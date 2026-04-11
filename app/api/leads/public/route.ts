@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const parsedBody:any = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyIds = Array.isArray(parsedBody.companyIds)
+    const companyIds:any = Array.isArray(parsedBody.companyIds)
       ? [
         ...new Set(
           parsedBody.companyIds.filter((companyId:any): companyId is string =>
