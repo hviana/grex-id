@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     },
   );
 
-  const app = (result[2] as Record<string, unknown>[])?.[0];
+  const app = (result[2] as unknown as Record<string, unknown>[])?.[0];
 
   return NextResponse.json(
     { success: true, data: { token: rawToken, app } },
