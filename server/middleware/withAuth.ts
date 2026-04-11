@@ -1,5 +1,10 @@
 import type { Middleware } from "./compose.ts";
-import { verifySystemToken } from "../utils/token.ts";
+import { hashToken, verifySystemToken } from "../utils/token.ts";
+import { findTokenByHash } from "../db/queries/tokens.ts";
+
+function isLikelyJwt(token: string): boolean {
+  return token.split(".").length === 3;
+}
 
 export function withAuth(
   options?: { roles?: string[]; permissions?: string[] },
@@ -22,13 +27,52 @@ export function withAuth(
     const token = authHeader.slice(7);
 
     try {
-      const payload = await verifySystemToken(token);
+      if (isLikelyJwt(token)) {
+        const payload = await verifySystemToken(token);
 
-      ctx.userId = payload.userId;
-      ctx.roles = payload.roles;
-      ctx.permissions = payload.permissions ?? [];
-      if (payload.companyId) ctx.companyId = payload.companyId;
-      if (payload.systemId) ctx.systemId = payload.systemId;
+        ctx.userId = payload.userId;
+        ctx.roles = payload.roles;
+        ctx.permissions = payload.permissions ?? [];
+        if (payload.companyId) ctx.companyId = payload.companyId;
+        if (payload.systemId) ctx.systemId = payload.systemId;
+      } else {
+        const tokenHash = await hashToken(token);
+        const apiToken = await findTokenByHash(tokenHash);
+        if (!apiToken) {
+          return Response.json(
+            {
+              success: false,
+              error: {
+                code: "UNAUTHORIZED",
+                message: "Invalid or expired token",
+              },
+            },
+            { status: 401 },
+          );
+        }
+
+        if (
+          apiToken.expiresAt &&
+          new Date(apiToken.expiresAt).getTime() <= Date.now()
+        ) {
+          return Response.json(
+            {
+              success: false,
+              error: {
+                code: "UNAUTHORIZED",
+                message: "Invalid or expired token",
+              },
+            },
+            { status: 401 },
+          );
+        }
+
+        ctx.userId = String(apiToken.userId);
+        ctx.companyId = String(apiToken.companyId);
+        ctx.systemId = String(apiToken.systemId);
+        ctx.roles = [];
+        ctx.permissions = apiToken.permissions ?? [];
+      }
 
       if (ctx.roles.includes("superuser")) {
         return next();

@@ -11,9 +11,14 @@ import {
   updateLocation,
 } from "@/server/db/queries/locations";
 
-const pipeline = compose(
+const readPipeline = compose(
   withRateLimit({ windowMs: 60000, maxRequests: 60 }),
   withAuth({ permissions: ["grexid.list_locations"] }),
+);
+
+const writePipeline = compose(
+  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withAuth(),
 );
 
 export async function GET(req: NextRequest) {
@@ -25,7 +30,7 @@ export async function GET(req: NextRequest) {
     permissions: [],
   };
 
-  return pipeline(req, ctx, async () => {
+  return readPipeline(req, ctx, async () => {
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
 
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
     permissions: [],
   };
 
-  return pipeline(req, ctx, async () => {
+  return writePipeline(req, ctx, async () => {
     const body = await req.json();
     const { name, description, address, companyId, systemId } = body;
 
@@ -103,7 +108,7 @@ export async function PUT(req: NextRequest) {
     permissions: [],
   };
 
-  return pipeline(req, ctx, async () => {
+  return writePipeline(req, ctx, async () => {
     const body = await req.json();
     const { id, name, description, address } = body;
 
@@ -131,7 +136,7 @@ export async function DELETE(req: NextRequest) {
     permissions: [],
   };
 
-  return pipeline(req, ctx, async () => {
+  return writePipeline(req, ctx, async () => {
     const url = new URL(req.url);
     const id = url.searchParams.get("id") ?? "";
 

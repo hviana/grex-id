@@ -7,6 +7,7 @@
 // =============================================================================
 
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
+import Human from "npm:@vladmandic/human";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -72,24 +73,307 @@ async function writeData(data: AppData): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Local network camera discovery stub
+// ONVIF WS-Discovery (local network camera scan)
 // ---------------------------------------------------------------------------
+// Discovers ONVIF-compatible cameras on the LAN by replicating the strategy
+// used by node-onvif (https://github.com/GuilhermeC18/node-onvif):
+//
+//   1. Open a UDP socket on an ephemeral port.
+//   2. Send a SOAP WS-Discovery Probe to the multicast group
+//      239.255.255.250:3702. Three probe types are sent
+//      (NetworkVideoTransmitter, Device, NetworkVideoDisplay), each retried
+//      DISCOVERY_RETRY_MAX times with DISCOVERY_INTERVAL_MS between rounds.
+//   3. Listen for ProbeMatch responses for DISCOVERY_WAIT_MS, dedupe by the
+//      EndpointReference URN, and pull the device URL from <XAddrs> and
+//      the friendly name from the onvif://.../name/<value> scope.
+//   4. Close the socket and look up each device's MAC in the kernel ARP
+//      cache (populated as a side-effect of the inbound UDP responses).
 
-/** Fake local network scan — returns a hardcoded camera after a short delay. */
-async function list(): Promise<CameraInfo[]> {
-  await new Promise((r) => setTimeout(r, 2000));
-  return [
-    { name: "Living Room", ip: "192.168.100.106", mac: "fc:23:cd:46:33:89" },
-  ];
+const ONVIF_MULTICAST_ADDRESS = "239.255.255.250";
+const ONVIF_DISCOVERY_PORT = 3702;
+const DISCOVERY_INTERVAL_MS = 150;
+const DISCOVERY_RETRY_MAX = 3;
+const DISCOVERY_WAIT_MS = 3000;
+const ONVIF_PROBE_TYPES = [
+  "NetworkVideoTransmitter",
+  "Device",
+  "NetworkVideoDisplay",
+] as const;
+
+interface ProbeMatch {
+  urn: string;
+  xaddrs: string[];
+  scopes: string[];
+}
+
+/** Build a WS-Discovery Probe SOAP envelope for the given ONVIF device type. */
+function buildOnvifProbe(type: string): string {
+  const uuid = crypto.randomUUID();
+  return `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"` +
+    ` xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">` +
+    `<s:Header>` +
+    `<a:Action s:mustUnderstand="1">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>` +
+    `<a:MessageID>uuid:${uuid}</a:MessageID>` +
+    `<a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>` +
+    `<a:To s:mustUnderstand="1">urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>` +
+    `</s:Header>` +
+    `<s:Body>` +
+    `<Probe xmlns="http://schemas.xmlsoap.org/ws/2005/04/discovery">` +
+    `<d:Types xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"` +
+    ` xmlns:dp0="http://www.onvif.org/ver10/network/wsdl">dp0:${type}</d:Types>` +
+    `</Probe>` +
+    `</s:Body>` +
+    `</s:Envelope>`;
 }
 
 /**
- * Per-frame processing stub. This is where face detection / embedding
- * extraction would run in production. Returns the frame unchanged.
+ * Extract the URN, XAddrs and Scopes from a ProbeMatch SOAP response. Uses
+ * regex with an optional namespace-prefix group because vendors disagree on
+ * which prefix to emit (`wsa:` vs `a:`, `d:` vs `wsd:`, etc.).
  */
-async function process(frame: Uint8Array): Promise<Uint8Array> {
-  await Promise.resolve();
-  return frame;
+function parseProbeMatch(xml: string): ProbeMatch | null {
+  const localTag = (name: string) =>
+    new RegExp(
+      `<(?:[\\w-]+:)?${name}\\b[^>]*>([\\s\\S]*?)</(?:[\\w-]+:)?${name}>`,
+      "i",
+    );
+
+  const xaddrsMatch = xml.match(localTag("XAddrs"));
+  if (!xaddrsMatch) return null;
+
+  const epRefMatch = xml.match(
+    /<(?:[\w-]+:)?EndpointReference\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?EndpointReference>/i,
+  );
+  if (!epRefMatch) return null;
+  const addrMatch = epRefMatch[1].match(localTag("Address"));
+  if (!addrMatch) return null;
+
+  const scopesMatch = xml.match(localTag("Scopes"));
+
+  return {
+    urn: addrMatch[1].trim(),
+    xaddrs: xaddrsMatch[1].trim().split(/\s+/).filter(Boolean),
+    scopes: scopesMatch
+      ? scopesMatch[1].trim().split(/\s+/).filter(Boolean)
+      : [],
+  };
+}
+
+/** Pull a value from an `onvif://www.onvif.org/<category>/<value>` scope. */
+function pickScopeValue(scopes: string[], category: string): string | null {
+  const prefix = `onvif://www.onvif.org/${category}/`;
+  for (const scope of scopes) {
+    if (scope.toLowerCase().startsWith(prefix)) {
+      const raw = scope.slice(prefix.length);
+      try {
+        return decodeURIComponent(raw);
+      } catch {
+        return raw;
+      }
+    }
+  }
+  return null;
+}
+
+function extractHostFromXAddr(xaddr: string): string | null {
+  try {
+    return new URL(xaddr).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the MAC address for an IPv4 host from the kernel ARP cache. The
+ * cache is populated passively when the kernel processes inbound packets,
+ * so by the time we call this the discovery responses have already taught
+ * the kernel each camera's MAC. Falls back to `ip neigh` if /proc/net/arp
+ * is unavailable.
+ */
+async function resolveMacByIp(ip: string): Promise<string> {
+  try {
+    const text = await Deno.readTextFile("/proc/net/arp");
+    // Columns: IP address, HW type, Flags, HW address, Mask, Device
+    const lines = text.split("\n").slice(1);
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 4 && parts[0] === ip) {
+        const mac = parts[3];
+        if (mac && mac !== "00:00:00:00:00:00") return mac.toLowerCase();
+      }
+    }
+  } catch { /* not linux, unreadable, or no entry */ }
+
+  try {
+    const cmd = new Deno.Command("ip", {
+      args: ["neigh", "show", ip],
+      stdout: "piped",
+      stderr: "null",
+    });
+    const { stdout } = await cmd.output();
+    const out = new TextDecoder().decode(stdout);
+    const m = out.match(/lladdr\s+([0-9a-fA-F:]{17})/);
+    if (m) return m[1].toLowerCase();
+  } catch { /* ignore */ }
+
+  return "";
+}
+
+/** Local network ONVIF camera discovery via WS-Discovery multicast. */
+async function list(): Promise<CameraInfo[]> {
+  let conn: Deno.DatagramConn;
+  try {
+    conn = Deno.listenDatagram({
+      port: 0,
+      transport: "udp",
+      hostname: "0.0.0.0",
+    });
+  } catch (err) {
+    console.error("[onvif] failed to bind UDP socket:", err);
+    return [];
+  }
+
+  const found = new Map<string, CameraInfo>();
+  let active = true;
+
+  // Sender loop: send each probe type DISCOVERY_RETRY_MAX times, spaced
+  // by DISCOVERY_INTERVAL_MS. Mirrors node-onvif's startProbe scheduling.
+  const sender = (async () => {
+    for (let attempt = 0; attempt < DISCOVERY_RETRY_MAX && active; attempt++) {
+      for (const type of ONVIF_PROBE_TYPES) {
+        if (!active) return;
+        try {
+          await conn.send(
+            new TextEncoder().encode(buildOnvifProbe(type)),
+            {
+              transport: "udp",
+              hostname: ONVIF_MULTICAST_ADDRESS,
+              port: ONVIF_DISCOVERY_PORT,
+            },
+          );
+        } catch {
+          // Socket closed by the discovery-window timeout — stop sending.
+          return;
+        }
+      }
+      await new Promise((r) => setTimeout(r, DISCOVERY_INTERVAL_MS));
+    }
+  })();
+
+  // Receiver loop: read ProbeMatch responses until the socket is closed.
+  const receiver = (async () => {
+    while (active) {
+      try {
+        const [data, addr] = await conn.receive();
+        const xml = new TextDecoder().decode(data);
+        const match = parseProbeMatch(xml);
+        if (!match || found.has(match.urn)) continue;
+
+        const ip = match.xaddrs.map(extractHostFromXAddr).find((h) => h) ??
+          (addr as Deno.NetAddr).hostname;
+        const name = pickScopeValue(match.scopes, "name") ??
+          `ONVIF Device (${ip})`;
+
+        found.set(match.urn, { name, ip, mac: "" });
+      } catch {
+        return; // receive() throws once the socket is closed
+      }
+    }
+  })();
+
+  // Discovery window — then close the socket to unblock the receiver.
+  await new Promise((r) => setTimeout(r, DISCOVERY_WAIT_MS));
+  active = false;
+  try {
+    conn.close();
+  } catch { /* already closed */ }
+  await Promise.allSettled([sender, receiver]);
+
+  // Resolve MAC addresses from the ARP cache populated by the responses.
+  const cameras = Array.from(found.values());
+  await Promise.all(
+    cameras.map(async (cam) => {
+      cam.mac = await resolveMacByIp(cam.ip);
+    }),
+  );
+
+  return cameras;
+}
+
+// ---------------------------------------------------------------------------
+// Face detection (Human)
+// ---------------------------------------------------------------------------
+// Lazily loaded singleton. Models download on first use and the first detect
+// call pays the warm-up cost; subsequent frames reuse the cached weights.
+
+const humanConfig = {
+  backend: "tensorflow",
+  modelBasePath: "https://vladmandic.github.io/human-models/models/",
+  cacheModels: true,
+  debug: false,
+  face: {
+    enabled: true,
+    detector: { rotation: false, maxDetected: 10, minConfidence: 0.5 },
+    description: { enabled: true },
+    mesh: { enabled: false },
+    iris: { enabled: false },
+    emotion: { enabled: false },
+    antispoof: { enabled: false },
+    liveness: { enabled: false },
+  },
+  body: { enabled: false },
+  hand: { enabled: false },
+  object: { enabled: false },
+  gesture: { enabled: false },
+  segmentation: { enabled: false },
+};
+
+// deno-lint-ignore no-explicit-any
+let humanInstance: any = null;
+// deno-lint-ignore no-explicit-any
+let humanLoadPromise: Promise<any> | null = null;
+
+// deno-lint-ignore no-explicit-any
+function getHuman(): Promise<any> {
+  if (humanInstance) return Promise.resolve(humanInstance);
+  if (!humanLoadPromise) {
+    humanLoadPromise = (async () => {
+      // deno-lint-ignore no-explicit-any
+      const instance = new (Human as any)(humanConfig);
+      await instance.load();
+      await instance.warmup();
+      humanInstance = instance;
+      console.log("[human] models loaded and warmed up");
+      return instance;
+    })();
+  }
+  return humanLoadPromise;
+}
+
+/**
+ * Decode a JPEG frame and run Human face detection. Returns the frame
+ * untouched plus the 1024-d embeddings of every detected face. Errors are
+ * swallowed so a single bad frame never tears down the stream.
+ */
+async function process(
+  frame: Uint8Array,
+): Promise<{ frame: Uint8Array; embeddings: number[][] }> {
+  try {
+    const human = await getHuman();
+    const tensor = human.tf.node.decodeJpeg(frame, 3);
+    const result = await human.detect(tensor);
+    tensor.dispose();
+    const embeddings: number[][] = (result.face ?? [])
+      .map((f: { embedding?: number[] }) => f.embedding)
+      .filter((e: number[] | undefined): e is number[] =>
+        Array.isArray(e) && e.length > 0
+      );
+    return { frame, embeddings };
+  } catch (err) {
+    console.error("[human] detection failed:", err);
+    return { frame, embeddings: [] };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -215,11 +499,52 @@ function buildRtspUrl(c: Connection): string {
   }@${c.ip}:${c.port}/${c.path}`;
 }
 
+// Face detection tunables — safe to edit.
+const DETECT_EVERY_N_FRAMES = 15; // Skip intermediate frames; Human is expensive.
+const FACE_DEDUP_SIMILARITY_THRESHOLD = 0.6; // Cosine sim above which two embeddings are the same person.
+const FACE_DEDUP_TTL_MS = 45_000; // A tracked face stays silent until unseen for at least this long.
+const FACE_BATCH_WINDOW_MS = 500; // Coalesce new uniques detected within this window into a single POST.
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const len = Math.min(a.length, b.length);
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < len; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 async function readMjpegFrames(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   handle: StreamHandle,
+  connection: Connection,
 ) {
   let buffer = new Uint8Array(0);
+  let frameCounter = 0;
+
+  // Per-stream face dedup + batching state. Reset on every (re)spawn so a
+  // reconnect gives everyone a fresh chance to be reported.
+  const trackedFaces: { embedding: number[]; lastSeen: number }[] = [];
+  let pendingBatch: number[][] = [];
+  let batchTimer: number | null = null;
+
+  const flushBatch = () => {
+    batchTimer = null;
+    if (pendingBatch.length === 0) return;
+    const toSend = pendingBatch;
+    pendingBatch = [];
+    sendDetection(toSend, connection.locationId).catch((err) => {
+      console.error(
+        `[detect] ${connection.id} → ${connection.locationId} failed:`,
+        err,
+      );
+    });
+  };
 
   const concat = (a: Uint8Array, b: Uint8Array) => {
     const out = new Uint8Array(a.length + b.length);
@@ -256,7 +581,43 @@ async function readMjpegFrames(
         const frame = buffer.slice(soiIdx, eoiIdx);
         buffer = buffer.slice(eoiIdx);
 
-        const processed = await process(frame);
+        frameCounter++;
+        const shouldDetect = frameCounter % DETECT_EVERY_N_FRAMES === 0;
+        const { frame: processed, embeddings } = shouldDetect
+          ? await process(frame)
+          : { frame, embeddings: [] as number[][] };
+
+        if (embeddings.length > 0) {
+          const now = Date.now();
+          // Drop tracked faces we haven't seen in a while so returning
+          // visitors trigger a new detection event.
+          for (let i = trackedFaces.length - 1; i >= 0; i--) {
+            if (now - trackedFaces[i].lastSeen > FACE_DEDUP_TTL_MS) {
+              trackedFaces.splice(i, 1);
+            }
+          }
+          for (const embedding of embeddings) {
+            let matched = false;
+            for (const tracked of trackedFaces) {
+              if (
+                cosineSimilarity(embedding, tracked.embedding) >=
+                  FACE_DEDUP_SIMILARITY_THRESHOLD
+              ) {
+                // Same person still in frame — just refresh their TTL.
+                tracked.lastSeen = now;
+                matched = true;
+                break;
+              }
+            }
+            if (!matched) {
+              trackedFaces.push({ embedding, lastSeen: now });
+              pendingBatch.push(embedding);
+            }
+          }
+          if (pendingBatch.length > 0 && batchTimer === null) {
+            batchTimer = setTimeout(flushBatch, FACE_BATCH_WINDOW_MS);
+          }
+        }
 
         const b64 = btoa(String.fromCharCode(...processed));
         const msg = JSON.stringify({ type: "frame", data: b64 });
@@ -376,7 +737,7 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
     })();
 
     const stdoutReader = proc.stdout.getReader();
-    readMjpegFrames(stdoutReader, handle).then(async () => {
+    readMjpegFrames(stdoutReader, handle, connection).then(async () => {
       if (!handle.abortController.signal.aborted) {
         handle.status = "reconnecting";
         handle.error = "Stream ended — attempting reconnect…";
