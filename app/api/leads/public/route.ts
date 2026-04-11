@@ -19,12 +19,12 @@ import { validateField } from "@/server/utils/field-validator";
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown> | null = null;
   try {
-    const parsedBody = await req.json() as Record<string, unknown>;
+    const parsedBody:any = await req.json() as Record<string, unknown>;
     body = parsedBody;
     const companyIds = Array.isArray(parsedBody.companyIds)
       ? [
         ...new Set(
-          parsedBody.companyIds.filter((companyId): companyId is string =>
+          parsedBody.companyIds.filter((companyId:any): companyId is string =>
             typeof companyId === "string" && companyId.trim().length > 0
           ),
         ),
