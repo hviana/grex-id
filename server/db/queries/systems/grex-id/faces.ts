@@ -110,7 +110,6 @@ export async function searchFaceByEmbedding(
     `SELECT id, leadId, vector::distance::knn() AS score
      FROM face
      WHERE embedding_type1 <|${limit},${candidates}|> $embedding
-       AND leadId.id != NONE
      ORDER BY score`,
     { embedding },
   );
