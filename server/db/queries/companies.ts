@@ -15,9 +15,9 @@ export async function listCompanies(
 
   if (params.userId) {
     conditions.push(
-      "id IN (SELECT companyId FROM company_user WHERE userId = $userId)",
+      "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
     );
-    bindings.userId = params.userId;
+    bindings.userId = rid(params.userId);
   }
   if (params.search) {
     conditions.push("name @@ $search");
