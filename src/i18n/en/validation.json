@@ -1,0 +1,21 @@
+{
+  "email.required": "Email is required",
+  "email.invalid": "Invalid email format",
+  "phone.invalid": "Invalid phone number (must be 10-15 digits)",
+  "password.required": "Password is required",
+  "password.tooShort": "Password must be at least 8 characters",
+  "password.mismatch": "Passwords do not match",
+  "name.required": "Name is required",
+  "slug.required": "Slug is required",
+  "slug.invalid": "Slug must contain only lowercase letters, numbers, and hyphens",
+  "url.invalid": "Invalid URL format",
+  "currencyCode.invalid": "Currency code must be 3 uppercase letters",
+  "cnpj.required": "CNPJ is required",
+  "cnpj.invalid": "Invalid CNPJ",
+  "companyAndSystem.required": "Company and system are required",
+  "color.invalid": "Color must be a valid hex code (e.g. #ff5733)",
+  "tag.duplicate": "A tag with this name already exists",
+  "terms.required": "You must accept the terms of service to continue",
+  "email.duplicate": "An account with this email already exists",
+  "phone.duplicate": "An account with this phone number already exists"
+}

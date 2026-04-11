@@ -1,0 +1,18 @@
+DEFINE TABLE plan SCHEMAFULL;
+DEFINE FIELD name             ON plan TYPE string;
+DEFINE FIELD description      ON plan TYPE string;
+DEFINE FIELD systemId         ON plan TYPE record<system>;
+DEFINE FIELD price            ON plan TYPE int;
+DEFINE FIELD currency         ON plan TYPE string DEFAULT "USD";
+DEFINE FIELD recurrenceDays   ON plan TYPE int;
+DEFINE FIELD benefits         ON plan TYPE array<string>;
+DEFINE FIELD permissions      ON plan TYPE array<string>;
+DEFINE FIELD entityLimits     ON plan TYPE option<object> FLEXIBLE;
+DEFINE FIELD apiRateLimit     ON plan TYPE int DEFAULT 1000;
+DEFINE FIELD storageLimitBytes ON plan TYPE int DEFAULT 1073741824;
+DEFINE FIELD isActive         ON plan TYPE bool DEFAULT true;
+DEFINE FIELD createdAt        ON plan TYPE datetime DEFAULT time::now();
+DEFINE FIELD updatedAt        ON plan TYPE datetime DEFAULT time::now();
+
+DEFINE INDEX idx_plan_system ON plan FIELDS systemId;
+DEFINE INDEX idx_plan_active ON plan FIELDS systemId, isActive;
