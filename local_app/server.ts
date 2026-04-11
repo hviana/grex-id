@@ -1,8 +1,9 @@
 // =============================================================================
-// Camera Network Manager — Deno Server
+// Grex-ID Camera Bridge — Deno Server
 // =============================================================================
-// A single-page web application for connecting to network cameras via RTSP.
-// All persistent data is stored in a local JSON file.
+// Local bridge between on-premise RTSP cameras and a remote Grex-ID instance.
+// All persistent data (grex-id token, base URL and saved camera connections)
+// is stored in a local JSON file.
 // =============================================================================
 
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
@@ -35,12 +36,21 @@ interface Connection {
   port: string;
   path: string;
   mac: string;
+  locationId: string;
+  locationName: string;
 }
 
 interface AppData {
-  token: string | null;
+  grexBaseUrl: string;
+  grexToken: string | null;
   connections: Connection[];
 }
+
+const DEFAULTS: AppData = {
+  grexBaseUrl: "",
+  grexToken: null,
+  connections: [],
+};
 
 // ---------------------------------------------------------------------------
 // Data persistence helpers
@@ -49,11 +59,11 @@ interface AppData {
 async function readData(): Promise<AppData> {
   try {
     const raw = await Deno.readTextFile(DATA_FILE);
-    return JSON.parse(raw) as AppData;
+    const parsed = JSON.parse(raw) as Partial<AppData>;
+    return { ...DEFAULTS, ...parsed };
   } catch {
-    const defaults: AppData = { token: null, connections: [] };
-    await writeData(defaults);
-    return defaults;
+    await writeData(DEFAULTS);
+    return { ...DEFAULTS };
   }
 }
 
@@ -62,16 +72,10 @@ async function writeData(data: AppData): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton async functions (business-logic stubs)
+// Local network camera discovery stub
 // ---------------------------------------------------------------------------
 
-/** Simulates authentication — returns a fictitious token after 2 s. */
-async function login(_user: string, _pass: string): Promise<string> {
-  await new Promise((r) => setTimeout(r, 2000));
-  return "tk_" + crypto.randomUUID();
-}
-
-/** Simulates fetching the camera list — returns one camera after 2 s. */
+/** Fake local network scan — returns a hardcoded camera after a short delay. */
 async function list(): Promise<CameraInfo[]> {
   await new Promise((r) => setTimeout(r, 2000));
   return [
@@ -80,13 +84,113 @@ async function list(): Promise<CameraInfo[]> {
 }
 
 /**
- * Processes a single video frame (skeleton).
- * In production this could run analytics, motion detection, etc.
+ * Per-frame processing stub. This is where face detection / embedding
+ * extraction would run in production. Returns the frame unchanged.
  */
 async function process(frame: Uint8Array): Promise<Uint8Array> {
-  // Stub — returns the frame unchanged.
   await Promise.resolve();
   return frame;
+}
+
+// ---------------------------------------------------------------------------
+// Grex-ID API helpers
+// ---------------------------------------------------------------------------
+
+function grexHeaders(token: string): HeadersInit {
+  return {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+}
+
+function grexBase(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "");
+}
+
+/** Validate grex-id connectivity by hitting the locations endpoint. */
+async function checkGrexConnection(): Promise<{
+  ok: boolean;
+  status: number;
+  message: string;
+}> {
+  const d = await readData();
+  if (!d.grexToken || !d.grexBaseUrl) {
+    return {
+      ok: false,
+      status: 0,
+      message: "Grex-ID is not configured yet.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${grexBase(d.grexBaseUrl)}/api/systems/grex-id/locations?limit=1`,
+      { headers: grexHeaders(d.grexToken) },
+    );
+    if (res.ok) {
+      return { ok: true, status: res.status, message: "Connection OK" };
+    }
+    let msg = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error?.message) msg = `${msg} — ${body.error.message}`;
+    } catch { /* ignore */ }
+    return { ok: false, status: res.status, message: msg };
+  } catch (err) {
+    return { ok: false, status: 0, message: String(err) };
+  }
+}
+
+/** Search locations on grex-id. Returns a normalized [{id, name}] list. */
+async function listGrexLocations(
+  search: string,
+): Promise<{ id: string; name: string }[]> {
+  const d = await readData();
+  if (!d.grexToken || !d.grexBaseUrl) {
+    throw new Error("Grex-ID is not configured.");
+  }
+  const url = new URL(
+    `${grexBase(d.grexBaseUrl)}/api/systems/grex-id/locations`,
+  );
+  url.searchParams.set("limit", "20");
+  if (search) url.searchParams.set("search", search);
+
+  const res = await fetch(url, { headers: grexHeaders(d.grexToken) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json();
+  const rows = Array.isArray(body?.data) ? body.data : [];
+  return rows
+    .map((r: Record<string, unknown>) => ({
+      id: String(r.id ?? ""),
+      name: String(r.name ?? ""),
+    }))
+    .filter((r) => r.id);
+}
+
+/**
+ * Send a batch of face embeddings (each length 1024) and a location ID to
+ * the grex-id detect endpoint using the configured Bearer token.
+ */
+async function sendDetection(
+  embeddings: number[][],
+  locationId: string,
+): Promise<unknown> {
+  const d = await readData();
+  if (!d.grexToken || !d.grexBaseUrl) {
+    throw new Error("Grex-ID is not configured.");
+  }
+  const res = await fetch(
+    `${grexBase(d.grexBaseUrl)}/api/systems/grex-id/detect`,
+    {
+      method: "POST",
+      headers: grexHeaders(d.grexToken),
+      body: JSON.stringify({ locationId, embeddings }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -105,20 +209,16 @@ interface StreamHandle {
 
 const activeStreams = new Map<string, StreamHandle>();
 
-/** Build an RTSP URL from connection parameters. */
 function buildRtspUrl(c: Connection): string {
   return `rtsp://${encodeURIComponent(c.username)}:${
     encodeURIComponent(c.password)
   }@${c.ip}:${c.port}/${c.path}`;
 }
 
-/** Parse MJPEG boundaries from an FFmpeg stdout stream. */
 async function readMjpegFrames(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   handle: StreamHandle,
 ) {
-  const SOI = 0xff_d8; // JPEG Start-Of-Image
-  const EOI = 0xff_d9; // JPEG End-Of-Image
   let buffer = new Uint8Array(0);
 
   const concat = (a: Uint8Array, b: Uint8Array) => {
@@ -134,9 +234,7 @@ async function readMjpegFrames(
       if (done) break;
       buffer = concat(buffer, value);
 
-      // Extract complete JPEG frames from the buffer.
       while (true) {
-        // Find SOI marker.
         let soiIdx = -1;
         for (let i = 0; i < buffer.length - 1; i++) {
           if (buffer[i] === 0xff && buffer[i + 1] === 0xd8) {
@@ -146,7 +244,6 @@ async function readMjpegFrames(
         }
         if (soiIdx === -1) break;
 
-        // Find EOI marker after SOI.
         let eoiIdx = -1;
         for (let i = soiIdx + 2; i < buffer.length - 1; i++) {
           if (buffer[i] === 0xff && buffer[i + 1] === 0xd9) {
@@ -156,25 +253,17 @@ async function readMjpegFrames(
         }
         if (eoiIdx === -1) break;
 
-        // Complete JPEG frame found.
         const frame = buffer.slice(soiIdx, eoiIdx);
         buffer = buffer.slice(eoiIdx);
 
-        // Run through the process function.
         const processed = await process(frame);
 
-        // Broadcast to connected WebSocket clients.
-        const b64 = btoa(
-          String.fromCharCode(...processed),
-        );
+        const b64 = btoa(String.fromCharCode(...processed));
         const msg = JSON.stringify({ type: "frame", data: b64 });
         for (const ws of handle.sockets) {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(msg);
-          }
+          if (ws.readyState === WebSocket.OPEN) ws.send(msg);
         }
 
-        // Mark as connected on first successful frame.
         if (handle.status !== "connected") {
           handle.status = "connected";
           handle.error = "";
@@ -192,7 +281,6 @@ async function readMjpegFrames(
   }
 }
 
-/** Notify all WebSocket clients of the stream status. */
 function broadcastStatus(handle: StreamHandle) {
   const msg = JSON.stringify({
     type: "status",
@@ -205,18 +293,15 @@ function broadcastStatus(handle: StreamHandle) {
   }
 }
 
-/** Try to resolve a new IP for a camera by its MAC address. */
 async function resolveIpByMac(mac: string): Promise<string | null> {
   const cameras = await list();
   const match = cameras.find((c) => c.mac === mac);
   return match ? match.ip : null;
 }
 
-/** Start (or restart) an RTSP stream for a connection. */
 async function startStream(connection: Connection): Promise<StreamHandle> {
   let handle = activeStreams.get(connection.id);
   if (handle) {
-    // Kill any existing process.
     try {
       handle.proc?.kill("SIGTERM");
     } catch { /* ignore */ }
@@ -240,7 +325,6 @@ async function startStream(connection: Connection): Promise<StreamHandle> {
   return handle;
 }
 
-/** Spawn the FFmpeg process that converts RTSP → MJPEG on stdout. */
 async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
   const url = buildRtspUrl(connection);
 
@@ -268,7 +352,6 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
     const proc = cmd.spawn();
     handle.proc = proc;
 
-    // Read stderr in background so it doesn't block.
     const stderrReader = proc.stderr.getReader();
     (async () => {
       const decoder = new TextDecoder();
@@ -281,12 +364,10 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
         }
       } catch { /* ignore */ }
 
-      // If process ended and we didn't abort, it's an error.
       if (
         !handle.abortController.signal.aborted && handle.status !== "connected"
       ) {
         handle.status = "error";
-        // Extract meaningful error from ffmpeg output.
         const lines = stderrText.split("\n").filter((l) => l.trim());
         handle.error = lines.slice(-3).join(" ") ||
           "FFmpeg exited unexpectedly";
@@ -294,10 +375,8 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
       }
     })();
 
-    // Read MJPEG frames from stdout.
     const stdoutReader = proc.stdout.getReader();
     readMjpegFrames(stdoutReader, handle).then(async () => {
-      // Stream ended — attempt reconnect if not explicitly stopped.
       if (!handle.abortController.signal.aborted) {
         handle.status = "reconnecting";
         handle.error = "Stream ended — attempting reconnect…";
@@ -315,7 +394,6 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
   }
 }
 
-/** Reconnection loop with exponential back-off and IP re-resolution. */
 async function attemptReconnect(connection: Connection, handle: StreamHandle) {
   while (
     handle.reconnectAttempts < RECONNECT_MAX_ATTEMPTS &&
@@ -333,11 +411,9 @@ async function attemptReconnect(connection: Connection, handle: StreamHandle) {
     await new Promise((r) => setTimeout(r, delay));
     if (handle.abortController.signal.aborted) return;
 
-    // Try to resolve a new IP in case it changed.
     const newIp = await resolveIpByMac(connection.mac);
     if (newIp && newIp !== connection.ip) {
       connection.ip = newIp;
-      // Persist the updated IP.
       const data = await readData();
       const idx = data.connections.findIndex((c) => c.id === connection.id);
       if (idx !== -1) {
@@ -352,7 +428,6 @@ async function attemptReconnect(connection: Connection, handle: StreamHandle) {
     broadcastStatus(handle);
 
     await spawnFfmpeg(connection, handle);
-    // If spawnFfmpeg didn't immediately error, break out — the read loop handles the rest.
     if (handle.status === "connecting" || handle.status === "connected") return;
   }
 
@@ -363,7 +438,6 @@ async function attemptReconnect(connection: Connection, handle: StreamHandle) {
   }
 }
 
-/** Stop a stream gracefully. */
 function stopStream(connectionId: string) {
   const handle = activeStreams.get(connectionId);
   if (!handle) return;
@@ -380,14 +454,15 @@ function stopStream(connectionId: string) {
 
 async function autoStartStreams() {
   const data = await readData();
-  if (!data.token || data.connections.length === 0) return;
+  if (
+    !data.grexToken || !data.grexBaseUrl || data.connections.length === 0
+  ) return;
   console.log(`[boot] Auto-starting ${data.connections.length} stream(s)…`);
   for (const conn of data.connections) {
     startStream({ ...conn });
   }
 }
 
-// Fire-and-forget on module load.
 autoStartStreams();
 
 // ---------------------------------------------------------------------------
@@ -416,7 +491,7 @@ async function handleRequest(request: Request): Promise<Response> {
   const path = url.pathname;
   const method = request.method;
 
-  // --- Serve the single-page frontend ----------------------------------
+  // Serve the single-page frontend.
   if (path === "/" && method === "GET") {
     try {
       const content = await Deno.readTextFile(HTML_FILE);
@@ -426,42 +501,76 @@ async function handleRequest(request: Request): Promise<Response> {
     }
   }
 
-  // --- Auth status -----------------------------------------------------
-  if (path === "/api/status" && method === "GET") {
-    const data = await readData();
-    return json({ loggedIn: !!data.token });
+  // --- Configuration (grex-id base URL + token) ---
+  if (path === "/api/config" && method === "GET") {
+    const d = await readData();
+    return json({
+      grexBaseUrl: d.grexBaseUrl,
+      grexToken: d.grexToken ?? "",
+      configured: !!(d.grexBaseUrl && d.grexToken),
+    });
   }
 
-  // --- Login -----------------------------------------------------------
-  if (path === "/api/login" && method === "POST") {
-    const { username, password } = await request.json();
-    const token = await login(username, password);
-    const data = await readData();
-    data.token = token;
-    await writeData(data);
-    return json({ ok: true, token });
-  }
-
-  // --- Logout ----------------------------------------------------------
-  if (path === "/api/logout" && method === "POST") {
-    // Stop all active streams.
+  if (path === "/api/config" && method === "POST") {
+    const body = await request.json();
+    const grexBaseUrl = String(body.grexBaseUrl ?? "").trim();
+    const grexToken = String(body.grexToken ?? "").trim();
+    if (!grexBaseUrl || !grexToken) {
+      return json(
+        { ok: false, error: "grexBaseUrl and grexToken are required." },
+        400,
+      );
+    }
+    const d = await readData();
+    d.grexBaseUrl = grexBaseUrl;
+    d.grexToken = grexToken;
+    await writeData(d);
+    // Restart all streams under the new configuration.
     for (const [id] of activeStreams) stopStream(id);
-    const data = await readData();
-    data.token = null;
-    await writeData(data);
+    for (const conn of d.connections) startStream({ ...conn });
     return json({ ok: true });
   }
 
-  // --- List cameras ----------------------------------------------------
+  // --- Grex-ID: connection health check ---
+  if (path === "/api/grex/check" && method === "GET") {
+    const result = await checkGrexConnection();
+    return json(result);
+  }
+
+  // --- Grex-ID: searchable location list ---
+  if (path === "/api/grex/locations" && method === "GET") {
+    const search = url.searchParams.get("search") ?? "";
+    try {
+      const locations = await listGrexLocations(search);
+      return json({ ok: true, locations });
+    } catch (err) {
+      return json(
+        { ok: false, error: String(err), locations: [] },
+        502,
+      );
+    }
+  }
+
+  // --- Grex-ID: detect (programmatic bridge endpoint) ---
+  if (path === "/api/grex/detect" && method === "POST") {
+    try {
+      const { embeddings, locationId } = await request.json();
+      const data = await sendDetection(embeddings, locationId);
+      return json({ ok: true, data });
+    } catch (err) {
+      return json({ ok: false, error: String(err) }, 502);
+    }
+  }
+
+  // --- Local network camera discovery ---
   if (path === "/api/cameras" && method === "GET") {
     const cameras = await list();
     return json({ cameras });
   }
 
-  // --- Get saved connections -------------------------------------------
+  // --- Saved connections ---
   if (path === "/api/connections" && method === "GET") {
     const data = await readData();
-    // Attach live status to each connection.
     const enriched = data.connections.map((c) => {
       const handle = activeStreams.get(c.id);
       return {
@@ -473,12 +582,16 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ connections: enriched });
   }
 
-  // --- Save a new connection -------------------------------------------
   if (path === "/api/connections" && method === "POST") {
     const body = await request.json() as Connection;
     body.id = body.id || crypto.randomUUID();
+    if (!body.locationId || !body.locationName) {
+      return json(
+        { ok: false, error: "locationId and locationName are required." },
+        400,
+      );
+    }
     const data = await readData();
-    // Upsert.
     const idx = data.connections.findIndex((c) => c.id === body.id);
     if (idx !== -1) {
       data.connections[idx] = body;
@@ -486,12 +599,10 @@ async function handleRequest(request: Request): Promise<Response> {
       data.connections.push(body);
     }
     await writeData(data);
-    // Auto-start the stream.
     startStream({ ...body });
     return json({ ok: true, connection: body });
   }
 
-  // --- Delete a connection ---------------------------------------------
   if (path === "/api/connections" && method === "DELETE") {
     const { id } = await request.json();
     stopStream(id);
@@ -501,7 +612,7 @@ async function handleRequest(request: Request): Promise<Response> {
     return json({ ok: true });
   }
 
-  // --- WebSocket for live stream ---------------------------------------
+  // --- WebSocket for live stream ---
   if (path.startsWith("/api/stream/") && method === "GET") {
     const connectionId = path.split("/api/stream/")[1];
     const upgrade = request.headers.get("upgrade") || "";
@@ -515,7 +626,6 @@ async function handleRequest(request: Request): Promise<Response> {
       const handle = activeStreams.get(connectionId);
       if (handle) {
         handle.sockets.add(socket);
-        // Send current status immediately.
         socket.send(JSON.stringify({
           type: "status",
           connectionId: handle.connectionId,
@@ -542,7 +652,6 @@ async function handleRequest(request: Request): Promise<Response> {
       if (handle) handle.sockets.delete(socket);
     };
 
-    // Allow clients to send commands (e.g., manual reconnect).
     socket.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
@@ -557,7 +666,6 @@ async function handleRequest(request: Request): Promise<Response> {
     return response;
   }
 
-  // --- 404 fallback ----------------------------------------------------
   return new Response("Not Found", { status: 404 });
 }
 

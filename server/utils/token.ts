@@ -27,8 +27,8 @@ export async function createSystemToken(
 ): Promise<string> {
   const core = Core.getInstance();
   const expiryMinutes = stayLoggedIn
-    ? Number(core.getSetting("auth.token.expiry.stayLoggedIn.hours")) * 60
-    : Number(core.getSetting("auth.token.expiry.minutes"));
+    ? Number(await core.getSetting("auth.token.expiry.stayLoggedIn.hours")) * 60
+    : Number(await core.getSetting("auth.token.expiry.minutes"));
 
   const jwt = await new jose.SignJWT({
     userId: payload.userId,

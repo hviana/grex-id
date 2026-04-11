@@ -23,7 +23,7 @@ export const sendEmail: HandlerFn = async (payload) => {
   // Resolve locale: payload > system default > hardcoded fallback
   let locale = payload.locale as string | undefined;
   if (!locale && systemSlug) {
-    const system = core.getSystemBySlug(systemSlug);
+    const system = await core.getSystemBySlug(systemSlug);
     locale = system?.defaultLocale ?? undefined;
   }
   locale ??= "en";
@@ -31,7 +31,7 @@ export const sendEmail: HandlerFn = async (payload) => {
   // Resolve senders: payload > Core setting
   const senders = (payload.senders as string[] | undefined) ??
     JSON.parse(
-      core.getSetting("communication.email.senders") ?? "[]",
+      (await core.getSetting("communication.email.senders")) ?? "[]",
     ) as string[];
 
   // Resolve template
@@ -46,10 +46,12 @@ export const sendEmail: HandlerFn = async (payload) => {
   }
 
   // Resolve Mailgun configuration from Core settings
-  const mailgunApiKey = core.getSetting("communication.email.mailgun_apikey");
-  const mailgunUrl = core.getSetting("communication.email.mailgun_url");
-  const mailgunFrom = core.getSetting("communication.email.mailgun_from") ??
-    senders[0];
+  const mailgunApiKey = await core.getSetting(
+    "communication.email.mailgun_apikey",
+  );
+  const mailgunUrl = await core.getSetting("communication.email.mailgun_url");
+  const mailgunFrom =
+    (await core.getSetting("communication.email.mailgun_from")) ?? senders[0];
 
   if (!mailgunApiKey || !mailgunUrl) {
     throw new Error(

@@ -8,9 +8,8 @@ import { validateField } from "@/server/utils/field-validator";
 
 export async function POST(req: NextRequest) {
   const core = Core.getInstance();
-  await core.ensureLoaded();
   const rateLimitPerMinute = Number(
-    core.getSetting("auth.rateLimit.perMinute") || 5,
+    (await core.getSetting("auth.rateLimit.perMinute")) || 5,
   );
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -91,7 +90,7 @@ export async function POST(req: NextRequest) {
   }
 
   const twoFactorGloballyEnabled =
-    core.getSetting("auth.twoFactor.enabled") === "true";
+    (await core.getSetting("auth.twoFactor.enabled")) === "true";
 
   if (twoFactorGloballyEnabled && user.twoFactorEnabled) {
     const { twoFactorCode } = body;

@@ -35,7 +35,7 @@ class Core {
     return Core.instance;
   }
 
-  async ensureLoaded(): Promise<void> {
+  private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
     if (!this.loadPromise) {
       this.loadPromise = this.load().then(() => {
@@ -79,7 +79,8 @@ class Core {
     await this.load();
   }
 
-  getSetting(key: string): string | undefined {
+  async getSetting(key: string): Promise<string | undefined> {
+    await this.ensureLoaded();
     const existing = this.settings.get(key);
     if (existing) return existing.value;
 
@@ -94,23 +95,28 @@ class Core {
     return undefined;
   }
 
-  getMissingSettings(): MissingSetting[] {
+  async getMissingSettings(): Promise<MissingSetting[]> {
+    await this.ensureLoaded();
     return Array.from(this.missingSettings.values());
   }
 
-  getSystemBySlug(slug: string): System | undefined {
+  async getSystemBySlug(slug: string): Promise<System | undefined> {
+    await this.ensureLoaded();
     return this.systems.find((s) => s.slug === slug);
   }
 
-  getRolesForSystem(systemId: string): Role[] {
+  async getRolesForSystem(systemId: string): Promise<Role[]> {
+    await this.ensureLoaded();
     return this.roles.filter((r) => r.systemId === systemId);
   }
 
-  getPlansForSystem(systemId: string): Plan[] {
+  async getPlansForSystem(systemId: string): Promise<Plan[]> {
+    await this.ensureLoaded();
     return this.plans.filter((p) => p.systemId === systemId);
   }
 
-  getMenusForSystem(systemId: string): MenuItem[] {
+  async getMenusForSystem(systemId: string): Promise<MenuItem[]> {
+    await this.ensureLoaded();
     const systemMenus = this.menus.filter((m) => m.systemId === systemId);
     return buildMenuTree(systemMenus);
   }

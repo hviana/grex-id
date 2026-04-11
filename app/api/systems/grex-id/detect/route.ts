@@ -3,7 +3,6 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getLocationById } from "@/server/db/queries/locations";
 import { publish } from "@/server/event-queue/publisher";
 
 const pipeline = compose(
@@ -23,50 +22,42 @@ export async function POST(req: NextRequest) {
   return pipeline(req, ctx, async () => {
     try {
       const body = await req.json();
-      const { locationId, embedding } = body;
+      const { locationId, embeddings } = body;
 
-      if (!locationId || !embedding || !Array.isArray(embedding)) {
+      if (
+        !locationId || !Array.isArray(embeddings) || embeddings.length === 0
+      ) {
         return NextResponse.json(
           {
             success: false,
             error: {
               code: "VALIDATION",
-              message: "locationId and embedding (array) are required",
+              message:
+                "locationId and embeddings (non-empty array) are required",
             },
           },
           { status: 400 },
         );
       }
 
-      if (embedding.length !== 1024) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "VALIDATION",
-              message: "validation.embedding.dimensions",
+      for (const embedding of embeddings) {
+        if (!Array.isArray(embedding) || embedding.length !== 1024) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: "VALIDATION",
+                message: "validation.embedding.dimensions",
+              },
             },
-          },
-          { status: 400 },
-        );
-      }
-
-      const location = await getLocationById(locationId);
-      if (!location) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: { code: "NOT_FOUND", message: "common.error.notFound" },
-          },
-          { status: 404 },
-        );
+            { status: 400 },
+          );
+        }
       }
 
       const eventId = await publish("GREXID_DETECTION", {
         locationId,
-        embedding,
-        companyId: location.companyId,
-        systemId: location.systemId,
+        embeddings,
       });
 
       return NextResponse.json({

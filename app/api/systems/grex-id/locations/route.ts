@@ -13,7 +13,7 @@ import {
 
 const pipeline = compose(
   withRateLimit({ windowMs: 60000, maxRequests: 60 }),
-  withAuth(),
+  withAuth({ permissions: ["grexid.list_locations"] }),
 );
 
 export async function GET(req: NextRequest) {

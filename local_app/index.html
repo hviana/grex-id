@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>📷 Camera Network Manager</title>
+    <title>Grex-ID Camera Bridge</title>
     <style>
       /* =================================================================
          CSS Variables & Reset
@@ -13,10 +13,13 @@
         --green-hover: #02b570;
         --green-light: #00ff88;
         --blue: #00ccff;
+        --amber: #ffaa00;
+        --red: #ff5555;
         --black: #000;
         --dark: #0a0a0a;
         --dark-card: #111;
-        --dark-border: #333;
+        --dark-2: #161616;
+        --dark-border: #2a2a2a;
         --text: #f0f0f0;
         --text-secondary: #ccc;
         --text-muted: #888;
@@ -44,7 +47,7 @@
       }
 
       /* =================================================================
-         Loading Overlay
+         Global Loading Overlay
          ================================================================= */
       #loading-overlay {
         position: fixed;
@@ -78,6 +81,18 @@
         margin: 0 auto 18px;
       }
 
+      .spinner-inline {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-top-color: var(--green);
+        border-right-color: var(--blue);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+      }
+
       .loader-box p {
         color: var(--text-secondary);
         font-size: 0.95rem;
@@ -89,7 +104,6 @@
           transform: rotate(360deg);
         }
       }
-
       @keyframes fadeInUp {
         from {
           opacity: 0;
@@ -100,7 +114,6 @@
           transform: translateY(0);
         }
       }
-
       @keyframes fadeIn {
         from {
           opacity: 0;
@@ -109,7 +122,6 @@
           opacity: 1;
         }
       }
-
       @keyframes slideDown {
         from {
           opacity: 0;
@@ -120,7 +132,6 @@
           transform: translateY(0);
         }
       }
-
       @keyframes pulse {
         0%, 100% {
           opacity: 1;
@@ -153,9 +164,9 @@
       }
 
       /* =================================================================
-         Login Screen
+         Config Screen
          ================================================================= */
-      #login-screen {
+      #config-screen {
         display: none;
         min-height: 100dvh;
         align-items: center;
@@ -164,14 +175,13 @@
         position: relative;
         z-index: 1;
       }
-
-      #login-screen.active {
+      #config-screen.active {
         display: flex;
       }
 
-      .login-card {
+      .config-card {
         width: 100%;
-        max-width: 400px;
+        max-width: 460px;
         background: var(--glass-bg);
         border: 1px dashed var(--dark-border);
         border-radius: var(--radius);
@@ -182,20 +192,20 @@
         animation: fadeInUp 0.5s ease;
       }
 
-      .login-card .brand {
+      .config-card .brand {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 28px;
       }
 
-      .login-card .brand .emoji {
-        font-size: 3rem;
+      .config-card .brand .emoji {
+        font-size: 2.8rem;
         display: block;
         margin-bottom: 12px;
         filter: drop-shadow(0 0 20px rgba(2, 208, 125, 0.4));
       }
 
-      .login-card .brand h1 {
-        font-size: 1.4rem;
+      .config-card .brand h1 {
+        font-size: 1.45rem;
         font-weight: 700;
         background: linear-gradient(135deg, var(--green), var(--blue));
         -webkit-background-clip: text;
@@ -203,7 +213,7 @@
         background-clip: text;
       }
 
-      .login-card .brand p {
+      .config-card .brand p {
         color: var(--text-muted);
         font-size: 0.85rem;
         margin-top: 6px;
@@ -214,8 +224,11 @@
       }
 
       .form-group label {
-        display: block;
-        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.78rem;
         color: var(--text-secondary);
         margin-bottom: 6px;
         text-transform: uppercase;
@@ -223,7 +236,25 @@
         font-weight: 600;
       }
 
-      .form-group input, .form-group select {
+      .form-group label .help-link {
+        text-transform: none;
+        letter-spacing: 0;
+        font-size: 0.75rem;
+        color: var(--blue);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+        transition: background var(--transition);
+      }
+      .form-group label .help-link:hover {
+        background: rgba(0, 204, 255, 0.1);
+      }
+
+      .form-group input,
+      .form-group textarea,
+      .form-group select {
         width: 100%;
         padding: 12px 14px;
         background: rgba(255, 255, 255, 0.04);
@@ -232,18 +263,59 @@
         color: var(--text);
         font-size: 0.95rem;
         outline: none;
+        font-family: inherit;
         transition:
           border-color var(--transition),
           box-shadow var(--transition);
       }
 
-      .form-group input::placeholder {
+      .form-group input::placeholder,
+      .form-group textarea::placeholder {
         color: var(--text-muted);
       }
 
-      .form-group input:focus {
+      .form-group input:focus,
+      .form-group textarea:focus,
+      .form-group select:focus {
         border-color: var(--green);
         box-shadow: 0 0 0 3px rgba(2, 208, 125, 0.15);
+      }
+
+      .form-hint {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
+
+      .config-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .inline-feedback {
+        margin-top: 14px;
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
+        font-size: 0.82rem;
+        display: none;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .inline-feedback.active {
+        display: block;
+      }
+      .inline-feedback.success {
+        background: rgba(2, 208, 125, 0.08);
+        border: 1px solid rgba(2, 208, 125, 0.25);
+        color: var(--green);
+      }
+      .inline-feedback.error {
+        background: rgba(255, 60, 60, 0.08);
+        border: 1px solid rgba(255, 60, 60, 0.25);
+        color: var(--red);
       }
 
       /* =================================================================
@@ -254,7 +326,7 @@
         align-items: center;
         justify-content: center;
         gap: 8px;
-        padding: 12px 24px;
+        padding: 12px 22px;
         border: none;
         border-radius: var(--radius-sm);
         font-size: 0.9rem;
@@ -262,6 +334,13 @@
         cursor: pointer;
         transition: all var(--transition);
         letter-spacing: 0.3px;
+        font-family: inherit;
+      }
+
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
       }
 
       .btn-primary {
@@ -270,41 +349,59 @@
         color: #000;
         box-shadow: 0 4px 20px rgba(2, 208, 125, 0.25);
       }
-
-      .btn-primary:hover {
+      .btn-primary:hover:not([disabled]) {
         transform: translateY(-2px);
         box-shadow: 0 6px 28px rgba(2, 208, 125, 0.35);
       }
-
       .btn-primary:active {
         transform: translateY(0);
       }
 
       .btn-secondary {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.05);
         color: var(--text);
         border: 1px solid var(--dark-border);
+        width: 100%;
       }
-
-      .btn-secondary:hover {
+      .btn-secondary:hover:not([disabled]) {
         background: rgba(255, 255, 255, 0.1);
-        border-color: var(--green);
+        border-color: var(--blue);
       }
 
       .btn-danger {
         background: rgba(255, 60, 60, 0.12);
-        color: #ff5555;
+        color: var(--red);
         border: 1px solid rgba(255, 60, 60, 0.2);
       }
-
-      .btn-danger:hover {
+      .btn-danger:hover:not([disabled]) {
         background: rgba(255, 60, 60, 0.2);
         transform: translateY(-1px);
       }
 
       .btn-sm {
-        padding: 8px 16px;
+        padding: 8px 14px;
         font-size: 0.82rem;
+        width: auto;
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--dark-border);
+        padding: 7px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-ghost:hover:not([disabled]) {
+        color: var(--text);
+        border-color: var(--green);
+        background: rgba(2, 208, 125, 0.06);
       }
 
       /* =================================================================
@@ -316,7 +413,6 @@
         position: relative;
         z-index: 1;
       }
-
       #dashboard.active {
         display: block;
         animation: fadeIn 0.4s ease;
@@ -327,20 +423,23 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 16px 20px;
-        background: rgba(0, 0, 0, 0.5);
+        gap: 10px;
+        padding: 14px 18px;
+        background: rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border-bottom: 1px solid var(--glass-border);
         position: sticky;
         top: 0;
         z-index: 100;
+        flex-wrap: wrap;
       }
 
       .header .logo {
         display: flex;
         align-items: center;
         gap: 10px;
+        min-width: 0;
       }
 
       .header .logo span.emoji {
@@ -354,29 +453,50 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+        white-space: nowrap;
       }
 
-      .btn-logout {
-        padding: 8px 16px;
-        font-size: 0.8rem;
-        background: rgba(255, 255, 255, 0.05);
+      .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        background: rgba(255, 255, 255, 0.04);
         border: 1px solid var(--dark-border);
-        border-radius: var(--radius-sm);
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all var(--transition);
+        color: var(--text-muted);
       }
-
-      .btn-logout:hover {
-        color: #ff5555;
-        border-color: rgba(255, 60, 60, 0.4);
+      .status-pill.ok {
+        background: rgba(2, 208, 125, 0.1);
+        border-color: rgba(2, 208, 125, 0.3);
+        color: var(--green);
+      }
+      .status-pill.bad {
         background: rgba(255, 60, 60, 0.08);
+        border-color: rgba(255, 60, 60, 0.25);
+        color: var(--red);
+      }
+      .status-pill.checking {
+        background: rgba(0, 204, 255, 0.08);
+        border-color: rgba(0, 204, 255, 0.25);
+        color: var(--blue);
+        animation: pulse 1.4s infinite;
       }
 
       /* Content container */
       .content {
         padding: 20px;
-        max-width: 800px;
+        max-width: 860px;
         margin: 0 auto;
       }
 
@@ -384,7 +504,7 @@
          Search Bar
          ================================================================= */
       .search-section {
-        margin-bottom: 24px;
+        margin-bottom: 22px;
       }
 
       .search-wrap {
@@ -404,26 +524,25 @@
         transition:
           border-color var(--transition),
           box-shadow var(--transition);
+        min-width: 0;
       }
-
       .search-wrap input:focus {
         border-color: var(--green);
         box-shadow: 0 0 0 3px rgba(2, 208, 125, 0.12);
       }
-
       .search-wrap input::placeholder {
         color: var(--text-muted);
       }
-
       .search-wrap .btn {
         flex-shrink: 0;
+        width: auto;
       }
 
       /* =================================================================
          Section titles
          ================================================================= */
       .section-title {
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         text-transform: uppercase;
         letter-spacing: 1.2px;
         color: var(--text-muted);
@@ -448,7 +567,6 @@
         transition: all var(--transition);
         animation: slideDown 0.35s ease backwards;
       }
-
       .camera-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 30px rgba(2, 208, 125, 0.08);
@@ -473,15 +591,28 @@
       .camera-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        font-size: 0.8rem;
+        gap: 10px 14px;
+        font-size: 0.78rem;
         color: var(--text-muted);
       }
-
       .camera-meta span {
         display: inline-flex;
         align-items: center;
         gap: 4px;
+      }
+
+      .location-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(0, 204, 255, 0.08);
+        border: 1px solid rgba(0, 204, 255, 0.25);
+        color: var(--blue);
+        font-size: 0.74rem;
+        font-weight: 600;
+        margin-top: 6px;
       }
 
       /* Status badges */
@@ -491,37 +622,33 @@
         gap: 6px;
         padding: 5px 12px;
         border-radius: 20px;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 600;
         letter-spacing: 0.3px;
+        flex-shrink: 0;
       }
-
       .status-badge.connected {
         background: rgba(2, 208, 125, 0.12);
         color: var(--green);
         border: 1px solid rgba(2, 208, 125, 0.25);
       }
-
       .status-badge.connecting {
         background: rgba(0, 204, 255, 0.1);
         color: var(--blue);
         border: 1px solid rgba(0, 204, 255, 0.2);
         animation: pulse 1.5s infinite;
       }
-
       .status-badge.reconnecting {
         background: rgba(255, 170, 0, 0.1);
-        color: #ffaa00;
+        color: var(--amber);
         border: 1px solid rgba(255, 170, 0, 0.2);
         animation: pulse 1.5s infinite;
       }
-
       .status-badge.error {
         background: rgba(255, 60, 60, 0.1);
-        color: #ff5555;
+        color: var(--red);
         border: 1px solid rgba(255, 60, 60, 0.2);
       }
-
       .status-badge.disconnected {
         background: rgba(255, 255, 255, 0.04);
         color: var(--text-muted);
@@ -546,6 +673,9 @@
         margin-top: 14px;
         flex-wrap: wrap;
       }
+      .camera-actions .btn {
+        width: auto;
+      }
 
       /* =================================================================
          Stream Viewer (canvas inside card)
@@ -559,14 +689,12 @@
         aspect-ratio: 16/9;
         border: 1px solid var(--dark-border);
       }
-
       .stream-viewer canvas {
         width: 100%;
         height: 100%;
         display: block;
         object-fit: contain;
       }
-
       .stream-placeholder {
         position: absolute;
         inset: 0;
@@ -579,7 +707,7 @@
       }
 
       /* =================================================================
-         Connection Modal
+         Modal
          ================================================================= */
       .modal-overlay {
         position: fixed;
@@ -588,19 +716,18 @@
         display: none;
         align-items: center;
         justify-content: center;
-        background: rgba(0, 0, 0, 0.7);
+        background: rgba(0, 0, 0, 0.75);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
         padding: 20px;
       }
-
       .modal-overlay.active {
         display: flex;
       }
 
       .modal {
         width: 100%;
-        max-width: 440px;
+        max-width: 460px;
         max-height: 90dvh;
         overflow-y: auto;
         background: var(--dark-card);
@@ -623,17 +750,150 @@
       .modal p.subtitle {
         color: var(--text-muted);
         font-size: 0.83rem;
-        margin-bottom: 22px;
+        margin-bottom: 20px;
+        line-height: 1.5;
       }
 
       .modal-actions {
         display: flex;
         gap: 10px;
-        margin-top: 24px;
+        margin-top: 22px;
       }
-
       .modal-actions .btn {
         flex: 1;
+        width: auto;
+      }
+
+      /* Help modal content */
+      .help-content {
+        font-size: 0.88rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+      }
+      .help-content ol {
+        padding-left: 22px;
+        margin: 12px 0;
+      }
+      .help-content li {
+        margin-bottom: 8px;
+      }
+      .help-content code {
+        background: rgba(0, 204, 255, 0.08);
+        border: 1px solid rgba(0, 204, 255, 0.2);
+        color: var(--blue);
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 0.82rem;
+        display: inline-block;
+      }
+      .help-permissions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 8px 0 4px;
+      }
+      .help-permissions code {
+        background: rgba(2, 208, 125, 0.08);
+        border-color: rgba(2, 208, 125, 0.25);
+        color: var(--green);
+      }
+
+      /* =================================================================
+         Searchable Location Field
+         ================================================================= */
+      .searchable {
+        position: relative;
+      }
+
+      .searchable input {
+        padding-right: 38px;
+      }
+
+      .searchable .field-spinner {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: none;
+      }
+      .searchable.loading .field-spinner {
+        display: inline-block;
+      }
+
+      .search-results {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--dark-2);
+        border: 1px solid var(--dark-border);
+        border-radius: var(--radius-sm);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 10;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+        display: none;
+      }
+      .search-results.active {
+        display: block;
+      }
+
+      .search-result-item {
+        padding: 12px 14px;
+        cursor: pointer;
+        font-size: 0.88rem;
+        color: var(--text);
+        border-bottom: 1px solid var(--dark-border);
+        transition: background var(--transition);
+      }
+      .search-result-item:last-child {
+        border-bottom: none;
+      }
+      .search-result-item:hover {
+        background: rgba(2, 208, 125, 0.08);
+        color: var(--green-light);
+      }
+
+      .search-empty {
+        padding: 16px 14px;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        text-align: center;
+      }
+
+      .selected-chip {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        background: rgba(2, 208, 125, 0.06);
+        border: 1px solid rgba(2, 208, 125, 0.25);
+        border-radius: var(--radius-sm);
+        margin-top: 8px;
+      }
+      .selected-chip.active {
+        display: flex;
+      }
+
+      .selected-chip .chip-label {
+        font-size: 0.85rem;
+        color: var(--green-light);
+        font-weight: 600;
+        word-break: break-word;
+      }
+      .selected-chip .chip-remove {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 0 4px;
+        transition: color var(--transition);
+      }
+      .selected-chip .chip-remove:hover {
+        color: var(--red);
       }
 
       /* =================================================================
@@ -644,14 +904,12 @@
         padding: 48px 24px;
         color: var(--text-muted);
       }
-
       .empty-state .emoji {
         font-size: 3rem;
         display: block;
         margin-bottom: 14px;
         opacity: 0.5;
       }
-
       .empty-state p {
         font-size: 0.9rem;
         line-height: 1.5;
@@ -664,13 +922,23 @@
         .content {
           padding: 28px;
         }
-
-        .login-card {
+        .config-card {
           padding: 48px 40px;
         }
-
         .camera-card {
           padding: 24px;
+        }
+        .header {
+          padding: 16px 24px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header-actions .btn-ghost span.label {
+          display: none;
+        }
+        .status-pill span.label {
+          display: none;
         }
       }
 
@@ -678,11 +946,9 @@
       ::-webkit-scrollbar {
         width: 6px;
       }
-
       ::-webkit-scrollbar-track {
         background: transparent;
       }
-
       ::-webkit-scrollbar-thumb {
         background: var(--dark-border);
         border-radius: 3px;
@@ -690,7 +956,7 @@
     </style>
   </head>
   <body>
-    <!-- ===== Loading Overlay ===== -->
+    <!-- ===== Global Loading Overlay ===== -->
     <div id="loading-overlay">
       <div class="loader-box">
         <div class="spinner"></div>
@@ -698,33 +964,59 @@
       </div>
     </div>
 
-    <!-- ===== Login Screen ===== -->
-    <div id="login-screen">
-      <div class="login-card">
+    <!-- ===== Configuration Screen ===== -->
+    <div id="config-screen">
+      <div class="config-card">
         <div class="brand">
-          <span class="emoji">📡</span>
-          <h1>Grex ID</h1>
-          <p>Sign in to manage your cameras</p>
+          <span class="emoji">🛰️</span>
+          <h1>Grex-ID Camera Bridge</h1>
+          <p>Connect this gateway to your Grex-ID instance</p>
         </div>
+
         <div class="form-group">
-          <label for="login-user">👤 Username</label>
+          <label for="cfg-url">🌐 Grex-ID Base URL</label>
           <input
-            type="text"
-            id="login-user"
-            placeholder="Enter your username"
-            autocomplete="username"
+            type="url"
+            id="cfg-url"
+            placeholder="https://grex.example.com"
+            autocomplete="off"
           />
+          <p class="form-hint">
+            Root URL of your Grex-ID deployment. Example:
+            <code>https://app.grex.id</code>
+          </p>
         </div>
+
         <div class="form-group">
-          <label for="login-pass">🔒 Password</label>
+          <label for="cfg-token">
+            🔑 API Token
+            <button type="button" class="help-link" id="help-btn">
+              ❓ How to get one
+            </button>
+          </label>
           <input
             type="password"
-            id="login-pass"
-            placeholder="Enter your password"
-            autocomplete="current-password"
+            id="cfg-token"
+            placeholder="Paste your Grex-ID API token"
+            autocomplete="off"
           />
+          <p class="form-hint">
+            Must include permissions
+            <code>grexid.detect</code> and
+            <code>grexid.list_locations</code>.
+          </p>
         </div>
-        <button class="btn btn-primary" id="login-btn">🚀 Sign In</button>
+
+        <div class="config-actions">
+          <button class="btn btn-primary" id="cfg-save">
+            🚀 Save & Continue
+          </button>
+          <button class="btn btn-secondary" id="cfg-test">
+            🔍 Test Connection
+          </button>
+        </div>
+
+        <div class="inline-feedback" id="cfg-feedback"></div>
       </div>
     </div>
 
@@ -732,40 +1024,51 @@
     <div id="dashboard">
       <header class="header">
         <div class="logo">
-          <span class="emoji">📡</span>
-          <h2>Grex ID</h2>
+          <span class="emoji">🛰️</span>
+          <h2>Grex-ID Bridge</h2>
         </div>
-        <button class="btn-logout" id="logout-btn">🚪 Logout</button>
+        <div class="header-actions">
+          <span class="status-pill" id="grex-status">
+            <span id="grex-status-dot">⚪</span>
+            <span class="label" id="grex-status-label">Unknown</span>
+          </span>
+          <button class="btn-ghost" id="check-btn">
+            🔍 <span class="label">Test</span>
+          </button>
+          <button class="btn-ghost" id="settings-btn">
+            ⚙️ <span class="label">Settings</span>
+          </button>
+        </div>
       </header>
 
       <div class="content">
-        <!-- Search -->
+        <!-- Camera discovery -->
         <section class="search-section">
           <div class="search-wrap">
             <input
               type="text"
               id="search-input"
-              placeholder="🔍 Search cameras by name…"
+              placeholder="🔍 Search cameras on the network…"
             />
             <button class="btn btn-primary btn-sm" id="search-btn">
-              Search
+              Scan
             </button>
           </div>
         </section>
 
-        <!-- Connections -->
+        <!-- Active connections -->
         <div id="connections-section" style="display: none">
           <h4 class="section-title">⚡ Active Connections</h4>
           <div class="camera-list" id="connections-list"></div>
           <div style="height: 24px"></div>
         </div>
 
-        <!-- Search results -->
-        <h4 class="section-title">📷 Available Cameras</h4>
+        <!-- Discovered cameras -->
+        <h4 class="section-title">📷 Discovered Cameras</h4>
         <div class="camera-list" id="camera-list">
           <div class="empty-state">
             <span class="emoji">🔍</span>
-            <p>Search for cameras on your network to get started.</p>
+            <p>Scan your local network to discover cameras.</p>
           </div>
         </div>
       </div>
@@ -775,36 +1078,111 @@
     <div class="modal-overlay" id="connect-modal">
       <div class="modal">
         <h3>🔗 Connect Camera</h3>
-        <p class="subtitle">Enter the RTSP stream details for this camera.</p>
+        <p class="subtitle">
+          Enter the RTSP credentials and select the Grex-ID location this camera
+          belongs to.
+        </p>
+
         <div class="form-group">
-          <label for="conn-name">📷 Camera Name (optional rename)</label>
+          <label for="conn-name">📷 Camera Name</label>
           <input type="text" id="conn-name" placeholder="e.g. Living Room" />
         </div>
+
         <div class="form-group">
           <label for="conn-user">👤 RTSP Username</label>
           <input type="text" id="conn-user" placeholder="admin" />
         </div>
+
         <div class="form-group">
           <label for="conn-pass">🔒 RTSP Password</label>
           <input type="password" id="conn-pass" placeholder="password" />
         </div>
+
         <div class="form-group">
           <label for="conn-ip">🌐 IP Address</label>
           <input type="text" id="conn-ip" placeholder="192.168.1.100" />
         </div>
+
         <div class="form-group">
           <label for="conn-port">🔌 Port</label>
           <input type="text" id="conn-port" placeholder="554" value="554" />
         </div>
+
         <div class="form-group">
           <label for="conn-path">📂 Stream Path</label>
           <input type="text" id="conn-path" placeholder="stream1" />
         </div>
+
+        <div class="form-group">
+          <label for="loc-search">📍 Grex-ID Location</label>
+          <div class="searchable" id="loc-field">
+            <input
+              type="text"
+              id="loc-search"
+              placeholder="Search locations…"
+              autocomplete="off"
+            />
+            <span class="spinner-inline field-spinner"></span>
+            <div class="search-results" id="loc-results"></div>
+          </div>
+          <div class="selected-chip" id="loc-chip">
+            <span class="chip-label" id="loc-chip-label"></span>
+            <button type="button" class="chip-remove" id="loc-chip-remove">
+              ✕
+            </button>
+          </div>
+          <p class="form-hint">
+            The Grex-ID location this camera belongs to. Required.
+          </p>
+        </div>
+
         <input type="hidden" id="conn-mac" />
         <input type="hidden" id="conn-original-name" />
+        <input type="hidden" id="loc-id" />
+        <input type="hidden" id="loc-name" />
+
         <div class="modal-actions">
           <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
           <button class="btn btn-primary" id="modal-save">⚡ Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Help Modal ===== -->
+    <div class="modal-overlay" id="help-modal">
+      <div class="modal">
+        <h3>🔑 How to create a Grex-ID API token</h3>
+        <p class="subtitle">
+          Follow these steps inside your Grex-ID panel.
+        </p>
+        <div class="help-content">
+          <ol>
+            <li>Sign in to your Grex-ID account at the base URL above.</li>
+            <li>Open the sidebar and go to <code>Tokens</code>.</li>
+            <li>
+              Click <code>Create Token</code> and give it a descriptive name
+              (e.g. <code>Camera Bridge</code>).
+            </li>
+            <li>
+              In the permissions field, add both of the following:
+              <div class="help-permissions">
+                <code>grexid.detect</code>
+                <code>grexid.list_locations</code>
+              </div>
+            </li>
+            <li>
+              Click <code>Save</code>. The raw token is shown <em>once</em> —
+              copy it immediately.
+            </li>
+            <li>Paste it into the API Token field on this screen.</li>
+          </ol>
+          <p style="margin-top: 12px">
+            Without both permissions this bridge cannot list locations or submit
+            detections.
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="help-close">Got it</button>
         </div>
       </div>
     </div>
@@ -818,17 +1196,28 @@
       const dom = {
         loading: document.getElementById("loading-overlay"),
         loadingText: document.getElementById("loading-text"),
-        loginScreen: document.getElementById("login-screen"),
+
+        configScreen: document.getElementById("config-screen"),
+        cfgUrl: document.getElementById("cfg-url"),
+        cfgToken: document.getElementById("cfg-token"),
+        cfgSave: document.getElementById("cfg-save"),
+        cfgTest: document.getElementById("cfg-test"),
+        cfgFeedback: document.getElementById("cfg-feedback"),
+        helpBtn: document.getElementById("help-btn"),
+
         dashboard: document.getElementById("dashboard"),
-        loginUser: document.getElementById("login-user"),
-        loginPass: document.getElementById("login-pass"),
-        loginBtn: document.getElementById("login-btn"),
-        logoutBtn: document.getElementById("logout-btn"),
+        grexStatus: document.getElementById("grex-status"),
+        grexStatusDot: document.getElementById("grex-status-dot"),
+        grexStatusLabel: document.getElementById("grex-status-label"),
+        checkBtn: document.getElementById("check-btn"),
+        settingsBtn: document.getElementById("settings-btn"),
+
         searchInput: document.getElementById("search-input"),
         searchBtn: document.getElementById("search-btn"),
         cameraList: document.getElementById("camera-list"),
         connectionsSection: document.getElementById("connections-section"),
         connectionsList: document.getElementById("connections-list"),
+
         modal: document.getElementById("connect-modal"),
         connName: document.getElementById("conn-name"),
         connUser: document.getElementById("conn-user"),
@@ -840,6 +1229,18 @@
         connOrigName: document.getElementById("conn-original-name"),
         modalCancel: document.getElementById("modal-cancel"),
         modalSave: document.getElementById("modal-save"),
+
+        locField: document.getElementById("loc-field"),
+        locSearch: document.getElementById("loc-search"),
+        locResults: document.getElementById("loc-results"),
+        locChip: document.getElementById("loc-chip"),
+        locChipLabel: document.getElementById("loc-chip-label"),
+        locChipRemove: document.getElementById("loc-chip-remove"),
+        locId: document.getElementById("loc-id"),
+        locName: document.getElementById("loc-name"),
+
+        helpModal: document.getElementById("help-modal"),
+        helpClose: document.getElementById("help-close"),
       };
 
       // =================================================================
@@ -849,6 +1250,8 @@
       let cameras = [];
       let connections = [];
       const streamSockets = new Map(); // connectionId → WebSocket
+      let locSearchDebounce = null;
+      let locSearchSeq = 0;
 
       // =================================================================
       // Loading Overlay
@@ -864,6 +1267,25 @@
       }
 
       // =================================================================
+      // Inline button busy helper
+      // =================================================================
+
+      const busyLabels = new Map();
+
+      function setBusy(btn, busy, busyText) {
+        if (busy) {
+          busyLabels.set(btn, btn.innerHTML);
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner-inline"></span> ' +
+            (busyText || "Working…");
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = busyLabels.get(btn) || btn.innerHTML;
+          busyLabels.delete(btn);
+        }
+      }
+
+      // =================================================================
       // API Helpers
       // =================================================================
 
@@ -876,44 +1298,153 @@
       }
 
       // =================================================================
-      // Auth
+      // Feedback helpers
       // =================================================================
 
-      async function checkAuth() {
-        const { loggedIn } = await api("/api/status");
-        return loggedIn;
+      function showFeedback(el, type, message) {
+        el.className = "inline-feedback " + type + " active";
+        el.textContent = message;
       }
 
-      async function performLogin() {
-        const username = dom.loginUser.value.trim();
-        const password = dom.loginPass.value.trim();
-        if (!username || !password) return;
+      function clearFeedback(el) {
+        el.className = "inline-feedback";
+        el.textContent = "";
+      }
 
-        showLoading("Authenticating…");
+      function esc(str) {
+        const d = document.createElement("div");
+        d.textContent = str == null ? "" : String(str);
+        return d.innerHTML;
+      }
+
+      // =================================================================
+      // Configuration
+      // =================================================================
+
+      async function loadConfig() {
+        const cfg = await api("/api/config");
+        if (cfg.grexBaseUrl) dom.cfgUrl.value = cfg.grexBaseUrl;
+        if (cfg.grexToken) dom.cfgToken.value = cfg.grexToken;
+        return cfg;
+      }
+
+      async function testConnectionInline(btn, feedbackEl) {
+        // Persist any edits first so the backend uses the latest values.
+        const grexBaseUrl = dom.cfgUrl.value.trim();
+        const grexToken = dom.cfgToken.value.trim();
+        if (!grexBaseUrl || !grexToken) {
+          showFeedback(
+            feedbackEl,
+            "error",
+            "Please fill in both the base URL and the token first.",
+          );
+          return false;
+        }
+        setBusy(btn, true, "Testing…");
+        clearFeedback(feedbackEl);
         try {
-          await api("/api/login", {
+          await api("/api/config", {
             method: "POST",
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ grexBaseUrl, grexToken }),
           });
-          await initDashboard();
+          const result = await api("/api/grex/check");
+          if (result.ok) {
+            showFeedback(
+              feedbackEl,
+              "success",
+              "✅ Connection successful (" + result.message + ").",
+            );
+            updateGrexStatus(true, "Online");
+            return true;
+          } else {
+            showFeedback(
+              feedbackEl,
+              "error",
+              "❌ " + (result.message || "Connection failed"),
+            );
+            updateGrexStatus(false, "Offline");
+            return false;
+          }
         } catch (err) {
-          alert("Login failed: " + err.message);
+          showFeedback(feedbackEl, "error", "❌ " + (err.message || err));
+          updateGrexStatus(false, "Offline");
+          return false;
         } finally {
-          hideLoading();
+          setBusy(btn, false);
         }
       }
 
-      async function performLogout() {
-        showLoading("Signing out…");
-        closeAllStreams();
-        await api("/api/logout", { method: "POST" });
-        connections = [];
-        cameras = [];
+      async function saveConfigAndContinue() {
+        const grexBaseUrl = dom.cfgUrl.value.trim();
+        const grexToken = dom.cfgToken.value.trim();
+        if (!grexBaseUrl || !grexToken) {
+          showFeedback(
+            dom.cfgFeedback,
+            "error",
+            "Please fill in both the base URL and the token.",
+          );
+          return;
+        }
+        setBusy(dom.cfgSave, true, "Saving…");
+        clearFeedback(dom.cfgFeedback);
+        try {
+          const resp = await api("/api/config", {
+            method: "POST",
+            body: JSON.stringify({ grexBaseUrl, grexToken }),
+          });
+          if (!resp.ok) {
+            showFeedback(
+              dom.cfgFeedback,
+              "error",
+              resp.error || "Failed to save configuration.",
+            );
+            return;
+          }
+          await initDashboard();
+        } catch (err) {
+          showFeedback(dom.cfgFeedback, "error", String(err));
+        } finally {
+          setBusy(dom.cfgSave, false);
+        }
+      }
+
+      function openSettings() {
         dom.dashboard.classList.remove("active");
-        dom.loginScreen.classList.add("active");
-        dom.loginUser.value = "";
-        dom.loginPass.value = "";
-        hideLoading();
+        dom.configScreen.classList.add("active");
+        clearFeedback(dom.cfgFeedback);
+      }
+
+      // =================================================================
+      // Grex-ID status pill
+      // =================================================================
+
+      function updateGrexStatus(ok, label) {
+        dom.grexStatus.className = "status-pill " + (ok ? "ok" : "bad");
+        dom.grexStatusDot.textContent = ok ? "🟢" : "🔴";
+        dom.grexStatusLabel.textContent = label;
+      }
+
+      function setGrexStatusChecking() {
+        dom.grexStatus.className = "status-pill checking";
+        dom.grexStatusDot.textContent = "🔵";
+        dom.grexStatusLabel.textContent = "Checking…";
+      }
+
+      async function checkGrexStatus() {
+        setBusy(dom.checkBtn, true, "Testing…");
+        setGrexStatusChecking();
+        try {
+          const result = await api("/api/grex/check");
+          if (result.ok) {
+            updateGrexStatus(true, "Online");
+          } else {
+            updateGrexStatus(false, result.message || "Offline");
+          }
+        } catch (err) {
+          updateGrexStatus(false, "Offline");
+        } finally {
+          setBusy(dom.checkBtn, false);
+        }
       }
 
       // =================================================================
@@ -922,6 +1453,7 @@
 
       async function searchCameras() {
         const query = dom.searchInput.value.trim().toLowerCase();
+        setBusy(dom.searchBtn, true, "Scanning…");
         showLoading("Scanning network…");
         try {
           const data = await api("/api/cameras");
@@ -931,6 +1463,7 @@
           console.error("Search failed:", err);
         } finally {
           hideLoading();
+          setBusy(dom.searchBtn, false);
         }
       }
 
@@ -957,31 +1490,40 @@
           port: dom.connPort.value.trim(),
           path: dom.connPath.value.trim(),
           mac: dom.connMac.value,
+          locationId: dom.locId.value,
+          locationName: dom.locName.value,
         };
 
         if (
           !conn.username || !conn.password || !conn.ip || !conn.port ||
           !conn.path
         ) {
-          alert("Please fill in all required fields.");
+          alert("Please fill in all required RTSP fields.");
+          return;
+        }
+        if (!conn.locationId) {
+          alert("Please select a Grex-ID location for this camera.");
           return;
         }
 
-        closeModal();
+        setBusy(dom.modalSave, true, "Connecting…");
         showLoading("Connecting camera…");
         try {
           const data = await api("/api/connections", {
             method: "POST",
             body: JSON.stringify(conn),
           });
-          await loadConnections();
-          // Open WebSocket for the new connection.
-          if (data.connection) {
-            openStreamSocket(data.connection.id);
+          if (!data.ok) {
+            alert("Failed to save connection: " + (data.error || "unknown"));
+            return;
           }
+          closeModal();
+          await loadConnections();
+          if (data.connection) openStreamSocket(data.connection.id);
         } catch (err) {
           alert("Failed to save connection: " + err.message);
         } finally {
+          setBusy(dom.modalSave, false);
           hideLoading();
         }
       }
@@ -1012,17 +1554,15 @@
 
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
         const ws = new WebSocket(
-          `${protocol}//${location.host}/api/stream/${connectionId}`,
+          protocol + "//" + location.host + "/api/stream/" + connectionId,
         );
 
         ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
-
             if (msg.type === "status") {
               updateConnectionStatus(msg.connectionId, msg.status, msg.error);
             }
-
             if (msg.type === "frame") {
               drawFrame(msg.connectionId || connectionId, msg.data);
             }
@@ -1031,7 +1571,6 @@
 
         ws.onclose = () => {
           streamSockets.delete(connectionId);
-          // Try to reconnect after a short delay.
           setTimeout(() => {
             if (connections.some((c) => c.id === connectionId)) {
               openStreamSocket(connectionId);
@@ -1039,9 +1578,7 @@
           }, 3000);
         };
 
-        ws.onerror = () => {
-          ws.close();
-        };
+        ws.onerror = () => ws.close();
 
         streamSockets.set(connectionId, ws);
       }
@@ -1055,26 +1592,21 @@
       }
 
       function closeAllStreams() {
-        for (const [id, ws] of streamSockets) {
-          ws.close();
-        }
+        for (const [id, ws] of streamSockets) ws.close();
         streamSockets.clear();
       }
 
       function drawFrame(connectionId, base64Data) {
-        const canvas = document.getElementById(`canvas-${connectionId}`);
+        const canvas = document.getElementById("canvas-" + connectionId);
         if (!canvas) return;
-
         const ctx = canvas.getContext("2d");
         const img = new Image();
         img.onload = () => {
           canvas.width = img.width;
           canvas.height = img.height;
           ctx.drawImage(img, 0, 0);
-
-          // Hide placeholder.
           const placeholder = document.getElementById(
-            `placeholder-${connectionId}`,
+            "placeholder-" + connectionId,
           );
           if (placeholder) placeholder.style.display = "none";
         };
@@ -1082,19 +1614,17 @@
       }
 
       function updateConnectionStatus(connectionId, status, error) {
-        // Update local state.
         const conn = connections.find((c) => c.id === connectionId);
         if (conn) {
           conn.streamStatus = status;
           conn.streamError = error;
         }
-        // Re-render just the status elements.
-        const badgeEl = document.getElementById(`badge-${connectionId}`);
+        const badgeEl = document.getElementById("badge-" + connectionId);
         if (badgeEl) {
-          badgeEl.className = `status-badge ${status}`;
+          badgeEl.className = "status-badge " + status;
           badgeEl.innerHTML = statusEmoji(status) + " " + capitalise(status);
         }
-        const errorEl = document.getElementById(`error-${connectionId}`);
+        const errorEl = document.getElementById("error-" + connectionId);
         if (errorEl) {
           if (status === "error" || status === "reconnecting") {
             errorEl.style.display = "block";
@@ -1110,59 +1640,50 @@
       // =================================================================
 
       function statusEmoji(s) {
-        const map = {
+        return {
           connected: "🟢",
           connecting: "🔵",
           reconnecting: "🟡",
           error: "🔴",
           disconnected: "⚪",
-        };
-        return map[s] || "⚪";
+        }[s] || "⚪";
       }
 
       function capitalise(s) {
         return s.charAt(0).toUpperCase() + s.slice(1);
       }
 
-      function renderCameras(query = "") {
+      function renderCameras(query) {
+        query = query || "";
         const filtered = cameras.filter((c) =>
           c.name.toLowerCase().includes(query)
         );
 
         if (filtered.length === 0) {
-          dom.cameraList.innerHTML = `
-          <div class="empty-state">
-            <span class="emoji">📭</span>
-            <p>${
-            cameras.length === 0
-              ? "No cameras found. Try searching again."
-              : "No cameras match your search."
-          }</p>
-          </div>`;
+          dom.cameraList.innerHTML =
+            '<div class="empty-state"><span class="emoji">📭</span><p>' +
+            (cameras.length === 0
+              ? "No cameras found. Try scanning again."
+              : "No cameras match your search.") +
+            "</p></div>";
           return;
         }
 
-        dom.cameraList.innerHTML = filtered.map((cam, i) => `
-        <div class="camera-card" style="animation-delay:${i * 0.06}s">
-          <div class="camera-card-header">
-            <div class="camera-info">
-              <h3>📷 ${esc(cam.name)}</h3>
-              <div class="camera-meta">
-                <span>🌐 ${esc(cam.ip)}</span>
-                <span>🔗 ${esc(cam.mac)}</span>
-              </div>
-            </div>
-          </div>
-          <div class="camera-actions">
-            <button class="btn btn-primary btn-sm"
-              onclick="openConnectModal('${esc(cam.name)}', '${
-          esc(cam.ip)
-        }', '${esc(cam.mac)}')">
-              ⚡ Connect
-            </button>
-          </div>
-        </div>
-      `).join("");
+        dom.cameraList.innerHTML = filtered.map((cam, i) =>
+          '<div class="camera-card" style="animation-delay:' + (i * 0.06) +
+          's">' +
+          '<div class="camera-card-header"><div class="camera-info">' +
+          "<h3>📷 " + esc(cam.name) + "</h3>" +
+          '<div class="camera-meta">' +
+          "<span>🌐 " + esc(cam.ip) + "</span>" +
+          "<span>🔗 " + esc(cam.mac) + "</span>" +
+          "</div></div></div>" +
+          '<div class="camera-actions">' +
+          '<button class="btn btn-primary btn-sm" onclick="openConnectModal(\'' +
+          esc(cam.name) + "','" + esc(cam.ip) + "','" + esc(cam.mac) +
+          "')\">⚡ Connect</button>" +
+          "</div></div>"
+        ).join("");
       }
 
       function renderConnections() {
@@ -1170,70 +1691,54 @@
           dom.connectionsSection.style.display = "none";
           return;
         }
-
         dom.connectionsSection.style.display = "block";
         dom.connectionsList.innerHTML = connections.map((c, i) => {
           const status = c.streamStatus || "disconnected";
           const error = c.streamError || "";
           const showError = status === "error" || status === "reconnecting";
-
-          return `
-          <div class="camera-card" style="animation-delay:${i * 0.06}s">
-            <div class="camera-card-header">
-              <div class="camera-info">
-                <h3>📷 ${esc(c.cameraName)}</h3>
-                <div class="camera-meta">
-                  <span>🌐 ${esc(c.ip)}:${esc(c.port)}</span>
-                  <span>🔗 ${esc(c.mac)}</span>
-                </div>
-              </div>
-              <span id="badge-${c.id}" class="status-badge ${status}">
-                ${statusEmoji(status)} ${capitalise(status)}
-              </span>
-            </div>
-
-            <div id="error-${c.id}" class="error-message"
-              style="display:${showError ? "block" : "none"}">
-              ${esc(error)}
-            </div>
-
-            <div class="stream-viewer">
-              <canvas id="canvas-${c.id}"></canvas>
-              <div id="placeholder-${c.id}" class="stream-placeholder">
-                ${
-            status === "connected"
-              ? ""
-              : statusEmoji(status) + " " + (status === "connecting"
+          return (
+            '<div class="camera-card" style="animation-delay:' + (i * 0.06) +
+            's">' +
+            '<div class="camera-card-header"><div class="camera-info">' +
+            "<h3>📷 " + esc(c.cameraName) + "</h3>" +
+            '<div class="camera-meta">' +
+            "<span>🌐 " + esc(c.ip) + ":" + esc(c.port) + "</span>" +
+            "<span>🔗 " + esc(c.mac) + "</span>" +
+            "</div>" +
+            (c.locationName
+              ? '<span class="location-tag">📍 ' + esc(c.locationName) +
+                "</span>"
+              : "") +
+            "</div>" +
+            '<span id="badge-' + c.id + '" class="status-badge ' + status +
+            '">' + statusEmoji(status) + " " + capitalise(status) +
+            "</span></div>" +
+            '<div id="error-' + c.id +
+            '" class="error-message" style="display:' +
+            (showError ? "block" : "none") + '">' +
+            esc(error) + "</div>" +
+            '<div class="stream-viewer">' +
+            '<canvas id="canvas-' + c.id + '"></canvas>' +
+            '<div id="placeholder-' + c.id + '" class="stream-placeholder">' +
+            (status === "connected" ? "" : statusEmoji(status) + " " +
+              (status === "connecting"
                 ? "Connecting…"
                 : status === "reconnecting"
                 ? "Reconnecting…"
-                : "Waiting for stream…")
-          }
-              </div>
-            </div>
-
-            <div class="camera-actions">
-              <button class="btn btn-secondary btn-sm"
-                onclick="manualReconnect('${c.id}')">
-                🔄 Reconnect
-              </button>
-              <button class="btn btn-danger btn-sm"
-                onclick="deleteConnection('${c.id}')">
-                🗑️ Disconnect
-              </button>
-            </div>
-          </div>`;
+                : "Waiting for stream…")) +
+            "</div></div>" +
+            '<div class="camera-actions">' +
+            '<button class="btn btn-secondary btn-sm" onclick="manualReconnect(\'' +
+            c.id + "')\">🔄 Reconnect</button>" +
+            '<button class="btn btn-danger btn-sm" onclick="deleteConnection(\'' +
+            c.id + "')\">🗑️ Disconnect</button>" +
+            "</div></div>"
+          );
         }).join("");
       }
 
-      function esc(str) {
-        const d = document.createElement("div");
-        d.textContent = str;
-        return d.innerHTML;
-      }
-
       // =================================================================
-      // Modal
+      // Connect Modal (location search)
       // =================================================================
 
       function openConnectModal(name, ip, mac) {
@@ -1245,11 +1750,76 @@
         dom.connPass.value = "";
         dom.connPort.value = "554";
         dom.connPath.value = "";
+        clearLocationSelection();
+        dom.locSearch.value = "";
+        dom.locResults.classList.remove("active");
         dom.modal.classList.add("active");
       }
 
       function closeModal() {
         dom.modal.classList.remove("active");
+      }
+
+      function clearLocationSelection() {
+        dom.locId.value = "";
+        dom.locName.value = "";
+        dom.locChip.classList.remove("active");
+        dom.locChipLabel.textContent = "";
+        dom.locSearch.disabled = false;
+        dom.locSearch.style.display = "";
+      }
+
+      function selectLocation(id, name) {
+        dom.locId.value = id;
+        dom.locName.value = name;
+        dom.locChipLabel.textContent = "📍 " + name;
+        dom.locChip.classList.add("active");
+        dom.locResults.classList.remove("active");
+        dom.locSearch.value = "";
+        dom.locSearch.style.display = "none";
+      }
+
+      async function searchLocations(query) {
+        const seq = ++locSearchSeq;
+        dom.locField.classList.add("loading");
+        try {
+          const res = await api(
+            "/api/grex/locations?search=" + encodeURIComponent(query),
+          );
+          if (seq !== locSearchSeq) return; // stale
+          const rows = res.locations || [];
+          if (!res.ok && res.error) {
+            dom.locResults.innerHTML = '<div class="search-empty">⚠️ ' +
+              esc(res.error) + "</div>";
+          } else if (rows.length === 0) {
+            dom.locResults.innerHTML =
+              '<div class="search-empty">No locations found.</div>';
+          } else {
+            dom.locResults.innerHTML = rows.map((r) =>
+              '<div class="search-result-item" data-id="' + esc(r.id) +
+              '" data-name="' + esc(r.name) + '">📍 ' + esc(r.name) + "</div>"
+            ).join("");
+          }
+          dom.locResults.classList.add("active");
+        } catch (err) {
+          if (seq !== locSearchSeq) return;
+          dom.locResults.innerHTML = '<div class="search-empty">⚠️ ' +
+            esc(err.message) + "</div>";
+          dom.locResults.classList.add("active");
+        } finally {
+          if (seq === locSearchSeq) dom.locField.classList.remove("loading");
+        }
+      }
+
+      function onLocationInput() {
+        if (locSearchDebounce) clearTimeout(locSearchDebounce);
+        const query = dom.locSearch.value.trim();
+        locSearchDebounce = setTimeout(() => searchLocations(query), 300);
+      }
+
+      function onLocationFocus() {
+        // Pre-populate with initial results
+        searchLocations(dom.locSearch.value.trim());
       }
 
       // =================================================================
@@ -1271,27 +1841,25 @@
       // =================================================================
 
       async function initDashboard() {
-        dom.loginScreen.classList.remove("active");
+        dom.configScreen.classList.remove("active");
         dom.dashboard.classList.add("active");
         await loadConnections();
-        // Open WebSocket for each existing connection.
-        for (const conn of connections) {
-          openStreamSocket(conn.id);
-        }
+        for (const conn of connections) openStreamSocket(conn.id);
+        checkGrexStatus();
       }
 
       async function boot() {
         showLoading("Starting up…");
         try {
-          const loggedIn = await checkAuth();
-          if (loggedIn) {
+          const cfg = await loadConfig();
+          if (cfg.configured) {
             await initDashboard();
           } else {
-            dom.loginScreen.classList.add("active");
+            dom.configScreen.classList.add("active");
           }
         } catch (err) {
           console.error("Boot error:", err);
-          dom.loginScreen.classList.add("active");
+          dom.configScreen.classList.add("active");
         } finally {
           hideLoading();
         }
@@ -1301,15 +1869,27 @@
       // Event Listeners
       // =================================================================
 
-      dom.loginBtn.addEventListener("click", performLogin);
-      dom.loginPass.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") performLogin();
-      });
-      dom.loginUser.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") dom.loginPass.focus();
+      dom.cfgSave.addEventListener("click", saveConfigAndContinue);
+      dom.cfgTest.addEventListener(
+        "click",
+        () => testConnectionInline(dom.cfgTest, dom.cfgFeedback),
+      );
+      dom.helpBtn.addEventListener(
+        "click",
+        () => dom.helpModal.classList.add("active"),
+      );
+      dom.helpClose.addEventListener(
+        "click",
+        () => dom.helpModal.classList.remove("active"),
+      );
+      dom.helpModal.addEventListener("click", (e) => {
+        if (e.target === dom.helpModal) {
+          dom.helpModal.classList.remove("active");
+        }
       });
 
-      dom.logoutBtn.addEventListener("click", performLogout);
+      dom.checkBtn.addEventListener("click", checkGrexStatus);
+      dom.settingsBtn.addEventListener("click", openSettings);
 
       dom.searchBtn.addEventListener("click", searchCameras);
       dom.searchInput.addEventListener("keydown", (e) => {
@@ -1321,6 +1901,28 @@
       dom.modal.addEventListener("click", (e) => {
         if (e.target === dom.modal) closeModal();
       });
+
+      dom.locSearch.addEventListener("input", onLocationInput);
+      dom.locSearch.addEventListener("focus", onLocationFocus);
+      dom.locResults.addEventListener("click", (e) => {
+        const item = e.target.closest(".search-result-item");
+        if (!item) return;
+        selectLocation(item.dataset.id, item.dataset.name);
+      });
+      dom.locChipRemove.addEventListener("click", () => {
+        clearLocationSelection();
+        dom.locSearch.focus();
+      });
+      document.addEventListener("click", (e) => {
+        if (!dom.locField.contains(e.target)) {
+          dom.locResults.classList.remove("active");
+        }
+      });
+
+      // Expose functions used from inline onclick handlers
+      window.openConnectModal = openConnectModal;
+      window.deleteConnection = deleteConnection;
+      window.manualReconnect = manualReconnect;
 
       // =================================================================
       // Boot

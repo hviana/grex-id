@@ -13,9 +13,8 @@ import { publish } from "@/server/event-queue/publisher";
 
 export async function POST(req: NextRequest) {
   const core = Core.getInstance();
-  await core.ensureLoaded();
   const rateLimitPerMinute = Number(
-    core.getSetting("auth.rateLimit.perMinute"),
+    await core.getSetting("auth.rateLimit.perMinute"),
   );
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -56,7 +55,7 @@ export async function POST(req: NextRequest) {
   if (!user) return successResponse;
 
   const cooldownSeconds = Number(
-    core.getSetting("auth.verification.cooldown.seconds"),
+    await core.getSetting("auth.verification.cooldown.seconds"),
   );
 
   // Check cooldown
@@ -72,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   const resetExpiryMinutes = Number(
-    core.getSetting("auth.passwordReset.expiry.minutes"),
+    await core.getSetting("auth.passwordReset.expiry.minutes"),
   );
 
   const resetToken = generateSecureToken();
@@ -83,7 +82,8 @@ export async function POST(req: NextRequest) {
     expiresAt: new Date(Date.now() + resetExpiryMinutes * 60_000),
   });
 
-  const baseUrl = core.getSetting("app.baseUrl") ?? "http://localhost:3000";
+  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+    "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
   const systemSlug = body.systemSlug as string | undefined;
 

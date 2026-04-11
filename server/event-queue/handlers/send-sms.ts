@@ -17,7 +17,7 @@ export const sendSms: HandlerFn = async (payload) => {
   // Resolve locale: payload > system default > hardcoded fallback
   let locale = payload.locale as string | undefined;
   if (!locale && systemSlug) {
-    const system = core.getSystemBySlug(systemSlug);
+    const system = await core.getSystemBySlug(systemSlug);
     locale = system?.defaultLocale ?? undefined;
   }
   locale ??= "en";

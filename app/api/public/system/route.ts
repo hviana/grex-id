@@ -7,21 +7,20 @@ export async function GET(req: NextRequest) {
   const useDefault = searchParams.get("default") === "true";
 
   const core = Core.getInstance();
-  await core.ensureLoaded();
 
   let resolvedSlug = slug;
   if (!resolvedSlug && useDefault) {
-    resolvedSlug = core.getSetting("app.defaultSystem") || null;
+    resolvedSlug = (await core.getSetting("app.defaultSystem")) || null;
   }
 
-  const genericTerms = core.getSetting("terms.generic") || "";
+  const genericTerms = (await core.getSetting("terms.generic")) || "";
 
   if (!resolvedSlug) {
     return NextResponse.json({
       success: true,
       data: genericTerms
         ? {
-          name: core.getSetting("app.name") || "Core",
+          name: (await core.getSetting("app.name")) || "Core",
           slug: "",
           logoUri: "",
           termsOfService: genericTerms,
@@ -30,13 +29,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const system = core.getSystemBySlug(resolvedSlug);
+  const system = await core.getSystemBySlug(resolvedSlug);
   if (!system) {
     return NextResponse.json({
       success: true,
       data: genericTerms
         ? {
-          name: core.getSetting("app.name") || "Core",
+          name: (await core.getSetting("app.name")) || "Core",
           slug: "",
           logoUri: "",
           termsOfService: genericTerms,

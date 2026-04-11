@@ -1727,9 +1727,17 @@ class Core {
 
   // Vouchers are NOT cached (queried on demand)
 
+  // Read methods are async and self-load on first access (lazy loading).
+  // No explicit warm-up call is required.
+  async getSetting(key: string): Promise<string | undefined>;
+  async getSystemBySlug(slug: string): Promise<System | undefined>;
+  async getRolesForSystem(systemId: string): Promise<Role[]>;
+  async getPlansForSystem(systemId: string): Promise<Plan[]>;
+  async getMenusForSystem(systemId: string): Promise<MenuItem[]>;
+
   // Missing settings log — tracks keys requested via getSetting()
   // that were not found in the DB. Cleared per key on reload when defined.
-  getMissingSettings(): MissingSetting[];
+  async getMissingSettings(): Promise<MissingSetting[]>;
   // MissingSetting: { key, firstRequestedAt }
 
   async load(): Promise<void>; // Loads all data from DB
