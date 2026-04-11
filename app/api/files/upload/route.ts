@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getFS } from "@/server/utils/fs.ts";
+import { getFS } from "@/server/utils/fs";
 import type { SaveControlResult } from "@hviana/surreal-fs";
 
 // --- In-memory rate limiter for unauthenticated uploads ---

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getFS } from "@/server/utils/fs.ts";
+import { getFS } from "@/server/utils/fs";
 import type { ReadControlResult } from "@hviana/surreal-fs";
 
 async function tryGetAuth(
