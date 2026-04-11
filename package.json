@@ -11,21 +11,24 @@
     "build:vinext": "vite build",
     "db:setup": "tsx server/db/setup.ts",
     "db:migrate": "tsx -e \"import('./server/db/migrations/runner').then(m => m.runMigrations()).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\"",
-    "db:seed": "tsx -e \"import('./server/db/seeds/runner').then(m => m.runSeeds()).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\""
+    "db:seed": "tsx -e \"import('./server/db/seeds/runner').then(m => m.runSeeds()).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\"",
+    "start:vinext": "vinext start"
   },
   "dependencies": {
     "@hviana/surreal-fs": "npm:@jsr/hviana__surreal-fs@^1.0.1",
     "@panva/jose": "npm:@jsr/panva__jose@^6.2.2",
     "chart.js": "^4.5.1",
-    "next": "16.2.1",
-    "react": "19.2.4",
+    "next": "^16.2.3",
+    "nitro": "^3.0.260311-beta",
+    "react": "^19.2.5",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "19.2.4",
+    "react-dom": "^19.2.5",
     "surrealdb": "^2.0.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@cloudflare/vite-plugin": "^1.31.2",
+    "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -38,7 +41,8 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vinext": "^0.0.41",
-    "vite": "^8.0.3"
+    "vite": "^8.0.8",
+    "wrangler": "^4.81.1"
   },
   "type": "module"
 }

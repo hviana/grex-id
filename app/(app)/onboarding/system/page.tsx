@@ -18,6 +18,7 @@ interface PlanOption {
   id: string;
   name: string;
   description: string;
+  planCredits: number;
   price: number;
   currency: string;
   recurrenceDays: number;
