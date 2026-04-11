@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
       name: name!,
       email: email!,
       phone,
-      profile: mergedProfile,
+      profile: mergedProfile as any,
       companyIds,
       tags,
     });
