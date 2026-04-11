@@ -105,7 +105,9 @@ export async function POST(req: NextRequest) {
     .join("");
 
   // Single batched query: create connected_app + api_token
-  const result = await db.query<[unknown, Record<string, unknown>[]]>(
+  const result = await db.query<
+    [unknown, unknown, Record<string, unknown>[]]
+  >(
     `LET $app = CREATE connected_app SET
        name = $clientName,
        companyId = $companyId,
@@ -136,7 +138,7 @@ export async function POST(req: NextRequest) {
     },
   );
 
-  const app = (result[2] as unknown as Record<string, unknown>[])?.[0];
+  const app = result[2]?.[0];
 
   return NextResponse.json(
     { success: true, data: { token: rawToken, app } },
