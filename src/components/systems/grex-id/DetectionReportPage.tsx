@@ -354,7 +354,7 @@ export default function DetectionReportPage() {
       [t("systems.grex-id.report.exportEmail")]: item.leadEmail ?? "",
       [t("systems.grex-id.report.exportPhone")]: item.leadPhone ?? "",
       [t("systems.grex-id.report.exportOwner")]: item.ownerName ?? "",
-      [t("systems.grex-id.report.score")]: (1 - item.score).toFixed(2),
+      [t("systems.grex-id.report.score")]: item.score.toFixed(2),
     }));
   }, [resolvedItems, t, locale]);
 
@@ -590,7 +590,7 @@ export default function DetectionReportPage() {
                     {t("systems.grex-id.report.score")}
                   </span>
                   <p className="text-sm font-mono text-white">
-                    {(1 - item.score).toFixed(2)}
+                    {item.score.toFixed(2)}
                   </p>
                 </div>
               </div>

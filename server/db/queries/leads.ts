@@ -2,6 +2,7 @@ import { getDb, rid } from "../connection.ts";
 import type { Lead, LeadCompanySystem } from "@/src/contracts/lead";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
+import { deleteFaceByLeadId } from "./systems/grex-id/faces.ts";
 
 function normalizeRecordId(value: unknown): string | null {
   if (!value) return null;
@@ -327,6 +328,7 @@ export async function syncLeadCompanyIds(leadId: string): Promise<string[]> {
 export async function deleteLead(id: string): Promise<void> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
+  await deleteFaceByLeadId(leadId);
   await db.query(
     `LET $ld = (SELECT profile FROM lead WHERE id = $id);
     DELETE FROM lead WHERE id = $id;
@@ -429,7 +431,14 @@ export async function removeLeadFromCompanySystem(
       systemId: rid(normalizedSystemId),
     },
   );
-  await syncLeadCompanyIds(normalizedLeadId);
+  const remaining = await syncLeadCompanyIds(normalizedLeadId);
+  // When a lead has no remaining associations in any tenant, drop its face
+  // embedding so the HNSW index cannot surface dangling matches in future
+  // detections. Face records are grex-id specific but safe to delete here:
+  // a lead with zero associations is effectively orphaned platform-wide.
+  if (remaining.length === 0) {
+    await deleteFaceByLeadId(normalizedLeadId);
+  }
 }
 
 export async function searchUsersInCompanySystem(

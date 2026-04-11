@@ -28,11 +28,11 @@ export const processDetection: HandlerFn = async (payload) => {
     let detectedLeadId: string | undefined;
     let score = 0;
 
-    if (bestMatch && bestMatch.score <= (1 - sensitivity)) {
+    if (bestMatch && bestMatch.score >= sensitivity) {
       detectedLeadId = bestMatch.leadId;
       score = bestMatch.score;
     } else {
-      score = bestMatch?.score ?? 1;
+      score = bestMatch?.score ?? 0;
     }
 
     await createDetection({
