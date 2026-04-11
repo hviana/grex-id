@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     );
 
     const { passwordHash: _, twoFactorSecret: _s, ...safeUser } =
-      user as Record<string, unknown>;
+      user as unknown as Record<string, unknown>;
 
     return NextResponse.json({
       success: true,
