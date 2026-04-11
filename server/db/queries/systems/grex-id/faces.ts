@@ -1,5 +1,31 @@
 import { getDb, rid } from "@/server/db/connection";
 
+function normalizeRecordId(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  const stringified = String(value).trim();
+  if (/^[^:\s]+:[^:\s]+$/.test(stringified)) {
+    return stringified;
+  }
+  if (typeof value === "object") {
+    const record = value as { id?: unknown; tb?: unknown };
+    if (typeof record.tb === "string") {
+      const innerId = typeof record.id === "string"
+        ? record.id
+        : record.id != null
+        ? String((record.id as { String?: string }).String ?? record.id)
+        : "";
+      if (innerId) return `${record.tb}:${innerId}`;
+    }
+    if (typeof record.id === "string") {
+      return record.id.trim() || null;
+    }
+  }
+  return stringified || null;
+}
+
 export interface Face {
   id: string;
   leadId: string;
@@ -79,16 +105,25 @@ export async function searchFaceByEmbedding(
 ): Promise<{ id: string; leadId: string; score: number }[]> {
   const db = await getDb();
   const result = await db.query<
-    [{ id: string; leadId: string; score: number }[]]
+    [{ id: unknown; leadId: unknown; score: number }[]]
   >(
-    `LET $q = $embedding;
-     SELECT id, leadId, vector::distance::knn() AS score
+    `SELECT id, leadId, vector::distance::knn() AS score
      FROM face
-     WHERE embedding_type1 <|${limit},${candidates}|> $q
+     WHERE embedding_type1 <|${limit},${candidates}|> $embedding
      ORDER BY score`,
     { embedding },
   );
-  return result[0] ?? [];
+  const rows = result[0] ?? [];
+  return rows
+    .map((row) => {
+      const id = normalizeRecordId(row.id);
+      const leadId = normalizeRecordId(row.leadId);
+      if (!id || !leadId) return null;
+      return { id, leadId, score: row.score };
+    })
+    .filter((row): row is { id: string; leadId: string; score: number } =>
+      row !== null
+    );
 }
 
 export async function deleteFaceByLeadId(leadId: string): Promise<void> {

@@ -6,8 +6,18 @@
 // is stored in a local JSON file.
 // =============================================================================
 
-import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
-import Human from "npm:@vladmandic/human";
+import { join } from "@std/path";
+import jpeg from "jpeg-js";
+
+// Force @vladmandic/human (really TFJS underneath) to pick the browser
+// platform instead of the node one. TFJS's node platform tries to do
+// `new this.util.TextEncoder()` against a stubbed-out node `util` module
+// and crashes at module-load time. Declaring WorkerGlobalScope makes the
+// IS_BROWSER flag evaluate to true, which routes platform selection to
+// the browser class (plain TextEncoder/fetch/performance — all native in Deno).
+// deno-lint-ignore no-explicit-any
+(globalThis as any).WorkerGlobalScope ??= class {};
+const { default: Human } = await import("@vladmandic/human");
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,6 +49,10 @@ interface Connection {
   mac: string;
   locationId: string;
   locationName: string;
+  // When set, this URL is passed directly to ffmpeg instead of being
+  // reconstructed from the individual fields above. Lets users enter any
+  // scheme (rtsp, http, https, rtmp, …) — ffmpeg auto-detects the protocol.
+  fullUrl?: string;
 }
 
 interface AppData {
@@ -308,10 +322,11 @@ async function list(): Promise<CameraInfo[]> {
 // call pays the warm-up cost; subsequent frames reuse the cached weights.
 
 const humanConfig = {
-  backend: "tensorflow",
+  backend: "cpu",
   modelBasePath: "https://vladmandic.github.io/human-models/models/",
   cacheModels: true,
   debug: false,
+  warmup: "none",
   face: {
     enabled: true,
     detector: { rotation: false, maxDetected: 10, minConfidence: 0.5 },
@@ -342,7 +357,6 @@ function getHuman(): Promise<any> {
       // deno-lint-ignore no-explicit-any
       const instance = new (Human as any)(humanConfig);
       await instance.load();
-      await instance.warmup();
       humanInstance = instance;
       console.log("[human] models loaded and warmed up");
       return instance;
@@ -361,7 +375,18 @@ async function process(
 ): Promise<{ frame: Uint8Array; embeddings: number[][] }> {
   try {
     const human = await getHuman();
-    const tensor = human.tf.node.decodeJpeg(frame, 3);
+    // jpeg-js is a pure-JS decoder — Deno has no tf.node.decodeJpeg because
+    // the ESM build of Human does not include @tensorflow/tfjs-node.
+    const { width, height, data: rgba } = jpeg.decode(frame, {
+      useTArray: true,
+    });
+    const rgb = new Uint8Array(width * height * 3);
+    for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+      rgb[j] = rgba[i];
+      rgb[j + 1] = rgba[i + 1];
+      rgb[j + 2] = rgba[i + 2];
+    }
+    const tensor = human.tf.tensor3d(rgb, [height, width, 3], "int32");
     const result = await human.detect(tensor);
     tensor.dispose();
     const embeddings: number[][] = (result.face ?? [])
@@ -494,9 +519,19 @@ interface StreamHandle {
 const activeStreams = new Map<string, StreamHandle>();
 
 function buildRtspUrl(c: Connection): string {
+  if (c.fullUrl && c.fullUrl.trim()) return c.fullUrl.trim();
   return `rtsp://${encodeURIComponent(c.username)}:${
     encodeURIComponent(c.password)
   }@${c.ip}:${c.port}/${c.path}`;
+}
+
+/** Redact credentials from any rtsp://user:pass@host URL so it's safe to log. */
+function redactRtspUrl(url: string): string {
+  return url.replace(/(rtsp:\/\/)([^:@/]+):([^@]+)@/i, "$1$2:***@");
+}
+
+function tag(connectionId: string): string {
+  return `[stream:${connectionId.slice(0, 8)}]`;
 }
 
 // Face detection tunables — safe to edit.
@@ -619,13 +654,25 @@ async function readMjpegFrames(
           }
         }
 
-        const b64 = btoa(String.fromCharCode(...processed));
-        const msg = JSON.stringify({ type: "frame", data: b64 });
-        for (const ws of handle.sockets) {
-          if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+        // Only encode + broadcast when at least one preview WS is listening.
+        // With previews closed by default, this avoids base64ing every frame.
+        if (handle.sockets.size > 0) {
+          let bin = "";
+          for (let i = 0; i < processed.length; i++) {
+            bin += String.fromCharCode(processed[i]);
+          }
+          const msg = JSON.stringify({ type: "frame", data: btoa(bin) });
+          for (const ws of handle.sockets) {
+            if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+          }
         }
 
         if (handle.status !== "connected") {
+          console.log(
+            `${
+              tag(handle.connectionId)
+            } first frame received (${processed.length} bytes) → status=connected`,
+          );
           handle.status = "connected";
           handle.error = "";
           handle.reconnectAttempts = 0;
@@ -634,6 +681,12 @@ async function readMjpegFrames(
       }
     }
   } catch (err) {
+    console.error(
+      `${
+        tag(handle.connectionId)
+      } readMjpegFrames error (aborted=${handle.abortController.signal.aborted}):`,
+      err,
+    );
     if (!handle.abortController.signal.aborted) {
       handle.status = "error";
       handle.error = String(err);
@@ -661,12 +714,25 @@ async function resolveIpByMac(mac: string): Promise<string | null> {
 }
 
 async function startStream(connection: Connection): Promise<StreamHandle> {
+  const t = tag(connection.id);
+  console.log(
+    `${t} startStream requested — name="${connection.cameraName}" ip=${connection.ip} port=${connection.port} path="${connection.path}" user="${connection.username}" fullUrl=${
+      connection.fullUrl ? "yes" : "no"
+    } locationId=${connection.locationId}`,
+  );
   let handle = activeStreams.get(connection.id);
   if (handle) {
+    console.log(
+      `${t} existing handle found (status=${handle.status}, sockets=${handle.sockets.size}) — killing previous ffmpeg and aborting`,
+    );
     try {
       handle.proc?.kill("SIGTERM");
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn(`${t} kill previous ffmpeg failed:`, err);
+    }
     handle.abortController.abort();
+  } else {
+    console.log(`${t} no existing handle — fresh start`);
   }
 
   const ac = new AbortController();
@@ -680,6 +746,9 @@ async function startStream(connection: Connection): Promise<StreamHandle> {
     abortController: ac,
   };
   activeStreams.set(connection.id, handle);
+  console.log(
+    `${t} handle created, status=connecting, sockets carried over=${handle.sockets.size}`,
+  );
   broadcastStatus(handle);
 
   await spawnFfmpeg(connection, handle);
@@ -687,24 +756,40 @@ async function startStream(connection: Connection): Promise<StreamHandle> {
 }
 
 async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
+  const t = tag(connection.id);
   const url = buildRtspUrl(connection);
+  const safeUrl = redactRtspUrl(url);
+  const schemeMatch = url.match(/^([a-zA-Z][a-zA-Z0-9+.\-]*):\/\//);
+  const scheme = schemeMatch ? schemeMatch[1].toLowerCase() : "";
+  const isRtsp = scheme === "rtsp" || scheme === "rtsps";
+  console.log(
+    `${t} buildRtspUrl → ${safeUrl} (source=${
+      connection.fullUrl && connection.fullUrl.trim() ? "fullUrl" : "composed"
+    }, scheme=${scheme || "?"}, rtspTransport=${isRtsp ? "tcp" : "n/a"})`,
+  );
+
+  // -rtsp_transport is a private option of the RTSP demuxer. Passing it to
+  // a non-RTSP input (http, https, rtmp, …) makes ffmpeg bail out with
+  // "Option rtsp_transport not found", so we only add it for rtsp/rtsps.
+  const args = [
+    ...(isRtsp ? ["-rtsp_transport", "tcp"] : []),
+    "-i",
+    url,
+    "-f",
+    "mjpeg",
+    "-q:v",
+    "5",
+    "-r",
+    "15",
+    "-an",
+    "pipe:1",
+  ];
+  const safeArgs = args.map((a) => (a === url ? safeUrl : a));
+  console.log(`${t} spawning ffmpeg ${safeArgs.join(" ")}`);
 
   try {
     const cmd = new Deno.Command("ffmpeg", {
-      args: [
-        "-rtsp_transport",
-        "tcp",
-        "-i",
-        url,
-        "-f",
-        "mjpeg",
-        "-q:v",
-        "5",
-        "-r",
-        "15",
-        "-an",
-        "pipe:1",
-      ],
+      args,
       stdout: "piped",
       stderr: "piped",
       stdin: "null",
@@ -712,18 +797,44 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
 
     const proc = cmd.spawn();
     handle.proc = proc;
+    console.log(`${t} ffmpeg spawned pid=${proc.pid}`);
 
     const stderrReader = proc.stderr.getReader();
     (async () => {
       const decoder = new TextDecoder();
       let stderrText = "";
+      let lineBuf = "";
       try {
         while (true) {
           const { done, value } = await stderrReader.read();
           if (done) break;
-          stderrText += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          stderrText += chunk;
+          lineBuf += chunk;
+          // Stream stderr line-by-line to the server console so the user
+          // can watch ffmpeg's handshake/auth/connection progress live.
+          let nl: number;
+          while ((nl = lineBuf.indexOf("\n")) !== -1) {
+            const line = lineBuf.slice(0, nl).trimEnd();
+            lineBuf = lineBuf.slice(nl + 1);
+            if (line) console.log(`${t} ffmpeg: ${line}`);
+          }
         }
+        if (lineBuf.trim()) console.log(`${t} ffmpeg: ${lineBuf.trimEnd()}`);
+      } catch (err) {
+        console.warn(`${t} stderr reader error:`, err);
+      }
+
+      let exitCode: number | string = "?";
+      let exitSignal: string = "none";
+      try {
+        const st = await proc.status;
+        exitCode = st.code;
+        exitSignal = st.signal ?? "none";
       } catch { /* ignore */ }
+      console.log(
+        `${t} ffmpeg exited code=${exitCode} signal=${exitSignal} aborted=${handle.abortController.signal.aborted} status=${handle.status}`,
+      );
 
       if (
         !handle.abortController.signal.aborted && handle.status !== "connected"
@@ -732,12 +843,17 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
         const lines = stderrText.split("\n").filter((l) => l.trim());
         handle.error = lines.slice(-3).join(" ") ||
           "FFmpeg exited unexpectedly";
+        console.error(`${t} ffmpeg failed before first frame: ${handle.error}`);
         broadcastStatus(handle);
       }
     })();
 
     const stdoutReader = proc.stdout.getReader();
+    console.log(`${t} stdout reader attached, waiting for first MJPEG frame…`);
     readMjpegFrames(stdoutReader, handle, connection).then(async () => {
+      console.log(
+        `${t} readMjpegFrames loop returned (status=${handle.status}, aborted=${handle.abortController.signal.aborted})`,
+      );
       if (!handle.abortController.signal.aborted) {
         handle.status = "reconnecting";
         handle.error = "Stream ended — attempting reconnect…";
@@ -746,6 +862,7 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
       }
     });
   } catch (err) {
+    console.error(`${t} failed to launch ffmpeg:`, err);
     handle.status = "error";
     handle.error = `Failed to launch FFmpeg: ${err}`;
     broadcastStatus(handle);
@@ -756,6 +873,10 @@ async function spawnFfmpeg(connection: Connection, handle: StreamHandle) {
 }
 
 async function attemptReconnect(connection: Connection, handle: StreamHandle) {
+  const t = tag(connection.id);
+  console.log(
+    `${t} attemptReconnect entered (current attempts=${handle.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})`,
+  );
   while (
     handle.reconnectAttempts < RECONNECT_MAX_ATTEMPTS &&
     !handle.abortController.signal.aborted
@@ -767,13 +888,24 @@ async function attemptReconnect(connection: Connection, handle: StreamHandle) {
       `Reconnect attempt ${handle.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS} in ${
         delay / 1000
       }s…`;
+    console.log(
+      `${t} reconnect #${handle.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS} — waiting ${delay}ms`,
+    );
     broadcastStatus(handle);
 
     await new Promise((r) => setTimeout(r, delay));
-    if (handle.abortController.signal.aborted) return;
+    if (handle.abortController.signal.aborted) {
+      console.log(`${t} reconnect aborted during delay`);
+      return;
+    }
 
+    console.log(`${t} resolving IP by MAC=${connection.mac}…`);
     const newIp = await resolveIpByMac(connection.mac);
+    console.log(
+      `${t} resolved IP=${newIp ?? "null"} (current=${connection.ip})`,
+    );
     if (newIp && newIp !== connection.ip) {
+      console.log(`${t} IP changed ${connection.ip} → ${newIp}, persisting`);
       connection.ip = newIp;
       const data = await readData();
       const idx = data.connections.findIndex((c) => c.id === connection.id);
@@ -789,23 +921,43 @@ async function attemptReconnect(connection: Connection, handle: StreamHandle) {
     broadcastStatus(handle);
 
     await spawnFfmpeg(connection, handle);
-    if (handle.status === "connecting" || handle.status === "connected") return;
+    if (handle.status === "connecting" || handle.status === "connected") {
+      console.log(
+        `${t} reconnect spawn succeeded (status=${handle.status}) — leaving loop`,
+      );
+      return;
+    }
+    console.log(
+      `${t} reconnect spawn did not reach connected (status=${handle.status}) — retrying`,
+    );
   }
 
   if (!handle.abortController.signal.aborted) {
+    console.error(`${t} giving up — max reconnect attempts reached`);
     handle.status = "error";
     handle.error = "Max reconnect attempts reached. Please reconnect manually.";
     broadcastStatus(handle);
+  } else {
+    console.log(`${t} attemptReconnect exiting due to abort`);
   }
 }
 
 function stopStream(connectionId: string) {
+  const t = tag(connectionId);
   const handle = activeStreams.get(connectionId);
-  if (!handle) return;
+  if (!handle) {
+    console.log(`${t} stopStream: no active handle`);
+    return;
+  }
+  console.log(
+    `${t} stopStream: aborting (status=${handle.status}, sockets=${handle.sockets.size})`,
+  );
   handle.abortController.abort();
   try {
     handle.proc?.kill("SIGTERM");
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.warn(`${t} stopStream: kill failed:`, err);
+  }
   activeStreams.delete(connectionId);
 }
 
@@ -946,7 +1098,17 @@ async function handleRequest(request: Request): Promise<Response> {
   if (path === "/api/connections" && method === "POST") {
     const body = await request.json() as Connection;
     body.id = body.id || crypto.randomUUID();
+    console.log(
+      `[api] POST /api/connections id=${body.id} name="${body.cameraName}" ip=${body.ip} port=${body.port} path="${body.path}" user="${body.username}" passLen=${
+        (body.password ?? "").length
+      } mac=${body.mac} locationId=${body.locationId} fullUrl=${
+        body.fullUrl ? redactRtspUrl(body.fullUrl) : "(none)"
+      }`,
+    );
     if (!body.locationId || !body.locationName) {
+      console.warn(
+        `[api] POST /api/connections rejected — missing locationId/locationName`,
+      );
       return json(
         { ok: false, error: "locationId and locationName are required." },
         400,
@@ -955,11 +1117,18 @@ async function handleRequest(request: Request): Promise<Response> {
     const data = await readData();
     const idx = data.connections.findIndex((c) => c.id === body.id);
     if (idx !== -1) {
+      console.log(`[api] updating existing connection at index ${idx}`);
       data.connections[idx] = body;
     } else {
+      console.log(
+        `[api] adding new connection (total will be ${
+          data.connections.length + 1
+        })`,
+      );
       data.connections.push(body);
     }
     await writeData(data);
+    console.log(`[api] connection persisted → startStream`);
     startStream({ ...body });
     return json({ ok: true, connection: body });
   }
@@ -981,12 +1150,17 @@ async function handleRequest(request: Request): Promise<Response> {
       return new Response("WebSocket upgrade required", { status: 426 });
     }
 
+    const t = tag(connectionId);
+    console.log(`${t} WebSocket upgrade requested`);
     const { socket, response } = Deno.upgradeWebSocket(request);
 
     socket.onopen = () => {
       const handle = activeStreams.get(connectionId);
       if (handle) {
         handle.sockets.add(socket);
+        console.log(
+          `${t} WS open — attached to handle (status=${handle.status}, sockets=${handle.sockets.size})`,
+        );
         socket.send(JSON.stringify({
           type: "status",
           connectionId: handle.connectionId,
@@ -994,6 +1168,9 @@ async function handleRequest(request: Request): Promise<Response> {
           error: handle.error,
         }));
       } else {
+        console.warn(
+          `${t} WS open but no active stream for this connection — sending disconnected`,
+        );
         socket.send(JSON.stringify({
           type: "status",
           connectionId,
@@ -1003,12 +1180,18 @@ async function handleRequest(request: Request): Promise<Response> {
       }
     };
 
-    socket.onclose = () => {
+    socket.onclose = (ev: CloseEvent) => {
       const handle = activeStreams.get(connectionId);
+      console.log(
+        `${t} WS close code=${ev.code} reason="${ev.reason}" remaining=${
+          handle?.sockets.size ?? 0
+        }`,
+      );
       if (handle) handle.sockets.delete(socket);
     };
 
-    socket.onerror = () => {
+    socket.onerror = (ev: Event) => {
+      console.error(`${t} WS error`, ev);
       const handle = activeStreams.get(connectionId);
       if (handle) handle.sockets.delete(socket);
     };
@@ -1017,11 +1200,20 @@ async function handleRequest(request: Request): Promise<Response> {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "reconnect") {
+          console.log(`${t} WS received reconnect request from client`);
           const data = await readData();
           const conn = data.connections.find((c) => c.id === connectionId);
-          if (conn) startStream({ ...conn });
+          if (conn) {
+            startStream({ ...conn });
+          } else {
+            console.warn(
+              `${t} WS reconnect: connection not found in data.json`,
+            );
+          }
         }
-      } catch { /* ignore bad messages */ }
+      } catch (err) {
+        console.warn(`${t} WS bad message:`, err);
+      }
     };
 
     return response;

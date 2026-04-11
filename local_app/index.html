@@ -1054,6 +1054,13 @@
               Scan
             </button>
           </div>
+          <button
+            class="btn btn-secondary btn-sm"
+            id="manual-url-btn"
+            style="margin-top: 10px; width: 100%"
+          >
+            ⌨️ Enter Camera URL Manually
+          </button>
         </section>
 
         <!-- Active connections -->
@@ -1077,11 +1084,25 @@
     <!-- ===== Connection Modal ===== -->
     <div class="modal-overlay" id="connect-modal">
       <div class="modal">
-        <h3>🔗 Connect Camera</h3>
-        <p class="subtitle">
+        <h3 id="modal-title">🔗 Connect Camera</h3>
+        <p class="subtitle" id="modal-subtitle">
           Enter the RTSP credentials and select the Grex-ID location this camera
           belongs to.
         </p>
+
+        <div class="form-group" id="conn-url-group" style="display: none">
+          <label for="conn-url">🔗 Camera URL</label>
+          <input
+            type="text"
+            id="conn-url"
+            placeholder="rtsp://user:pass@192.168.1.100:554/stream1"
+          />
+          <p class="form-hint">
+            Paste a full stream URL. Any protocol supported by FFmpeg works —
+            <code>rtsp://</code>, <code>http://</code>, <code>https://</code>,
+            <code>rtmp://</code>, etc.
+          </p>
+        </div>
 
         <div class="form-group">
           <label for="conn-name">📷 Camera Name</label>
@@ -1218,7 +1239,13 @@
         connectionsSection: document.getElementById("connections-section"),
         connectionsList: document.getElementById("connections-list"),
 
+        manualUrlBtn: document.getElementById("manual-url-btn"),
+
         modal: document.getElementById("connect-modal"),
+        modalTitle: document.getElementById("modal-title"),
+        modalSubtitle: document.getElementById("modal-subtitle"),
+        connUrlGroup: document.getElementById("conn-url-group"),
+        connUrl: document.getElementById("conn-url"),
         connName: document.getElementById("conn-name"),
         connUser: document.getElementById("conn-user"),
         connPass: document.getElementById("conn-pass"),
@@ -1250,6 +1277,7 @@
       let cameras = [];
       let connections = [];
       const streamSockets = new Map(); // connectionId → WebSocket
+      const previewOpen = new Set(); // connectionIds with an actively requested preview
       let locSearchDebounce = null;
       let locSearchSeq = 0;
 
@@ -1482,24 +1510,74 @@
       }
 
       async function saveConnection() {
+        const manualMode = dom.connUrlGroup.style.display !== "none";
+        let fullUrl = "";
+        let parsed = null;
+
+        if (manualMode) {
+          fullUrl = dom.connUrl.value.trim();
+          if (!fullUrl) {
+            alert("Please enter a camera URL.");
+            return;
+          }
+          parsed = parseRtspUrl(fullUrl);
+          if (!parsed) {
+            alert(
+              "Invalid URL. Expected a full URL starting with " +
+                "rtsp://, http://, https://, rtmp://, etc.",
+            );
+            return;
+          }
+          // Best-effort field back-fill for display & reconnect metadata.
+          dom.connUser.value = parsed.username;
+          dom.connPass.value = parsed.password;
+          dom.connIp.value = parsed.ip;
+          dom.connPort.value = parsed.port;
+          dom.connPath.value = parsed.path;
+        }
+
         const conn = {
-          cameraName: dom.connName.value.trim() || dom.connOrigName.value,
+          cameraName: dom.connName.value.trim() || dom.connOrigName.value ||
+            dom.connIp.value.trim() || "Camera",
           username: dom.connUser.value.trim(),
           password: dom.connPass.value.trim(),
           ip: dom.connIp.value.trim(),
-          port: dom.connPort.value.trim(),
+          port: dom.connPort.value.trim() || "554",
           path: dom.connPath.value.trim(),
           mac: dom.connMac.value,
           locationId: dom.locId.value,
           locationName: dom.locName.value,
         };
+        if (manualMode) conn.fullUrl = fullUrl;
 
-        if (
-          !conn.username || !conn.password || !conn.ip || !conn.port ||
-          !conn.path
-        ) {
-          alert("Please fill in all required RTSP fields.");
-          return;
+        // Browser-side connection-flow log (no password).
+        console.log("[conn] saveConnection payload", {
+          manualMode,
+          hasFullUrl: !!conn.fullUrl,
+          fullUrl: conn.fullUrl
+            ? conn.fullUrl.replace(
+              /(^[a-z]+:\/\/[^:@/]+):([^@]+)@/i,
+              "$1:***@",
+            )
+            : "(none)",
+          cameraName: conn.cameraName,
+          ip: conn.ip,
+          port: conn.port,
+          path: conn.path,
+          username: conn.username,
+          passLen: conn.password.length,
+          mac: conn.mac,
+          locationId: conn.locationId,
+        });
+
+        if (!manualMode) {
+          if (
+            !conn.username || !conn.password || !conn.ip || !conn.port ||
+            !conn.path
+          ) {
+            alert("Please fill in all required RTSP fields.");
+            return;
+          }
         }
         if (!conn.locationId) {
           alert("Please select a Grex-ID location for this camera.");
@@ -1509,9 +1587,15 @@
         setBusy(dom.modalSave, true, "Connecting…");
         showLoading("Connecting camera…");
         try {
+          console.log("[conn] POST /api/connections →");
           const data = await api("/api/connections", {
             method: "POST",
             body: JSON.stringify(conn),
+          });
+          console.log("[conn] POST /api/connections ←", {
+            ok: data.ok,
+            error: data.error,
+            id: data.connection?.id,
           });
           if (!data.ok) {
             alert("Failed to save connection: " + (data.error || "unknown"));
@@ -1519,8 +1603,8 @@
           }
           closeModal();
           await loadConnections();
-          if (data.connection) openStreamSocket(data.connection.id);
         } catch (err) {
+          console.error("[conn] POST /api/connections threw", err);
           alert("Failed to save connection: " + err.message);
         } finally {
           setBusy(dom.modalSave, false);
@@ -1531,6 +1615,7 @@
       async function deleteConnection(id) {
         if (!confirm("Disconnect and remove this camera?")) return;
         showLoading("Disconnecting…");
+        previewOpen.delete(id);
         closeStreamSocket(id);
         try {
           await api("/api/connections", {
@@ -1550,35 +1635,73 @@
       // =================================================================
 
       function openStreamSocket(connectionId) {
-        if (streamSockets.has(connectionId)) return;
+        const short = connectionId.slice(0, 8);
+        if (streamSockets.has(connectionId)) {
+          console.log(
+            `[stream:${short}] openStreamSocket skipped — socket already open`,
+          );
+          return;
+        }
 
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          protocol + "//" + location.host + "/api/stream/" + connectionId,
-        );
+        const wsUrl = protocol + "//" + location.host + "/api/stream/" +
+          connectionId;
+        console.log(`[stream:${short}] opening WebSocket ${wsUrl}`);
+        const ws = new WebSocket(wsUrl);
+        let firstFrameSeen = false;
+
+        ws.onopen = () => {
+          console.log(`[stream:${short}] WS open`);
+        };
 
         ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === "status") {
+              console.log(
+                `[stream:${short}] status → ${msg.status}${
+                  msg.error ? " (" + msg.error + ")" : ""
+                }`,
+              );
               updateConnectionStatus(msg.connectionId, msg.status, msg.error);
             }
             if (msg.type === "frame") {
+              if (!firstFrameSeen) {
+                firstFrameSeen = true;
+                console.log(`[stream:${short}] first frame received`);
+              }
               drawFrame(msg.connectionId || connectionId, msg.data);
             }
-          } catch { /* ignore */ }
+          } catch (err) {
+            console.warn(`[stream:${short}] bad WS message`, err);
+          }
         };
 
-        ws.onclose = () => {
+        ws.onclose = (ev) => {
           streamSockets.delete(connectionId);
+          if (!previewOpen.has(connectionId)) {
+            console.log(
+              `[stream:${short}] WS close code=${ev.code} reason="${ev.reason}" — preview closed`,
+            );
+            return;
+          }
+          console.log(
+            `[stream:${short}] WS close code=${ev.code} reason="${ev.reason}" — retrying in 3s`,
+          );
           setTimeout(() => {
-            if (connections.some((c) => c.id === connectionId)) {
+            if (
+              previewOpen.has(connectionId) &&
+              connections.some((c) => c.id === connectionId)
+            ) {
               openStreamSocket(connectionId);
             }
           }, 3000);
         };
 
-        ws.onerror = () => ws.close();
+        ws.onerror = (ev) => {
+          console.error(`[stream:${short}] WS error`, ev);
+          ws.close();
+        };
 
         streamSockets.set(connectionId, ws);
       }
@@ -1594,6 +1717,23 @@
       function closeAllStreams() {
         for (const [id, ws] of streamSockets) ws.close();
         streamSockets.clear();
+      }
+
+      function openPreview(connectionId) {
+        previewOpen.add(connectionId);
+        renderConnections();
+        openStreamSocket(connectionId);
+      }
+
+      function closePreview(connectionId) {
+        previewOpen.delete(connectionId);
+        closeStreamSocket(connectionId);
+        const conn = connections.find((c) => c.id === connectionId);
+        if (conn) {
+          conn.streamStatus = "disconnected";
+          conn.streamError = "";
+        }
+        renderConnections();
       }
 
       function drawFrame(connectionId, base64Data) {
@@ -1693,9 +1833,13 @@
         }
         dom.connectionsSection.style.display = "block";
         dom.connectionsList.innerHTML = connections.map((c, i) => {
-          const status = c.streamStatus || "disconnected";
-          const error = c.streamError || "";
-          const showError = status === "error" || status === "reconnecting";
+          const isPreview = previewOpen.has(c.id);
+          const status = isPreview
+            ? (c.streamStatus || "connecting")
+            : "disconnected";
+          const error = isPreview ? (c.streamError || "") : "";
+          const showError = isPreview &&
+            (status === "error" || status === "reconnecting");
           return (
             '<div class="camera-card" style="animation-delay:' + (i * 0.06) +
             's">' +
@@ -1710,26 +1854,37 @@
                 "</span>"
               : "") +
             "</div>" +
-            '<span id="badge-' + c.id + '" class="status-badge ' + status +
-            '">' + statusEmoji(status) + " " + capitalise(status) +
-            "</span></div>" +
-            '<div id="error-' + c.id +
-            '" class="error-message" style="display:' +
-            (showError ? "block" : "none") + '">' +
-            esc(error) + "</div>" +
-            '<div class="stream-viewer">' +
-            '<canvas id="canvas-' + c.id + '"></canvas>' +
-            '<div id="placeholder-' + c.id + '" class="stream-placeholder">' +
-            (status === "connected" ? "" : statusEmoji(status) + " " +
-              (status === "connecting"
-                ? "Connecting…"
-                : status === "reconnecting"
-                ? "Reconnecting…"
-                : "Waiting for stream…")) +
-            "</div></div>" +
+            (isPreview
+              ? '<span id="badge-' + c.id + '" class="status-badge ' + status +
+                '">' + statusEmoji(status) + " " + capitalise(status) +
+                "</span>"
+              : "") +
+            "</div>" +
+            (isPreview
+              ? '<div id="error-' + c.id +
+                '" class="error-message" style="display:' +
+                (showError ? "block" : "none") + '">' +
+                esc(error) + "</div>" +
+                '<div class="stream-viewer">' +
+                '<canvas id="canvas-' + c.id + '"></canvas>' +
+                '<div id="placeholder-' + c.id +
+                '" class="stream-placeholder">' +
+                (status === "connected" ? "" : statusEmoji(status) + " " +
+                  (status === "connecting"
+                    ? "Connecting…"
+                    : status === "reconnecting"
+                    ? "Reconnecting…"
+                    : "Waiting for stream…")) +
+                "</div></div>"
+              : "") +
             '<div class="camera-actions">' +
-            '<button class="btn btn-secondary btn-sm" onclick="manualReconnect(\'' +
-            c.id + "')\">🔄 Reconnect</button>" +
+            (isPreview
+              ? '<button class="btn btn-secondary btn-sm" onclick="manualReconnect(\'' +
+                c.id + "')\">🔄 Reconnect</button>" +
+                '<button class="btn btn-secondary btn-sm" onclick="closePreview(\'' +
+                c.id + "')\">🙈 Hide preview</button>"
+              : '<button class="btn btn-secondary btn-sm" onclick="openPreview(\'' +
+                c.id + "')\">👁️ Show preview</button>") +
             '<button class="btn btn-danger btn-sm" onclick="deleteConnection(\'' +
             c.id + "')\">🗑️ Disconnect</button>" +
             "</div></div>"
@@ -1742,6 +1897,12 @@
       // =================================================================
 
       function openConnectModal(name, ip, mac) {
+        dom.modalTitle.textContent = "🔗 Connect Camera";
+        dom.modalSubtitle.textContent =
+          "Enter the RTSP credentials and select the Grex-ID location this " +
+          "camera belongs to.";
+        dom.connUrlGroup.style.display = "none";
+        dom.connUrl.value = "";
         dom.connName.value = name;
         dom.connOrigName.value = name;
         dom.connIp.value = ip;
@@ -1754,6 +1915,92 @@
         dom.locSearch.value = "";
         dom.locResults.classList.remove("active");
         dom.modal.classList.add("active");
+      }
+
+      function openManualUrlModal() {
+        dom.modalTitle.textContent = "⌨️ Manual Camera Entry";
+        dom.modalSubtitle.textContent =
+          "Paste the RTSP URL of your camera, or fill in the fields below.";
+        dom.connUrlGroup.style.display = "";
+        dom.connUrl.value = "";
+        dom.connName.value = "";
+        dom.connOrigName.value = "";
+        dom.connIp.value = "";
+        dom.connMac.value = "";
+        dom.connUser.value = "";
+        dom.connPass.value = "";
+        dom.connPort.value = "554";
+        dom.connPath.value = "";
+        clearLocationSelection();
+        dom.locSearch.value = "";
+        dom.locResults.classList.remove("active");
+        dom.modal.classList.add("active");
+        setTimeout(() => dom.connUrl.focus(), 50);
+      }
+
+      // Parse a stream URL (rtsp/http/https/rtmp/…) into its parts. Returns
+      // null if the string is not a usable <scheme>://… URL.
+      function parseRtspUrl(raw) {
+        if (!raw) return null;
+        const input = raw.trim();
+        const schemeMatch = input.match(/^([a-zA-Z][a-zA-Z0-9+.\-]*):\/\//);
+        if (!schemeMatch) return null;
+        try {
+          const rest = input.slice(schemeMatch[0].length);
+          let userinfo = "";
+          let hostAndPath = rest;
+          const atIdx = rest.lastIndexOf("@");
+          if (atIdx !== -1) {
+            userinfo = rest.slice(0, atIdx);
+            hostAndPath = rest.slice(atIdx + 1);
+          }
+          let username = "";
+          let password = "";
+          if (userinfo) {
+            const colonIdx = userinfo.indexOf(":");
+            if (colonIdx !== -1) {
+              username = decodeURIComponent(userinfo.slice(0, colonIdx));
+              password = decodeURIComponent(userinfo.slice(colonIdx + 1));
+            } else {
+              username = decodeURIComponent(userinfo);
+            }
+          }
+          const slashIdx = hostAndPath.indexOf("/");
+          const hostPort = slashIdx === -1
+            ? hostAndPath
+            : hostAndPath.slice(0, slashIdx);
+          const path = slashIdx === -1 ? "" : hostAndPath.slice(slashIdx + 1);
+          if (!hostPort) return null;
+          let ip = hostPort;
+          let port = "554";
+          // IPv6 in brackets: [::1]:554
+          if (hostPort.startsWith("[")) {
+            const end = hostPort.indexOf("]");
+            if (end === -1) return null;
+            ip = hostPort.slice(1, end);
+            const after = hostPort.slice(end + 1);
+            if (after.startsWith(":")) port = after.slice(1);
+          } else {
+            const colonIdx = hostPort.lastIndexOf(":");
+            if (colonIdx !== -1) {
+              ip = hostPort.slice(0, colonIdx);
+              port = hostPort.slice(colonIdx + 1);
+            }
+          }
+          return { username, password, ip, port: port || "554", path };
+        } catch {
+          return null;
+        }
+      }
+
+      function onConnUrlInput() {
+        const parsed = parseRtspUrl(dom.connUrl.value);
+        if (!parsed) return;
+        dom.connUser.value = parsed.username;
+        dom.connPass.value = parsed.password;
+        dom.connIp.value = parsed.ip;
+        dom.connPort.value = parsed.port;
+        dom.connPath.value = parsed.path;
       }
 
       function closeModal() {
@@ -1844,7 +2091,6 @@
         dom.configScreen.classList.remove("active");
         dom.dashboard.classList.add("active");
         await loadConnections();
-        for (const conn of connections) openStreamSocket(conn.id);
         checkGrexStatus();
       }
 
@@ -1892,6 +2138,8 @@
       dom.settingsBtn.addEventListener("click", openSettings);
 
       dom.searchBtn.addEventListener("click", searchCameras);
+      dom.manualUrlBtn.addEventListener("click", openManualUrlModal);
+      dom.connUrl.addEventListener("input", onConnUrlInput);
       dom.searchInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") searchCameras();
       });

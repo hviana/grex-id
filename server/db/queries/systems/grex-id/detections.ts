@@ -16,8 +16,13 @@ function normalizeRecordId(value: unknown): string | null {
 
   if (typeof value === "object") {
     const record = value as { id?: unknown; tb?: unknown };
-    if (typeof record.tb === "string" && typeof record.id === "string") {
-      return `${record.tb}:${record.id}`;
+    if (typeof record.tb === "string") {
+      const innerId = typeof record.id === "string"
+        ? record.id
+        : record.id != null
+        ? String((record.id as { String?: string }).String ?? record.id)
+        : "";
+      if (innerId) return `${record.tb}:${innerId}`;
     }
     if (typeof record.id === "string") {
       const recordId = record.id.trim();
@@ -26,19 +31,6 @@ function normalizeRecordId(value: unknown): string | null {
   }
 
   return stringified || null;
-}
-
-function normalizeRecordIds(values: unknown[]): string[] {
-  const ids = new Set<string>();
-
-  for (const value of values) {
-    const id = normalizeRecordId(value);
-    if (id) {
-      ids.add(id);
-    }
-  }
-
-  return [...ids];
 }
 
 export interface Detection {
@@ -61,7 +53,6 @@ export interface DetectionReportItem {
   leadEmail?: string;
   leadPhone?: string;
   leadAvatarUri?: string;
-  leadCompanyIds?: string[];
   ownerId?: string;
   ownerName?: string;
   classification: "member" | "visitor" | "unknown";
@@ -73,38 +64,45 @@ export async function createDetection(data: {
   score: number;
 }): Promise<Detection> {
   const db = await getDb();
+  const leadId = data.leadId ? normalizeRecordId(data.leadId) : null;
+  const bindings: Record<string, unknown> = {
+    locationId: rid(data.locationId),
+    score: data.score,
+  };
+  const sets = [
+    "locationId = $locationId",
+    "score = $score",
+    "detectedAt = time::now()",
+  ];
+  if (leadId) {
+    sets.push("leadId = $leadId");
+    bindings.leadId = rid(leadId);
+  }
   const result = await db.query<[Detection[]]>(
-    `CREATE grexid_detection SET
-      locationId = $locationId,
-      leadId = $leadId,
-      score = $score,
-      detectedAt = time::now()`,
-    {
-      locationId: rid(data.locationId),
-      leadId: data.leadId ? rid(data.leadId) : undefined,
-      score: data.score,
-    },
+    `CREATE grexid_detection SET ${sets.join(", ")}`,
+    bindings,
   );
   return result[0][0];
 }
 
 interface RawDetectionRow {
-  id: string;
+  id: unknown;
   detectedAt: string;
   score: number;
-  locationId: Record<string, unknown> & {
-    id: string;
-    name: string;
-    companyId: string;
-    systemId: string;
-  };
+  locationId:
+    & Record<string, unknown>
+    & {
+      id: unknown;
+      name: string;
+      companyId: unknown;
+      systemId: unknown;
+    };
   leadId?:
     | (Record<string, unknown> & {
-      id: string;
-      name: string;
-      email: string;
+      id: unknown;
+      name?: string;
+      email?: string;
       phone?: string;
-      companyIds?: unknown[];
       profile?: { avatarUri?: string };
     })
     | null;
@@ -154,12 +152,18 @@ export async function listDetections(
   const hasMore = rawItems.length > limit;
   const fetched = hasMore ? rawItems.slice(0, limit) : rawItems;
 
-  // Collect unique leadIds to batch-check lead_company_system associations
+  // Collect unique leadIds to batch-check lead_company_system associations.
+  // Only associations for the CURRENT company + system determine "member"
+  // status — the authoritative multi-tenant boundary is lead_company_system,
+  // not lead.companyIds.
   const leadIds = [
     ...new Set(
       fetched
-        .filter((r) => r.leadId && typeof r.leadId === "object")
-        .map((r) => normalizeRecordId((r.leadId as { id: string }).id))
+        .map((r) =>
+          r.leadId && typeof r.leadId === "object"
+            ? normalizeRecordId((r.leadId as { id: unknown }).id)
+            : null
+        )
         .filter((leadId): leadId is string => Boolean(leadId)),
     ),
   ];
@@ -173,17 +177,17 @@ export async function listDetections(
     const assocResult = await db.query<
       [
         {
-          leadId: string;
+          leadId: unknown;
           ownerId:
             | (Record<string, unknown> & {
-              id: string;
+              id: unknown;
               profile?: { name?: string };
             })
             | null;
         }[],
       ]
     >(
-      `SELECT * FROM lead_company_system
+      `SELECT leadId, ownerId FROM lead_company_system
        WHERE leadId IN $leadIds
          AND companyId = $companyId
          AND systemId = $systemId
@@ -202,7 +206,7 @@ export async function listDetections(
         ? row.ownerId
         : null;
       assocMap.set(lid, {
-        ownerId: owner?.id,
+        ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
         ownerName: owner?.profile?.name ?? undefined,
       });
     }
@@ -214,42 +218,47 @@ export async function listDetections(
       ? row.leadId
       : null;
     const leadRecordId = normalizeRecordId(lead?.id);
-    const leadCompanyIds = normalizeRecordIds(
-      Array.isArray(lead?.companyIds) ? lead.companyIds : [],
-    );
 
+    // Classification rules (multi-tenant):
+    // - unknown: detection has no leadId (face did not match any registered lead)
+    // - member:  lead is associated with the CURRENT company + system
+    //            (has a lead_company_system row for this tenant)
+    // - visitor: lead exists in the database but is NOT associated with the
+    //            current company + system (it belongs to another tenant, or
+    //            has no tenant at all)
     let classification: "member" | "visitor" | "unknown" = "unknown";
-    let ownerId: string | undefined;
-    let ownerName: string | undefined;
+    const assoc = leadRecordId ? assocMap.get(leadRecordId) : undefined;
 
     if (leadRecordId) {
-      const assoc = assocMap.get(leadRecordId);
-      const belongsToCurrentCompany =
-        leadCompanyIds.includes(params.companyId) || Boolean(assoc);
-
-      if (belongsToCurrentCompany) {
-        classification = "member";
-        ownerId = assoc.ownerId;
-        ownerName = assoc.ownerName;
-      } else {
-        classification = "visitor";
-      }
+      classification = assoc ? "member" : "visitor";
     }
 
+    const isMember = classification === "member";
+
     return {
-      id: row.id,
+      id: normalizeRecordId(row.id) ?? String(row.id),
       detectedAt: row.detectedAt,
       score: row.score,
-      locationId: loc.id,
+      locationId: normalizeRecordId(loc.id) ?? String(loc.id),
       locationName: loc.name,
-      leadId: leadRecordId,
-      leadName: lead?.name,
-      leadEmail: classification === "visitor" ? undefined : lead?.email,
-      leadPhone: classification === "visitor" ? undefined : lead?.phone,
-      leadAvatarUri: lead?.profile?.avatarUri,
-      leadCompanyIds,
-      ownerId,
-      ownerName,
+      // leadId is exposed only for members. For visitors we intentionally hide
+      // the record id so the frontend cannot correlate visitors across tenants.
+      leadId: isMember ? leadRecordId ?? undefined : undefined,
+      // Name and avatar are shown for members and visitors (so the operator
+      // can still recognize a recurring visitor's face), but never for unknown.
+      leadName: leadRecordId ? lead?.name ?? undefined : undefined,
+      leadAvatarUri: leadRecordId
+        ? lead?.profile?.avatarUri ?? undefined
+        : undefined,
+      // Contact details are member-only. Visitors and unknown never expose
+      // email/phone — that information belongs to the tenant that owns the lead.
+      leadEmail: isMember ? lead?.email ?? undefined : undefined,
+      leadPhone: isMember ? lead?.phone ?? undefined : undefined,
+      // Owner is resolved from lead_company_system for the CURRENT tenant only,
+      // so owners from other tenants are never leaked. It is only surfaced for
+      // members because visitors have no association in this tenant.
+      ownerId: isMember ? assoc?.ownerId : undefined,
+      ownerName: isMember ? assoc?.ownerName : undefined,
       classification,
     };
   });

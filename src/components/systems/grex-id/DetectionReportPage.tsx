@@ -51,7 +51,6 @@ interface DetectionItem {
   leadEmail?: string;
   leadPhone?: string;
   leadAvatarUri?: string;
-  leadCompanyIds?: string[];
   ownerId?: string;
   ownerName?: string;
   classification: "member" | "visitor" | "unknown";
@@ -165,27 +164,10 @@ export default function DetectionReportPage() {
     });
   };
 
-  const resolvedItems = useMemo(
-    () =>
-      items.map((item) => {
-        const leadCompanyIds = Array.isArray(item.leadCompanyIds)
-          ? item.leadCompanyIds
-          : [];
-
-        if (!companyId || !item.leadId || leadCompanyIds.length === 0) {
-          return item;
-        }
-
-        const belongsToCurrentCompany = item.classification === "member" ||
-          leadCompanyIds.includes(companyId);
-
-        return {
-          ...item,
-          classification: belongsToCurrentCompany ? "member" : "visitor",
-        };
-      }),
-    [items, companyId],
-  );
+  // The backend is authoritative for classification and masking — it already
+  // strips email/phone/owner for visitors and everything for unknown faces.
+  // The frontend just renders what it receives.
+  const resolvedItems = items;
 
   const classificationCounts = useMemo(() => {
     const counts = { member: 0, visitor: 0, unknown: 0 };

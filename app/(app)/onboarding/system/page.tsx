@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
@@ -32,6 +32,8 @@ interface PlanOption {
 
 export default function OnboardingSystemPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedSlug = searchParams.get("system");
   const { t } = useLocale();
   const { systemToken } = useAuth();
 
@@ -51,10 +53,17 @@ export default function OnboardingSystemPage() {
     fetch("/api/core/systems")
       .then((r) => r.json())
       .then((json) => {
-        if (json.success) setSystems(json.data ?? []);
+        if (json.success) {
+          const list: SystemOption[] = json.data ?? [];
+          setSystems(list);
+          if (preselectedSlug) {
+            const match = list.find((s) => s.slug === preselectedSlug);
+            if (match) setSelectedSystem(match);
+          }
+        }
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [preselectedSlug]);
 
   const handleSelectSystem = async () => {
     if (!selectedSystem) return;

@@ -26,7 +26,12 @@ export async function GET(req: NextRequest) {
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "20");
 
-    const result = await listCompanies({ search, cursor, limit });
+    const result = await listCompanies({
+      search,
+      cursor,
+      limit,
+      userId: ctx.userId,
+    });
     return NextResponse.json({
       success: true,
       data: result.data,
