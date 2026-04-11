@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { Role } from "@/src/contracts/role";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";

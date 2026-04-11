@@ -1,5 +1,5 @@
 import * as jose from "@panva/jose";
-import Core from "./Core";
+import Core from "./Core.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(

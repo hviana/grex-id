@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { CoreSetting } from "@/src/contracts/core-settings";
 
 export async function listSettings(): Promise<CoreSetting[]> {

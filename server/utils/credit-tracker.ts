@@ -1,5 +1,5 @@
-import { getDb, rid } from "../db/connection";
-import { publish } from "../event-queue/publisher";
+import { getDb, rid } from "../db/connection.ts";
+import { publish } from "../event-queue/publisher.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(

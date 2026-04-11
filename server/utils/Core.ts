@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection";
+import { getDb } from "../db/connection.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";

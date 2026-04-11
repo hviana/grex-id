@@ -1,5 +1,5 @@
-import Core from "../../utils/Core";
-import type { HandlerFn } from "../worker";
+import Core from "../../utils/Core.ts";
+import type { HandlerFn } from "../worker.ts";
 import type { TemplateFunction } from "@/src/contracts/communication";
 
 const templateRegistry: Record<string, TemplateFunction> = {

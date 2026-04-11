@@ -1,10 +1,10 @@
-import { Worker } from "../event-queue/worker";
-import { getAllHandlerNames } from "../event-queue/registry";
-import { sendEmail } from "../event-queue/handlers/send-email";
-import { sendSms } from "../event-queue/handlers/send-sms";
-import { processPayment } from "../event-queue/handlers/process-payment";
-import { processDetection } from "../event-queue/handlers/systems/grex-id/process-detection";
-import type { HandlerFn } from "../event-queue/worker";
+import { Worker } from "../event-queue/worker.ts";
+import { getAllHandlerNames } from "../event-queue/registry.ts";
+import { sendEmail } from "../event-queue/handlers/send-email.ts";
+import { sendSms } from "../event-queue/handlers/send-sms.ts";
+import { processPayment } from "../event-queue/handlers/process-payment.ts";
+import { processDetection } from "../event-queue/handlers/systems/grex-id/process-detection.ts";
+import type { HandlerFn } from "../event-queue/worker.ts";
 import type { WorkerConfig } from "@/src/contracts/event-queue";
 
 const handlerFunctions: Record<string, HandlerFn> = {

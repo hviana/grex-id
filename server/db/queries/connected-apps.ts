@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { ConnectedApp } from "@/src/contracts/connected-app";
 
 export async function listConnectedApps(

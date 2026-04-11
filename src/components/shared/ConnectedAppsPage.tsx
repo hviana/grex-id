@@ -76,7 +76,7 @@ export default function ConnectedAppsPage() {
 
   // Build the OAuth authorize URL so external developers can copy it
   const authorizeUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/oauth/authorize?system_slug=${
+    ? `${globalThis.location.origin}/oauth/authorize?system_slug=${
       encodeURIComponent(systemSlug ?? "")
     }&client_name=YOUR_APP_NAME&permissions=read:*&redirect_origin=https://yourapp.com`
     : "";

@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { Tag } from "@/src/contracts/tag";
 
 export async function searchTags(

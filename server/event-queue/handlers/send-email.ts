@@ -1,8 +1,8 @@
-import Core from "../../utils/Core";
-import { verificationTemplate } from "../../utils/communication/templates/verification";
-import { passwordResetTemplate } from "../../utils/communication/templates/password-reset";
-import { leadUpdateVerificationTemplate } from "../../utils/communication/templates/lead-update-verification";
-import type { HandlerFn } from "../worker";
+import Core from "../../utils/Core.ts";
+import { verificationTemplate } from "../../utils/communication/templates/verification.ts";
+import { passwordResetTemplate } from "../../utils/communication/templates/password-reset.ts";
+import { leadUpdateVerificationTemplate } from "../../utils/communication/templates/lead-update-verification.ts";
+import type { HandlerFn } from "../worker.ts";
 import type { TemplateFunction } from "@/src/contracts/communication";
 
 const templateRegistry: Record<string, TemplateFunction> = {

@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection";
+import { getDb } from "../db/connection.ts";
 import type { WorkerConfig } from "@/src/contracts/event-queue";
 
 export type HandlerFn = (payload: Record<string, unknown>) => Promise<void>;

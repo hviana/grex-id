@@ -83,14 +83,14 @@ function OAuthAuthorizeContent() {
   }, [systemToken, user, loadCompanies]);
 
   const sendMessageAndClose = (data: Record<string, unknown>) => {
-    if (redirectOrigin && window.opener) {
+    if (redirectOrigin && globalThis.opener) {
       try {
-        window.opener.postMessage(data, redirectOrigin);
+        globalThis.opener.postMessage(data, redirectOrigin);
       } catch {
         // cross-origin postMessage failed — opener may have a different origin
       }
     }
-    window.close();
+    globalThis.close();
   };
 
   const handleAuthorize = async () => {

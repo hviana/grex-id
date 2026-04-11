@@ -1,5 +1,5 @@
-import type { Middleware } from "./compose";
-import { getDb } from "../db/connection";
+import type { Middleware } from "./compose.ts";
+import { getDb } from "../db/connection.ts";
 
 export function withPlanAccess(featureNames: string[]): Middleware {
   return async (_req, ctx, next) => {

@@ -1,5 +1,5 @@
-import { getDb } from "../db/connection";
-import { publish } from "../event-queue/publisher";
+import { getDb } from "../db/connection.ts";
+import { publish } from "../event-queue/publisher.ts";
 
 const BILLING_CHECK_INTERVAL_MS = 3_600_000; // 1 hour
 

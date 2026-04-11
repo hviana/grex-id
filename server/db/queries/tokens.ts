@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { ApiToken } from "@/src/contracts/token";
 
 export async function listTokens(

@@ -10,8 +10,8 @@ import {
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import ContactSubform from "./ContactSubform";
-import ProfileSubform from "./ProfileSubform";
+import ContactSubform from "./ContactSubform.tsx";
+import ProfileSubform from "./ProfileSubform.tsx";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 

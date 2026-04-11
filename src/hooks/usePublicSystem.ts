@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PublicSystemInfo } from "@/src/contracts/system";
-import { useLocale } from "./useLocale";
+import { useLocale } from "./useLocale.ts";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 
 export function usePublicSystem(slug: string | null) {

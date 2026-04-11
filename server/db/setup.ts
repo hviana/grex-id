@@ -1,6 +1,6 @@
-import { runMigrations } from "./migrations/runner";
-import { runSeeds } from "./seeds/runner";
-import { closeDb } from "./connection";
+import { runMigrations } from "./migrations/runner.ts";
+import { runSeeds } from "./seeds/runner.ts";
+import { closeDb } from "./connection.ts";
 
 async function main() {
   console.log("[setup] starting database setup...");

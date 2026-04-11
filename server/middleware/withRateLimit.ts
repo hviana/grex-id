@@ -1,5 +1,5 @@
-import type { Middleware } from "./compose";
-import { checkRateLimit, type RateLimitConfig } from "../utils/rate-limiter";
+import type { Middleware } from "./compose.ts";
+import { checkRateLimit, type RateLimitConfig } from "../utils/rate-limiter.ts";
 
 export function withRateLimit(config: RateLimitConfig): Middleware {
   return async (req, ctx, next) => {

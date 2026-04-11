@@ -1,6 +1,6 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
-import { emailLayout } from "./layout";
+import { emailLayout } from "./layout.ts";
 
 interface LeadChange {
   field: string;

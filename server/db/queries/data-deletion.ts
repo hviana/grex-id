@@ -1,4 +1,4 @@
-import { getDb } from "../connection";
+import { getDb } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
 
 /**

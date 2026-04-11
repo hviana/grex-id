@@ -1,5 +1,5 @@
-import { getDb } from "../db/connection";
-import { getHandlersForEvent } from "./registry";
+import { getDb } from "../db/connection.ts";
+import { getHandlersForEvent } from "./registry.ts";
 
 export async function publish(
   name: string,

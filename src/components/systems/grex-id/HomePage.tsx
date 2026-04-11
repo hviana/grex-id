@@ -11,7 +11,7 @@ import BotProtection from "@/src/components/shared/BotProtection";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
-import FacialBiometricsSubform from "./FacialBiometricsSubform";
+import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 
 export default function GrexIdHomePage() {
   const { t } = useLocale();

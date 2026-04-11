@@ -1,4 +1,4 @@
-import { getDb } from "../connection";
+import { getDb } from "../connection.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 

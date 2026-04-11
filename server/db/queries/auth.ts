@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { User } from "@/src/contracts/user";
 
 export type VerificationRequestType =

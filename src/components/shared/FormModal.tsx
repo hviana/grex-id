@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Modal from "./Modal";
-import GenericFormButton from "./GenericFormButton";
-import ErrorDisplay from "./ErrorDisplay";
+import Modal from "./Modal.tsx";
+import GenericFormButton from "./GenericFormButton.tsx";
+import ErrorDisplay from "./ErrorDisplay.tsx";
 import { useLocale } from "@/src/hooks/useLocale";
-import type { SubformConfig, SubformRef } from "./GenericList";
+import type { SubformConfig, SubformRef } from "./GenericList.tsx";
 
 interface FormModalProps {
   title: string;

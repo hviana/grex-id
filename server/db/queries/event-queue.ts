@@ -1,4 +1,4 @@
-import { getDb, rid } from "../connection";
+import { getDb, rid } from "../connection.ts";
 import type { Delivery, QueueEvent } from "@/src/contracts/event-queue";
 
 export async function getEventById(id: string): Promise<QueueEvent | null> {

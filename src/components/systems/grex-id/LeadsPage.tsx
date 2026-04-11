@@ -13,7 +13,7 @@ import type {
   SubformRef,
 } from "@/src/components/shared/GenericList";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
-import FacialBiometricsSubform from "./FacialBiometricsSubform";
+import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";

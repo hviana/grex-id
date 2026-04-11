@@ -45,12 +45,12 @@ function loadHumanScript(): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Browser-only"));
   }
-  if (window.Human?.Human) return Promise.resolve();
-  if (window.__humanScriptPromise) return window.__humanScriptPromise;
+  if (globalThis.Human?.Human) return Promise.resolve();
+  if (globalThis.__humanScriptPromise) return globalThis.__humanScriptPromise;
 
-  window.__humanScriptPromise = new Promise<void>((resolve, reject) => {
+  globalThis.__humanScriptPromise = new Promise<void>((resolve, reject) => {
     const finish = () => {
-      if (window.Human?.Human) resolve();
+      if (globalThis.Human?.Human) resolve();
       else {reject(
           new Error("Human script loaded but window.Human.Human missing"),
         );}
@@ -81,13 +81,13 @@ function loadHumanScript(): Promise<void> {
       finish();
     };
     script.onerror = () => {
-      window.__humanScriptPromise = undefined;
+      globalThis.__humanScriptPromise = undefined;
       reject(new Error("Failed to load Human script"));
     };
     document.head.appendChild(script);
   });
 
-  return window.__humanScriptPromise;
+  return globalThis.__humanScriptPromise;
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,8 +122,8 @@ function getHumanInstance(): Promise<HumanInstance> {
 
   humanInitPromise = (async () => {
     await loadHumanScript();
-    if (!window.Human?.Human) throw new Error("Human not available");
-    const human = new window.Human.Human(humanConfig);
+    if (!globalThis.Human?.Human) throw new Error("Human not available");
+    const human = new globalThis.Human.Human(humanConfig);
     await human.load();
     try {
       await human.warmup();
@@ -267,7 +267,7 @@ const FacialBiometricsSubform = forwardRef<
     useEffect(() => {
       if (!cameraReady || !modelsLoaded || capturedImage) return;
       let busy = false;
-      detectionIntervalRef.current = window.setInterval(async () => {
+      detectionIntervalRef.current = globalThis.setInterval(async () => {
         if (busy || !videoRef.current || !humanRef.current) return;
         busy = true;
         try {

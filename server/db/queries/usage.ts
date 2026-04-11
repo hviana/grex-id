@@ -1,4 +1,4 @@
-import { getDb } from "../connection";
+import { getDb } from "../connection.ts";
 import type { UsageRecord } from "@/src/contracts/usage";
 
 export async function getUsageForPeriod(

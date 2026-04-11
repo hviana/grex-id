@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
-import Modal from "./Modal";
-import Spinner from "./Spinner";
+import Modal from "./Modal.tsx";
+import Spinner from "./Spinner.tsx";
 
 interface DeleteButtonProps {
   onConfirm: () => Promise<void>;

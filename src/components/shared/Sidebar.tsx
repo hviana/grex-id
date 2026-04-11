@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { MenuItem } from "@/src/contracts/menu";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { useLocale } from "@/src/hooks/useLocale";
-import SidebarSearch from "./SidebarSearch";
-import SidebarMenuItem from "./SidebarMenuItem";
-import Spinner from "./Spinner";
+import SidebarSearch from "./SidebarSearch.tsx";
+import SidebarMenuItem from "./SidebarMenuItem.tsx";
+import Spinner from "./Spinner.tsx";
 
 interface SidebarProps {
   menus: MenuItem[];

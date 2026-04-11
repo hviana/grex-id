@@ -1,4 +1,4 @@
-import type { Address } from "./address";
+import type { Address } from "./address.ts";
 
 export interface IPaymentProvider {
   charge(

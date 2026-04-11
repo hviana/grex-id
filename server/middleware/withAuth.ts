@@ -1,5 +1,5 @@
-import type { Middleware } from "./compose";
-import { verifySystemToken } from "../utils/token";
+import type { Middleware } from "./compose.ts";
+import { verifySystemToken } from "../utils/token.ts";
 
 export function withAuth(
   options?: { roles?: string[]; permissions?: string[] },

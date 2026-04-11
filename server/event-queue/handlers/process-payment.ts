@@ -1,5 +1,5 @@
-import type { HandlerFn } from "../worker";
-import { getDb } from "../../db/connection";
+import type { HandlerFn } from "../worker.ts";
+import { getDb } from "../../db/connection.ts";
 
 export const processPayment: HandlerFn = async (payload) => {
   const subscriptionId = payload.subscriptionId as string;

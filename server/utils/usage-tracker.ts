@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection";
+import { getDb } from "../db/connection.ts";
 
 if (typeof window !== "undefined") {
   throw new Error("usage-tracker.ts must not be imported in client-side code.");

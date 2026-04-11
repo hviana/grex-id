@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import * as XLSX from "xlsx";
 import { useLocale } from "@/src/hooks/useLocale";
-import Spinner from "./Spinner";
+import Spinner from "./Spinner.tsx";
 
 interface DownloadDataProps {
   data:

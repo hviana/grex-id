@@ -1,6 +1,6 @@
 "use client";
 
-import Spinner from "./Spinner";
+import Spinner from "./Spinner.tsx";
 
 interface GenericFormButtonProps {
   loading: boolean;

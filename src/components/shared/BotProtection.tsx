@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
-import Spinner from "./Spinner";
+import Spinner from "./Spinner.tsx";
 
 interface BotProtectionProps {
   onVerified: (token: string) => void;

@@ -1,6 +1,6 @@
-import { getDb } from "../connection";
-import { seedSuperuser } from "./001_superuser";
-import { seedDefaultSettings } from "./002_default_settings";
+import { getDb } from "../connection.ts";
+import { seedSuperuser } from "./001_superuser.ts";
+import { seedDefaultSettings } from "./002_default_settings.ts";
 
 if (typeof window !== "undefined") {
   throw new Error("Seed runner must not be imported in client-side code.");

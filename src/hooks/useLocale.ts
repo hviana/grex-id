@@ -1,8 +1,8 @@
 "use client";
 
 import { useContext } from "react";
-import { LocaleContext } from "./LocaleProvider";
-import type { LocaleContextValue } from "./LocaleProvider";
+import { LocaleContext } from "./LocaleProvider.tsx";
+import type { LocaleContextValue } from "./LocaleProvider.tsx";
 
 export function useLocale(): LocaleContextValue {
   const ctx = useContext(LocaleContext);

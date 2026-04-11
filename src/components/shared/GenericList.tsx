@@ -6,17 +6,17 @@ import type {
   FieldType,
   PaginatedResult,
 } from "@/src/contracts/common";
-import type { FilterConfig, FilterValues } from "./FilterDropdown";
+import type { FilterConfig, FilterValues } from "./FilterDropdown.tsx";
 import { useLocale } from "@/src/hooks/useLocale";
-import SearchField from "./SearchField";
-import CreateButton from "./CreateButton";
-import EditButton from "./EditButton";
-import DeleteButton from "./DeleteButton";
-import FilterDropdown from "./FilterDropdown";
-import FilterBadge from "./FilterBadge";
-import GenericListItem from "./GenericListItem";
-import Spinner from "./Spinner";
-import FormModal from "./FormModal";
+import SearchField from "./SearchField.tsx";
+import CreateButton from "./CreateButton.tsx";
+import EditButton from "./EditButton.tsx";
+import DeleteButton from "./DeleteButton.tsx";
+import FilterDropdown from "./FilterDropdown.tsx";
+import FilterBadge from "./FilterBadge.tsx";
+import GenericListItem from "./GenericListItem.tsx";
+import Spinner from "./Spinner.tsx";
+import FormModal from "./FormModal.tsx";
 
 export interface SubformConfig {
   component: React.ComponentType<{

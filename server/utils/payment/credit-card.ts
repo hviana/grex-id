@@ -1,4 +1,4 @@
-import type { IPaymentProvider, PaymentResult } from "./interface";
+import type { IPaymentProvider, PaymentResult } from "./interface.ts";
 
 export class CreditCardPaymentProvider implements IPaymentProvider {
   async charge(
