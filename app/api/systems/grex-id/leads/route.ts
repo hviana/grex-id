@@ -16,257 +16,161 @@ import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 
-const pipeline = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
-  withAuth(),
-);
+async function postHandler(req: NextRequest, ctx: RequestContext) {
+  let body: Record<string, unknown> | null = null;
 
-export async function POST(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+  try {
+    const parsedBody = await req.json() as Record<string, unknown>;
+    body = parsedBody;
+    const companyId = parsedBody.companyId || ctx.tenant.companyId;
+    const systemId = parsedBody.systemId || ctx.tenant.systemId;
+    const inferredCompanyIds = companyId ? [companyId as string] : [];
+    const profile = parsedBody.profile as
+      | { name?: string; avatarUri?: string; age?: number }
+      | undefined;
+    const ownerId = parsedBody.ownerId as string | undefined;
+    const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
+    const avatarUri = parsedBody.avatarUri as string | undefined;
+    const email = parsedBody.email
+      ? standardizeField("email", parsedBody.email, "lead")
+      : undefined;
+    const phone = parsedBody.phone
+      ? standardizeField("phone", parsedBody.phone, "lead")
+      : undefined;
+    const name = parsedBody.name
+      ? standardizeField("name", parsedBody.name, "lead")
+      : undefined;
 
-  return pipeline(req, ctx, async () => {
-    let body: Record<string, unknown> | null = null;
+    const emailErrors = validateField("email", email, "lead");
+    const nameErrors = validateField("name", name, "lead");
+    const allErrors = [...emailErrors, ...nameErrors];
 
-    try {
-      const parsedBody = await req.json() as Record<string, unknown>;
-      body = parsedBody;
-      const companyId = parsedBody.companyId || ctx.companyId;
-      const systemId = parsedBody.systemId || ctx.systemId;
-      const inferredCompanyIds = companyId ? [companyId as string] : [];
-      const profile = parsedBody.profile as
-        | { name?: string; avatarUri?: string; age?: number }
-        | undefined;
-      const ownerId = parsedBody.ownerId as string | undefined;
-      const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
-      const avatarUri = parsedBody.avatarUri as string | undefined;
-      const email = parsedBody.email
-        ? standardizeField("email", parsedBody.email, "lead")
-        : undefined;
-      const phone = parsedBody.phone
-        ? standardizeField("phone", parsedBody.phone, "lead")
-        : undefined;
-      const name = parsedBody.name
-        ? standardizeField("name", parsedBody.name, "lead")
-        : undefined;
-
-      const emailErrors = validateField("email", email, "lead");
-      const nameErrors = validateField("name", name, "lead");
-      const allErrors = [...emailErrors, ...nameErrors];
-
-      if (!companyId || !systemId) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "VALIDATION",
-              message: "validation.companyAndSystem.required",
-            },
+    if (!companyId || !systemId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "validation.companyAndSystem.required",
           },
-          { status: 400 },
-        );
-      }
+        },
+        { status: 400 },
+      );
+    }
 
-      if (!profile?.name || allErrors.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "VALIDATION",
-              errors: allErrors.length > 0
-                ? allErrors
-                : ["validation.name.required"],
-            },
+    if (!profile?.name || allErrors.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: allErrors.length > 0
+              ? allErrors
+              : ["validation.name.required"],
           },
-          { status: 400 },
-        );
-      }
+        },
+        { status: 400 },
+      );
+    }
 
-      // Use avatarUri from facial capture as the profile avatar
-      if (avatarUri && profile) {
-        (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
-      }
+    // Use avatarUri from facial capture as the profile avatar
+    if (avatarUri && profile) {
+      (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
+    }
 
-      let lead;
-      const existing = await findLeadByEmailOrPhone(email!, phone);
+    let lead;
+    const existing = await findLeadByEmailOrPhone(email!, phone);
 
-      if (existing) {
-        const alreadyAssociated = await isLeadAssociated(
-          existing.id,
-          companyId as string,
-          systemId as string,
-        );
+    if (existing) {
+      const alreadyAssociated = await isLeadAssociated(
+        existing.id,
+        companyId as string,
+        systemId as string,
+      );
 
-        if (!alreadyAssociated) {
-          await associateLeadWithCompanySystem({
-            leadId: existing.id,
-            companyId: companyId as string,
-            systemId: systemId as string,
-            ownerId: ownerId as string | undefined,
-          });
-        }
-
-        lead = await updateLead(existing.id, {
-          name: name!,
-          email: email!,
-          phone,
-          profile,
-        });
-        await syncLeadCompanyIds(existing.id);
-      } else {
-        const dup = await checkDuplicates("lead", [
-          { field: "email", value: email! },
-          { field: "phone", value: phone },
-        ]);
-        if (dup.isDuplicate) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                code: "DUPLICATE",
-                message: "validation.lead.duplicateContact",
-              },
-            },
-            { status: 409 },
-          );
-        }
-
-        lead = await createLead({
-          name: name!,
-          email: email!,
-          phone,
-          profile: profile as {
-            name: string;
-            avatarUri?: string;
-            age?: number;
-          },
-          companyIds: inferredCompanyIds,
-        });
+      if (!alreadyAssociated) {
         await associateLeadWithCompanySystem({
-          leadId: lead.id,
+          leadId: existing.id,
           companyId: companyId as string,
           systemId: systemId as string,
           ownerId: ownerId as string | undefined,
         });
       }
 
-      if (faceDescriptor && Array.isArray(faceDescriptor)) {
-        await tryUpsertFace({
-          leadId: lead.id,
-          embedding_type1: faceDescriptor as number[],
-        }, {
-          route: "systems/grex-id/leads:POST",
-          companyId: companyId as string,
-          systemId: systemId as string,
-        });
-      }
-
-      return NextResponse.json(
-        { success: true, data: lead },
-        { status: 201 },
-      );
-    } catch (error) {
-      console.error("Grex assisted lead route error:", {
-        method: "POST",
-        companyId: body?.companyId ?? ctx.companyId,
-        systemId: body?.systemId ?? ctx.systemId,
-        ownerId: body?.ownerId,
-        error,
+      lead = await updateLead(existing.id, {
+        name: name!,
+        email: email!,
+        phone,
+        profile,
       });
-
-      if (
-        error instanceof Error &&
-        error.message.startsWith("INVALID_RECORD_ID:")
-      ) {
-        const field = error.message.slice("INVALID_RECORD_ID:".length);
-        if (field === "companyId" || field === "systemId") {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                code: "VALIDATION",
-                message: "validation.companyAndSystem.required",
-              },
-            },
-            { status: 400 },
-          );
-        }
+      await syncLeadCompanyIds(existing.id);
+    } else {
+      const dup = await checkDuplicates("lead", [
+        { field: "email", value: email! },
+        { field: "phone", value: phone },
+      ]);
+      if (dup.isDuplicate) {
         return NextResponse.json(
           {
             success: false,
             error: {
-              code: "ERROR",
-              message: "common.error.generic",
+              code: "DUPLICATE",
+              message: "validation.lead.duplicateContact",
             },
           },
-          { status: 500 },
+          { status: 409 },
         );
       }
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "ERROR",
-            message: "common.error.generic",
-          },
+      lead = await createLead({
+        name: name!,
+        email: email!,
+        phone,
+        profile: profile as {
+          name: string;
+          avatarUri?: string;
+          age?: number;
         },
-        { status: 500 },
-      );
+        companyIds: inferredCompanyIds,
+      });
+      await associateLeadWithCompanySystem({
+        leadId: lead.id,
+        companyId: companyId as string,
+        systemId: systemId as string,
+        ownerId: ownerId as string | undefined,
+      });
     }
-  });
-}
 
-export async function PUT(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+    if (faceDescriptor && Array.isArray(faceDescriptor)) {
+      await tryUpsertFace({
+        leadId: lead.id,
+        embedding_type1: faceDescriptor as number[],
+      }, {
+        route: "systems/grex-id/leads:POST",
+        companyId: companyId as string,
+        systemId: systemId as string,
+      });
+    }
 
-  return pipeline(req, ctx, async () => {
-    let body: Record<string, unknown> | null = null;
+    return NextResponse.json(
+      { success: true, data: lead },
+      { status: 201 },
+    );
+  } catch (error) {
+    console.error("Grex assisted lead route error:", {
+      method: "POST",
+      companyId: body?.companyId ?? ctx.tenant.companyId,
+      systemId: body?.systemId ?? ctx.tenant.systemId,
+      ownerId: body?.ownerId,
+      error,
+    });
 
-    try {
-      const parsedBody = await req.json() as Record<string, unknown>;
-      body = parsedBody;
-      const companyId = parsedBody.companyId || ctx.companyId;
-      const systemId = parsedBody.systemId || ctx.systemId;
-      const id = parsedBody.id as string | undefined;
-      const profile = parsedBody.profile as
-        | { name?: string; avatarUri?: string; age?: number }
-        | undefined;
-      const ownerId = parsedBody.ownerId as string | undefined;
-      const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
-      const avatarUri = parsedBody.avatarUri as string | undefined;
-      const email = parsedBody.email
-        ? standardizeField("email", parsedBody.email, "lead")
-        : undefined;
-      const phone = parsedBody.phone
-        ? standardizeField("phone", parsedBody.phone, "lead")
-        : undefined;
-      const name = parsedBody.name
-        ? standardizeField("name", parsedBody.name, "lead")
-        : undefined;
-
-      if (!id) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: { code: "VALIDATION", message: "validation.id.required" },
-          },
-          { status: 400 },
-        );
-      }
-
-      if (!companyId || !systemId) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("INVALID_RECORD_ID:")
+    ) {
+      const field = error.message.slice("INVALID_RECORD_ID:".length);
+      if (field === "companyId" || field === "systemId") {
         return NextResponse.json(
           {
             success: false,
@@ -278,85 +182,6 @@ export async function PUT(req: NextRequest) {
           { status: 400 },
         );
       }
-
-      if (avatarUri && profile) {
-        (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
-      }
-
-      const lead = await updateLead(id as string, {
-        name,
-        email,
-        phone,
-        profile,
-      });
-
-      if (ownerId !== undefined) {
-        const { updateLeadOwner } = await import(
-          "@/server/db/queries/leads"
-        );
-        await updateLeadOwner(
-          id as string,
-          companyId as string,
-          systemId as string,
-          (ownerId as string) || null,
-        );
-      }
-
-      if (faceDescriptor && Array.isArray(faceDescriptor)) {
-        await tryUpsertFace({
-          leadId: id as string,
-          embedding_type1: faceDescriptor as number[],
-        }, {
-          route: "systems/grex-id/leads:PUT",
-          companyId: companyId as string,
-          systemId: systemId as string,
-        });
-      }
-
-      await syncLeadCompanyIds(id as string);
-      return NextResponse.json({
-        success: true,
-        data: lead,
-      });
-    } catch (error) {
-      console.error("Grex assisted lead route error:", {
-        method: "PUT",
-        id: body?.id,
-        companyId: body?.companyId ?? ctx.companyId,
-        systemId: body?.systemId ?? ctx.systemId,
-        ownerId: body?.ownerId,
-        error,
-      });
-
-      if (
-        error instanceof Error &&
-        error.message.startsWith("INVALID_RECORD_ID:")
-      ) {
-        const field = error.message.slice("INVALID_RECORD_ID:".length);
-        if (field === "companyId" || field === "systemId") {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                code: "VALIDATION",
-                message: "validation.companyAndSystem.required",
-              },
-            },
-            { status: 400 },
-          );
-        }
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "ERROR",
-              message: "common.error.generic",
-            },
-          },
-          { status: 500 },
-        );
-      }
-
       return NextResponse.json(
         {
           success: false,
@@ -368,5 +193,170 @@ export async function PUT(req: NextRequest) {
         { status: 500 },
       );
     }
-  });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "ERROR",
+          message: "common.error.generic",
+        },
+      },
+      { status: 500 },
+    );
+  }
 }
+
+async function putHandler(req: NextRequest, ctx: RequestContext) {
+  let body: Record<string, unknown> | null = null;
+
+  try {
+    const parsedBody = await req.json() as Record<string, unknown>;
+    body = parsedBody;
+    const companyId = parsedBody.companyId || ctx.tenant.companyId;
+    const systemId = parsedBody.systemId || ctx.tenant.systemId;
+    const id = parsedBody.id as string | undefined;
+    const profile = parsedBody.profile as
+      | { name?: string; avatarUri?: string; age?: number }
+      | undefined;
+    const ownerId = parsedBody.ownerId as string | undefined;
+    const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
+    const avatarUri = parsedBody.avatarUri as string | undefined;
+    const email = parsedBody.email
+      ? standardizeField("email", parsedBody.email, "lead")
+      : undefined;
+    const phone = parsedBody.phone
+      ? standardizeField("phone", parsedBody.phone, "lead")
+      : undefined;
+    const name = parsedBody.name
+      ? standardizeField("name", parsedBody.name, "lead")
+      : undefined;
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", message: "validation.id.required" },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!companyId || !systemId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "validation.companyAndSystem.required",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (avatarUri && profile) {
+      (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
+    }
+
+    const lead = await updateLead(id as string, {
+      name,
+      email,
+      phone,
+      profile,
+    });
+
+    if (ownerId !== undefined) {
+      const { updateLeadOwner } = await import(
+        "@/server/db/queries/leads"
+      );
+      await updateLeadOwner(
+        id as string,
+        companyId as string,
+        systemId as string,
+        (ownerId as string) || null,
+      );
+    }
+
+    if (faceDescriptor && Array.isArray(faceDescriptor)) {
+      await tryUpsertFace({
+        leadId: id as string,
+        embedding_type1: faceDescriptor as number[],
+      }, {
+        route: "systems/grex-id/leads:PUT",
+        companyId: companyId as string,
+        systemId: systemId as string,
+      });
+    }
+
+    await syncLeadCompanyIds(id as string);
+    return NextResponse.json({
+      success: true,
+      data: lead,
+    });
+  } catch (error) {
+    console.error("Grex assisted lead route error:", {
+      method: "PUT",
+      id: body?.id,
+      companyId: body?.companyId ?? ctx.tenant.companyId,
+      systemId: body?.systemId ?? ctx.tenant.systemId,
+      ownerId: body?.ownerId,
+      error,
+    });
+
+    if (
+      error instanceof Error &&
+      error.message.startsWith("INVALID_RECORD_ID:")
+    ) {
+      const field = error.message.slice("INVALID_RECORD_ID:".length);
+      if (field === "companyId" || field === "systemId") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              message: "validation.companyAndSystem.required",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "ERROR",
+            message: "common.error.generic",
+          },
+        },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "ERROR",
+          message: "common.error.generic",
+        },
+      },
+      { status: 500 },
+    );
+  }
+}
+
+const pipeline = compose(
+  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withAuth(),
+);
+
+export const POST = compose(
+  pipeline,
+  async (req, ctx) => postHandler(req as NextRequest, ctx),
+);
+
+export const PUT = compose(
+  pipeline,
+  async (req, ctx) => putHandler(req as NextRequest, ctx),
+);

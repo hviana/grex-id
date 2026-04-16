@@ -2,7 +2,9 @@ import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 
 if (typeof window !== "undefined") {
-  throw new Error("auto-recharge handler must not be imported in client-side code.");
+  throw new Error(
+    "auto-recharge handler must not be imported in client-side code.",
+  );
 }
 
 /**
@@ -129,7 +131,7 @@ export async function handleAutoRecharge(payload: {
   }
 
   // Create credit purchase and publish PAYMENT_DUE
-  const purchase = await db.query<[ { id: string }[] ]>(
+  const purchase = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
       companyId = $companyId,
       systemId = $systemId,

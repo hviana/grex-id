@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyTenantToken, createTenantToken } from "@/server/utils/token";
+import { createTenantToken, verifyTenantToken } from "@/server/utils/token";
 import { isJtiRevoked, revokeJti } from "@/server/utils/token-revocation";
 import { getDb, rid } from "@/server/db/connection";
 

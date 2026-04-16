@@ -1,35 +1,40 @@
 import type { Middleware } from "./compose.ts";
-import { getDb } from "../db/connection.ts";
+import { getDb, rid } from "../db/connection.ts";
 
 export function withEntityLimit(
   entityName: string,
   tableName: string,
 ): Middleware {
   return async (_req, ctx, next) => {
-    if (!ctx.companyId || !ctx.systemId) {
+    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
       return Response.json(
         {
           success: false,
           error: {
             code: "BAD_REQUEST",
-            message: "Company and system context required",
+            message: "common.error.scopeMismatch",
           },
         },
         { status: 400 },
       );
     }
 
-    if (ctx.roles.includes("superuser")) {
+    if (ctx.tenant.roles.includes("superuser")) {
       return next();
     }
 
     const db = await getDb();
 
-    const subs = await db.query<[{ planId: string; voucherIds: string[] }[]]>(
-      `SELECT planId, voucherIds FROM subscription
+    const subs = await db.query<
+      [{ planId: string; voucherId: string | null }[]]
+    >(
+      `SELECT planId, voucherId FROM subscription
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
        LIMIT 1`,
-      { companyId: ctx.companyId, systemId: ctx.systemId },
+      {
+        companyId: rid(ctx.tenant.companyId),
+        systemId: rid(ctx.tenant.systemId),
+      },
     );
 
     const sub = subs[0]?.[0];
@@ -47,23 +52,23 @@ export function withEntityLimit(
 
     let limit = plan.entityLimits[entityName];
 
-    if (sub.voucherIds.length > 0) {
+    // Single voucher — check for entityLimitModifiers
+    if (sub.voucherId) {
       const vouchers = await db.query<
         [{ entityLimitModifiers: Record<string, number> | null }[]]
       >(
-        "SELECT entityLimitModifiers FROM voucher WHERE id IN $ids",
-        { ids: sub.voucherIds },
+        "SELECT entityLimitModifiers FROM voucher WHERE id = $id LIMIT 1",
+        { id: sub.voucherId },
       );
-      for (const v of vouchers[0] ?? []) {
-        if (v.entityLimitModifiers?.[entityName]) {
-          limit += v.entityLimitModifiers[entityName];
-        }
+      const v = vouchers[0]?.[0];
+      if (v?.entityLimitModifiers?.[entityName]) {
+        limit += v.entityLimitModifiers[entityName];
       }
     }
 
     const counts = await db.query<[{ count: number }[]]>(
       `SELECT count() AS count FROM ${tableName} WHERE companyId = $companyId GROUP ALL`,
-      { companyId: ctx.companyId },
+      { companyId: rid(ctx.tenant.companyId) },
     );
 
     const currentCount = counts[0]?.[0]?.count ?? 0;
@@ -73,8 +78,7 @@ export function withEntityLimit(
           success: false,
           error: {
             code: "ENTITY_LIMIT",
-            message:
-              `Entity limit reached for ${entityName} (${currentCount}/${limit})`,
+            message: "billing.error.entityLimit",
           },
         },
         { status: 403 },

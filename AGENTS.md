@@ -10,26 +10,26 @@ load-bearing. Nothing is decorative.
 ### 1. Overview
 
 A serverless multi-tenant platform. **Users** authenticate once, belong to one
-or more **companies**, and subscribe each company to one or more **systems**
-via a **plan**. A **superuser** administers the Core (systems, roles, plans,
-menus, vouchers, settings, terms, data deletion). Each system renders its own
-UI, menus, and features according to the active plan and user roles.
+or more **companies**, and subscribe each company to one or more **systems** via
+a **plan**. A **superuser** administers the Core (systems, roles, plans, menus,
+vouchers, settings, terms, data deletion). Each system renders its own UI,
+menus, and features according to the active plan and user roles.
 
 Every system additionally ships a **public homepage** (`.tsx` component
-registered in the homepage registry) accessible at `/?system=<slug>`. The
-core setting `app.defaultSystem` determines which homepage is rendered when
-no `?system=` is provided. If nothing matches, a core fallback homepage is
-shown. All public pages (homepage, auth pages, terms) receive system branding
-(logo + name) through the same `?system=` parameter.
+registered in the homepage registry) accessible at `/?system=<slug>`. The core
+setting `app.defaultSystem` determines which homepage is rendered when no
+`?system=` is provided. If nothing matches, a core fallback homepage is shown.
+All public pages (homepage, auth pages, terms) receive system branding (logo +
+name) through the same `?system=` parameter.
 
-**Subframeworks** (§26) extend the Core at build time by mirroring its
-structure under `frameworks/<name>/`. **Systems** are runtime tenants;
-subframeworks are design-time code bundles.
+**Subframeworks** (§26) extend the Core at build time by mirroring its structure
+under `frameworks/<name>/`. **Systems** are runtime tenants; subframeworks are
+design-time code bundles.
 
 ### 1.1 Runtime invariants (non-negotiable)
 
-1. **Serverless runtime.** Only standard Web APIs (`fetch`, `crypto`,
-   `Request`, `Response`, …). No Node/Deno/Bun-specific APIs.
+1. **Serverless runtime.** Only standard Web APIs (`fetch`, `crypto`, `Request`,
+   `Response`, …). No Node/Deno/Bun-specific APIs.
 2. **Mobile-first responsive UI.** Build the most visually stunning interface
    possible with Tailwind only.
 3. **Spinner on every AJAX.** Not just form submits — initial loads, deletes,
@@ -41,16 +41,16 @@ subframeworks are design-time code bundles.
 6. **Emojis instead of icon libraries.** No icon dependency.
 7. **All UI text uses i18n keys** with `en` and `pt-BR` translations.
 8. **Backend never returns human-readable text.** Validation errors, generic
-   errors, file-upload errors, rate-limit errors — all i18n keys resolved by
-   the frontend via `t()`. Shape: `{ code: "VALIDATION", errors: string[] }`
-   or `{ code: "ERROR", message: "common.error.generic" }`.
-9. **Communication templates use i18n keys.** Email/SMS templates call `t()`
-   — never hardcode English.
+   errors, file-upload errors, rate-limit errors — all i18n keys resolved by the
+   frontend via `t()`. Shape: `{ code: "VALIDATION", errors: string[] }` or
+   `{ code: "ERROR", message: "common.error.generic" }`.
+9. **Communication templates use i18n keys.** Email/SMS templates call `t()` —
+   never hardcode English.
 10. **Compositional DB model.** Reusable structures (profile, address) are
-    separate tables referenced via `record<>` links, never embedded. To
-    create: `CREATE` the composable first, then the parent with the link. To
-    update: update the composable directly. To delete: delete both parent
-    and composable.
+    separate tables referenced via `record<>` links, never embedded. To create:
+    `CREATE` the composable first, then the parent with the link. To update:
+    update the composable directly. To delete: delete both parent and
+    composable.
 
 ### 2. Tech Stack
 
@@ -74,8 +74,7 @@ subframeworks are design-time code bundles.
 
 ### 3. Code & Style Baseline
 
-- TypeScript strict mode. Contracts live in `src/contracts/` and are
-  isomorphic.
+- TypeScript strict mode. Contracts live in `src/contracts/` and are isomorphic.
 - Web-APIs only (see §1.1.1). Never import `node:*`, `Deno.*`, `Bun.*`.
 - Emojis for icons. No icon library imports.
 - Mobile-first: every component designs for small screens first and scales up.
@@ -103,14 +102,19 @@ utilities.
 **Rules implemented via Tailwind utilities only:**
 
 - Dark backgrounds with subtle gradients.
-- Cards: `backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)]`.
-- Hover: `hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20`.
-- Gradient borders / accents: `bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)]`.
-- Color roles: primary = `--color-primary-green`; accent = `--color-secondary-blue`; background = `--color-black`; borders = `--color-dark-gray`; secondary text = `--color-light-text`.
+- Cards:
+  `backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)]`.
+- Hover:
+  `hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20`.
+- Gradient borders / accents:
+  `bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)]`.
+- Color roles: primary = `--color-primary-green`; accent =
+  `--color-secondary-blue`; background = `--color-black`; borders =
+  `--color-dark-gray`; secondary text = `--color-light-text`.
 - **Inputs & textareas MUST use `placeholder-white/30`.** Never
   `placeholder-[var(--color-light-text)]/50`, never omit. Placeholder text
-  itself comes from `t("common.placeholder.*")`. Labels follow the same rule
-  — no hardcoded strings, always `t()`.
+  itself comes from `t("common.placeholder.*")`. Labels follow the same rule —
+  no hardcoded strings, always `t()`.
 
 ### 5. Internationalization (i18n)
 
@@ -128,10 +132,10 @@ src/i18n/
 
 ```typescript
 export function t(
-  key: string,            // "domain.section.label" e.g. "auth.login.title"
+  key: string, // "domain.section.label" e.g. "auth.login.title"
   locale: string,
   params?: Record<string, string>,
-): string;               // Returns the key itself as fallback if not found.
+): string; // Returns the key itself as fallback if not found.
 ```
 
 #### 5.3 Locale resolution (frontend — UI)
@@ -148,12 +152,12 @@ There is no global `app.defaultLocale`. Each system owns its default.
 
 When the user changes locale, the cookie is set and — if authenticated —
 `PUT /api/users?action=locale` persists it on `user.profile.locale`, so
-server-side operations (email/SMS) use the user's language even without
-cookie access. `profile.locale` is also set at registration from the active
-frontend locale.
+server-side operations (email/SMS) use the user's language even without cookie
+access. `profile.locale` is also set at registration from the active frontend
+locale.
 
-`LocaleProvider` accepts an optional `defaultLocale` prop. `(app)` layout
-and public pages (via `usePublicSystem`) resolve it from the current system.
+`LocaleProvider` accepts an optional `defaultLocale` prop. `(app)` layout and
+public pages (via `usePublicSystem`) resolve it from the current system.
 
 #### 5.4 Locale resolution (server — email/SMS handlers)
 
@@ -167,8 +171,8 @@ receives no props, reads from `LocaleContext`.
 
 #### 5.6 DB-stored i18n keys
 
-Display names for roles, plans, menu items, and plan benefits are stored in
-the DB as i18n keys (e.g. `"roles.admin.name"`) and resolved at render time.
+Display names for roles, plans, menu items, and plan benefits are stored in the
+DB as i18n keys (e.g. `"roles.admin.name"`) and resolved at render time.
 
 #### 5.7 Backend-never-returns-text rule
 
@@ -265,16 +269,15 @@ permission errors, and status messages.
 - Adding a new system **creates a subfolder `[slug]` in every one of**:
   `src/components/systems/`, `server/db/migrations/systems/`,
   `server/db/queries/systems/`, `server/db/frontend-queries/systems/`,
-  `server/event-queue/handlers/systems/`, `app/api/systems/`,
-  `public/systems/`, and `src/i18n/<locale>/systems/` for every locale.
+  `server/event-queue/handlers/systems/`, `app/api/systems/`, `public/systems/`,
+  and `src/i18n/<locale>/systems/` for every locale.
 - **System-specific migrations** live in
-  `server/db/migrations/systems/[slug]/*.surql` and use the same numeric
-  prefix convention (e.g. `0026_create_foo.surql`). The runner scans the
-  root migrations directory, every `systems/<slug>/` subfolder, and every
-  `frameworks/*/server/db/migrations/` subtree; merges them; sorts by
-  numeric prefix globally; executes pending ones; records them in
-  `_migrations` with the relative path (e.g.
-  `systems/grex-id/0026_create_face.surql`).
+  `server/db/migrations/systems/[slug]/*.surql` and use the same numeric prefix
+  convention (e.g. `0026_create_foo.surql`). The runner scans the root
+  migrations directory, every `systems/<slug>/` subfolder, and every
+  `frameworks/*/server/db/migrations/` subtree; merges them; sorts by numeric
+  prefix globally; executes pending ones; records them in `_migrations` with the
+  relative path (e.g. `systems/grex-id/0026_create_face.surql`).
 
 ---
 
@@ -287,9 +290,9 @@ permission errors, and status messages.
 - All tables are `SCHEMAFULL`.
 - Passwords stored with `crypto::argon2::generate()`; verified with
   `crypto::argon2::compare()`. Never hashed in app code.
-- **Compositional model** (§1.1.10): reusable structures (`profile`,
-  `address`) are separate tables linked via `record<>`. Frontend responses
-  include the full nested object resolved via SurrealDB `FETCH`.
+- **Compositional model** (§1.1.10): reusable structures (`profile`, `address`)
+  are separate tables linked via `record<>`. Frontend responses include the full
+  nested object resolved via SurrealDB `FETCH`.
 - **Cursor-based pagination everywhere.** Never `SKIP`. Frontend supplies
   `limit`, capped server-side at 200.
 - **FULLTEXT search** for textual lookup fields (see migration files for the
@@ -298,16 +301,16 @@ permission errors, and status messages.
 
 #### 7.2 Single-call rule (transaction safety)
 
-The backend uses a single shared SurrealDB connection. **Every query
-function must batch all statements into one `db.query()` call.** Never
-sequential `await db.query()` within the same function; never `Promise.all`
-of multiple `db.query()`. Separate calls create implicit transactions that
-conflict under concurrency, producing `"Transaction conflict: Resource
+The backend uses a single shared SurrealDB connection. **Every query function
+must batch all statements into one `db.query()` call.** Never sequential
+`await db.query()` within the same function; never `Promise.all` of multiple
+`db.query()`. Separate calls create implicit transactions that conflict under
+concurrency, producing `"Transaction conflict: Resource
 busy"`.
 
 Pass values between statements with `LET`. Use `UPSERT … WHERE` instead of
-read-then-write. The final `SELECT … FETCH` (to resolve record links) must
-be part of the same batched query.
+read-then-write. The final `SELECT … FETCH` (to resolve record links) must be
+part of the same batched query.
 
 **Example — create a user with a composable profile and return the fully
 resolved row in one call:**
@@ -326,25 +329,28 @@ SELECT * FROM user WHERE id = $u[0].id FETCH profile;
 Every creation/update path MUST delegate to these utilities — no ad-hoc
 `trim()`, validation regex, or duplicate-check queries in route handlers.
 
-| Step                      | Utility (§12)                  | Order          |
-| ------------------------- | ------------------------------ | -------------- |
-| Normalize raw input       | `standardizeField`             | Before all     |
-| Reject invalid values     | `validateField` / `validateFields` | After standardize |
-| Reject duplicates         | `checkDuplicates`              | Before `CREATE` |
-| Enforce plan entity caps  | `withEntityLimit` middleware   | Before `CREATE` |
+| Step                     | Utility (§12)                      | Order             |
+| ------------------------ | ---------------------------------- | ----------------- |
+| Normalize raw input      | `standardizeField`                 | Before all        |
+| Reject invalid values    | `validateField` / `validateFields` | After standardize |
+| Reject duplicates        | `checkDuplicates`                  | Before `CREATE`   |
+| Enforce plan entity caps | `withEntityLimit` middleware       | Before `CREATE`   |
 
 #### 7.4 Backend connection (`server/db/connection.ts`)
 
-HTTP connection (not WebSocket) for serverless compatibility. Credentials
-from static `Core.DB_*`. Singleton `getDb()`:
+HTTP connection (not WebSocket) for serverless compatibility. Credentials from
+static `Core.DB_*`. Singleton `getDb()`:
 
 ```typescript
 let dbInstance: Surreal | null = null;
 export async function getDb(): Promise<Surreal> {
   if (!dbInstance) {
     dbInstance = new Surreal();
-    await dbInstance.connect(Core.DB_URL, { /* auth */ });
-    await dbInstance.use({ namespace: Core.DB_NAMESPACE, database: Core.DB_DATABASE });
+    await dbInstance.connect(Core.DB_URL, {/* auth */});
+    await dbInstance.use({
+      namespace: Core.DB_NAMESPACE,
+      database: Core.DB_DATABASE,
+    });
   }
   return dbInstance;
 }
@@ -352,8 +358,8 @@ export async function getDb(): Promise<Surreal> {
 
 #### 7.5 Frontend connection (`client/db/connection.ts`)
 
-WebSocket using the SurrealDB user-scoped token. Exclusively for
-`LIVE SELECT`. `connectFrontendDb(userToken: string)`.
+WebSocket using the SurrealDB user-scoped token. Exclusively for `LIVE SELECT`.
+`connectFrontendDb(userToken: string)`.
 
 #### 7.6 Live Query Permissions
 
@@ -361,8 +367,8 @@ WebSocket using the SurrealDB user-scoped token. Exclusively for
 - Every table used by frontend queries MUST declare
   `PERMISSIONS FOR select WHERE <ownership>` (e.g. `WHERE userId = $auth.id`).
 - Always include cursor pagination with a reasonable limit.
-- The frontend WebSocket token is a SurrealDB user-scoped token (§19.1), not
-  the system API token.
+- The frontend WebSocket token is a SurrealDB user-scoped token (§19.1), not the
+  system API token.
 
 Example:
 
@@ -375,60 +381,58 @@ DEFINE TABLE notification SCHEMAFULL
 
 #### 7.7 Migration & seed runners
 
-- `server/db/migrations/runner.ts` — tracks applied migrations in
-  `_migrations` (UNIQUE `name`), scans root + `systems/<slug>/` + every
+- `server/db/migrations/runner.ts` — tracks applied migrations in `_migrations`
+  (UNIQUE `name`), scans root + `systems/<slug>/` + every
   `frameworks/*/server/db/migrations/` subtree, sorts by numeric prefix
   globally, executes pending in a transaction, records the relative path.
-- `server/db/seeds/runner.ts` — each seed file exports an async function
-  that checks existence before inserting (idempotent). Example: superuser
-  seed skips if `SELECT * FROM user WHERE roles CONTAINS "superuser"` is
-  non-empty.
+- `server/db/seeds/runner.ts` — each seed file exports an async function that
+  checks existence before inserting (idempotent). Example: superuser seed skips
+  if `SELECT * FROM user WHERE roles CONTAINS "superuser"` is non-empty.
 
 ### 8. Schema Index
 
 All `DEFINE TABLE` / `DEFINE FIELD` / `DEFINE INDEX` statements live in the
 migration files below. Read the files directly for exact DDL. Each migration
-creates or alters exactly one table; the rules that matter for app code are
-summarized in this table.
+creates exactly one table; the rules that matter for app code are summarized in
+this table.
 
-| Migration file | Table | Key rules |
-| --- | --- | --- |
-| `0000_db_generals.surql` | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes. |
-| `0001_create_user.surql` | `user` | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn. |
-| `0002_create_company.surql` | `company` | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user. |
-| `0003_create_company_user.surql` | `company_user` | Unique `(companyId, userId)`. Pure association. |
-| `0004_create_system.surql` | `system` | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt. |
-| `0005_create_company_system.surql` | `company_system` | Unique `(companyId, systemId)`. Idempotent creation (§22.1). |
-| `0006_create_user_company_system.surql` | `user_company_system` | Unique `(userId, companyId, systemId)`. Per-(company+system) roles. |
-| `0007_create_role.surql` | `role` | Unique `(name, systemId)`. `isBuiltIn` flag. |
-| `0008_create_plan.surql` | `plan` | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive. |
-| `0009_create_voucher.surql` | `voucher` | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers. |
-| `0010_create_menu_item.surql` | `menu_item` | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`. |
-| `0011_create_subscription.surql` | `subscription` | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active|past_due|cancelled`. `paymentMethodId` optional (free plans). Single optional `voucherId` — §22.7. |
-| `0012_create_payment_method.surql` | `payment_method` | `billingAddress` is `record<address>`. `isDefault` bool. |
-| `0013_create_credit_purchase.surql` | `credit_purchase` | Status ∈ `pending|completed|failed`. |
-| `0014_create_connected_app.surql` | `connected_app` | Scoped per (company, system). |
-| `0015_create_api_token.surql` | `api_token` | Base fields (altered by 0034). |
-| `0017_create_usage_record.surql` | `usage_record` | `actorType ∈ user|token|connected_app`. `period` = `YYYY-MM`. |
-| `0018_create_queue_event.surql` | `queue_event` | `payload` `object FLEXIBLE`. |
-| `0019_create_delivery.surql` | `delivery` | Status ∈ `pending|processing|done|dead`. Index for claim path. |
-| `0020_create_core_setting.surql` | `core_setting` | Unique `key`. |
-| `0021_create_verification_request.surql` | `verification_request` | type ∈ `email_verify|phone_verify|password_reset`. Unique `token`. |
-| `0022_create_live_query_permissions.surql` | various | Applies `PERMISSIONS FOR select WHERE …` per §7.6. |
-| `0023_create_lead.surql` | `lead` | `profile` is `record<profile>`. Unique `email` / `phone`. |
-| `0024_create_lead_company_system.surql` | `lead_company_system` | Unique `(leadId, companyId, systemId)`. |
-| `0025_create_location.surql` | `location` | Scoped per (company, system). Embeds `address` inline. |
-| `0029_create_tag.surql` | `tag` | Scoped per (company, system). Unique `(name, companyId, systemId)`. |
-| `0030_create_profile.surql` | `profile` | Composable. Fields: name, avatarUri, age, locale. FULLTEXT `name`. |
-| `0031_create_address.surql` | `address` | Composable. |
-| `0032_create_credit_expense.surql` | `credit_expense` | Daily container. Unique `(companyId, systemId, resourceKey, day)`. |
-| `0033_create_front_core_setting.surql` | `front_core_setting` | Unique `key`. Physically separated from `core_setting` (§10.2.8). |
-| `0034_alter_api_token_fields.surql` | `api_token` | Adds `tenant` (`object FLEXIBLE` + sub-fields), `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `jti` UNIQUE and `revokedAt`. |
-| `0035_alter_subscription_autorecharge.surql` | `subscription` | Adds `autoRechargeEnabled/Amount/InProgress`. |
+| Migration file                             | Table                    | Key rules                                                                                                                                                                                                                                                          |
+| ------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0000_db_generals.surql`                   | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                          |
+| `0001_create_user.surql`                   | `user`                   | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                       |
+| `0002_create_company.surql`                | `company`                | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                |
+| `0003_create_company_user.surql`           | `company_user`           | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                    |
+| `0004_create_system.surql`                 | `system`                 | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                   |
+| `0005_create_company_system.surql`         | `company_system`         | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                       |
+| `0006_create_user_company_system.surql`    | `user_company_system`    | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                |
+| `0007_create_role.surql`                   | `role`                   | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                       |
+| `0008_create_plan.surql`                   | `plan`                   | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive. |
+| `0009_create_voucher.surql`                | `voucher`                | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers.                 |
+| `0010_create_menu_item.surql`              | `menu_item`              | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                  |
+| `0011_create_subscription.surql`           | `subscription`           | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                      |
+| `0012_create_payment_method.surql`         | `payment_method`         | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                           |
+| `0013_create_credit_purchase.surql`        | `credit_purchase`        | Status ∈ `pending                                                                                                                                                                                                                                                  |
+| `0014_create_connected_app.surql`          | `connected_app`          | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade.                                                                                                                                                                  |
+| `0015_create_api_token.surql`              | `api_token`              | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                               |
+| `0017_create_usage_record.surql`           | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                  |
+| `0018_create_queue_event.surql`            | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                       |
+| `0019_create_delivery.surql`               | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                  |
+| `0020_create_core_setting.surql`           | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                      |
+| `0021_create_verification_request.surql`   | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                               |
+| `0022_create_live_query_permissions.surql` | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                 |
+| `0023_create_lead.surql`                   | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                            |
+| `0024_create_lead_company_system.surql`    | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                            |
+| `0025_create_location.surql`               | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                             |
+| `0029_create_tag.surql`                    | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                |
+| `0030_create_profile.surql`                | `profile`                | Composable. Fields: name, avatarUri, age, locale. FULLTEXT `name`.                                                                                                                                                                                                 |
+| `0031_create_address.surql`                | `address`                | Composable.                                                                                                                                                                                                                                                        |
+| `0032_create_credit_expense.surql`         | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                 |
+| `0033_create_front_core_setting.surql`     | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                  |
+| `0034_create_token_revocation.surql`       | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                            |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
-`surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is
-no separate `file_metadata` table (§13.5).
+`surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
+separate `file_metadata` table (§13.5).
 
 **Seed files:**
 
@@ -444,29 +448,33 @@ no separate `file_metadata` table (§13.5).
 ### 9. Tenant — the single source of request context
 
 Every authenticated and unauthenticated request, job, worker, and handler
-operates against a **Tenant** object. Tokens embed it; middleware decodes
-it; route handlers, queries, jobs, and event handlers read `ctx.tenant`.
-The frontend never manipulates the Tenant directly — it holds only the
-opaque token; `useAuth().token` passes it as `Authorization: Bearer`.
+operates against a **Tenant** object. Tokens embed it; middleware decodes it;
+route handlers, queries, jobs, and event handlers read `ctx.tenant`. The
+frontend never manipulates the Tenant directly — it holds only the opaque token;
+`useAuth().token` passes it as `Authorization: Bearer`.
 
 #### 9.1 Contract (`src/contracts/tenant.ts`)
 
 ```typescript
 export interface Tenant {
-  systemId: string;       // "0" for unauthenticated / non-tenant contexts
-  companyId: string;      // "0" for unauthenticated / non-tenant contexts
-  systemSlug: string;     // "core" for core-scoped routes; else the system slug
-  roles: string[];        // [] for anonymous / app-token tenants
-  permissions: string[];  // [] for anonymous; "*" wildcard allowed
+  systemId: string; // "0" for unauthenticated / non-tenant contexts
+  companyId: string; // "0" for unauthenticated / non-tenant contexts
+  systemSlug: string; // "core" for core-scoped routes; else the system slug
+  roles: string[]; // [] for anonymous / app-token tenants
+  permissions: string[]; // [] for anonymous; "*" wildcard allowed
 }
 
-export type TenantActorType = "user" | "api_token" | "connected_app" | "anonymous";
+export type TenantActorType =
+  | "user"
+  | "api_token"
+  | "connected_app"
+  | "anonymous";
 
 export interface TenantClaims extends Tenant {
   actorType: TenantActorType;
-  actorId: string;        // user/token/app id; "0" for anonymous
-  jti: string;            // unique token id (revocation §19.12)
-  exchangeable: boolean;  // true only for actorType="user"
+  actorId: string; // user/token/app id; "0" for anonymous
+  jti: string; // unique token id (revocation §19.12)
+  exchangeable: boolean; // true only for actorType="user"
 }
 ```
 
@@ -474,38 +482,41 @@ export interface TenantClaims extends Tenant {
 
 1. **Unauthenticated requests always receive a synthetic Tenant** — never
    `null`. `systemId = "0"`, `companyId = "0"`, empty `roles`/`permissions`.
-   `systemSlug = "core"` when the route is core-scoped
-   (`/api/core/*`, `/api/auth/*`, `/api/public/*` without a `system`
-   param); otherwise it is the resolved system slug (e.g.
-   `/api/public/system?slug=grex-id` or `/api/systems/grex-id/*`).
+   `systemSlug = "core"` when the route is core-scoped (`/api/core/*`,
+   `/api/auth/*`, `/api/public/*` without a `system` param); otherwise it is the
+   resolved system slug (e.g. `/api/public/system?slug=grex-id` or
+   `/api/systems/grex-id/*`).
 2. **Backend code never reads** `companyId`/`systemId`/`roles`/`permissions`
    **from query strings, cookies, or request bodies.** These come from the
    Tenant only. Changing the tenant requires a token exchange (§19.11).
-3. **Queries, event handlers, jobs, and workers** accept `tenant: Tenant`
-   (or a `ctx` that contains it) — not loose IDs. This includes every
-   query in `server/db/queries/` and every utility that needs scoping
+3. **Queries, event handlers, jobs, and workers** accept `tenant: Tenant` (or a
+   `ctx` that contains it) — not loose IDs. This includes every query in
+   `server/db/queries/` and every utility that needs scoping
    (`trackCreditExpense`, `consumeCredits`, `trackUsage`, `standardizeField`,
    `validateField`, `checkDuplicates`, etc.).
 4. **Jobs without a user context** construct a system Tenant via
    `getSystemTenant()` — `systemId = "0"`, `companyId = "0"`,
-   `systemSlug = "core"`, `roles = ["superuser"]`, `permissions = ["*"]`.
-   This helper is the only place such a tenant is built.
+   `systemSlug = "core"`, `roles = ["superuser"]`, `permissions = ["*"]`. This
+   helper is the only place such a tenant is built.
 5. **Token exchange is the sole mechanism to change Tenant** (§19.11). App
-   tokens and connected-app tokens carry `exchangeable: false` and are
-   bound for life to their issue-time Tenant.
+   tokens and connected-app tokens carry `exchangeable: false` and are bound for
+   life to their issue-time Tenant.
 
 #### 9.3 Helpers (`server/utils/tenant.ts`)
 
 ```typescript
 export function getSystemTenant(): Tenant;
 export function getAnonymousTenant(systemSlug: string): Tenant;
-export function assertScope(tenant: Tenant, required: { companyId?: string; systemId?: string }): void; // throws 403 on mismatch
+export function assertScope(
+  tenant: Tenant,
+  required: { companyId?: string; systemId?: string },
+): void; // throws 403 on mismatch
 ```
 
 ### 10. Configuration Singletons
 
-Both singletons use the same optimization strategy: lazy load on first
-access, in-memory cache, reload on write, missing-key log, admin editor.
+Both singletons use the same optimization strategy: lazy load on first access,
+in-memory cache, reload on write, missing-key log, admin editor.
 
 #### 10.1 Core (server-only)
 
@@ -513,13 +524,16 @@ access, in-memory cache, reload on write, missing-key log, admin editor.
 
 ```typescript
 class Core {
-  private static readonly DB_URL: string;    // from environment
+  private static readonly DB_URL: string; // from environment
   private static readonly DB_USER: string;
   private static readonly DB_PASS: string;
   private static readonly DB_NAMESPACE: string;
   private static readonly DB_DATABASE: string;
 
-  systems: System[]; roles: Role[]; plans: Plan[]; menus: MenuItem[];
+  systems: System[];
+  roles: Role[];
+  plans: Plan[];
+  menus: MenuItem[];
   settings: Map<string, CoreSetting>;
   // vouchers are NOT cached (queried on demand)
 
@@ -528,7 +542,9 @@ class Core {
   async getRolesForSystem(systemId: string): Promise<Role[]>;
   async getPlansForSystem(systemId: string): Promise<Plan[]>;
   async getMenusForSystem(systemId: string): Promise<MenuItem[]>;
-  async getMissingSettings(): Promise<{ key: string; firstRequestedAt: string }[]>;
+  async getMissingSettings(): Promise<
+    { key: string; firstRequestedAt: string }[]
+  >;
   async load(): Promise<void>;
   async reload(): Promise<void>;
   static getInstance(): Core;
@@ -543,60 +559,59 @@ if (typeof window !== "undefined") {
 }
 ```
 
-**Reload trigger.** Whenever a core entity is written (systems, roles,
-plans, menus, settings), the route handler calls
-`Core.getInstance().reload()`.
+**Reload trigger.** Whenever a core entity is written (systems, roles, plans,
+menus, settings), the route handler calls `Core.getInstance().reload()`.
 
-**No hardcoded fallback constants.** Server-side config is read exclusively
-via `Core.getInstance().getSetting(key)`. If a key is missing, `getSetting`
-returns `undefined` and the key is logged.
+**No hardcoded fallback constants.** Server-side config is read exclusively via
+`Core.getInstance().getSetting(key)`. If a key is missing, `getSetting` returns
+`undefined` and the key is logged.
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts`)
 
-| Key | Seed value | Used by |
-| --- | --- | --- |
-| `app.name` | `"Core"` | Email templates (`appName`) |
-| `app.baseUrl` | `"http://localhost:3000"` | Verification/reset links |
-| `app.defaultSystem` | `""` | Homepage fallback system slug |
-| `auth.token.expiry.minutes` | `"15"` | System API token lifetime |
-| `auth.token.expiry.stayLoggedIn.hours` | `"168"` | Stay-logged-in lifetime (7 days) |
-| `auth.rateLimit.perMinute` | `"5"` | Auth route rate limit |
-| `auth.verification.expiry.minutes` | `"15"` | Email verification link |
-| `auth.passwordReset.expiry.minutes` | `"30"` | Password reset link |
-| `auth.verification.cooldown.seconds` | `"120"` | Min interval between verification/reset emails |
-| `auth.twoFactor.enabled` | `"true"` | Global 2FA toggle |
-| `auth.oauth.enabled` | `"false"` | Global OAuth (login) toggle |
-| `auth.oauth.providers` | `"[]"` | JSON array of enabled providers |
-| `files.maxUploadSizeBytes` | `"52428800"` | 50 MB |
-| `files.publicUpload.rateLimit.perMinute` | `"3"` | Strict per-IP limit for unauthenticated uploads |
-| `files.publicUpload.maxSizeBytes` | `"2097152"` | 2 MB |
-| `files.publicUpload.allowedExtensions` | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist |
-| `files.publicUpload.allowedPathPatterns` | `'["*/*/*/logos/*"]'` | Public-upload path glob whitelist |
-| `terms.generic` | `""` | Generic LGPD fallback HTML |
-| `billing.autoRecharge.minAmount` | `"500"` | Min auto-recharge (cents) |
-| `billing.autoRecharge.maxAmount` | `"50000"` | Max auto-recharge per subscription (cents) |
+| Key                                      | Seed value                                 | Used by                                         |
+| ---------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
+| `app.name`                               | `"Core"`                                   | Email templates (`appName`)                     |
+| `app.baseUrl`                            | `"http://localhost:3000"`                  | Verification/reset links                        |
+| `app.defaultSystem`                      | `""`                                       | Homepage fallback system slug                   |
+| `auth.token.expiry.minutes`              | `"15"`                                     | System API token lifetime                       |
+| `auth.token.expiry.stayLoggedIn.hours`   | `"168"`                                    | Stay-logged-in lifetime (7 days)                |
+| `auth.rateLimit.perMinute`               | `"5"`                                      | Auth route rate limit                           |
+| `auth.verification.expiry.minutes`       | `"15"`                                     | Email verification link                         |
+| `auth.passwordReset.expiry.minutes`      | `"30"`                                     | Password reset link                             |
+| `auth.verification.cooldown.seconds`     | `"120"`                                    | Min interval between verification/reset emails  |
+| `auth.twoFactor.enabled`                 | `"true"`                                   | Global 2FA toggle                               |
+| `auth.oauth.enabled`                     | `"false"`                                  | Global OAuth (login) toggle                     |
+| `auth.oauth.providers`                   | `"[]"`                                     | JSON array of enabled providers                 |
+| `files.maxUploadSizeBytes`               | `"52428800"`                               | 50 MB                                           |
+| `files.publicUpload.rateLimit.perMinute` | `"3"`                                      | Strict per-IP limit for unauthenticated uploads |
+| `files.publicUpload.maxSizeBytes`        | `"2097152"`                                | 2 MB                                            |
+| `files.publicUpload.allowedExtensions`   | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist               |
+| `files.publicUpload.allowedPathPatterns` | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist               |
+| `terms.generic`                          | `""`                                       | Generic LGPD fallback HTML                      |
+| `billing.autoRecharge.minAmount`         | `"500"`                                    | Min auto-recharge (cents)                       |
+| `billing.autoRecharge.maxAmount`         | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
 
-**Missing settings log.** Keys requested via `getSetting()` that aren't in
-the DB are recorded with a timestamp. `reload()` clears any that have since
-been defined. `/api/core/settings/missing` exposes the log; the settings
-panel renders a warning banner with an "Add all missing" button that
-pre-fills them as new rows.
+**Missing settings log.** Keys requested via `getSetting()` that aren't in the
+DB are recorded with a timestamp. `reload()` clears any that have since been
+defined. `/api/core/settings/missing` exposes the log; the settings panel
+renders a warning banner with an "Add all missing" button that pre-fills them as
+new rows.
 
 #### 10.2 FrontCore (isomorphic)
 
-Mirrors Core for frontend-safe settings only. **Isomorphic** — the file is
-safe to import in both server and frontend bundles, and does not include a
+Mirrors Core for frontend-safe settings only. **Isomorphic** — the file is safe
+to import in both server and frontend bundles, and does not include a
 server-only guard.
 
 - Reads exclusively from `front_core_setting` (never `core_setting`).
 - **In the browser**, `FrontCore.getInstance()` loads via the public route
-  `GET /api/public/front-core` (no auth). Response cached in memory for the
-  page lifetime; refreshed on `reload()`.
+  `GET /api/public/front-core` (no auth). Response cached in memory for the page
+  lifetime; refreshed on `reload()`.
 - **On the server**, reads DB directly through the same connection.
 - Admin writes via `PUT /api/core/front-settings`: updates DB → calls
-  `FrontCore.getInstance().reload()` on server → broadcasts invalidation
-  to open clients (live SELECT on `front_core_setting`, when the user's
-  SurrealDB token has select permission).
+  `FrontCore.getInstance().reload()` on server → broadcasts invalidation to open
+  clients (live SELECT on `front_core_setting`, when the user's SurrealDB token
+  has select permission).
 
 **Contract:**
 
@@ -604,7 +619,9 @@ server-only guard.
 class FrontCore {
   settings: Map<string, FrontCoreSetting>;
   async getSetting(key: string): Promise<string | undefined>;
-  async getMissingSettings(): Promise<{ key: string; firstRequestedAt: string }[]>;
+  async getMissingSettings(): Promise<
+    { key: string; firstRequestedAt: string }[]
+  >;
   async load(): Promise<void>;
   async reload(): Promise<void>;
   static getInstance(): FrontCore;
@@ -613,14 +630,14 @@ class FrontCore {
 
 ##### 10.2.6 FrontCore settings (seeded by `003_default_front_settings.ts`)
 
-| Key | Seed value | Used by |
-| --- | --- | --- |
-| `front.app.name` | `"Core"` | Tab title, public page headers |
-| `front.app.brandPrimaryColor` | `"#02d07d"` | Runtime theming |
-| `front.support.email` | `"support@core.com"` | Footer support link |
-| `front.support.helpUrl` | `""` | Help Center link |
-| `front.botProtection.siteKey` | `""` | CAPTCHA / bot-protection client key |
-| `front.payment.publicKey` | `""` | Payment gateway publishable key |
+| Key                           | Seed value           | Used by                             |
+| ----------------------------- | -------------------- | ----------------------------------- |
+| `front.app.name`              | `"Core"`             | Tab title, public page headers      |
+| `front.app.brandPrimaryColor` | `"#02d07d"`          | Runtime theming                     |
+| `front.support.email`         | `"support@core.com"` | Footer support link                 |
+| `front.support.helpUrl`       | `""`                 | Help Center link                    |
+| `front.botProtection.siteKey` | `""`                 | CAPTCHA / bot-protection client key |
+| `front.payment.publicKey`     | `""`                 | Payment gateway publishable key     |
 
 ##### 10.2.7 Admin panel
 
@@ -629,25 +646,31 @@ The superuser panel has **two separate pages**:
 - `(core)/settings` → server-only `core_setting` editor.
 - `(core)/front-settings` → `front_core_setting` editor.
 
-Both use `DynamicKeyValueField` + missing-keys banner + "Add all missing"
-button (identical UX). A badge in each header names which table is being
-edited (`t("core.settings.title")` vs `t("core.frontSettings.title")`).
+Both use `DynamicKeyValueField` + missing-keys banner + "Add all missing" button
+(identical UX). A badge in each header names which table is being edited
+(`t("core.settings.title")` vs `t("core.frontSettings.title")`).
 
 ##### 10.2.8 Why separate tables
 
-Physical separation guarantees the frontend bundle cannot accidentally leak
-a server-only secret: a read permission granting `SELECT * FROM
-front_core_setting` never touches `core_setting`. Keys must never overlap.
+Physical separation guarantees the frontend bundle cannot accidentally leak a
+server-only secret: a read permission granting
+`SELECT * FROM
+front_core_setting` never touches `core_setting`. Keys must never
+overlap.
 
 ### 11. Middleware Pipeline
 
 Every API route uses `compose()` from `server/middleware/compose.ts`.
 
 ```typescript
-type Middleware = (req: Request, ctx: RequestContext, next: () => Promise<Response>) => Promise<Response>;
+type Middleware = (
+  req: Request,
+  ctx: RequestContext,
+  next: () => Promise<Response>,
+) => Promise<Response>;
 
 interface RequestContext {
-  tenant: Tenant;        // ALWAYS populated — never null (anonymous synthesized)
+  tenant: Tenant; // ALWAYS populated — never null (anonymous synthesized)
   claims?: TenantClaims; // Full decoded JWT when authenticated
   // No ad-hoc companyId/systemId/roles/userId — read from tenant/claims.
 }
@@ -655,57 +678,57 @@ interface RequestContext {
 
 **Standard execution order:**
 
-1. `withRateLimit(config)` — sliding window. Key: `{companyId}:{systemId}`
-   for general routes; `{ip}` for auth routes. Reads `ctx.tenant`.
-2. `withAuth(options?)` — verifies the JWT, checks `jti` against the
-   revocation list (§19.12), runs the CORS check (§12.7) for
-   `frontendUse` tokens, populates `ctx.tenant` + `ctx.claims`. If no
-   token, populates the anonymous Tenant.
+1. `withRateLimit(config)` — sliding window. Key: `{companyId}:{systemId}` for
+   general routes; `{ip}` for auth routes. Reads `ctx.tenant`.
+2. `withAuth(options?)` — verifies the JWT, checks `jti` against the revocation
+   list (§19.12), runs the CORS check (§12.7) for `frontendUse` tokens,
+   populates `ctx.tenant` + `ctx.claims`. If no token, populates the anonymous
+   Tenant.
    - Options: `{ roles?, permissions?, requireAuthenticated? }`.
    - **Superusers bypass all role/permission checks.**
    - If `roles` is provided, `ctx.tenant.roles` must contain at least one.
-   - If `permissions` is provided, `ctx.tenant.permissions` must contain
-     at least one listed entry OR the `"*"` wildcard.
+   - If `permissions` is provided, `ctx.tenant.permissions` must contain at
+     least one listed entry OR the `"*"` wildcard.
    - Route handlers **never parse the `Authorization` header themselves**.
-3. `withPlanAccess(featureNames[])` — verifies the subscription for the
-   tenant is active and within `currentPeriodEnd`, and that the plan grants
-   at least one of the listed permissions.
-4. `withEntityLimit(entityName)` — (optional, before CREATE) checks the
-   current entity count against plan limits + voucher modifiers.
+3. `withPlanAccess(featureNames[])` — verifies the subscription for the tenant
+   is active and within `currentPeriodEnd`, and that the plan grants at least
+   one of the listed permissions.
+4. `withEntityLimit(entityName)` — (optional, before CREATE) checks the current
+   entity count against plan limits + voucher modifiers.
 
-**Auth routes (`/api/auth/*`) only use `withRateLimit`.** They still
-receive the synthesized anonymous `ctx.tenant` so downstream utilities keep
-the uniform contract.
+**Auth routes (`/api/auth/*`) only use `withRateLimit`.** They still receive the
+synthesized anonymous `ctx.tenant` so downstream utilities keep the uniform
+contract.
 
 **Uniform tenant rule.** Every helper below the middleware layer (queries,
-utilities, event handlers, jobs) accepts `tenant: Tenant` (never loose
-IDs). PR review rejects any helper that reintroduces scattered context.
+utilities, event handlers, jobs) accepts `tenant: Tenant` (never loose IDs). PR
+review rejects any helper that reintroduces scattered context.
 
 ### 12. Cross-Cutting Backend Utilities
 
 All of the following MUST be used — no ad-hoc reimplementations.
 
-| File | Purpose |
-| --- | --- |
-| `server/utils/rate-limiter.ts` | §12.1 |
-| `server/utils/usage-tracker.ts` | §12.2 |
-| `server/utils/credit-tracker.ts` | §12.3 |
-| `server/utils/entity-deduplicator.ts` | §12.4 |
-| `server/utils/field-standardizer.ts` | §12.5 |
-| `server/utils/field-validator.ts` | §12.6 |
-| `server/utils/cors.ts` | §12.7 |
-| `server/utils/token-revocation.ts` | §12.8 |
-| `server/utils/fs.ts` | `getFS()` — shared `SurrealFS` singleton for §13 |
-| `server/utils/tenant.ts` | §9.3 |
-| `server/utils/token.ts` | JWT create/verify via `@panva/jose`, embeds Tenant |
+| File                                  | Purpose                                            |
+| ------------------------------------- | -------------------------------------------------- |
+| `server/utils/rate-limiter.ts`        | §12.1                                              |
+| `server/utils/usage-tracker.ts`       | §12.2                                              |
+| `server/utils/credit-tracker.ts`      | §12.3                                              |
+| `server/utils/entity-deduplicator.ts` | §12.4                                              |
+| `server/utils/field-standardizer.ts`  | §12.5                                              |
+| `server/utils/field-validator.ts`     | §12.6                                              |
+| `server/utils/cors.ts`                | §12.7                                              |
+| `server/utils/token-revocation.ts`    | §12.8                                              |
+| `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13   |
+| `server/utils/tenant.ts`              | §9.3                                               |
+| `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant |
 
 #### 12.1 Rate limiter
 
 Sliding window, in-memory. Plan's `apiRateLimit` (plus voucher
 `apiRateLimitModifier`) defines the global limit for a company+system.
 Distributed across active actors (user + tokens + connected_apps):
-`floor(globalLimit / activeActorCount)` with a minimum of 1 per actor.
-Per-route overrides passed as `withRateLimit` config.
+`floor(globalLimit / activeActorCount)` with a minimum of 1 per actor. Per-route
+overrides passed as `withRateLimit` config.
 
 #### 12.2 Usage tracker
 
@@ -715,7 +738,7 @@ async function trackUsage(params: {
   actorId: string;
   companyId: string;
   systemId: string;
-  resource: string;  // e.g. "storage_bytes", "credits"
+  resource: string; // e.g. "storage_bytes", "credits"
   value: number;
 }): Promise<void>;
 ```
@@ -728,8 +751,8 @@ successful chargeable operations.
 ```typescript
 // Records one expense (daily container, UPSERT increments amount)
 async function trackCreditExpense(params: {
-  resourceKey: string;    // i18n key, e.g. "billing.credits.resource.faceDetection"
-  amount: number;         // cents
+  resourceKey: string; // i18n key, e.g. "billing.credits.resource.faceDetection"
+  amount: number; // cents
   companyId: string;
   systemId: string;
 }): Promise<void>;
@@ -743,105 +766,131 @@ export interface CreditDeductionResult {
 
 // Consumes credits atomically (plan first, then purchased)
 async function consumeCredits(params: {
-  resourceKey: string; amount: number; companyId: string; systemId: string;
+  resourceKey: string;
+  amount: number;
+  companyId: string;
+  systemId: string;
 }): Promise<CreditDeductionResult>;
 ```
 
 `consumeCredits` must perform the entire deduction in a single batched
-`db.query()` (§7.2). The complete algorithm including auto-recharge and
-one-shot alert flag is in §22.3.
+`db.query()` (§7.2). The complete algorithm including auto-recharge and one-shot
+alert flag is in §22.3.
 
 #### 12.4 Entity deduplicator
 
 ```typescript
-export interface DeduplicationField { field: string; value: unknown; }
+export interface DeduplicationField {
+  field: string;
+  value: unknown;
+}
 export interface DeduplicationResult {
   isDuplicate: boolean;
   conflicts: { field: string; value: unknown; existingRecordId: string }[];
 }
 export async function checkDuplicates(
-  entity: string, fields: DeduplicationField[],
+  entity: string,
+  fields: DeduplicationField[],
 ): Promise<DeduplicationResult>;
 ```
 
 **Rules:**
 
 - Call `checkDuplicates` **before** the `CREATE` query on any entity with a
-  UNIQUE index or logical uniqueness (user email/phone, company document,
-  system slug, voucher code, tag name-per-scope, etc.).
-- Pass every uniqueness field. `null`/`undefined` values are silently
-  skipped (e.g. optional phone).
-- Each field is checked independently so conflicts can be reported
-  precisely for i18n error messages.
+  UNIQUE index or logical uniqueness (user email/phone, company document, system
+  slug, voucher code, tag name-per-scope, etc.).
+- Pass every uniqueness field. `null`/`undefined` values are silently skipped
+  (e.g. optional phone).
+- Each field is checked independently so conflicts can be reported precisely for
+  i18n error messages.
 
 #### 12.5 Field standardizer
 
 ```typescript
-export function standardizeField(field: string, value: string, entity?: string): string;
-export function registerStandardizer(field: string, fn: (v: string) => string, entity?: string): void;
+export function standardizeField(
+  field: string,
+  value: string,
+  entity?: string,
+): string;
+export function registerStandardizer(
+  field: string,
+  fn: (v: string) => string,
+  entity?: string,
+): void;
 ```
 
-Resolution order: entity+field specific → generic field → default
-(`trim` + strip `<>`).
+Resolution order: entity+field specific → generic field → default (`trim` +
+strip `<>`).
 
-| Field | Transformation |
-| --- | --- |
-| `email` | Trim, lowercase, collapse whitespace |
-| `phone` | Strip all non-digit characters |
-| `name` | Trim, collapse whitespace, remove `<>` |
-| `slug` | Trim, lowercase, spaces → hyphens, strip non-slug chars |
-| `document` | Strip all non-digit characters |
-| default | Trim, remove `<>` |
+| Field      | Transformation                                          |
+| ---------- | ------------------------------------------------------- |
+| `email`    | Trim, lowercase, collapse whitespace                    |
+| `phone`    | Strip all non-digit characters                          |
+| `name`     | Trim, collapse whitespace, remove `<>`                  |
+| `slug`     | Trim, lowercase, spaces → hyphens, strip non-slug chars |
+| `document` | Strip all non-digit characters                          |
+| default    | Trim, remove `<>`                                       |
 
 Call **before** validation and storage. Pass `entity` when known.
 
 #### 12.6 Field validator
 
 ```typescript
-export function validateField(field: string, value: unknown, entity?: string): string[];
-export function validateFields(fields: { field: string; value: unknown }[], entity?: string): Record<string, string[]>;
-export function registerValidator(field: string, fn: (v: unknown) => string[], entity?: string): void;
+export function validateField(
+  field: string,
+  value: unknown,
+  entity?: string,
+): string[];
+export function validateFields(
+  fields: { field: string; value: unknown }[],
+  entity?: string,
+): Record<string, string[]>;
+export function registerValidator(
+  field: string,
+  fn: (v: unknown) => string[],
+  entity?: string,
+): void;
 ```
 
 Resolution order: entity+field specific → generic → no validator (empty).
 Returns an **array of i18n keys** (empty = valid). Route handlers return
 `{ code: "VALIDATION", errors: string[] }` on non-empty.
 
-| Field | Rules | i18n keys |
-| --- | --- | --- |
-| `email` | Required, regex format | `validation.email.required`, `.invalid` |
-| `phone` | Optional; if provided, 10–15 digits | `validation.phone.invalid` |
-| `password` | Required, min 8 chars | `validation.password.required`, `.tooShort` |
-| `name` | Required, non-empty after trim | `validation.name.required` |
-| `slug` | Required, lowercase alphanumeric + hyphens | `validation.slug.required`, `.invalid` |
-| `url` | Optional; must be parseable | `validation.url.invalid` |
-| `currencyCode` | 3 uppercase letters | `validation.currencyCode.invalid` |
-| `cnpj` | Required, 14 digits, valid check digits | `validation.cnpj.required`, `.invalid` |
+| Field          | Rules                                      | i18n keys                                   |
+| -------------- | ------------------------------------------ | ------------------------------------------- |
+| `email`        | Required, regex format                     | `validation.email.required`, `.invalid`     |
+| `phone`        | Optional; if provided, 10–15 digits        | `validation.phone.invalid`                  |
+| `password`     | Required, min 8 chars                      | `validation.password.required`, `.tooShort` |
+| `name`         | Required, non-empty after trim             | `validation.name.required`                  |
+| `slug`         | Required, lowercase alphanumeric + hyphens | `validation.slug.required`, `.invalid`      |
+| `url`          | Optional; must be parseable                | `validation.url.invalid`                    |
+| `currencyCode` | 3 uppercase letters                        | `validation.currencyCode.invalid`           |
+| `cnpj`         | Required, 14 digits, valid check digits    | `validation.cnpj.required`, `.invalid`      |
 
 Validation i18n keys live in `src/i18n/{locale}/validation.json`.
 
-`phone` treats empty/null/undefined as valid (optional). Other validators
-that start with a required check say so explicitly.
+`phone` treats empty/null/undefined as valid (optional). Other validators that
+start with a required check say so explicitly.
 
 #### 12.7 CORS (`server/utils/cors.ts`)
 
 Enforces `api_token.frontendDomains` for `frontendUse = true` tokens.
 
-1. Missing/empty `Origin` header → rejected (frontend tokens must come
-   from a browser).
+1. Missing/empty `Origin` header → rejected (frontend tokens must come from a
+   browser).
 2. Origin not matching any entry in `frontendDomains` (exact scheme + host
-   + port) → 403 with `common.error.cors`.
+   - port) → 403 with `common.error.cors`.
 3. On success, response is decorated with
    `Access-Control-Allow-Origin: <origin>`,
    `Access-Control-Allow-Credentials: true`, and the appropriate
-   `Allow-Methods`/`Allow-Headers`. Preflight (`OPTIONS`) bypasses
-   `withAuth` but runs `cors.ts` — the frontend passes the token in a
-   custom header during preflight so the gateway can resolve it.
+   `Allow-Methods`/`Allow-Headers`. Preflight (`OPTIONS`) bypasses `withAuth`
+   but runs `cors.ts` — the frontend passes the token in a custom header during
+   preflight so the gateway can resolve it.
 
-Tokens with `frontendUse = false` are strictly server-to-server: any
-request carrying a browser `Origin` for such a token is rejected
-outright. Panel-issued user tokens (`actorType = "user"`) ignore
-`frontendUse` — their CORS is governed by `app.baseUrl`.
+Tokens with `frontendUse = false` are strictly server-to-server: any request
+carrying a browser `Origin` for such a token is rejected outright. Panel-issued
+user tokens (`actorType = "user"`) ignore `frontendUse` — their CORS is governed
+by `app.baseUrl`.
 
 #### 12.8 Token revocation (`server/utils/token-revocation.ts`)
 
@@ -850,10 +899,10 @@ export async function revokeJti(jti: string, reason: string): Promise<void>;
 export async function isJtiRevoked(jti: string): Promise<boolean>;
 ```
 
-Keyed by `jti`. User-session JWTs use a small `token_revocation` table
-where rows TTL to the original `exp` — stays bounded automatically.
-Never-expiring tokens (`api_token.neverExpires=true`) use
-`api_token.revokedAt` directly (not the TTL table).
+Keyed by `jti`. User-session JWTs use a small `token_revocation` table where
+rows TTL to the original `exp` — stays bounded automatically. Never-expiring
+tokens (`api_token.neverExpires=true`) use `api_token.revokedAt` directly (not
+the TTL table).
 
 `withAuth` performs revocation checks on **every** authenticated request
 (cache + single-row lookup keeps the overhead negligible relative to JWT
@@ -861,8 +910,8 @@ verification).
 
 ### 13. File Storage
 
-Uses `@hviana/surreal-fs` exclusively. All file data **and** metadata are
-stored within surreal-fs — no separate SQL tables.
+Uses `@hviana/surreal-fs` exclusively. All file data **and** metadata are stored
+within surreal-fs — no separate SQL tables.
 
 #### 13.1 Path pattern
 
@@ -876,11 +925,11 @@ stored within surreal-fs — no separate SQL tables.
 
 #### 13.2 Upload route (`POST /api/files/upload`) — single dual-mode endpoint
 
-FormData: `file`, `companyId`, `systemSlug`, `userId`, `category` (JSON
-string array), optional `description`.
+FormData: `file`, `companyId`, `systemSlug`, `userId`, `category` (JSON string
+array), optional `description`.
 
-**Mode is determined by the `Authorization` header.** If a valid token
-exists → authenticated mode; otherwise → unauthenticated mode.
+**Mode is determined by the `Authorization` header.** If a valid token exists →
+authenticated mode; otherwise → unauthenticated mode.
 
 **Authenticated mode.**
 
@@ -894,8 +943,8 @@ exists → authenticated mode; otherwise → unauthenticated mode.
    optional `description`.
 7. Return `{ uri, fileUuid, fileName, sizeBytes, mimeType }`.
 
-**Unauthenticated mode** — used for initial system-logo uploads by the
-superuser and any public-facing form:
+**Unauthenticated mode** — used for initial system-logo uploads by the superuser
+and any public-facing form:
 
 1. Strict per-IP rate limit from `files.publicUpload.rateLimit.perMinute`
    (default 3).
@@ -909,8 +958,11 @@ superuser and any public-facing form:
 
 ```typescript
 await fs.save({
-  path, content: bytes, metadata,
-  control: (savePath, concurrencyMap) => isPathAllowed(savePath, allowedPatterns),
+  path,
+  content: bytes,
+  metadata,
+  control: (savePath, concurrencyMap) =>
+    isPathAllowed(savePath, allowedPatterns),
 });
 ```
 
@@ -924,10 +976,10 @@ application-level checks are bypassed.
 
 1. Split `uri` into the path array.
 2. `fs.read({ path })` → content stream + metadata.
-3. Resolve `fileName` + `mimeType` from metadata (fallback: last path
-   segment + `application/octet-stream`).
-4. Stream response with `Content-Type`, `Content-Disposition`,
-   `Content-Length` headers.
+3. Resolve `fileName` + `mimeType` from metadata (fallback: last path segment +
+   `application/octet-stream`).
+4. Stream response with `Content-Type`, `Content-Disposition`, `Content-Length`
+   headers.
 
 #### 13.4 Public API routes (no middleware pipeline)
 
@@ -938,9 +990,8 @@ non-sensitive, read-only data.
   (resolves from `app.defaultSystem`). Response:
   `{ success: true, data: { name, slug, logoUri, defaultLocale?, termsOfService? } | null }`.
   No rate limiting by default (static-like).
-- **`GET /api/public/front-core`** — returns the full
-  `front_core_setting` table as a key/value map. Used by FrontCore in the
-  browser (§10.2).
+- **`GET /api/public/front-core`** — returns the full `front_core_setting` table
+  as a key/value map. Used by FrontCore in the browser (§10.2).
 - **`POST /api/leads/public`** — see §23.2.
 
 #### 13.5 File metadata
@@ -950,10 +1001,18 @@ separate `file_metadata` SQL table. Isomorphic contract shape:
 
 ```typescript
 export interface FileMetadata {
-  id: string; companyId: string; systemSlug: string; userId: string;
-  category: string[]; fileName: string; fileUuid: string;
-  uri: string; sizeBytes: number; mimeType: string;
-  description?: string; createdAt: string;
+  id: string;
+  companyId: string;
+  systemSlug: string;
+  userId: string;
+  category: string[];
+  fileName: string;
+  fileUuid: string;
+  uri: string;
+  sizeBytes: number;
+  mimeType: string;
+  description?: string;
+  createdAt: string;
 }
 ```
 
@@ -961,20 +1020,22 @@ export interface FileMetadata {
 
 #### 14.1 Architecture
 
-Two tables: `queue_event` (the published fact) and `delivery` (one per
-handler per event). **Workers pull from `delivery`, never `queue_event`.**
+Two tables: `queue_event` (the published fact) and `delivery` (one per handler
+per event). **Workers pull from `delivery`, never `queue_event`.**
 
 #### 14.2 Publisher (`server/event-queue/publisher.ts`)
 
 ```typescript
 async function publish(
-  name: string, payload: Record<string, unknown>, availableAt?: Date,
-): Promise<string>;  // returns event id
+  name: string,
+  payload: Record<string, unknown>,
+  availableAt?: Date,
+): Promise<string>; // returns event id
 ```
 
 Steps: (1) insert `queue_event` with `availableAt ?? now()`; (2) look up
-handlers for this event name in the registry; (3) for each handler, insert
-a `delivery` with `status="pending"`, `availableAt` copied from the event,
+handlers for this event name in the registry; (3) for each handler, insert a
+`delivery` with `status="pending"`, `availableAt` copied from the event,
 `maxAttempts` from handler config.
 
 #### 14.3 Registry (`server/event-queue/registry.ts`)
@@ -984,7 +1045,7 @@ const handlerRegistry: Record<string, string[]> = {
   "SEND_EMAIL": ["send_email"],
   "SEND_SMS": ["send_sms"],
   "PAYMENT_DUE": ["process_payment"],
-  "TRIGGER_AUTO_RECHARGE": ["auto_recharge"],  // §22.5
+  "TRIGGER_AUTO_RECHARGE": ["auto_recharge"], // §22.5
   // Systems/frameworks add more here
 };
 export function getHandlersForEvent(eventName: string): string[];
@@ -1046,9 +1107,9 @@ LOOP forever:
 
 #### 14.5 Idempotency
 
-Every handler must be idempotent. Check whether the action was already
-performed (e.g. welcome email sent for this user). Use `delivery.id` or
-`event.id` as the idempotency key when talking to external services.
+Every handler must be idempotent. Check whether the action was already performed
+(e.g. welcome email sent for this user). Use `delivery.id` or `event.id` as the
+idempotency key when talking to external services.
 
 #### 14.6 Lease recovery
 
@@ -1057,70 +1118,74 @@ If a worker crashes, its `processing` rows become claimable again once
 
 ### 15. Communication (Email / SMS)
 
-**No provider abstraction.** All channels are implemented directly as
-event handlers. Entities needing to send communication simply `publish()`
-an event with recipients + template name + template data — the handler
-resolves templates, reads Core settings, and calls the external service.
+**No provider abstraction.** All channels are implemented directly as event
+handlers. Entities needing to send communication simply `publish()` an event
+with recipients + template name + template data — the handler resolves
+templates, reads Core settings, and calls the external service.
 
 #### 15.1 Templates
 
 Live in `server/utils/communication/templates/`. Each template function:
 
 ```typescript
-export interface TemplateResult { body: string; title?: string; }
-export type TemplateFunction = (locale: string, data: Record<string, string>) => TemplateResult;
+export interface TemplateResult {
+  body: string;
+  title?: string;
+}
+export type TemplateFunction = (
+  locale: string,
+  data: Record<string, string>,
+) => TemplateResult;
 ```
 
 Every template MUST use `t()` for all strings — no hardcoded English. All
 templates have full `en` + `pt-BR` translations in
-`src/i18n/{locale}/templates.json`, committed together with the template
-file.
+`src/i18n/{locale}/templates.json`, committed together with the template file.
 
 #### 15.2 Shared email layout (`_layout.ts`)
 
-All email templates wrap their body in `emailLayout(bodyHtml, locale)`,
-which produces a mobile-first, email-client-safe skeleton:
+All email templates wrap their body in `emailLayout(bodyHtml, locale)`, which
+produces a mobile-first, email-client-safe skeleton:
 
 - 600 px max width desktop; collapses on mobile via `<meta viewport>` +
-  `@media (max-width: 600px)` (`table-layout: fixed`, inline fallback
-  widths, padding). **Table-based layout only** — Flexbox/Grid don't
-  render in most email clients.
-- **Inline CSS only.** Class selectors live in a `<style>` block and are
-  used only as media-query hooks. No external stylesheets, no JS, no
-  webfonts (Arial/Helvetica + system stacks).
-- Brand colors are **hardcoded** (email clients can't resolve CSS
-  variables).
-- CTA buttons are a `<table>` with a single `<a>` inside a padded cell;
-  gradient applied as `background-image` with a solid-color fallback.
+  `@media (max-width: 600px)` (`table-layout: fixed`, inline fallback widths,
+  padding). **Table-based layout only** — Flexbox/Grid don't render in most
+  email clients.
+- **Inline CSS only.** Class selectors live in a `<style>` block and are used
+  only as media-query hooks. No external stylesheets, no JS, no webfonts
+  (Arial/Helvetica + system stacks).
+- Brand colors are **hardcoded** (email clients can't resolve CSS variables).
+- CTA buttons are a `<table>` with a single `<a>` inside a padded cell; gradient
+  applied as `background-image` with a solid-color fallback.
 - Dark-mode: ship `<meta name="color-scheme" content="light dark">` +
   `@media (prefers-color-scheme: dark)` overrides for text + borders.
-- **Preheader text:** first element in `<body>` is a hidden
-  (`display:none`) preheader summarizing the content for inbox previews.
+- **Preheader text:** first element in `<body>` is a hidden (`display:none`)
+  preheader summarizing the content for inbox previews.
 
 #### 15.3 Template body structure (mandatory order)
 
 1. Bold emoji hero block (🧾/✅/⚠️/🔁/🤝 — match the semantic).
 2. Greeting using the recipient's `name`.
 3. One-sentence summary of the event.
-4. Table of facts (amount, plan, date, resource, next billing cycle, …) —
-   every cell via `t()`.
+4. Table of facts (amount, plan, date, resource, next billing cycle, …) — every
+   cell via `t()`.
 5. Single gradient CTA → `billingUrl`/`loginUrl`/etc. Label key
    `templates.<name>.cta`.
 6. Footer with `Core.getSetting("app.name")`, support link from
-   `FrontCore.getSetting("front.support.email")`, and a "this email was
-   sent to <recipient>" disclaimer.
+   `FrontCore.getSetting("front.support.email")`, and a "this email was sent to
+   <recipient>" disclaimer.
 
 #### 15.4 Template catalog
 
-| Template | File | When published | Payload fields |
-| --- | --- | --- | --- |
-| `verification` | `verification.ts` | Registration / email change | `name`, `verificationLink` |
-| `password-reset` | `password-reset.ts` | `forgot-password` flow | `name`, `resetLink` |
-| `payment-success` | `payment-success.ts` | Recurring charge OK; credit purchase OK | `name`, `systemName`, `kind` (`"recurring"|"credits"|"auto-recharge"`), `amount`, `currency`, `billingUrl` |
-| `payment-failure` | `payment-failure.ts` | Recurring charge failed; credit purchase failed; auto-recharge attempt failed | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl` |
-| `auto-recharge` | `auto-recharge.ts` | Auto-recharge initiated (always followed by a success/failure template) | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
-| `insufficient-credit` | `insufficient-credit.ts` | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink` |
-| `tenant-invite` | `tenant-invite.ts` | Admin adds an existing user to a new (company, system) pair (§21.1) | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl` |
+| Template              | File                     | When published                                                                                         | Payload fields                                                              |
+| --------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `verification`        | `verification.ts`        | Registration / email change                                                                            | `name`, `verificationLink`                                                  |
+| `password-reset`      | `password-reset.ts`      | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                         |
+| `payment-success`     | `payment-success.ts`     | Recurring charge OK; credit purchase OK                                                                | `name`, `systemName`, `kind` (`"recurring"                                  |
+| `payment-failure`     | `payment-failure.ts`     | Recurring charge failed; credit purchase failed; auto-recharge attempt failed                          | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`  |
+| `auto-recharge`       | `auto-recharge.ts`       | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
+| `insufficient-credit` | `insufficient-credit.ts` | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                         |
+| `tenant-invite`       | `tenant-invite.ts`       | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`     |
 
 i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
 `templates.paymentSuccess.*`, `templates.paymentFailure.*`,
@@ -1149,8 +1214,8 @@ Handler steps: (1) resolve locale via §5.4; (2) resolve senders:
 function; (4) render; (5) call the email service configured in
 `communication.email.provider`.
 
-**`send_sms`** (`handlers/send-sms.ts`) — same payload with phone numbers
-as `recipients`. Uses `communication.sms.provider`.
+**`send_sms`** (`handlers/send-sms.ts`) — same payload with phone numbers as
+`recipients`. Uses `communication.sms.provider`.
 
 **Publishing example** (registration route):
 
@@ -1164,8 +1229,8 @@ await publish("SEND_EMAIL", {
 ```
 
 Route handlers publish `SEND_EMAIL`/`SEND_SMS` directly. No intermediate
-business event handlers — the route does its business logic and publishes
-the channel event.
+business event handlers — the route does its business logic and publishes the
+channel event.
 
 ### 16. Jobs
 
@@ -1173,18 +1238,22 @@ the channel event.
 - **`server/jobs/start-event-queue.ts`** — creates a worker per registered
   handler name with its `WorkerConfig`.
 - **`server/jobs/recurring-billing.ts`** — periodic (e.g. hourly) under the
-  system Tenant. (1) `SELECT subscription WHERE status="active" AND
-  currentPeriodEnd <= now()`; (2) for each, `publish("PAYMENT_DUE", …)`;
-  `process_payment` handler charges via the server payment provider.
+  system Tenant. (1)
+  `SELECT subscription WHERE status="active" AND
+  currentPeriodEnd <= now()`;
+  (2) for each, `publish("PAYMENT_DUE", …)`; `process_payment` handler charges
+  via the server payment provider.
   - **Success:** advance `currentPeriodStart`/`currentPeriodEnd`, reset
-    `remainingPlanCredits = plan.planCredits`, reset `creditAlertSent =
-    false`, publish `SEND_EMAIL` with `payment-success` (`kind =
+    `remainingPlanCredits = plan.planCredits`, reset
+    `creditAlertSent =
+    false`, publish `SEND_EMAIL` with `payment-success`
+    (`kind =
     "recurring"`).
   - **Failure:** set `status = "past_due"` and publish `SEND_EMAIL` with
     `payment-failure` (`kind = "recurring"`, with gateway `reason`).
 - **`server/jobs/token-cleanup.ts`** — daily under the system Tenant.
-  Hard-deletes `api_token` rows where `revokedAt` is older than 90 days.
-  Cleans orphaned `connected_app` rows whose underlying token was removed.
+  Hard-deletes `api_token` rows where `revokedAt` is older than 90 days. Cleans
+  orphaned `connected_app` rows whose underlying token was removed.
 
 ---
 
@@ -1207,23 +1276,36 @@ export async function connectFrontendDb(userToken: string): Promise<Surreal>;
 
 ```typescript
 export interface IClientPaymentProvider {
-  tokenize(cardData: CardInput, billingAddress: Address): Promise<TokenizationResult>;
+  tokenize(
+    cardData: CardInput,
+    billingAddress: Address,
+  ): Promise<TokenizationResult>;
 }
 export interface CardInput {
-  number: string; cvv: string; expiryMonth: string; expiryYear: string;
-  holderName: string; holderDocument: string;
+  number: string;
+  cvv: string;
+  expiryMonth: string;
+  expiryYear: string;
+  holderName: string;
+  holderDocument: string;
 }
-export interface TokenizationResult { cardToken: string; cardMask: string; }
+export interface TokenizationResult {
+  cardToken: string;
+  cardMask: string;
+}
 ```
 
-`client/utils/payment/credit-card.ts` implements this. Details depend on
-the gateway's client SDK.
+`client/utils/payment/credit-card.ts` implements this. Details depend on the
+gateway's client SDK.
 
 **Server-side** (`server/utils/payment/interface.ts`):
 
 ```typescript
 export interface IPaymentProvider {
-  charge(amountCents: number, params: Record<string, string>): Promise<PaymentResult>;
+  charge(
+    amountCents: number,
+    params: Record<string, string>,
+  ): Promise<PaymentResult>;
 }
 export interface PaymentResult {
   success: boolean;
@@ -1237,47 +1319,46 @@ export interface PaymentResult {
 
 #### 17.3 React hooks
 
-| Hook | File | Purpose |
-| --- | --- | --- |
-| `useDebounce` | `src/hooks/useDebounce.ts` | Debounced value (configurable delay) |
-| `useAuth` | `src/hooks/useAuth.ts` | Holds opaque `token` + `surrealToken`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only). |
-| `useLiveQuery` | `src/hooks/useLiveQuery.ts` | Wraps `LIVE SELECT`; manages WebSocket; reactive data |
+| Hook               | File                            | Purpose                                                                                                                                                                                           |
+| ------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useDebounce`      | `src/hooks/useDebounce.ts`      | Debounced value (configurable delay)                                                                                                                                                              |
+| `useAuth`          | `src/hooks/useAuth.ts`          | Holds opaque `token` + `surrealToken`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only). |
+| `useLiveQuery`     | `src/hooks/useLiveQuery.ts`     | Wraps `LIVE SELECT`; manages WebSocket; reactive data                                                                                                                                             |
 | `useSystemContext` | `src/hooks/useSystemContext.ts` | Thin wrapper over `useAuth` exposing `tenant` + `companies[]`, `systems[]`, `switchCompany()`, `switchSystem()`. Switchers call `useAuth().exchangeTenant()` — never mutate local state directly. |
-| `useLocale` | `src/hooks/useLocale.ts` | `locale`, `setLocale()`, `t()`, `supportedLocales` |
-| `usePublicSystem` | `src/hooks/usePublicSystem.ts` | Fetches public system info (no auth). Used by homepage + auth pages for branding. |
-| `useFrontCore` | `src/hooks/useFrontCore.ts` | Lazily loads `FrontCore`; synchronous `get(key)`; reloads on live-query signal from admin panel. |
+| `useLocale`        | `src/hooks/useLocale.ts`        | `locale`, `setLocale()`, `t()`, `supportedLocales`                                                                                                                                                |
+| `usePublicSystem`  | `src/hooks/usePublicSystem.ts`  | Fetches public system info (no auth). Used by homepage + auth pages for branding.                                                                                                                 |
+| `useFrontCore`     | `src/hooks/useFrontCore.ts`     | Lazily loads `FrontCore`; synchronous `get(key)`; reloads on live-query signal from admin panel.                                                                                                  |
 
 #### 17.4 Single-token rule
 
-The frontend stores **only** the opaque token string from `/api/auth/login`
-and `/api/auth/exchange`. No React context or hook stores `companyId`,
-`systemId`, `roles`, or `permissions` independently — they are derived
-from the decoded token via `useAuth().tenant`. Every `fetch` wrapper pulls
-the token from `useAuth()` and sets `Authorization: Bearer <token>`. This
-is the one enforcement point that keeps the frontend free of scattered
-tenant state.
+The frontend stores **only** the opaque token string from `/api/auth/login` and
+`/api/auth/exchange`. No React context or hook stores `companyId`, `systemId`,
+`roles`, or `permissions` independently — they are derived from the decoded
+token via `useAuth().tenant`. Every `fetch` wrapper pulls the token from
+`useAuth()` and sets `Authorization: Bearer <token>`. This is the one
+enforcement point that keeps the frontend free of scattered tenant state.
 
 ### 18. UI Components
 
 #### 18.1 Generic primitives (all in `src/components/shared/`)
 
-| Component | Notes |
-| --- | --- |
-| `Spinner` | Tailwind `animate-spin` on a circular border. Props: `size?: "sm" \| "md" \| "lg"`. Rendered on every async action (§1.1.3). |
-| `Modal` | Standard modal chrome. |
-| `LocaleSelector` | §5.5. |
-| `SearchField` | Debounced (`useDebounce`). |
-| `CreateButton` / `EditButton` / `DeleteButton` | Standard entity-row controls. |
-| `FormModal` | See §18.2. |
-| `GenericFormButton` | Submit with embedded Spinner. |
-| `ErrorDisplay` | Surfaces server-side error i18n keys. |
-| `FilterDropdown`, `DateRangeFilter`, `FilterBadge` | See §18.2. |
-| `DownloadData` | Exports rows as XLSX (see §18.1.1). |
-| `BotProtection` | CAPTCHA / challenge widget (§19.9). Backend verifies `botToken`. |
-| `SystemBranding` | Logo + name block used on auth pages. |
-| `Sidebar`, `SidebarMenuItem`, `SidebarSearch` | §18.6. |
-| `ProfileMenu` | §18.7. |
-| `TagSearch` | §18.4. |
+| Component                                          | Notes                                                                                                                        |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `Spinner`                                          | Tailwind `animate-spin` on a circular border. Props: `size?: "sm" \| "md" \| "lg"`. Rendered on every async action (§1.1.3). |
+| `Modal`                                            | Standard modal chrome.                                                                                                       |
+| `LocaleSelector`                                   | §5.5.                                                                                                                        |
+| `SearchField`                                      | Debounced (`useDebounce`).                                                                                                   |
+| `CreateButton` / `EditButton` / `DeleteButton`     | Standard entity-row controls.                                                                                                |
+| `FormModal`                                        | See §18.2.                                                                                                                   |
+| `GenericFormButton`                                | Submit with embedded Spinner.                                                                                                |
+| `ErrorDisplay`                                     | Surfaces server-side error i18n keys.                                                                                        |
+| `FilterDropdown`, `DateRangeFilter`, `FilterBadge` | See §18.2.                                                                                                                   |
+| `DownloadData`                                     | Exports rows as XLSX (see §18.1.1).                                                                                          |
+| `BotProtection`                                    | CAPTCHA / challenge widget (§19.9). Backend verifies `botToken`.                                                             |
+| `SystemBranding`                                   | Logo + name block used on auth pages.                                                                                        |
+| `Sidebar`, `SidebarMenuItem`, `SidebarSearch`      | §18.6.                                                                                                                       |
+| `ProfileMenu`                                      | §18.7.                                                                                                                       |
+| `TagSearch`                                        | §18.4.                                                                                                                       |
 
 ##### 18.1.1 `DownloadData`
 
@@ -1290,11 +1371,11 @@ Props: {
 }
 ```
 
-If `data` is a function, it is called on click with an inline Spinner
-inside the button. Uses `xlsx` to build the workbook, writes a compressed
-array buffer, and triggers a browser download via a temporary `<a>` +
-`URL.createObjectURL`. Empty results or thrown errors leave the button in
-idle state. Follows the glassmorphism standard.
+If `data` is a function, it is called on click with an inline Spinner inside the
+button. Uses `xlsx` to build the workbook, writes a compressed array buffer, and
+triggers a browser download via a temporary `<a>` + `URL.createObjectURL`. Empty
+results or thrown errors leave the button in idle state. Follows the
+glassmorphism standard.
 
 #### 18.2 List / CRUD system
 
@@ -1320,29 +1401,42 @@ Props: {
 ```
 
 Behavior: debounced `SearchField`; `CreateButton` opens a `FormModal`;
-`EditButton` fetches the full entity via `fetchOneRoute` then opens
-`FormModal` in edit mode; `DeleteButton` confirms then refreshes;
-cursor-based pagination (Load More / Prev-Next); filters through
-`FilterDropdown`, applied filters shown as `FilterBadge`.
+`EditButton` fetches the full entity via `fetchOneRoute` then opens `FormModal`
+in edit mode; `DeleteButton` confirms then refreshes; cursor-based pagination
+(Load More / Prev-Next); filters through `FilterDropdown`, applied filters shown
+as `FilterBadge`.
 
-`GenericListItem` renders `"fieldName: formattedValue"` per row, formatted
-by `FieldType`:
+`GenericListItem` renders `"fieldName: formattedValue"` per row, formatted by
+`FieldType`:
 
 ```typescript
-export type FieldType = "string" | "number" | "boolean" | "date" | "datetime"
-  | "email" | "phone" | "url" | "currency" | "file" | "json";
+export type FieldType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "date"
+  | "datetime"
+  | "email"
+  | "phone"
+  | "url"
+  | "currency"
+  | "file"
+  | "json";
 ```
 
 Common types:
 
 ```typescript
 export interface CursorParams {
-  cursor?: string;                        // opaque
-  limit: number;                          // 1..200, capped server-side
+  cursor?: string; // opaque
+  limit: number; // 1..200, capped server-side
   direction?: "next" | "prev";
 }
 export interface PaginatedResult<T> {
-  data: T[]; nextCursor: string | null; prevCursor: string | null; total?: number;
+  data: T[];
+  nextCursor: string | null;
+  prevCursor: string | null;
+  total?: number;
 }
 export interface ApiResponse<T> {
   success: boolean;
@@ -1353,7 +1447,8 @@ export interface ApiResponse<T> {
 
 `FilterDropdown` — compact dropdown revealing configured filters.
 
-`DateRangeFilter` — `Props: { maxRangeDays: number; onChange: (s: Date, e: Date) => void }`.
+`DateRangeFilter` —
+`Props: { maxRangeDays: number; onChange: (s: Date, e: Date) => void }`.
 
 `FilterBadge` — `Props: { label: string; onRemove: () => void }`.
 
@@ -1372,24 +1467,24 @@ Props: {
 ```
 
 Renders subforms vertically; each exposes `getData()` + `isValid()` via
-`useImperativeHandle`. Submit button is `GenericFormButton` with a
-Spinner. `ErrorDisplay` shows server errors. On submit: collect from all
-subforms, merge, send.
+`useImperativeHandle`. Submit button is `GenericFormButton` with a Spinner.
+`ErrorDisplay` shows server errors. On submit: collect from all subforms, merge,
+send.
 
 #### 18.3 Field-selection policy — prefer smart fields over plain inputs
 
 **Every form field that accepts structured or relational data MUST use the
-appropriate smart component.** Plain `<input type="text">` is reserved for
-truly free-form strings (person name, description).
+appropriate smart component.** Plain `<input type="text">` is reserved for truly
+free-form strings (person name, description).
 
-| Data type | Required component | Notes |
-| --- | --- | --- |
-| Multiple free-text values (permissions, tags, benefits) | `MultiBadgeField mode:"custom"` | Type + Enter to add |
-| Multiple values from a known backend set (roles, system permissions, plan IDs) | `MultiBadgeField mode:"search"` with `fetchFn` | Only backend values; no arbitrary text |
-| Single or multiple related records (system, plan, role, company) | `SearchableSelectField` | Debounced API search; selected items as removable badges |
-| Static small option set | `MultiBadgeField mode:"search"` with `staticOptions`, or `<select>` | `<select>` only when fixed and tiny (≤ 6 items) |
-| Key-value pairs (settings, entity limits) | `DynamicKeyValueField` | Never `<textarea>` for JSON/CSV KV data |
-| File or image | `FileUploadField` | Never a plain text URL input for uploaded assets |
+| Data type                                                                      | Required component                                                  | Notes                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------- |
+| Multiple free-text values (permissions, tags, benefits)                        | `MultiBadgeField mode:"custom"`                                     | Type + Enter to add                                      |
+| Multiple values from a known backend set (roles, system permissions, plan IDs) | `MultiBadgeField mode:"search"` with `fetchFn`                      | Only backend values; no arbitrary text                   |
+| Single or multiple related records (system, plan, role, company)               | `SearchableSelectField`                                             | Debounced API search; selected items as removable badges |
+| Static small option set                                                        | `MultiBadgeField mode:"search"` with `staticOptions`, or `<select>` | `<select>` only when fixed and tiny (≤ 6 items)          |
+| Key-value pairs (settings, entity limits)                                      | `DynamicKeyValueField`                                              | Never `<textarea>` for JSON/CSV KV data                  |
+| File or image                                                                  | `FileUploadField`                                                   | Never a plain text URL input for uploaded assets         |
 
 **Never use a plain comma-separated `<input>` or `<textarea>` for:**
 
@@ -1397,25 +1492,24 @@ truly free-form strings (person name, description).
 - Role assignments (use `mode:"search"` fetching `/api/core/roles`).
 - Benefit lists, plan permissions, voucher permissions
   (`MultiBadgeField mode:"custom"`).
-- Any field referencing a DB entity by ID or name
-  (`SearchableSelectField`).
+- Any field referencing a DB entity by ID or name (`SearchableSelectField`).
 
 **`mode:"search"` vs `mode:"custom"`**
 
-- `"search"` — valid values defined server-side (roles, permission strings
-  that already exist, plan IDs, tag names). User cannot invent values.
-- `"custom"` — open-ended strings the user defines (e.g. new permission
-  strings on a new role, benefit labels on a new plan).
+- `"search"` — valid values defined server-side (roles, permission strings that
+  already exist, plan IDs, tag names). User cannot invent values.
+- `"custom"` — open-ended strings the user defines (e.g. new permission strings
+  on a new role, benefit labels on a new plan).
 
 **`SearchableSelectField` vs `MultiBadgeField mode:"search"`**
 
 - `SearchableSelectField` for **record references** — emits `{ id, label }[]`
   (selecting a system/plan/company).
-- `MultiBadgeField mode:"search"` for **string values** from a backend set
-  — emits strings or `{ name, color }` objects.
+- `MultiBadgeField mode:"search"` for **string values** from a backend set —
+  emits strings or `{ name, color }` objects.
 
-**ProfileMenu selectors** use `SearchableSelectField` with
-`multiple={false}` and `showAllOnEmpty`; `fetchFn` filters the local array.
+**ProfileMenu selectors** use `SearchableSelectField` with `multiple={false}`
+and `showAllOnEmpty`; `fetchFn` filters the local array.
 
 #### 18.4 Reusable field components (`src/components/fields/`)
 
@@ -1484,21 +1578,20 @@ Props: {
 Behavior:
 
 - Input on top; badges below in a `flex-wrap` container.
-- `mode:"custom"`: user types and presses Enter. `fetchFn`/`staticOptions`
-  (if provided) show suggestions, but the user can still add values not in
-  the list.
-- `mode:"search"`: user can only pick from `fetchFn`/`staticOptions`. Free
-  text is blocked.
+- `mode:"custom"`: user types and presses Enter. `fetchFn`/`staticOptions` (if
+  provided) show suggestions, but the user can still add values not in the list.
+- `mode:"search"`: user can only pick from `fetchFn`/`staticOptions`. Free text
+  is blocked.
 - `fetchFn` debounced with inline Spinner while loading. `staticOptions`
   filtered locally.
-- Each badge has an "x" to remove. Already-selected values are excluded
-  from the suggestion dropdown.
-- String items → badge text is the string. Object items → badge shows
-  `name`; if `color` is set, the badge background is that hex color.
+- Each badge has an "x" to remove. Already-selected values are excluded from the
+  suggestion dropdown.
+- String items → badge text is the string. Object items → badge shows `name`; if
+  `color` is set, the badge background is that hex color.
 
 Used by Roles (permissions), Plans (permissions, benefits), Vouchers
-(permissions), Menus (requiredRoles, hiddenInPlanIds), and anywhere a
-legacy comma-separated textarea would appear.
+(permissions), Menus (requiredRoles, hiddenInPlanIds), and anywhere a legacy
+comma-separated textarea would appear.
 
 **`TagSearch`** (`src/components/shared/TagSearch.tsx`)
 
@@ -1512,32 +1605,36 @@ Props: {
 ```
 
 Wraps `MultiBadgeField mode:"search"` with a `fetchFn` calling
-`/api/tags?search=`. Converts between the `{ name, color, id }` badge
-format and the flat string-array of IDs consumers expect. Badges show the
-tag name in its color. Designed for list toolbars / filter panels.
+`/api/tags?search=`. Converts between the `{ name, color, id }` badge format and
+the flat string-array of IDs consumers expect. Badges show the tag name in its
+color. Designed for list toolbars / filter panels.
 
 #### 18.5 Subform components (`src/components/subforms/`)
 
 Every subform exposes:
 
 ```typescript
-interface SubformRef { getData(): Record<string, unknown>; isValid(): boolean; }
+interface SubformRef {
+  getData(): Record<string, unknown>;
+  isValid(): boolean;
+}
 interface SubformProps {
   initialData?: Record<string, unknown>;
-  requiredFields?: string[]; optionalFields?: string[];
+  requiredFields?: string[];
+  optionalFields?: string[];
 }
 ```
 
-| Subform | Fields | Used by |
-| --- | --- | --- |
-| `ProfileSubform` | `name`, `avatarUri` (FileUploadField), `age` | Users, Agents |
-| `ContactSubform` | `email`, `phone` | User register/edit |
-| `PasswordSubform` | `password`, `confirmPassword` | User register/edit |
-| `AddressSubform` | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode` | Company, PaymentMethod |
-| `CompanyIdentificationSubform` | `name`, `document`, `documentType` | Company create/edit |
-| `CreditCardSubform` | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform` | Payment method |
-| `NameDescSubform` | `name`, `description` (configurable required fields and char limits) | Tokens, Connected Apps, generic |
-| `LeadCoreSubform` | Lead identification, contact, profile, tags | Leads |
+| Subform                        | Fields                                                                                                   | Used by                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `ProfileSubform`               | `name`, `avatarUri` (FileUploadField), `age`                                                             | Users, Agents                   |
+| `ContactSubform`               | `email`, `phone`                                                                                         | User register/edit              |
+| `PasswordSubform`              | `password`, `confirmPassword`                                                                            | User register/edit              |
+| `AddressSubform`               | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode`               | Company, PaymentMethod          |
+| `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                       | Company create/edit             |
+| `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform` | Payment method                  |
+| `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                     | Tokens, Connected Apps, generic |
+| `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                              | Leads                           |
 
 #### 18.6 Sidebar
 
@@ -1545,12 +1642,12 @@ interface SubformProps {
 - Closes on outside click or menu-item click.
 - Contains `SidebarSearch` at top + recursive `SidebarMenuItem`.
 - Menu items loaded from the Core for the active system.
-- Items with roles not matching the user's roles are hidden. Items listed
-  in the plan's `hiddenInPlanIds` are hidden.
+- Items with roles not matching the user's roles are hidden. Items listed in the
+  plan's `hiddenInPlanIds` are hidden.
 
 `SidebarMenuItem` — recursive, unlimited depth. Click expands/collapses
-children; leaf items navigate to the mapped component. Search filter: a
-child match keeps the parent visible.
+children; leaf items navigate to the mapped component. Search filter: a child
+match keeps the parent visible.
 
 `SidebarSearch` — uses `useDebounce` to filter as the user types.
 
@@ -1560,67 +1657,65 @@ child match keeps the parent visible.
 2. **Company selector** — `SearchableSelectField` (`multiple={false}`,
    `showAllOnEmpty`) listing the user's companies. Selected = badge.
 3. **System selector** — `SearchableSelectField` (`multiple={false}`,
-   `showAllOnEmpty`) listing systems the current company subscribes to
-   (active subscriptions only).
+   `showAllOnEmpty`) listing systems the current company subscribes to (active
+   subscriptions only).
 4. Profile link.
 5. Logout — clears tokens, redirects to `/login`.
 
 Changing company or system calls `useAuth().exchangeTenant(companyId,
-systemId)` which performs the token exchange (§19.11). The new token
-replaces the stored one; sidebar menus reload for the new Tenant; all
-context-dependent data (usage, billing) re-reads from
-`useAuth().tenant`. Because the token is the sole source of truth, no
-other state needs manual reset.
+systemId)`
+which performs the token exchange (§19.11). The new token replaces the stored
+one; sidebar menus reload for the new Tenant; all context-dependent data (usage,
+billing) re-reads from `useAuth().tenant`. Because the token is the sole source
+of truth, no other state needs manual reset.
 
-Changing company resets the system selector to the first system of the
-newly selected company.
+Changing company resets the system selector to the first system of the newly
+selected company.
 
 #### 18.8 System context, branding, initial-page rule
 
-All `(app)` pages consume `useSystemContext()` for company id, system
-slug, plan, roles — used to load the correct logo, translations, menus,
-and system-specific components.
+All `(app)` pages consume `useSystemContext()` for company id, system slug,
+plan, roles — used to load the correct logo, translations, menus, and
+system-specific components.
 
 **`(app)` layout responsibilities:**
 
-1. **Onboarding guard** on mount: no companies → redirect
-   `/onboarding/company`; companies but no active subscriptions →
-   `/onboarding/system`.
-2. **Default context** when onboarding is complete: first company + its
-   first subscribed system.
-3. **Context persistence** via `core_company` + `core_system` cookies —
-   survives reloads; fallback to first/first when cookies are invalid.
+1. **Onboarding guard** on mount: no companies → redirect `/onboarding/company`;
+   companies but no active subscriptions → `/onboarding/system`.
+2. **Default context** when onboarding is complete: first company + its first
+   subscribed system.
+3. **Context persistence** via `core_company` + `core_system` cookies — survives
+   reloads; fallback to first/first when cookies are invalid.
 
-**Sidebar branding.** The `(app)` layout passes the active system's
-`logoUri` (resolved via the download endpoint) and `name` to the sidebar.
-**The sidebar MUST NEVER display "Core"** — that label is reserved for
-the `(core)` layout. If no system is selected yet, show a `Spinner`
-instead of a fallback name.
+**Sidebar branding.** The `(app)` layout passes the active system's `logoUri`
+(resolved via the download endpoint) and `name` to the sidebar. **The sidebar
+MUST NEVER display "Core"** — that label is reserved for the `(core)` layout. If
+no system is selected yet, show a `Spinner` instead of a fallback name.
 
 **Menu loading.** Fetch the system's custom menus from
-`GET /api/core/menus?systemId=...` filtered by the user's roles + plan.
-Then **append the hardcoded shared default menus** (usage, billing, users,
+`GET /api/core/menus?systemId=...` filtered by the user's roles + plan. Then
+**append the hardcoded shared default menus** (usage, billing, users,
 company-edit, connected-apps, tokens) with `sortOrder` offset by
-`max(customSortOrder) + 1` so they always appear **after** the custom
-items. When no custom menus exist, only the defaults render. Creating
-custom menus never hides the shared defaults.
+`max(customSortOrder) + 1` so they always appear **after** the custom items.
+When no custom menus exist, only the defaults render. Creating custom menus
+never hides the shared defaults.
 
 **Initial-page rule.** The initial page is the **first menu item with a
-non-empty `componentName`**, resolved by depth-first traversal of the
-full menu tree (custom first, then shared defaults, ordered by
-`sortOrder`). `findFirstComponent(tree)` produces the route. The layout
-navigates to `/<componentName>` in three situations: (1) initial load
-after login; (2) company switch; (3) system switch. The login redirects
-to `/entry` — a lightweight spinner-only landing page at
-`app/(app)/entry/page.tsx` that never renders real content. This avoids
-loading any component before the layout resolves the target route. If
-the system defines custom menus, the first custom one becomes the
-landing page; otherwise the first default (typically `usage`) is used.
+non-empty `componentName`**, resolved by depth-first traversal of the full menu
+tree (custom first, then shared defaults, ordered by `sortOrder`).
+`findFirstComponent(tree)` produces the route. The layout navigates to
+`/<componentName>` in three situations: (1) initial load after login; (2)
+company switch; (3) system switch. The login redirects to `/entry` — a
+lightweight spinner-only landing page at `app/(app)/entry/page.tsx` that never
+renders real content. This avoids loading any component before the layout
+resolves the target route. If the system defines custom menus, the first custom
+one becomes the landing page; otherwise the first default (typically `usage`) is
+used.
 
 #### 18.9 Public homepages
 
-Each system has a dedicated `.tsx` homepage component with full creative
-freedom (within the visual standard). No shared template.
+Each system has a dedicated `.tsx` homepage component with full creative freedom
+(within the visual standard). No shared template.
 
 **Router:** `app/page.tsx`:
 
@@ -1629,21 +1724,22 @@ freedom (within the visual standard). No shared template.
 3. Else render the **core homepage inline** — welcome + "Get Started" →
    `/login`.
 
-Successful resolution: fetch public system info, look up the homepage
-component in the **homepage registry**
+Successful resolution: fetch public system info, look up the homepage component
+in the **homepage registry**
 (`src/components/systems/registry.ts → getHomePage(slug)`), render inside
 `<Suspense>`.
 
 **Registry:**
 
 ```typescript
-registerHomePage("my-system",
-  () => import("@/src/components/systems/my-system/HomePage"));
+registerHomePage(
+  "my-system",
+  () => import("@/src/components/systems/my-system/HomePage"),
+);
 ```
 
-Homepage components live at
-`src/components/systems/[slug]/HomePage.tsx`. They receive no props;
-they use `useLocale()` and link to `/login?system=<slug>`.
+Homepage components live at `src/components/systems/[slug]/HomePage.tsx`. They
+receive no props; they use `useLocale()` and link to `/login?system=<slug>`.
 
 #### 18.10 Plan cards (onboarding + billing)
 
@@ -1665,30 +1761,31 @@ glassmorphism design.
 └─────────────────────────────────────────────┘
 ```
 
-- Card: `backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6`.
-  Current/selected: `border-[var(--color-primary-green)] shadow-lg shadow-[var(--color-light-green)]/20 -translate-y-1`.
+- Card:
+  `backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6`.
+  Current/selected:
+  `border-[var(--color-primary-green)] shadow-lg shadow-[var(--color-light-green)]/20 -translate-y-1`.
 - Plan name: `text-xl font-bold text-white` via `t()`.
-- Price: `text-2xl font-bold text-[var(--color-primary-green)]`. Free
-  plans render a translated "Free" badge
+- Price: `text-2xl font-bold text-[var(--color-primary-green)]`. Free plans
+  render a translated "Free" badge
   (`bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-3 py-1 rounded-full`).
   Paid plans show formatted currency + recurrence (e.g. "$9.99 / 30 days").
 - Description: `text-sm text-[var(--color-light-text)]` via `t()`.
 - Benefits: gradient header, each benefit on its own line with a green `✓`;
   benefit strings are i18n keys via `t()`.
 - Limits: gradient header, each limit with an emoji + formatted value.
-  `plan.entityLimits` keys rendered via
-  `t("billing.limits." + key)`. `apiRateLimit` + `storageLimitBytes` use
-  human-readable formatting.
+  `plan.entityLimits` keys rendered via `t("billing.limits." + key)`.
+  `apiRateLimit` + `storageLimitBytes` use human-readable formatting.
 - Subscribe button: gradient button. The current plan replaces it with a
   "Current Plan" badge.
 
-**Voucher-adjusted effective price.** When the subscription has an
-active (non-expired) voucher whose `applicablePlanIds` is empty OR
-contains the current plan, show the original price with `line-through`
-and the effective price prominently next to it. Effective price =
-`plan.price − voucher.priceModifier` clamped to ≥ 0. This is cosmetic on
-the frontend — server-side charge calculations (recurring billing job +
-credit purchase handler) must also apply the voucher's modifiers.
+**Voucher-adjusted effective price.** When the subscription has an active
+(non-expired) voucher whose `applicablePlanIds` is empty OR contains the current
+plan, show the original price with `line-through` and the effective price
+prominently next to it. Effective price = `plan.price − voucher.priceModifier`
+clamped to ≥ 0. This is cosmetic on the frontend — server-side charge
+calculations (recurring billing job + credit purchase handler) must also apply
+the voucher's modifiers.
 
 #### 18.11 Charts
 
@@ -1704,26 +1801,24 @@ system-specific API routes.
 
 #### 19.1 Dual token architecture
 
-| Token | Purpose | Issued by | Transport |
-| --- | --- | --- | --- |
-| System API Token | API requests to backend routes | Backend via `@panva/jose` | `Authorization: Bearer <token>` |
-| SurrealDB User Token | Frontend live queries via WebSocket | SurrealDB `DEFINE ACCESS … TYPE RECORD` | WebSocket auth on connect |
+| Token                | Purpose                             | Issued by                               | Transport                       |
+| -------------------- | ----------------------------------- | --------------------------------------- | ------------------------------- |
+| System API Token     | API requests to backend routes      | Backend via `@panva/jose`               | `Authorization: Bearer <token>` |
+| SurrealDB User Token | Frontend live queries via WebSocket | SurrealDB `DEFINE ACCESS … TYPE RECORD` | WebSocket auth on connect       |
 
-Both refresh when appropriate: system token via `/api/auth/refresh`;
-SurrealDB token by re-authenticating the WebSocket.
+Both refresh when appropriate: system token via `/api/auth/refresh`; SurrealDB
+token by re-authenticating the WebSocket.
 
 #### 19.2 System branding on public pages
 
 All unauthenticated pages (homepage, login, register, forgot-password,
-reset-password, verify, terms) read `?system=<slug>`. When present, the
-page fetches `/api/public/system?slug=<slug>` and renders the system
-logo + name in the header above the form. Auth page links (login ↔
-register, forgot-password → login, etc.) preserve the `?system=`
-parameter so branding stays consistent across the entire unauthenticated
-flow.
+reset-password, verify, terms) read `?system=<slug>`. When present, the page
+fetches `/api/public/system?slug=<slug>` and renders the system logo + name in
+the header above the form. Auth page links (login ↔ register, forgot-password →
+login, etc.) preserve the `?system=` parameter so branding stays consistent
+across the entire unauthenticated flow.
 
-Without `?system=`, pages show the core app name (`app.name`) with no
-logo.
+Without `?system=`, pages show the core app name (`app.name`) with no logo.
 
 #### 19.3 Registration flow
 
@@ -1732,12 +1827,11 @@ logo.
 2. Backend validates `termsAccepted: true`; rejects with
    `validation.terms.required` if missing.
 3. Auth rate limit check (aggressive).
-4. Password hashed via `crypto::argon2::generate(password)` inside
-   SurrealDB.
+4. Password hashed via `crypto::argon2::generate(password)` inside SurrealDB.
 5. `verification_request` row created (secure random token, expiry from
    `auth.verification.expiry.minutes`).
-6. Publish `SEND_EMAIL` (or `SEND_SMS` if phone-only) with the
-   `verification` template.
+6. Publish `SEND_EMAIL` (or `SEND_SMS` if phone-only) with the `verification`
+   template.
 7. Login blocked until `emailVerified = true` (or `phoneVerified` for
    phone-only).
 
@@ -1757,41 +1851,39 @@ logo.
 
 1. **Superuser** → `/systems` (core admin panel). Skips onboarding.
 2. **No companies** → `/onboarding/company`.
-3. **Companies but no active subscriptions** → `/onboarding/system`.
-   Two-step flow: (1) pick system, (2) pick plan. On submit,
-   `POST /api/billing` with `action: "subscribe"` creates the
-   `company_system` association and the subscription in one batched query
-   (§22.1). Free plans require no payment method.
-4. **Onboarding complete** → `/entry` (spinner-only landing pad, §18.8).
-   The `(app)` layout then loads menus and navigates to the first menu
-   item's component.
+3. **Companies but no active subscriptions** → `/onboarding/system`. Two-step
+   flow: (1) pick system, (2) pick plan. On submit, `POST /api/billing` with
+   `action: "subscribe"` creates the `company_system` association and the
+   subscription in one batched query (§22.1). Free plans require no payment
+   method.
+4. **Onboarding complete** → `/entry` (spinner-only landing pad, §18.8). The
+   `(app)` layout then loads menus and navigates to the first menu item's
+   component.
 
-`(app)` layout checks `GET /api/companies/{companyId}/systems`; empty
-response → redirect `/onboarding/system`.
+`(app)` layout checks `GET /api/companies/{companyId}/systems`; empty response →
+redirect `/onboarding/system`.
 
-The usage page always opens with the **default context** (first company +
-its first subscribed system), resolved by the `(app)` layout on mount.
+The usage page always opens with the **default context** (first company + its
+first subscribed system), resolved by the `(app)` layout on mount.
 
 #### 19.6 Company / system switching
 
-After initial onboarding, the user switches via **ProfileMenu** (§18.7).
-Company change resets the system selector to the first system of the new
-company. Both changes call `useAuth().exchangeTenant()` (§19.11), which
-updates `useSystemContext`, reloads menus, usage, billing, and all
-context-dependent UI, and navigates to the first menu item's component
-(§18.8 initial-page rule).
+After initial onboarding, the user switches via **ProfileMenu** (§18.7). Company
+change resets the system selector to the first system of the new company. Both
+changes call `useAuth().exchangeTenant()` (§19.11), which updates
+`useSystemContext`, reloads menus, usage, billing, and all context-dependent UI,
+and navigates to the first menu item's component (§18.8 initial-page rule).
 
 #### 19.7 Password recovery
 
 1. Submit email/phone. Bot protection + auth rate limit.
-2. Cooldown check (`auth.verification.cooldown.seconds`) — no new request
-   within the safe window.
+2. Cooldown check (`auth.verification.cooldown.seconds`) — no new request within
+   the safe window.
 3. Create `verification_request` of type `password_reset` (expiry
    `auth.passwordReset.expiry.minutes`).
 4. Publish `SEND_EMAIL`/`SEND_SMS` with `password-reset` template.
 5. User clicks link → `reset-password` page validates token → submit new
-   password → backend updates `passwordHash` and marks the request
-   `usedAt`.
+   password → backend updates `passwordHash` and marks the request `usedAt`.
 
 #### 19.8 OAuth login flow (if `auth.oauth.enabled = "true"`)
 
@@ -1802,14 +1894,14 @@ context-dependent UI, and navigates to the first menu item's component
 
 #### 19.9 Security measures
 
-| Measure | Setting / implementation |
-| --- | --- |
-| Rate limiting | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP). |
-| Bot protection | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token. |
-| Verification cooldown | `auth.verification.cooldown.seconds` (default 120). Enforced via latest `verification_request.createdAt`. |
-| Token expiration | Reset tokens (`auth.passwordReset.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime. |
-| 2FA | Per user. `auth.twoFactor.enabled` global toggle. TOTP after password on login. |
-| OAuth | `auth.oauth.enabled` global toggle; shows provider buttons on login. |
+| Measure               | Setting / implementation                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Rate limiting         | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP).                                      |
+| Bot protection        | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token.                                 |
+| Verification cooldown | `auth.verification.cooldown.seconds` (default 120). Enforced via latest `verification_request.createdAt`.                    |
+| Token expiration      | Reset tokens (`auth.passwordReset.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime. |
+| 2FA                   | Per user. `auth.twoFactor.enabled` global toggle. TOTP after password on login.                                              |
+| OAuth                 | `auth.oauth.enabled` global toggle; shows provider buttons on login.                                                         |
 
 #### 19.10 Tenant embedding in JWT
 
@@ -1827,13 +1919,12 @@ Every System API Token is a JWT with signed claims:
 }
 ```
 
-The backend reads this on every request. The frontend never parses the
-JWT body beyond storing the opaque string.
+The backend reads this on every request. The frontend never parses the JWT body
+beyond storing the opaque string.
 
 #### 19.11 Token exchange — the only context-change path
 
-Switching company/system in the ProfileMenu calls
-`POST /api/auth/exchange`:
+Switching company/system in the ProfileMenu calls `POST /api/auth/exchange`:
 
 ```
 POST /api/auth/exchange
@@ -1844,133 +1935,127 @@ Response: { success: true, data: { token: string, tenant: Tenant } }
 
 Backend steps:
 
-1. Verify JWT signature; check `revokedAt IS NONE` for its `jti`
-   (rejects 401 if revoked/expired).
-2. Load `claims.actorType` — **reject with 403 if not `"user"`.** App
-   tokens and manually created tokens (`exchangeable: false`) are bound
-   for life to their issue-time Tenant.
-3. Verify the user still belongs to target `companyId` (via
-   `company_user`) and is still associated with target `systemId` (via
-   `user_company_system`). Fail → 403.
+1. Verify JWT signature; check `revokedAt IS NONE` for its `jti` (rejects 401 if
+   revoked/expired).
+2. Load `claims.actorType` — **reject with 403 if not `"user"`.** App tokens and
+   manually created tokens (`exchangeable: false`) are bound for life to their
+   issue-time Tenant.
+3. Verify the user still belongs to target `companyId` (via `company_user`) and
+   is still associated with target `systemId` (via `user_company_system`). Fail
+   → 403.
 4. Load roles + permissions from that `user_company_system` row; resolve
    `systemSlug` from `systemId`.
-5. Revoke the old token (`revokedAt = time::now()` on the `jti` record)
-   — atomic with step 6 in the same batched query.
+5. Revoke the old token (`revokedAt = time::now()` on the `jti` record) — atomic
+   with step 6 in the same batched query.
 6. Issue a **new JWT** with the new Tenant and a fresh `jti`, using the
-   remaining lifetime of the previous token (stay-logged-in semantics
-   carry over but are not extended).
+   remaining lifetime of the previous token (stay-logged-in semantics carry over
+   but are not extended).
 7. Return the new token.
 
-**Frontend:** `useAuth` exposes `exchangeTenant(companyId, systemId)`
-which performs the call, updates its internal `token` state, and
-triggers re-fetches of menus, usage, billing, and any other
-context-dependent data. All components read from `useAuth().token` only
-— no scattered companyId/systemId.
+**Frontend:** `useAuth` exposes `exchangeTenant(companyId, systemId)` which
+performs the call, updates its internal `token` state, and triggers re-fetches
+of menus, usage, billing, and any other context-dependent data. All components
+read from `useAuth().token` only — no scattered companyId/systemId.
 
 **API token + connected-app restriction.** Both return 403 from
-`/api/auth/exchange`. They are scoped for life. The Tokens form and the
-OAuth authorize page both state this explicitly.
+`/api/auth/exchange`. They are scoped for life. The Tokens form and the OAuth
+authorize page both state this explicitly.
 
 #### 19.12 Token revocation lifecycle
 
-Revocation uses `jti` (not token hash), so it works for freshly minted
-user tokens as well as persisted `api_token` / connected-app tokens.
+Revocation uses `jti` (not token hash), so it works for freshly minted user
+tokens as well as persisted `api_token` / connected-app tokens.
 
-- `api_token` records persist `jti` (see `0034_alter_api_token_fields`).
-  Deleting a token from the Tokens page or revoking a connected app from
-  the Connected Apps page sets `revokedAt = time::now()` in a single
-  batched query. `withAuth` rejects any JWT whose `jti` maps to a row
-  with `revokedAt IS NOT NONE`.
-- **User-session JWTs** (login / exchange) use the `token_revocation`
-  TTL table (§12.8). Exchange invalidates the prior session token by
-  `jti`. Logout invalidates the current session token.
+- `api_token` records persist `jti` (see `0015_create_api_token`). Deleting a
+  token from the Tokens page or revoking a connected app from the Connected Apps
+  page sets `revokedAt = time::now()` in a single batched query. `withAuth`
+  rejects any JWT whose `jti` maps to a row with `revokedAt IS NOT NONE`.
+- **User-session JWTs** (login / exchange) use the `token_revocation` TTL table
+  (§12.8). Exchange invalidates the prior session token by `jti`. Logout
+  invalidates the current session token.
 - **Deletion → revocation guarantee.** Any deletion of an `api_token` or
-  `connected_app` sets `revokedAt` on the underlying `api_token` in the
-  same batched query that removes the `connected_app` record. Rows stay
-  for 90-day audit, then `server/jobs/token-cleanup.ts` hard-deletes
-  them. Third parties who hold the raw bearer value cannot continue
-  calling the API after the user revokes.
+  `connected_app` sets `revokedAt` on the underlying `api_token` in the same
+  batched query that removes the `connected_app` record. Rows stay for 90-day
+  audit, then `server/jobs/token-cleanup.ts` hard-deletes them. Third parties
+  who hold the raw bearer value cannot continue calling the API after the user
+  revokes.
 
 ### 20. Superuser Core Admin Panel `(core)`
 
-The `(core)` route group is superuser-only. Layout renders a sidebar
-with hardcoded core menus: **Systems, Roles, Plans, Vouchers, Menus,
-Terms, Data Deletion, Settings, Front Settings.** All sidebar labels use
-i18n keys (never hardcoded English). Header text uses
-`t("core.layout.superuserPanel")`.
+The `(core)` route group is superuser-only. Layout renders a sidebar with
+hardcoded core menus: **Systems, Roles, Plans, Vouchers, Menus, Terms, Data
+Deletion, Settings, Front Settings.** All sidebar labels use i18n keys (never
+hardcoded English). Header text uses `t("core.layout.superuserPanel")`.
 
 #### 20.1 i18n keys
 
-Core keys live in `src/i18n/{locale}/core.json`. The JSON omits the
-`core.` domain prefix (the `t()` function strips it). Required groups:
+Core keys live in `src/i18n/{locale}/core.json`. The JSON omits the `core.`
+domain prefix (the `t()` function strips it). Required groups:
 
-- `nav.*` — sidebar labels (systems, roles, plans, vouchers, menus,
-  terms, dataDeletion, settings, frontSettings)
+- `nav.*` — sidebar labels (systems, roles, plans, vouchers, menus, terms,
+  dataDeletion, settings, frontSettings)
 - `layout.*` — layout chrome (e.g. `layout.superuserPanel`)
 - `systems.*` — CRUD keys: title, create, edit, name, slug, logo,
   termsOfService, empty
-- `roles.*` — title, create, edit, name, system, selectSystem,
-  permissions, permissionsHint, builtIn, isBuiltIn, empty
-- `plans.*` — title, create, edit, name, description, system,
-  selectSystem, price, cents, currency, recurrenceDays, benefits,
-  benefitsHint, permissions, entityLimits, entityLimitsHint,
-  apiRateLimit, storageLimitBytes, storage, active, inactive,
-  isActive, days, empty
+- `roles.*` — title, create, edit, name, system, selectSystem, permissions,
+  permissionsHint, builtIn, isBuiltIn, empty
+- `plans.*` — title, create, edit, name, description, system, selectSystem,
+  price, cents, currency, recurrenceDays, benefits, benefitsHint, permissions,
+  entityLimits, entityLimitsHint, apiRateLimit, storageLimitBytes, storage,
+  active, inactive, isActive, days, empty
 - `vouchers.*` — title, create, edit, code, priceModifier, cents,
   priceModifierHint, expiresAt, permissions, entityLimitModifiers,
-  entityLimitModifiersHint, apiRateLimitModifier,
-  storageLimitModifier, applicablePlanIds, applicablePlansHint,
-  empty, expired, expires, apiRate, storage
-- `menus.*` — title, selectSystem, label, emoji, componentName,
-  sortOrder, requiredRoles, hiddenInPlanIds, edit, delete, addChild,
-  addRoot, incompleteConfig, empty
-- `settings.*` / `frontSettings.*` — title, key, value, description,
-  save, missingTitle, addMissing, empty, add, saved,
-  descriptionPlaceholder
-- `terms.*` — title, selectSystem, generic, genericHint, content,
-  contentHint, save, saved, empty, noTerms, hasTerms, usingGeneric,
-  editTerms, viewPublic
-- `dataDeletion.*` — title, selectCompany, selectSystem, deleteButton,
-  warning, awareness, passwordLabel, passwordPlaceholder,
-  confirmDelete, success, error.passwordInvalid, error.notFound
+  entityLimitModifiersHint, apiRateLimitModifier, storageLimitModifier,
+  applicablePlanIds, applicablePlansHint, empty, expired, expires, apiRate,
+  storage
+- `menus.*` — title, selectSystem, label, emoji, componentName, sortOrder,
+  requiredRoles, hiddenInPlanIds, edit, delete, addChild, addRoot,
+  incompleteConfig, empty
+- `settings.*` / `frontSettings.*` — title, key, value, description, save,
+  missingTitle, addMissing, empty, add, saved, descriptionPlaceholder
+- `terms.*` — title, selectSystem, generic, genericHint, content, contentHint,
+  save, saved, empty, noTerms, hasTerms, usingGeneric, editTerms, viewPublic
+- `dataDeletion.*` — title, selectCompany, selectSystem, deleteButton, warning,
+  awareness, passwordLabel, passwordPlaceholder, confirmDelete, success,
+  error.passwordInvalid, error.notFound
 
 Every key must have full `en` + `pt-BR` translations.
 
 #### 20.2 Core form conventions
 
-All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`)
-use `forwardRef` + `useImperativeHandle` to expose `getData()` +
-`isValid()`.
+All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
+`forwardRef` + `useImperativeHandle` to expose `getData()` + `isValid()`.
 
-- **SystemForm** — name, slug, `FileUploadField` with `previewEnabled`
-  for the system logo, `termsOfService` textarea (HTML). The
-  `FileUploadField` uses `category={["logos"]}` and `systemSlug` from
-  form state. For core-admin uploads where user context is not yet
-  available, `companyId` / `userId` / `systemSlug` may be empty — the
-  upload route handles this in unauthenticated mode with strict
-  validation (§13.2). System i18n key: `core.systems.termsOfService`.
+- **SystemForm** — name, slug, `FileUploadField` with `previewEnabled` for the
+  system logo, `termsOfService` textarea (HTML). The `FileUploadField` uses
+  `category={["logos"]}` and `systemSlug` from form state. For core-admin
+  uploads where user context is not yet available, `companyId` / `userId` /
+  `systemSlug` may be empty — the upload route handles this in unauthenticated
+  mode with strict validation (§13.2). System i18n key:
+  `core.systems.termsOfService`.
 - **RoleForm** — name, systemId (select), isBuiltIn (checkbox),
   `MultiBadgeField` for permissions (`mode:"custom"`, format hint
   `"e.g. read:users, write:billing"`).
-- **PlanForm** — name, description, systemId, price, currency,
-  recurrenceDays, apiRateLimit, storageLimitBytes, isActive.
-  `MultiBadgeField mode:"custom"` for permissions, `MultiBadgeField
-  mode:"custom"` for benefits, `DynamicKeyValueField` for entityLimits.
+- **PlanForm** — name, description, systemId, price, currency, recurrenceDays,
+  apiRateLimit, storageLimitBytes, isActive. `MultiBadgeField mode:"custom"` for
+  permissions, `MultiBadgeField
+  mode:"custom"` for benefits,
+  `DynamicKeyValueField` for entityLimits.
 - **VoucherForm** — code, priceModifier, apiRateLimitModifier,
   storageLimitModifier, expiresAt. `MultiBadgeField mode:"custom"` for
   permissions; `DynamicKeyValueField` for entityLimitModifiers;
-  `SearchableSelectField(multiple={true})` for `applicablePlanIds`
-  fetching `/api/core/plans?search=` (empty selection = valid for all
-  plans). Removing a plan from `applicablePlanIds` on save triggers the
-  auto-removal cascade (§22.7) so subscriptions that no longer qualify
-  are stripped of the voucher atomically with the update.
+  `SearchableSelectField(multiple={true})` for `applicablePlanIds` fetching
+  `/api/core/plans?search=` (empty selection = valid for all plans). Removing a
+  plan from `applicablePlanIds` on save triggers the auto-removal cascade
+  (§22.7) so subscriptions that no longer qualify are stripped of the voucher
+  atomically with the update.
 
 #### 20.3 `MenuTreeEditor` (`src/components/core/MenuTreeEditor.tsx`)
 
 Not a standard list page — a dedicated tree editor.
 
-1. **System selector** at the top — dropdown. Only menus for the
-   selected system are shown. Changing the system reloads the tree.
+1. **System selector** at the top — dropdown. Only menus for the selected system
+   are shown. Changing the system reloads the tree.
 2. **Tree display** with indentation, emoji + label per node, e.g.:
    ```
    📈 Usage
@@ -1979,74 +2064,68 @@ Not a standard list page — a dedicated tree editor.
    ├── 📉 Analytics
    │   └── 📊 Deep Dive
    ```
-3. **Inline "+" add.** A "+" button at root level and one inside each
-   node (to add a child). Clicking "+" replaces the "+" with an inline
-   text input (with cancel), asking only for the menu label. Enter
-   creates the menu with just the label (+ parent + system). **No modal
-   for creation.**
-4. **Incomplete-config badge.** "⚠" displayed when a menu item is
-   missing required configuration (e.g. empty `componentName`).
-   Structural menus that only group submenus are expected to have no
-   `componentName` and are not flagged.
-5. **Edit button** "✏️" opens a modal to edit everything **except
-   hierarchy**: label, emoji, componentName, sortOrder, requiredRoles
-   (`MultiBadgeField`), hiddenInPlanIds (`MultiBadgeField`). Parent-child
-   relationships are managed exclusively via drag-and-drop.
+3. **Inline "+" add.** A "+" button at root level and one inside each node (to
+   add a child). Clicking "+" replaces the "+" with an inline text input (with
+   cancel), asking only for the menu label. Enter creates the menu with just the
+   label (+ parent + system). **No modal for creation.**
+4. **Incomplete-config badge.** "⚠" displayed when a menu item is missing
+   required configuration (e.g. empty `componentName`). Structural menus that
+   only group submenus are expected to have no `componentName` and are not
+   flagged.
+5. **Edit button** "✏️" opens a modal to edit everything **except hierarchy**:
+   label, emoji, componentName, sortOrder, requiredRoles (`MultiBadgeField`),
+   hiddenInPlanIds (`MultiBadgeField`). Parent-child relationships are managed
+   exclusively via drag-and-drop.
 6. **Delete button** "🗑️" with confirmation.
-7. **Drag-and-drop.** Reorder within the same level (updates
-   `sortOrder`), or move to another parent (updates `parentId`).
-   Optimistic tree; persisted via API.
-8. **No top-level search or create button.** All additions go through
-   the inline "+" buttons.
+7. **Drag-and-drop.** Reorder within the same level (updates `sortOrder`), or
+   move to another parent (updates `parentId`). Optimistic tree; persisted via
+   API.
+8. **No top-level search or create button.** All additions go through the inline
+   "+" buttons.
 
 #### 20.4 `SettingsEditor` / `FrontSettingsEditor`
 
-Both pages use `DynamicKeyValueField` + a "missing keys" banner with an
-"Add all missing" button. A badge in each header identifies which table
-is being edited (§10.2.7). Missing-settings data comes from
-`/api/core/settings/missing` and `/api/core/front-settings/missing`
-respectively.
+Both pages use `DynamicKeyValueField` + a "missing keys" banner with an "Add all
+missing" button. A badge in each header identifies which table is being edited
+(§10.2.7). Missing-settings data comes from `/api/core/settings/missing` and
+`/api/core/front-settings/missing` respectively.
 
 #### 20.5 `TermsEditor` (`app/(core)/terms/page.tsx` + `src/components/core/TermsEditor.tsx`)
 
-Core sidebar entry: 📜 `core.nav.terms`. Separate from the System edit
-form.
+Core sidebar entry: 📜 `core.nav.terms`. Separate from the System edit form.
 
-1. **Generic terms card** at the top (always visible): edits the
-   `terms.generic` core setting via a modal with a large textarea.
-2. **System terms list** below: each system card shows name + slug + a
-   status badge (`core.terms.hasTerms` or `core.terms.usingGeneric`) +
-   an edit button opening a modal with a pre-filled searchable system
-   field (read-only in edit mode) + a very large textarea.
-3. **Create button**: opens a modal with a searchable system field
-   (same debounced-dropdown pattern as `DataDeletion`) + a large
-   textarea. Saving updates that system's `termsOfService`.
+1. **Generic terms card** at the top (always visible): edits the `terms.generic`
+   core setting via a modal with a large textarea.
+2. **System terms list** below: each system card shows name + slug + a status
+   badge (`core.terms.hasTerms` or `core.terms.usingGeneric`) + an edit button
+   opening a modal with a pre-filled searchable system field (read-only in edit
+   mode) + a very large textarea.
+3. **Create button**: opens a modal with a searchable system field (same
+   debounced-dropdown pattern as `DataDeletion`) + a large textarea. Saving
+   updates that system's `termsOfService`.
 
 API: `GET /api/core/terms` returns all systems with their terms status.
-`PUT /api/core/terms` accepts `{ systemId, termsOfService }` to update a
-system, or `{ generic: true, content }` to update the generic fallback
-setting.
+`PUT /api/core/terms` accepts `{ systemId, termsOfService }` to update a system,
+or `{ generic: true, content }` to update the generic fallback setting.
 
 #### 20.6 `DataDeletion` (`app/(core)/data-deletion/page.tsx` + `src/components/core/DataDeletion.tsx`)
 
-Sidebar entry lives under `core.nav.dataDeletion`. Permanently deletes
-all data for a specific (company, system) pair, including uploaded
-files.
+Sidebar entry lives under `core.nav.dataDeletion`. Permanently deletes all data
+for a specific (company, system) pair, including uploaded files.
 
-**Page:** debounced `SearchField` to pick company + debounced
-`SearchField` to pick system. Delete button enabled only when both are
-selected; opens the confirmation modal.
+**Page:** debounced `SearchField` to pick company + debounced `SearchField` to
+pick system. Delete button enabled only when both are selected; opens the
+confirmation modal.
 
 **Confirmation modal (high-security):**
 
 1. Red warning: irreversible; lists every table affected (§20.6.1).
-2. **Awareness checkbox** (`core.dataDeletion.awareness`) must be
-   checked.
-3. **Password re-entry** — superuser re-enters their current password.
-   Sent to backend and verified via `crypto::argon2::compare()` before
-   any deletion occurs.
-4. Delete button enabled only when awareness is checked + password
-   non-empty. Spinner during the op.
+2. **Awareness checkbox** (`core.dataDeletion.awareness`) must be checked.
+3. **Password re-entry** — superuser re-enters their current password. Sent to
+   backend and verified via `crypto::argon2::compare()` before any deletion
+   occurs.
+4. Delete button enabled only when awareness is checked + password non-empty.
+   Spinner during the op.
 5. Cancel closes without action.
 
 **API:** `DELETE /api/core/data-deletion`
@@ -2071,85 +2150,83 @@ Removes, for the given (`companyId`, `systemId`) pair:
 - `credit_purchase` rows
 - `tag` rows
 - `menu_item` rows for this system (only if no other companies use it)
-- All uploaded files under `{companyId}/{systemSlug}/` via
-  `fs.delete()` iterating `fs.readDir()`.
+- All uploaded files under `{companyId}/{systemSlug}/` via `fs.delete()`
+  iterating `fs.readDir()`.
 
-**Does NOT delete** the `company` or `system` records themselves — only
-the association and all scoped data. The entities can be re-associated
-later.
+**Does NOT delete** the `company` or `system` records themselves — only the
+association and all scoped data. The entities can be re-associated later.
 
 ### 21. Subsystem Panel `(app)`
 
-The authenticated user's workspace, scoped to a specific company +
-system. Layout behavior is in §18.8.
+The authenticated user's workspace, scoped to a specific company + system.
+Layout behavior is in §18.8.
 
 #### 21.1 `UsersPage` (admin CRUD — `src/components/shared/UsersPage.tsx`)
 
-Lists users associated with the current company + system.
-Create/edit/delete visible only to users whose `useSystemContext().roles`
-contains `admin`.
+Lists users associated with the current company + system. Create/edit/delete
+visible only to users whose `useSystemContext().roles` contains `admin`.
 
 **Invite flow** (`POST /api/users`):
 
-- **New user** (no existing email): creates `user` with profile,
-  hashes password, creates `company_user` + `user_company_system` with
-  the specified roles.
-- **Existing user** (email match): **does not create a new account.**
-  Creates or updates `company_user` + `user_company_system` for the
-  target (company, system), setting the specified roles. Returns
+- **New user** (no existing email): creates `user` with profile, hashes
+  password, creates `company_user` + `user_company_system` with the specified
+  roles.
+- **Existing user** (email match): **does not create a new account.** Creates or
+  updates `company_user` + `user_company_system` for the target (company,
+  system), setting the specified roles. Returns
   `{ success: true, invited: true }`. Frontend shows
-  `common.users.inviteExisting`. Backend publishes `SEND_EMAIL` with
-  the `tenant-invite` template (inviter name, company, system, roles)
-  — **this email is mandatory**.
+  `common.users.inviteExisting`. Backend publishes `SEND_EMAIL` with the
+  `tenant-invite` template (inviter name, company, system, roles) — **this email
+  is mandatory**.
 
-**Roles are per (company, system) pair.** Stored in
-`user_company_system`. Same user can have different roles in different
-systems. `DELETE /api/users` only removes the `user_company_system`
-association — never the `user` record or other associations.
+**Roles are per (company, system) pair.** Stored in `user_company_system`. Same
+user can have different roles in different systems. `DELETE /api/users` only
+removes the `user_company_system` association — never the `user` record or other
+associations.
 
 **Features:**
 
 - Debounced search (already present).
 - **Create / Invite** modal: name, email, phone, password,
   `MultiBadgeField mode:"search"` for roles fetching
-  `/api/core/roles?systemId=...`. Hint explains the invite flow.
-  `password` silently ignored when inviting an existing user.
-- **Edit** modal (fields): name (via profile), phone, roles. Email
-  read-only. `PUT /api/users`.
+  `/api/core/roles?systemId=...`. Hint explains the invite flow. `password`
+  silently ignored when inviting an existing user.
+- **Edit** modal (fields): name (via profile), phone, roles. Email read-only.
+  `PUT /api/users`.
 - **Delete** with confirmation → `DELETE /api/users`.
 - **Role badges** per row from `user_company_system`.
 
 #### 21.2 `TokensPage` (`src/components/shared/TokensPage.tsx`)
 
-Lists API tokens for the current (user, company, system). Every token
-here carries the Tenant of that (company, system) and is **not
-exchangeable** (§19.11).
+Lists API tokens for the current (user, company, system). Every token here
+carries the Tenant of that (company, system) and is **not exchangeable**
+(§19.11).
 
 **Create modal:**
 
 - Name, description.
-- `MultiBadgeField mode:"search"` for permissions, fetching unique
-  permissions aggregated from all roles for the current system via
+- `MultiBadgeField mode:"search"` for permissions, fetching unique permissions
+  aggregated from all roles for the current system via
   `/api/core/roles?systemId=...`.
 - Optional `monthlySpendLimit`.
 - Expiry section — mutually exclusive: **"Never expires"** checkbox OR
-  `expiresAt` date input. Checking "Never expires" disables the date;
-  setting a date unchecks the box.
+  `expiresAt` date input. Checking "Never expires" disables the date; setting a
+  date unchecks the box.
 - **"Use in frontend" toggle.** When on, a required `frontendDomains`
-  `MultiBadgeField mode:"custom"` (hint
-  `"e.g. https://app.example.com"`) appears.
-- Backend re-validates: `neverExpires` XOR `expiresAt`; `frontendUse`
-  implies ≥ 1 frontend domain.
-- **On success, a modal displays the raw token once** with a copy
-  button and a warning that it cannot be shown again.
+  `MultiBadgeField mode:"custom"` (hint `"e.g. https://app.example.com"`)
+  appears.
+- Backend re-validates: `neverExpires` XOR `expiresAt`; `frontendUse` implies ≥
+  1 frontend domain.
+- **On success, a modal displays the raw token once** with a copy button and a
+  warning that it cannot be shown again.
 
 **Delete token** — `DeleteButton` on each row with confirmation. Calls
-`DELETE /api/tokens` which sets `revokedAt` on the `api_token` row
-(§19.12), invalidating the token instantly regardless of copies.
+`DELETE /api/tokens` which sets `revokedAt` on the `api_token` row (§19.12),
+invalidating the token instantly regardless of copies.
 
-**Token list.** Each card shows: name, description, permission badges,
-expiry date or a "Never expires" badge, a "Frontend" badge with the
-domain count when `frontendUse = true`, creation date.
+**Token list.** Each card shows: name, description, permission badges, expiry
+date or a "Never expires" badge, a "Frontend" badge with the domain count when
+`frontendUse = true`, creation date.
 
 ##### 21.2.1 `ApiToken` contract (rules-bearing)
 
@@ -2157,20 +2234,20 @@ domain count when `frontendUse = true`, creation date.
 export interface ApiToken {
   id: string;
   userId: string;
-  tenant: Tenant;          // source of truth for scope (§9)
-  companyId: string;       // mirrors tenant.companyId — denormalized for indexing
-  systemId: string;        // mirrors tenant.systemId — denormalized for indexing
+  tenant: Tenant; // source of truth for scope (§9)
+  companyId: string; // mirrors tenant.companyId — denormalized for indexing
+  systemId: string; // mirrors tenant.systemId — denormalized for indexing
   name: string;
   description?: string;
-  tokenHash: string;       // stored hashed; raw shown once
-  jti: string;             // unique — used for revocation (§19.12)
-  permissions: string[];   // duplicated into tenant.permissions at issue time
+  tokenHash: string; // stored hashed; raw shown once
+  jti: string; // unique — used for revocation (§19.12)
+  permissions: string[]; // duplicated into tenant.permissions at issue time
   monthlySpendLimit?: number;
-  neverExpires: boolean;   // mutually exclusive with expiresAt
-  expiresAt?: string;      // null when neverExpires is true
-  frontendUse: boolean;    // allowed from browsers (CORS §12.7)
+  neverExpires: boolean; // mutually exclusive with expiresAt
+  expiresAt?: string; // null when neverExpires is true
+  frontendUse: boolean; // allowed from browsers (CORS §12.7)
   frontendDomains: string[]; // allowed origins when frontendUse=true (empty = block all)
-  revokedAt?: string;      // §19.12
+  revokedAt?: string; // §19.12
   createdAt: string;
 }
 ```
@@ -2178,38 +2255,36 @@ export interface ApiToken {
 #### 21.3 `ConnectedAppsPage` (`src/components/shared/ConnectedAppsPage.tsx`)
 
 - Shows all `connected_app` records for the current (company, system).
-- **No manual "Add" button.** Apps are created exclusively via the OAuth
-  flow (§24).
+- **No manual "Add" button.** Apps are created exclusively via the OAuth flow
+  (§24).
 - Each card shows: app name, granted permissions, creation date, and a
   **Revoke** button → `DELETE /api/connected-apps` which deletes the
-  `connected_app` row AND sets `revokedAt = time::now()` on the
-  underlying `api_token` in the same batched query (§19.12). Raw hash
-  retained 90 days for audit; cleanup job deletes after.
-- An info box explains the OAuth flow and shows the authorization URL
-  template for developer reference.
+  `connected_app` row AND sets `revokedAt = time::now()` on the underlying
+  `api_token` in the same batched query (§19.12). Raw hash retained 90 days for
+  audit; cleanup job deletes after.
+- An info box explains the OAuth flow and shows the authorization URL template
+  for developer reference.
 
 #### 21.4 `BillingPage` (`src/components/shared/BillingPage.tsx`)
 
 Organized into sections.
 
-**1. Current Plan.** Renders the active subscription's plan card
-(§18.10) with a "Current Plan" badge. Shows next billing date
-(`currentPeriodEnd`). **Cancel** button → confirmation modal →
-`POST /api/billing { action: "cancel" }`. If no active subscription,
-shows a prompt to subscribe.
+**1. Current Plan.** Renders the active subscription's plan card (§18.10) with a
+"Current Plan" badge. Shows next billing date (`currentPeriodEnd`). **Cancel**
+button → confirmation modal → `POST /api/billing { action: "cancel" }`. If no
+active subscription, shows a prompt to subscribe.
 
-**2. Available Plans.** All active plans for the current system as
-rich plan cards. Each non-current plan has a **Subscribe** button. Paid
-plans that lack a payment method prompt the user to add one first, then
-call `POST /api/billing { action: "subscribe" }`. Plan changes: the
-backend cancels the old subscription and creates a new one in the same
-batched query.
+**2. Available Plans.** All active plans for the current system as rich plan
+cards. Each non-current plan has a **Subscribe** button. Paid plans that lack a
+payment method prompt the user to add one first, then call
+`POST /api/billing { action: "subscribe" }`. Plan changes: the backend cancels
+the old subscription and creates a new one in the same batched query.
 
-**3. Payment Methods.** Lists all for the current company. Each card
-shows mask + holder name + "Default" badge when applicable.
+**3. Payment Methods.** Lists all for the current company. Each card shows
+mask + holder name + "Default" badge when applicable.
 
-- **Add** → `FormModal` with `CreditCardSubform` (embeds
-  `AddressSubform`). `POST /api/billing { action: "add_payment_method" }`.
+- **Add** → `FormModal` with `CreditCardSubform` (embeds `AddressSubform`).
+  `POST /api/billing { action: "add_payment_method" }`.
 - **Set Default** on any non-default card →
   `POST /api/billing { action: "set_default_payment_method" }`.
 - **Remove** (confirmation) →
@@ -2223,53 +2298,51 @@ shows mask + holder name + "Default" badge when applicable.
 - **Credit History** list with status badges.
 - **Auto-Recharge Credits** subsection: toggle
   (`billing.credits.autoRecharge.title`) with description
-  (`billing.credits.autoRecharge.description`). When enabled, an amount
-  input in the subscription currency
-  (`billing.credits.autoRecharge.amountLabel`) becomes required.
-  Disabling resets `autoRechargeAmount` to 0. Tooltip: auto-recharge
-  requires a default payment method; if none exists, the toggle is
-  disabled with a hint linking to Payment Methods. Saving calls
+  (`billing.credits.autoRecharge.description`). When enabled, an amount input in
+  the subscription currency (`billing.credits.autoRecharge.amountLabel`) becomes
+  required. Disabling resets `autoRechargeAmount` to 0. Tooltip: auto-recharge
+  requires a default payment method; if none exists, the toggle is disabled with
+  a hint linking to Payment Methods. Saving calls
   `POST /api/billing { action: "set_auto_recharge", enabled, amount }`.
 
 **5. Voucher.**
 
 - Input + Apply button → `POST /api/billing { action: "apply_voucher" }`.
-  Backend validates (exists, not expired, company in `applicableCompanyIds`
-  — or that array is empty, current plan in `applicablePlanIds` — or that
-  array is empty) and sets `subscription.voucherId` (§22.7 —
-  single-voucher invariant: applying replaces any existing voucher).
-- **Feedback appears inline directly below the voucher input, not at the
-  top of the page.** Per-section state (no global
-  `setError`/`setSuccess`). `billing.voucher.success` (green) or error
-  (red). On success the input clears and the subscription reloads.
-- Displays the currently applied (non-expired) voucher — if any — as a
-  single badge showing code + price effect (e.g. `−$5.00` or `+$2.00`).
-  Applying a new voucher replaces the badge automatically.
+  Backend validates (exists, not expired, company in `applicableCompanyIds` — or
+  that array is empty, current plan in `applicablePlanIds` — or that array is
+  empty) and sets `subscription.voucherId` (§22.7 — single-voucher invariant:
+  applying replaces any existing voucher).
+- **Feedback appears inline directly below the voucher input, not at the top of
+  the page.** Per-section state (no global `setError`/`setSuccess`).
+  `billing.voucher.success` (green) or error (red). On success the input clears
+  and the subscription reloads.
+- Displays the currently applied (non-expired) voucher — if any — as a single
+  badge showing code + price effect (e.g. `−$5.00` or `+$2.00`). Applying a new
+  voucher replaces the badge automatically.
 - Effective price display: `GET /api/billing` returns subscriptions with
-  `voucherId` **FETCHed** (full voucher object, or `NONE`). See §18.10
-  for the price rendering rule.
+  `voucherId` **FETCHed** (full voucher object, or `NONE`). See §18.10 for the
+  price rendering rule.
 
 #### 21.5 `UsagePage` (`src/components/shared/UsagePage.tsx`)
 
 Fetches `GET /api/usage`. Two sections.
 
-**1. Storage.** Horizontal `react-chartjs-2` `Bar` showing used vs.
-available storage (plan limit + voucher `storageLimitModifier`). Storage
-usage is computed server-side via `@hviana/surreal-fs` `fs.readDir()`
-summing file sizes under `{companyId}/{systemSlug}/`. The backend query
-(`server/db/queries/usage.ts`) caches this and recalculates periodically
-or on upload/delete. Values in human-readable format (e.g. `"245 MB /
+**1. Storage.** Horizontal `react-chartjs-2` `Bar` showing used vs. available
+storage (plan limit + voucher `storageLimitModifier`). Storage usage is computed
+server-side via `@hviana/surreal-fs` `fs.readDir()` summing file sizes under
+`{companyId}/{systemSlug}/`. The backend query (`server/db/queries/usage.ts`)
+caches this and recalculates periodically or on upload/delete. Values in
+human-readable format (e.g. `"245 MB /
 1 GB"`). Gradient fill
 `from-[var(--color-primary-green)] to-[var(--color-secondary-blue)]`.
 
-**2. Credit Expenses.** `react-chartjs-2` `Bar` column chart: one column
-per **resource key** (translated via `t()`), value = sum of daily
-`credit_expense` records over the selected range. **`DateRangeFilter`
-with `maxRangeDays = 31`.** Default range: last 31 days. Distinct color
-per resource. Summary table below.
+**2. Credit Expenses.** `react-chartjs-2` `Bar` column chart: one column per
+**resource key** (translated via `t()`), value = sum of daily `credit_expense`
+records over the selected range. **`DateRangeFilter` with `maxRangeDays = 31`.**
+Default range: last 31 days. Distinct color per resource. Summary table below.
 
-**No "API Calls" metric.** Rate limiting is enforced by middleware (not
-tracked as usage).
+**No "API Calls" metric.** Rate limiting is enforced by middleware (not tracked
+as usage).
 
 **Usage API:**
 
@@ -2296,87 +2369,91 @@ All actions accept `action` in the body.
 **`subscribe`** — create a new subscription (or change plan):
 
 1. Create `company_system` **idempotently** via an existence check
-   (`IF array::len(...) = 0 { CREATE company_system ... }`). SurrealDB
-   throws on `CREATE` with a duplicate unique key, so a raw `CREATE`
-   must **never** be used here.
-2. If an active subscription already exists for this (company, system),
-   update it to `status = "cancelled"` in the same batched query.
-3. Create `subscription` with selected plan, period dates, status
-   `"active"`, and `remainingPlanCredits = plan.planCredits`.
-4. Create `user_company_system` if missing for the authenticated user +
-   this (company, system), with `roles: ["admin"]`. This ensures the
-   company owner always sees "Manage Users" and can perform admin
-   operations.
+   (`IF array::len(...) = 0 { CREATE company_system ... }`). SurrealDB throws on
+   `CREATE` with a duplicate unique key, so a raw `CREATE` must **never** be
+   used here.
+2. If an active subscription already exists for this (company, system), update
+   it to `status = "cancelled"` in the same batched query.
+3. Create `subscription` with selected plan, period dates, status `"active"`,
+   and `remainingPlanCredits = plan.planCredits`.
+4. Create `user_company_system` if missing for the authenticated user + this
+   (company, system), with `roles: ["admin"]`. This ensures the company owner
+   always sees "Manage Users" and can perform admin operations.
 
 Free plans (price = 0) omit `paymentMethodId` (field is
-`option<record<payment_method>>`). Paid plans require it; the route
-returns a validation error if missing.
+`option<record<payment_method>>`). Paid plans require it; the route returns a
+validation error if missing.
 
-**`cancel`** — body: `{ action: "cancel", companyId, systemId }`.
-Sets subscription `status = "cancelled"`. **Does NOT delete the
-`company_system` association.**
+**`cancel`** — body: `{ action: "cancel", companyId, systemId }`. Sets
+subscription `status = "cancelled"`. **Does NOT delete the `company_system`
+association.**
 
-**`add_payment_method`** — body: `{ action, companyId, cardToken,
-cardMask, holderName, holderDocument, billingAddress }`. Creates
-`address` record first, then `payment_method` with the link. First
+**`add_payment_method`** — body:
+`{ action, companyId, cardToken,
+cardMask, holderName, holderDocument, billingAddress }`.
+Creates `address` record first, then `payment_method` with the link. First
 method for the company → `isDefault = true`.
 
-**`set_default_payment_method`** — body: `{ action, companyId,
-paymentMethodId }`. Sets `isDefault = false` for all the company's
-methods, then `isDefault = true` on the target. Single batched query.
+**`set_default_payment_method`** — body:
+`{ action, companyId,
+paymentMethodId }`. Sets `isDefault = false` for all the
+company's methods, then `isDefault = true` on the target. Single batched query.
 
-**`remove_payment_method`** — body: `{ action, paymentMethodId }`.
-Deletes the `payment_method` and its linked `address`. If removed method
-was default, promotes the next available.
+**`remove_payment_method`** — body: `{ action, paymentMethodId }`. Deletes the
+`payment_method` and its linked `address`. If removed method was default,
+promotes the next available.
 
-**`purchase_credits`** — body: `{ action, companyId, systemId, amount,
-paymentMethodId }`. Creates `credit_purchase` `status = "pending"`;
-publishes `PAYMENT_DUE`; `process_payment` charges + updates status. On
-success: increments credit balance via `usage_record resource =
-"credits"` and publishes `SEND_EMAIL` with `payment-success` (`kind =
-"credits"`); **also resets `subscription.creditAlertSent = false`**. On
-failure: `SEND_EMAIL` with `payment-failure` (`kind = "credits"`, with
-gateway `reason`).
+**`purchase_credits`** — body:
+`{ action, companyId, systemId, amount,
+paymentMethodId }`. Creates
+`credit_purchase` `status = "pending"`; publishes `PAYMENT_DUE`;
+`process_payment` charges + updates status. On success: increments credit
+balance via `usage_record resource =
+"credits"` and publishes `SEND_EMAIL` with
+`payment-success` (`kind =
+"credits"`); **also resets
+`subscription.creditAlertSent = false`**. On failure: `SEND_EMAIL` with
+`payment-failure` (`kind = "credits"`, with gateway `reason`).
 
-**`set_auto_recharge`** — body: `{ action, companyId, systemId, enabled,
-amount }`. When enabling: `amount` must be ≥
-`billing.autoRecharge.minAmount` (default 500 ¢), else
-`validation.amount.tooSmall`; company must have a default
-`payment_method`, else `billing.autoRecharge.noDefaultPaymentMethod`.
-Updates `autoRechargeEnabled` + `autoRechargeAmount` in a single batched
-query. Disabling sets `autoRechargeAmount = 0` AND resets
-`autoRechargeInProgress = false` to clear any stuck flag.
+**`set_auto_recharge`** — body:
+`{ action, companyId, systemId, enabled,
+amount }`. When enabling: `amount` must
+be ≥ `billing.autoRecharge.minAmount` (default 500 ¢), else
+`validation.amount.tooSmall`; company must have a default `payment_method`, else
+`billing.autoRecharge.noDefaultPaymentMethod`. Updates `autoRechargeEnabled` +
+`autoRechargeAmount` in a single batched query. Disabling sets
+`autoRechargeAmount = 0` AND resets `autoRechargeInProgress = false` to clear
+any stuck flag.
 
 **`apply_voucher`** — body: `{ action, companyId, systemId, voucherCode }`.
 Validates in order: voucher exists; not expired; the company is in
-`applicableCompanyIds` (or the array is empty = universal); the
-subscription's current `planId` is in `applicablePlanIds` (or that array
-is empty = all plans). Sets `subscription.voucherId` — single-voucher
-invariant: if the subscription already has a voucher, it is replaced
-atomically in the same batched query (§22.7). Returns the applied
-voucher's details so the frontend can show the effect.
+`applicableCompanyIds` (or the array is empty = universal); the subscription's
+current `planId` is in `applicablePlanIds` (or that array is empty = all plans).
+Sets `subscription.voucherId` — single-voucher invariant: if the subscription
+already has a voucher, it is replaced atomically in the same batched query
+(§22.7). Returns the applied voucher's details so the frontend can show the
+effect.
 
 #### 22.2 Spend limits
 
-Users, tokens, and connected apps may define `monthlySpendLimit`.
-Before any chargeable operation, the system checks that the actor's
-current month usage + operation cost ≤ `monthlySpendLimit`.
+Users, tokens, and connected apps may define `monthlySpendLimit`. Before any
+chargeable operation, the system checks that the actor's current month usage +
+operation cost ≤ `monthlySpendLimit`.
 
 #### 22.3 Credit deduction system
 
-Credits consumed by system-specific operations identified by i18n
-resource keys. Each plan includes `planCredits` — temporary credits
-valid only during the plan's recurrence period. On subscribe or renew,
-`remainingPlanCredits` is set to `plan.planCredits`; these expire when
-the period ends.
+Credits consumed by system-specific operations identified by i18n resource keys.
+Each plan includes `planCredits` — temporary credits valid only during the
+plan's recurrence period. On subscribe or renew, `remainingPlanCredits` is set
+to `plan.planCredits`; these expire when the period ends.
 
 **Priority (handled by `consumeCredits` in `credit-tracker.ts`):**
 
 1. Plan credits first — decrement `subscription.remainingPlanCredits`.
-2. Purchased credits second — decrement from
-   `usage_record resource = "credits"` balance.
-3. Insufficient → operation rejected; email alert triggered (once per
-   exhaustion cycle).
+2. Purchased credits second — decrement from `usage_record resource = "credits"`
+   balance.
+3. Insufficient → operation rejected; email alert triggered (once per exhaustion
+   cycle).
 
 **Algorithm (all in one batched `db.query()`):**
 
@@ -2384,102 +2461,110 @@ the period ends.
 2. Fetch the company's purchased credit balance.
 3. `total = remainingPlanCredits + purchased`.
 4. If `total < amount`:
-   - If `autoRechargeEnabled = true` AND `autoRechargeInProgress = false`:
-     set `autoRechargeInProgress = true` (re-entrancy guard) and publish
+   - If `autoRechargeEnabled = true` AND `autoRechargeInProgress = false`: set
+     `autoRechargeInProgress = true` (re-entrancy guard) and publish
      `TRIGGER_AUTO_RECHARGE { subscriptionId, companyId, systemId,
-     resourceKey }`. Return `{ success: false, source: "insufficient" }`.
-     Caller retries after the recharge completes; retry policy is
-     system-specific (most resources fail the current op and let the
-     user retry).
+     resourceKey }`.
+     Return `{ success: false, source: "insufficient" }`. Caller retries after
+     the recharge completes; retry policy is system-specific (most resources
+     fail the current op and let the user retry).
    - Else (disabled or already in progress):
-     - If `creditAlertSent = false`: publish `SEND_EMAIL
+     - If `creditAlertSent = false`: publish
+       `SEND_EMAIL
        insufficient-credit` and set `creditAlertSent = true`.
      - Return `{ success: false, source: "insufficient" }`.
-5. If `remainingPlanCredits >= amount`: decrement it; record the
-   expense in `credit_expense` (daily container, UPSERT). Return
+5. If `remainingPlanCredits >= amount`: decrement it; record the expense in
+   `credit_expense` (daily container, UPSERT). Return
    `{ success: true, source: "plan" }`.
-6. Else `total >= amount`: use all plan credits, decrement remainder
-   from purchased; record the expense. Return
+6. Else `total >= amount`: use all plan credits, decrement remainder from
+   purchased; record the expense. Return
    `{ success: true, source: "purchased" }`.
 
 **One-shot alert mechanism.** `creditAlertSent` resets to `false` in two
-scenarios — ensuring the user is notified each time credits run out
-after a replenishment, without spam:
+scenarios — ensuring the user is notified each time credits run out after a
+replenishment, without spam:
 
-1. **Credit purchase** — `purchase_credits` success (§22.1) resets the
-   flag on the active subscription.
-2. **Plan renewal** — the recurring-billing job resets it when
-   renewing (alongside `remainingPlanCredits = plan.planCredits`).
+1. **Credit purchase** — `purchase_credits` success (§22.1) resets the flag on
+   the active subscription.
+2. **Plan renewal** — the recurring-billing job resets it when renewing
+   (alongside `remainingPlanCredits = plan.planCredits`).
 
 #### 22.4 Plan-credit lifecycle
 
 - **On subscribe:** `remainingPlanCredits = plan.planCredits`.
-- **On renewal** (recurring-billing job): `remainingPlanCredits =
+- **On renewal** (recurring-billing job):
+  `remainingPlanCredits =
   plan.planCredits`; `creditAlertSent = false`.
 - **On cancel:** plan credits are forfeited (not refunded);
   `remainingPlanCredits` stays as-is on the cancelled row for audit.
-- **On plan change** (subscribe to a different plan): old subscription
-  cancelled (credits forfeited); new subscription starts with the new
-  plan's `planCredits`.
+- **On plan change** (subscribe to a different plan): old subscription cancelled
+  (credits forfeited); new subscription starts with the new plan's
+  `planCredits`.
 
 #### 22.5 Auto-recharge credits
 
-When a deduction fails and `autoRechargeEnabled = true`, the credit
-tracker publishes `TRIGGER_AUTO_RECHARGE` instead of immediately sending
-the insufficient-credit email. The `auto_recharge` handler
+When a deduction fails and `autoRechargeEnabled = true`, the credit tracker
+publishes `TRIGGER_AUTO_RECHARGE` instead of immediately sending the
+insufficient-credit email. The `auto_recharge` handler
 (`server/event-queue/handlers/auto-recharge.ts`) performs the recharge.
 
 **Handler steps:**
 
 1. Load the subscription; verify `autoRechargeEnabled = true` AND
-   `autoRechargeInProgress = true`. Otherwise mark delivery `done` with
-   no side effects.
+   `autoRechargeInProgress = true`. Otherwise mark delivery `done` with no side
+   effects.
 2. Load the company's default payment method. Missing → publish
    `SEND_EMAIL payment-failure kind="auto-recharge"`
    (`reason = "billing.autoRecharge.noPaymentMethod"`); clear
    `autoRechargeInProgress`; finish.
-3. Publish `SEND_EMAIL auto-recharge` (user should know a charge is
-   being attempted).
-4. Create `credit_purchase { amount: autoRechargeAmount, status:
-   "pending", purpose: "auto-recharge" }`; publish `PAYMENT_DUE`. Since
-   handlers can't block, this chains: `process_payment` sees the
-   `purpose` flag and, on success, publishes `SEND_EMAIL
-   payment-success kind="auto-recharge"` + credits the balance; on
-   failure, `SEND_EMAIL payment-failure kind="auto-recharge"`.
+3. Publish `SEND_EMAIL auto-recharge` (user should know a charge is being
+   attempted).
+4. Create
+   `credit_purchase { amount: autoRechargeAmount, status:
+   "pending", purpose: "auto-recharge" }`;
+   publish `PAYMENT_DUE`. Since handlers can't block, this chains:
+   `process_payment` sees the `purpose` flag and, on success, publishes
+   `SEND_EMAIL
+   payment-success kind="auto-recharge"` + credits the balance;
+   on failure, `SEND_EMAIL payment-failure kind="auto-recharge"`.
 5. Whichever terminal branch runs clears `autoRechargeInProgress = false`.
 
-**Email guarantees.** Every auto-recharge attempt generates ≥ 2 emails:
-one `auto-recharge` notice when initiated + one `payment-success` or
-`payment-failure` when it settles. Users can silence by disabling
-auto-recharge; the on/off state itself triggers no extra emails.
+**Email guarantees.** Every auto-recharge attempt generates ≥ 2 emails: one
+`auto-recharge` notice when initiated + one `payment-success` or
+`payment-failure` when it settles. Users can silence by disabling auto-recharge;
+the on/off state itself triggers no extra emails.
 
 **Security.**
 
 - `autoRechargeAmount` capped per subscription by
   `billing.autoRecharge.maxAmount` (default 50 000 ¢ / $500).
 - Idempotency key: `subscriptionId + currentPeriodStart + monotonic
-  counter` — retried deliveries never double-charge.
+  counter` —
+  retried deliveries never double-charge.
 - The handler runs under a **synthesized subscription Tenant**:
   `tenant.companyId/systemId/systemSlug` copied from the subscription,
-  `roles: ["system"]`, `permissions: ["*"]`. This is the only tenant
-  backend workers construct explicitly, always through a dedicated
-  helper in `server/utils/tenant.ts`.
+  `roles: ["system"]`, `permissions: ["*"]`. This is the only tenant backend
+  workers construct explicitly, always through a dedicated helper in
+  `server/utils/tenant.ts`.
 
 #### 22.6 `Subscription` contract (rules-bearing fields)
 
 ```typescript
 export interface Subscription {
   id: string;
-  companyId: string; systemId: string; planId: string;
-  paymentMethodId?: string;                     // optional for free plans
+  companyId: string;
+  systemId: string;
+  planId: string;
+  paymentMethodId?: string; // optional for free plans
   status: "active" | "past_due" | "cancelled";
-  currentPeriodStart: string; currentPeriodEnd: string;
-  voucherId?: string;                           // single voucher — replaced on re-apply (§22.7)
-  remainingPlanCredits: number;                 // resets on renewal
-  creditAlertSent: boolean;                     // one-shot (§22.3)
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  voucherId?: string; // single voucher — replaced on re-apply (§22.7)
+  remainingPlanCredits: number; // resets on renewal
+  creditAlertSent: boolean; // one-shot (§22.3)
   autoRechargeEnabled: boolean;
-  autoRechargeAmount: number;                   // cents; 0 when disabled
-  autoRechargeInProgress: boolean;              // re-entrancy guard
+  autoRechargeAmount: number; // cents; 0 when disabled
+  autoRechargeInProgress: boolean; // re-entrancy guard
   createdAt: string;
 }
 ```
@@ -2489,51 +2574,47 @@ export interface Subscription {
 Two invariants the voucher subsystem enforces end-to-end (core admin →
 `apply_voucher` → billing display → recurring charge).
 
-**Single-voucher invariant.** A `(company, system)` subscription has at
-most one active voucher (`subscription.voucherId`). `apply_voucher`
-(§22.1) replaces the existing voucher atomically in the same batched
-query — there is no stacking, combining, or summing. The voucher most
-recently applied is the one in effect; previous ones are simply
-overwritten (no audit row, since vouchers are codes the user can
-re-enter at any time).
+**Single-voucher invariant.** A `(company, system)` subscription has at most one
+active voucher (`subscription.voucherId`). `apply_voucher` (§22.1) replaces the
+existing voucher atomically in the same batched query — there is no stacking,
+combining, or summing. The voucher most recently applied is the one in effect;
+previous ones are simply overwritten (no audit row, since vouchers are codes the
+user can re-enter at any time).
 
 **Plan-scope rule.** Each voucher carries
 `applicablePlanIds: array<record<plan>>`:
 
 - **Empty array** — voucher is valid for every plan (the default).
-- **Non-empty array** — voucher is valid only when the subscription's
-  current `planId` is in the list. `apply_voucher` rejects with a
-  validation error otherwise (i18n key
-  `billing.voucher.planNotApplicable`).
+- **Non-empty array** — voucher is valid only when the subscription's current
+  `planId` is in the list. `apply_voucher` rejects with a validation error
+  otherwise (i18n key `billing.voucher.planNotApplicable`).
 
 **Auto-removal cascade on voucher edit.** The core voucher update
 (`PUT /api/core/vouchers`) runs in a single batched `db.query()` that:
 
 1. Updates the voucher record.
 2. If `applicablePlanIds` is non-empty after the update, finds every
-   subscription where `voucherId = <this voucher>` AND the
-   subscription's `planId` is **not** in the new `applicablePlanIds`.
+   subscription where `voucherId = <this voucher>` AND the subscription's
+   `planId` is **not** in the new `applicablePlanIds`.
 3. Clears `voucherId = NONE` on each such subscription.
 
-Because steps 1–3 are one batched statement, subscriptions never sit in
-an inconsistent state where the voucher still points to them but no
-longer applies. Open billing pages reflect the removal on their next
-reload (or instantly via live query on `subscription`). No email is sent
-for this removal — the billing-page reload communicates the change.
+Because steps 1–3 are one batched statement, subscriptions never sit in an
+inconsistent state where the voucher still points to them but no longer applies.
+Open billing pages reflect the removal on their next reload (or instantly via
+live query on `subscription`). No email is sent for this removal — the
+billing-page reload communicates the change.
 
 **Plan-change & voucher.** When a user switches plan (`subscribe` with a
-different plan — §22.1), the old subscription is cancelled (voucher
-reference cancelled with it) and the new subscription starts with
-`voucherId = NONE`. The user must re-apply any voucher they wish to
-continue using; this also re-runs the scope validation against the new
-plan.
+different plan — §22.1), the old subscription is cancelled (voucher reference
+cancelled with it) and the new subscription starts with `voucherId = NONE`. The
+user must re-apply any voucher they wish to continue using; this also re-runs
+the scope validation against the new plan.
 
-**Core-admin UI surface.** The VoucherForm (§20.2) renders
-`applicablePlanIds` via `SearchableSelectField(multiple={true})` fetching
-`/api/core/plans?search=`. A hint under the field
-(`core.vouchers.applicablePlansHint`) reminds the superuser that leaving
-the field empty makes the voucher valid for every plan, and that
-removing a plan from a non-empty list strips the voucher from any
+**Core-admin UI surface.** The VoucherForm (§20.2) renders `applicablePlanIds`
+via `SearchableSelectField(multiple={true})` fetching `/api/core/plans?search=`.
+A hint under the field (`core.vouchers.applicablePlansHint`) reminds the
+superuser that leaving the field empty makes the voucher valid for every plan,
+and that removing a plan from a non-empty list strips the voucher from any
 currently-subscribed company whose plan is removed.
 
 ### 23. Public / Anonymous API
@@ -2545,23 +2626,20 @@ See §13.4.
 #### 23.2 `POST /api/leads/public` — unauthenticated lead registration / update verification
 
 - Requires `botToken` (bot-protection challenge).
-- Payload: `name`, `email`, `phone?`, `profile`, `companyIds`,
-  `systemSlug`, `termsAccepted`. **Tags are not accepted** — only
-  authenticated users can manage tags.
+- Payload: `name`, `email`, `phone?`, `profile`, `companyIds`, `systemSlug`,
+  `termsAccepted`. **Tags are not accepted** — only authenticated users can
+  manage tags.
 - Backend requires `termsAccepted: true`; rejects otherwise.
-- **New lead:** create `lead` record; associate with `companyIds` +
-  system. Return `{ requiresVerification: false, id }`.
-- **Existing lead** (matched by email or phone): do not modify directly.
-  Create a `verification_request` of type `email_verify`; publish
-  `SEND_EMAIL` with `verification` template. Return
-  `{ requiresVerification: true }`. Lead data is updated only after the
-  user clicks the verification link.
-- **Cooldown:** `auth.verification.cooldown.seconds`. Returns 429 if
-  elapsed.
-- **Expiry:** `auth.verification.expiry.minutes` for the verification
-  token.
-- System-specific routes (e.g. `/api/systems/grex-id/leads/public`) can
-  delegate here and add their own logic (e.g. face biometrics).
+- **New lead:** create `lead` record; associate with `companyIds` + system.
+  Return `{ requiresVerification: false, id }`.
+- **Existing lead** (matched by email or phone): do not modify directly. Create
+  a `verification_request` of type `email_verify`; publish `SEND_EMAIL` with
+  `verification` template. Return `{ requiresVerification: true }`. Lead data is
+  updated only after the user clicks the verification link.
+- **Cooldown:** `auth.verification.cooldown.seconds`. Returns 429 if elapsed.
+- **Expiry:** `auth.verification.expiry.minutes` for the verification token.
+- System-specific routes (e.g. `/api/systems/grex-id/leads/public`) can delegate
+  here and add their own logic (e.g. face biometrics).
 
 #### 23.3 `GET /api/public/front-core`
 
@@ -2569,8 +2647,8 @@ See §10.2 / §13.4.
 
 ### 24. OAuth Server Flow (Connected Apps)
 
-The platform acts as an OAuth **server** so third-party apps can request
-scoped access to a user's data. **This is not social login.**
+The platform acts as an OAuth **server** so third-party apps can request scoped
+access to a user's data. **This is not social login.**
 
 #### 24.1 Authorization URL format
 
@@ -2589,7 +2667,8 @@ scoped access to a user's data. **This is not social login.**
    ```javascript
    const popup = window.open(
      `${platformBaseUrl}/oauth/authorize?client_name=MyApp&permissions=read:leads&system_slug=grex-id&redirect_origin=https://myapp.com`,
-     "oauth", "popup,width=520,height=640",
+     "oauth",
+     "popup,width=520,height=640",
    );
    window.addEventListener("message", (e) => {
      if (e.origin !== platformBaseUrl) return;
@@ -2598,14 +2677,14 @@ scoped access to a user's data. **This is not social login.**
    });
    ```
 
-2. **Authorization page** (`app/(auth)/oauth/authorize/page.tsx`) reads
-   URL params.
+2. **Authorization page** (`app/(auth)/oauth/authorize/page.tsx`) reads URL
+   params.
    - **Not authenticated:** redirect to
      `/login?oauth=1&client_name=...&permissions=...&system_slug=...&redirect_origin=...`
      and return here after login.
-   - **Authenticated:** show app name, a company selector (user picks
-     which company grants access), the requested permission list, and
-     **Authorize** / **Cancel** buttons.
+   - **Authenticated:** show app name, a company selector (user picks which
+     company grants access), the requested permission list, and **Authorize** /
+     **Cancel** buttons.
 
 3. **On Authorize** — the page calls `POST /api/auth/oauth/authorize`:
 
@@ -2631,34 +2710,34 @@ scoped access to a user's data. **This is not social login.**
      `exchangeable: false`, embedded Tenant.
    - Returns the raw token **once**; only its SHA-256 hash is stored in
      `api_token.tokenHash`.
-   - Page posts back: `window.opener.postMessage({ token },
+   - Page posts back:
+     `window.opener.postMessage({ token },
      redirectOrigin); window.close();`.
 
 4. **On Cancel / Deny** — page posts `{ error: "access_denied" }`.
 
-5. **Login page integration** (`app/(auth)/login/page.tsx`). When
-   `oauth=1` is present, after successful login the router pushes to
-   `/oauth/authorize?...` (with all OAuth params) instead of
-   `/entry`/`/usage`.
+5. **Login page integration** (`app/(auth)/login/page.tsx`). When `oauth=1` is
+   present, after successful login the router pushes to `/oauth/authorize?...`
+   (with all OAuth params) instead of `/entry`/`/usage`.
 
 #### 24.3 Connected Apps page
 
-See §21.3. No manual creation — apps appear only via the OAuth flow.
-Revocation sets `revokedAt` on the underlying `api_token` (§19.12).
+See §21.3. No manual creation — apps appear only via the OAuth flow. Revocation
+sets `revokedAt` on the underlying `api_token` (§19.12).
 
 #### 24.4 Manually created API tokens
 
-Users can also create API tokens via the Tokens menu (§21.2). Each token
-has a name, description, selected granular permissions, optional spend
-limit, optional expiry (mutually exclusive with `neverExpires`),
-optional `frontendUse` + `frontendDomains`. The raw value is shown once
-and never stored — only its SHA-256 hash.
+Users can also create API tokens via the Tokens menu (§21.2). Each token has a
+name, description, selected granular permissions, optional spend limit, optional
+expiry (mutually exclusive with `neverExpires`), optional `frontendUse` +
+`frontendDomains`. The raw value is shown once and never stored — only its
+SHA-256 hash.
 
 ### 25. Terms of Acceptance (LGPD)
 
-Every system has its own terms of acceptance including LGPD compliance
-text. The core provides a generic fallback via the `terms.generic`
-setting; systems override with `System.termsOfService`.
+Every system has its own terms of acceptance including LGPD compliance text. The
+core provides a generic fallback via the `terms.generic` setting; systems
+override with `System.termsOfService`.
 
 #### 25.1 Resolution order
 
@@ -2668,23 +2747,22 @@ setting; systems override with `System.termsOfService`.
 
 #### 25.2 Mandatory checkpoints
 
-1. **User registration** (`/register`): checkbox with terms text (or
-   link). Must be checked. Backend validates `termsAccepted: true` on
-   `/api/auth/register`; rejects with `validation.terms.required`.
-2. **Public lead registration / update** (`POST /api/leads/public`):
-   requires `termsAccepted: true`. Any public frontend form submitting
-   here must include the checkbox.
+1. **User registration** (`/register`): checkbox with terms text (or link). Must
+   be checked. Backend validates `termsAccepted: true` on `/api/auth/register`;
+   rejects with `validation.terms.required`.
+2. **Public lead registration / update** (`POST /api/leads/public`): requires
+   `termsAccepted: true`. Any public frontend form submitting here must include
+   the checkbox.
 
 #### 25.3 Display
 
-Terms HTML stored in the DB. On the frontend, terms render inside a
-scrollable container (`max-height` + `overflow-y-auto`) above the
-acceptance checkbox. The checkbox label uses `auth.register.termsAccept`
-/ `common.terms.accept`.
+Terms HTML stored in the DB. On the frontend, terms render inside a scrollable
+container (`max-height` + `overflow-y-auto`) above the acceptance checkbox. The
+checkbox label uses `auth.register.termsAccept` / `common.terms.accept`.
 
 Below the checkbox, a **"View Terms of Service"** link opens
-`/terms?system=<slug>` in a **new browser tab** so users can read the
-full terms without leaving the form.
+`/terms?system=<slug>` in a **new browser tab** so users can read the full terms
+without leaving the form.
 
 #### 25.4 API surface
 
@@ -2692,9 +2770,11 @@ full terms without leaving the form.
 
 ```typescript
 export interface PublicSystemInfo {
-  name: string; slug: string; logoUri: string;
+  name: string;
+  slug: string;
+  logoUri: string;
   defaultLocale?: string;
-  termsOfService?: string;              // resolved (system → generic)
+  termsOfService?: string; // resolved (system → generic)
 }
 ```
 
@@ -2719,17 +2799,16 @@ Admin management is covered in §20.5 (`TermsEditor`).
 
 ### 26. Subframeworks
 
-The Core supports **subframeworks** — reusable extensions that plug into
-the existing structure without a parallel namespace. A subframework is
-**not** a system (systems are runtime tenants; subframeworks are
-design-time code bundles).
+The Core supports **subframeworks** — reusable extensions that plug into the
+existing structure without a parallel namespace. A subframework is **not** a
+system (systems are runtime tenants; subframeworks are design-time code
+bundles).
 
 #### 26.1 Folder layout
 
-Each subframework lives under `frameworks/<name>/` and **mirrors the
-Core root** (`app/`, `src/`, `server/`, `client/`, `public/`, i18n
-under `src/i18n/`, migrations under `server/db/migrations/`, etc.).
-Example:
+Each subframework lives under `frameworks/<name>/` and **mirrors the Core root**
+(`app/`, `src/`, `server/`, `client/`, `public/`, i18n under `src/i18n/`,
+migrations under `server/db/migrations/`, etc.). Example:
 
 ```
 frameworks/foo/
@@ -2745,27 +2824,26 @@ frameworks/foo/
     └── utils/foo-helper.ts
 ```
 
-The build process symlinks/merges these paths into the Core trees. **No
-separate namespace** — a file at `frameworks/foo/server/db/queries/foo.ts`
-behaves exactly as `server/db/queries/foo.ts`. Migrations are numbered
-globally (the migration runner scans root +
-`systems/<slug>/` + every `frameworks/*/server/db/migrations/` subtree).
+The build process symlinks/merges these paths into the Core trees. **No separate
+namespace** — a file at `frameworks/foo/server/db/queries/foo.ts` behaves
+exactly as `server/db/queries/foo.ts`. Migrations are numbered globally (the
+migration runner scans root + `systems/<slug>/` + every
+`frameworks/*/server/db/migrations/` subtree).
 
 #### 26.2 AGENTS.md inheritance
 
-Every framework ships its own `frameworks/<name>/AGENTS.md` that
-**inherits the Core AGENTS by reference**. It describes only what is
-framework-specific:
+Every framework ships its own `frameworks/<name>/AGENTS.md` that **inherits the
+Core AGENTS by reference**. It describes only what is framework-specific:
 
 - Contracts, routes, queries, handlers, components the framework adds.
 - New Core / FrontCore settings required (added through its own seeds).
 - System-slug-like markers the framework uses for scoping.
 - Framework-specific i18n namespaces (e.g. `foo.*` in `foo.json`).
 
-Everything else — visual standard, i18n rules, tenant handling,
-middleware, single-call rule, deduplicator/standardizer/validator use,
-event-queue conventions, email template design, security/revocation
-rules — is inherited verbatim from Core.
+Everything else — visual standard, i18n rules, tenant handling, middleware,
+single-call rule, deduplicator/standardizer/validator use, event-queue
+conventions, email template design, security/revocation rules — is inherited
+verbatim from Core.
 
 Every framework AGENTS.md starts with:
 
@@ -2777,29 +2855,28 @@ Every framework AGENTS.md starts with:
 
 Frameworks and systems are orthogonal. A framework may publish:
 
-- Components registered in `src/components/systems/registry.ts` — a
-  system's menus can reference these.
+- Components registered in `src/components/systems/registry.ts` — a system's
+  menus can reference these.
 - API routes consumable by systems.
 - Event handlers and templates that systems publish events to.
-- Migrations creating new tables or extending existing ones (with the
-  usual `companyId` + `systemId` scoping when tenant-specific).
+- Migrations creating new tables or extending existing ones (with the usual
+  `companyId` + `systemId` scoping when tenant-specific).
 
 A framework **MUST NOT**:
 
 - Duplicate the Core file tree in a separate namespace.
 - Introduce a routing prefix that bypasses `withAuth` + `ctx.tenant`.
 - Read `companyId`/`systemId` from request bodies or cookies.
-- Break backwards compatibility with Core routes, tables, or contracts.
-  Additive changes only; renames require a full
-  migration-and-cleanup commit.
+- Break backwards compatibility with Core routes, tables, or contracts. Additive
+  changes only; renames require a full migration-and-cleanup commit.
 
 #### 26.4 Registration
 
-Frameworks opt into the build via `next.config.ts` (webpack aliases
-merging trees) and via `frameworks/index.ts` (imports each framework's
-side-effect modules: component registries, handler registries, migration
-metadata). Exactly one public entry per framework — a single
-`index.ts`. The Core's job starter imports them at boot.
+Frameworks opt into the build via `next.config.ts` (webpack aliases merging
+trees) and via `frameworks/index.ts` (imports each framework's side-effect
+modules: component registries, handler registries, migration metadata). Exactly
+one public entry per framework — a single `index.ts`. The Core's job starter
+imports them at boot.
 
 ---
 
@@ -2809,88 +2886,83 @@ metadata). Exactly one public entry per framework — a single
 
 Phases ordered by dependency. Each builds on the previous.
 
-**Phase 1 — Foundation.** Next.js 16 + TS strict; Tailwind 4.2 + CSS
-variables (§4); `src/contracts/`; `server/db/connection.ts` (§7.4);
-migration runner + all migration files (§8); seed runner +
-`001_superuser` + `002_default_settings` + `003_default_front_settings`;
-`Core` singleton + server-only guard; i18n skeleton with `en` and
-`pt-BR`. **Done when:** migrations run, superuser exists, Core loads.
+**Phase 1 — Foundation.** Next.js 16 + TS strict; Tailwind 4.2 + CSS variables
+(§4); `src/contracts/`; `server/db/connection.ts` (§7.4); migration runner + all
+migration files (§8); seed runner + `001_superuser` + `002_default_settings` +
+`003_default_front_settings`; `Core` singleton + server-only guard; i18n
+skeleton with `en` and `pt-BR`. **Done when:** migrations run, superuser exists,
+Core loads.
 
-**Phase 2 — Authentication.** `@panva/jose` token utilities; rate
-limiter; all `/api/auth/*` routes; `BotProtection`; auth pages (login,
-register w/ LGPD checkbox §25, verify, forgot-password, reset-password);
-verification-request system w/ cooldowns; terms-acceptance validation
-on register + public leads; `useAuth`; minimal event-queue foundation
-(`send_email` handler + verification/password-reset templates).
+**Phase 2 — Authentication.** `@panva/jose` token utilities; rate limiter; all
+`/api/auth/*` routes; `BotProtection`; auth pages (login, register w/ LGPD
+checkbox §25, verify, forgot-password, reset-password); verification-request
+system w/ cooldowns; terms-acceptance validation on register + public leads;
+`useAuth`; minimal event-queue foundation (`send_email` handler +
+verification/password-reset templates).
 
-**Phase 3 — Event Queue.** `publisher.ts`, `registry.ts`, `worker.ts`
-(claim, lease, backoff, dead-letter); `send_email` + `send_sms`
-handlers; templates (verification, password-reset); `start-event-queue`.
+**Phase 3 — Event Queue.** `publisher.ts`, `registry.ts`, `worker.ts` (claim,
+lease, backoff, dead-letter); `send_email` + `send_sms` handlers; templates
+(verification, password-reset); `start-event-queue`.
 
 **Phase 4 — Shared UI Components.** `Spinner`, `LocaleSelector`, `Modal`,
 `SearchField` (+ `useDebounce`), `GenericList` + `GenericListItem`,
-`CreateButton`/`EditButton`/`DeleteButton`, `FilterDropdown`,
-`DateRangeFilter`, `FilterBadge`, `FormModal`, `GenericFormButton`,
-`ErrorDisplay`, `FileUploadField`, `SearchableSelectField`,
-`DynamicKeyValueField`, `MultiBadgeField`, all subforms (§18.5),
-`DownloadData`, `SystemBranding`, `TagSearch`.
+`CreateButton`/`EditButton`/`DeleteButton`, `FilterDropdown`, `DateRangeFilter`,
+`FilterBadge`, `FormModal`, `GenericFormButton`, `ErrorDisplay`,
+`FileUploadField`, `SearchableSelectField`, `DynamicKeyValueField`,
+`MultiBadgeField`, all subforms (§18.5), `DownloadData`, `SystemBranding`,
+`TagSearch`.
 
-**Phase 5 — Core Admin Panel.** Middleware pipeline; core API routes
-(systems, roles, plans, vouchers, menus, terms, data-deletion,
-settings, front-settings, settings/missing); core queries; core UI
-pages (including `SystemForm` w/ `FileUploadField` logo,
-`MultiBadgeField` usage); `MenuTreeEditor` (§20.3); `SettingsEditor` +
-`FrontSettingsEditor`; `TermsEditor`; `DataDeletion`; public terms
-page; i18n keys for every label; component + menu registry.
+**Phase 5 — Core Admin Panel.** Middleware pipeline; core API routes (systems,
+roles, plans, vouchers, menus, terms, data-deletion, settings, front-settings,
+settings/missing); core queries; core UI pages (including `SystemForm` w/
+`FileUploadField` logo, `MultiBadgeField` usage); `MenuTreeEditor` (§20.3);
+`SettingsEditor` + `FrontSettingsEditor`; `TermsEditor`; `DataDeletion`; public
+terms page; i18n keys for every label; component + menu registry.
 
-**Phase 6 — Multi-Tenant User Flow & Subsystem Panel.** Onboarding
-pages (company creation, system-selection with rich plan cards);
-post-login onboarding guard (§18.8, §19.5); company API + queries;
-`Sidebar` + `SidebarMenuItem` + `SidebarSearch`; `ProfileMenu` with
-company/system switcher; `useSystemContext` w/ cookie persistence;
-`(app)` layout with system branding (Sidebar logo + name, never
-"Core"); menu loading per §18.8 (custom + hardcoded defaults w/ offset
+**Phase 6 — Multi-Tenant User Flow & Subsystem Panel.** Onboarding pages
+(company creation, system-selection with rich plan cards); post-login onboarding
+guard (§18.8, §19.5); company API + queries; `Sidebar` + `SidebarMenuItem` +
+`SidebarSearch`; `ProfileMenu` with company/system switcher; `useSystemContext`
+w/ cookie persistence; `(app)` layout with system branding (Sidebar logo + name,
+never "Core"); menu loading per §18.8 (custom + hardcoded defaults w/ offset
 `sortOrder`).
 
-**Phase 7 — Billing & Payment.** All `POST /api/billing` actions
-(§22.1); billing queries; client-side payment tokenization; server-side
-payment provider; `BillingPage`; plan cards (§18.10) shared between
-onboarding and billing.
+**Phase 7 — Billing & Payment.** All `POST /api/billing` actions (§22.1);
+billing queries; client-side payment tokenization; server-side payment provider;
+`BillingPage`; plan cards (§18.10) shared between onboarding and billing.
 
-**Phase 8 — Usage, Storage & Credit Tracking.** `credit_expense`
-migration; `credit-tracker.ts` (`trackCreditExpense` + `consumeCredits`);
-storage via `fs.readDir()`; `GET /api/usage`; `UsagePage` (storage bar
-chart, credit-expense column chart, `DateRangeFilter` max 31 days,
-summary table, **no API-call metric**).
+**Phase 8 — Usage, Storage & Credit Tracking.** `credit_expense` migration;
+`credit-tracker.ts` (`trackCreditExpense` + `consumeCredits`); storage via
+`fs.readDir()`; `GET /api/usage`; `UsagePage` (storage bar chart, credit-expense
+column chart, `DateRangeFilter` max 31 days, summary table, **no API-call
+metric**).
 
-**Phase 8.5 — Connected Apps, Tokens & Users CRUD.** `UsersPage` with
-invite flow; `TokensPage` (neverExpires/expiresAt exclusivity,
-frontendUse + frontendDomains, raw token once); `ConnectedAppsPage`
-(OAuth-only creation, revoke sets `revokedAt`); OAuth popup flow;
-spend-limit enforcement.
+**Phase 8.5 — Connected Apps, Tokens & Users CRUD.** `UsersPage` with invite
+flow; `TokensPage` (neverExpires/expiresAt exclusivity, frontendUse +
+frontendDomains, raw token once); `ConnectedAppsPage` (OAuth-only creation,
+revoke sets `revokedAt`); OAuth popup flow; spend-limit enforcement.
 
-**Phase 9 — Live Queries & Real-Time.** `client/db/connection.ts`
-(WebSocket); `useLiveQuery`; frontend query files with `LIVE SELECT` +
-proper `PERMISSIONS`; integration with UI.
+**Phase 9 — Live Queries & Real-Time.** `client/db/connection.ts` (WebSocket);
+`useLiveQuery`; frontend query files with `LIVE SELECT` + proper `PERMISSIONS`;
+integration with UI.
 
-**Phase 10 — Recurring Billing Job.** `recurring-billing.ts`;
-integration with `process_payment`; `past_due` + grace periods;
-`server/jobs/index.ts` starter.
+**Phase 10 — Recurring Billing Job.** `recurring-billing.ts`; integration with
+`process_payment`; `past_due` + grace periods; `server/jobs/index.ts` starter.
 
 ### 28. Technical Decisions & Trade-offs
 
-| Decision | Rationale |
-| --- | --- |
-| SurrealDB HTTP for backend, WebSocket for frontend | Serverless runtimes support HTTP; WebSocket is needed only for live queries in the browser. |
-| In-memory rate limiter | Serverless instances share no state; rate limits are per-instance approximations. Migrate to DB-backed counter for strict enforcement. |
-| Cursor-based pagination (never SKIP) | Stable performance regardless of dataset size; no missed/duplicated rows on concurrent writes. |
-| Event queue in SurrealDB (not external broker) | Reduces infra dependencies. Suitable for moderate throughput. Move to an external broker if throughput exceeds SurrealDB capacity. |
-| Core singleton with reload | Avoids repeated DB queries for config. Trade-off: briefly stale during reload. Acceptable for config data. |
-| Argon2 via SurrealDB built-in | Avoids native module dependencies. Password hashing/verification inside the DB. |
-| No custom CSS beyond variables | Enforces design consistency. Tailwind covers all styling. |
-| Emojis instead of icons | Zero icon-library dependency. |
-| `@panva/jose` for JWTs | Pure JS; works in all serverless runtimes. |
-| `react-chartjs-2` for charts | Flexible, well-documented; covers all chart needs. |
-| Token embeds the full Tenant | Single source of context for frontend + backend. Eliminates scattered `companyId`/`systemId`. Token exchange is the only context switch. |
-| Split Core vs FrontCore settings tables | Physical separation guarantees the frontend bundle cannot leak server-only secrets. |
-| Subframeworks live beside Core files | Avoids a separate namespace; keeps conventions uniform. A framework cannot be misrouted or mis-scoped against the Core. |
+| Decision                                           | Rationale                                                                                                                                |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| SurrealDB HTTP for backend, WebSocket for frontend | Serverless runtimes support HTTP; WebSocket is needed only for live queries in the browser.                                              |
+| In-memory rate limiter                             | Serverless instances share no state; rate limits are per-instance approximations. Migrate to DB-backed counter for strict enforcement.   |
+| Cursor-based pagination (never SKIP)               | Stable performance regardless of dataset size; no missed/duplicated rows on concurrent writes.                                           |
+| Event queue in SurrealDB (not external broker)     | Reduces infra dependencies. Suitable for moderate throughput. Move to an external broker if throughput exceeds SurrealDB capacity.       |
+| Core singleton with reload                         | Avoids repeated DB queries for config. Trade-off: briefly stale during reload. Acceptable for config data.                               |
+| Argon2 via SurrealDB built-in                      | Avoids native module dependencies. Password hashing/verification inside the DB.                                                          |
+| No custom CSS beyond variables                     | Enforces design consistency. Tailwind covers all styling.                                                                                |
+| Emojis instead of icons                            | Zero icon-library dependency.                                                                                                            |
+| `@panva/jose` for JWTs                             | Pure JS; works in all serverless runtimes.                                                                                               |
+| `react-chartjs-2` for charts                       | Flexible, well-documented; covers all chart needs.                                                                                       |
+| Token embeds the full Tenant                       | Single source of context for frontend + backend. Eliminates scattered `companyId`/`systemId`. Token exchange is the only context switch. |
+| Split Core vs FrontCore settings tables            | Physical separation guarantees the frontend bundle cannot leak server-only secrets.                                                      |
+| Subframeworks live beside Core files               | Avoids a separate namespace; keeps conventions uniform. A framework cannot be misrouted or mis-scoped against the Core.                  |

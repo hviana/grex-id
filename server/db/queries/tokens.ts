@@ -67,7 +67,7 @@ export async function createToken(data: {
   frontendDomains: string[];
 }): Promise<string> {
   const db = await getDb();
-  const result = await db.query<[ { id: string }[]]>(
+  const result = await db.query<[{ id: string }[]]>(
     `CREATE api_token SET
       userId = $userId,
       companyId = $companyId,

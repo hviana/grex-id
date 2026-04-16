@@ -24,8 +24,8 @@ export async function createTenantToken(
   const core = Core.getInstance();
   const expiryMinutes = stayLoggedIn
     ? Number(
-        await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
-      ) * 60
+      await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
+    ) * 60
     : Number(await core.getSetting("auth.token.expiry.minutes"));
 
   const jwt = await new jose.SignJWT({

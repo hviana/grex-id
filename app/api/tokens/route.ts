@@ -14,8 +14,7 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
 
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
-  let query =
-    `SELECT id, name, description, permissions, monthlySpendLimit,
+  let query = `SELECT id, name, description, permissions, monthlySpendLimit,
             neverExpires, expiresAt, frontendUse, frontendDomains,
             jti, createdAt
      FROM api_token WHERE revokedAt IS NONE`;

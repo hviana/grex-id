@@ -8,7 +8,10 @@ async function getHandler(req: NextRequest) {
   const frontCore = FrontCore.getInstance();
   await frontCore.load();
 
-  const settings: Record<string, { id: string; key: string; value: string; description: string }>[] = [];
+  const settings: Record<
+    string,
+    { id: string; key: string; value: string; description: string }
+  >[] = [];
   for (const [, setting] of frontCore.settings) {
     settings.push({
       id: setting.id,
@@ -28,7 +31,9 @@ async function getHandler(req: NextRequest) {
 
 async function putHandler(req: NextRequest) {
   const body = await req.json();
-  const { settings } = body as { settings: { key: string; value: string; description?: string }[] };
+  const { settings } = body as {
+    settings: { key: string; value: string; description?: string }[];
+  };
 
   if (!settings || !Array.isArray(settings)) {
     return NextResponse.json(
@@ -68,10 +73,16 @@ async function putHandler(req: NextRequest) {
   });
 }
 
-export const GET = compose(withAuth({ roles: ["superuser"] }), async (req, _ctx, next) => {
-  return getHandler(req as NextRequest);
-});
+export const GET = compose(
+  withAuth({ roles: ["superuser"] }),
+  async (req, _ctx, next) => {
+    return getHandler(req as NextRequest);
+  },
+);
 
-export const PUT = compose(withAuth({ roles: ["superuser"] }), async (req, _ctx, next) => {
-  return putHandler(req as NextRequest);
-});
+export const PUT = compose(
+  withAuth({ roles: ["superuser"] }),
+  async (req, _ctx, next) => {
+    return putHandler(req as NextRequest);
+  },
+);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyTenantToken, createTenantToken } from "@/server/utils/token";
+import { createTenantToken, verifyTenantToken } from "@/server/utils/token";
 import { isJtiRevoked } from "@/server/utils/token-revocation";
 import { getDb, rid } from "@/server/db/connection";
 
@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
 
     // Verify user still exists
     const db = await getDb();
-    const userResult = await db.query<[{ id: string; email: string; stayLoggedIn: boolean }[]]>(
+    const userResult = await db.query<
+      [{ id: string; email: string; stayLoggedIn: boolean }[]]
+    >(
       `SELECT id, email, stayLoggedIn FROM user WHERE id = $userId LIMIT 1`,
       { userId: rid(claims.actorId) },
     );

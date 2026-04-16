@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
 import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
+import type { RequestContext } from "@/src/contracts/auth";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest, _ctx: RequestContext) {
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId");
   const systemId = url.searchParams.get("systemId");
@@ -70,11 +73,11 @@ export async function GET(req: NextRequest) {
     } while (cursor);
   }
 
-  // Query: plan storage limit + voucher modifiers
+  // Query: plan storage limit + single voucher modifier
   const planResult = await db.query<
-    [{ storageLimitBytes: number; voucherIds: string[] }[]]
+    [{ storageLimitBytes: number; voucherId: string | null }[]]
   >(
-    `SELECT plan.storageLimitBytes AS storageLimitBytes, voucherIds
+    `SELECT plan.storageLimitBytes AS storageLimitBytes, voucherId
        FROM subscription
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
        LIMIT 1
@@ -88,20 +91,20 @@ export async function GET(req: NextRequest) {
   let storageLimitBytes = 1073741824; // 1GB default
   const subRow = (planResult[0] as unknown[])?.[0] as {
     storageLimitBytes?: number;
-    voucherIds?: string[];
+    voucherId?: string | null;
   } | undefined;
   if (subRow?.storageLimitBytes) {
     storageLimitBytes = subRow.storageLimitBytes;
   }
-  if (subRow?.voucherIds?.length) {
-    const voucherResult = await db.query<[{ total: number }[]]>(
-      `SELECT math::sum(storageLimitModifier) AS total FROM voucher
-         WHERE id IN $ids GROUP ALL`,
-      { ids: subRow.voucherIds },
+  if (subRow?.voucherId) {
+    const voucherResult = await db.query<[{ storageLimitModifier: number }[]]>(
+      `SELECT storageLimitModifier FROM voucher WHERE id = $id LIMIT 1`,
+      { id: subRow.voucherId },
     );
-    storageLimitBytes +=
-      ((voucherResult[0] as unknown[])?.[0] as { total?: number } | undefined)
-        ?.total ?? 0;
+    storageLimitBytes += ((voucherResult[0] as unknown[])?.[0] as
+      | { storageLimitModifier?: number }
+      | undefined)
+      ?.storageLimitModifier ?? 0;
   }
 
   // Query: credit expenses
@@ -134,3 +137,8 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+export const GET = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+);

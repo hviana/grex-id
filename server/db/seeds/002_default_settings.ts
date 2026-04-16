@@ -99,8 +99,7 @@ const defaults: DefaultSetting[] = [
   {
     key: "files.publicUpload.rateLimit.perMinute",
     value: "3",
-    description:
-      "Strict per-IP rate limit for unauthenticated file uploads",
+    description: "Strict per-IP rate limit for unauthenticated file uploads",
   },
   {
     key: "files.publicUpload.maxSizeBytes",

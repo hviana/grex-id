@@ -21,7 +21,7 @@ interface Subscription {
   status: string;
   currentPeriodStart: string;
   currentPeriodEnd: string;
-  voucherIds: VoucherInfo[]; // fetched from DB via FETCH
+  voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
 }
 
 interface PlanInfo {
@@ -136,17 +136,14 @@ export default function BillingPage() {
   const activeSub = subscriptions.find((s) => s.status === "active");
   const activePlan = activeSub ? planMap[activeSub.planId] : null;
 
-  // Compute effective discount from active vouchers (sum of positive priceModifiers)
-  const activeVouchers: VoucherInfo[] = (activeSub?.voucherIds ?? []).filter(
-    (v): v is VoucherInfo =>
-      typeof v === "object" &&
-      v !== null &&
-      (!v.expiresAt || new Date(v.expiresAt) > new Date()),
-  );
-  const totalVoucherDiscount = activeVouchers.reduce(
-    (sum, v) => sum + (v.priceModifier ?? 0),
-    0,
-  );
+  // Compute effective discount from active voucher (single voucher invariant §22.7)
+  const activeVoucher: VoucherInfo | null = activeSub?.voucherId &&
+      typeof activeSub.voucherId === "object" &&
+      (!activeSub.voucherId.expiresAt ||
+        new Date(activeSub.voucherId.expiresAt) > new Date())
+    ? activeSub.voucherId
+    : null;
+  const totalVoucherDiscount = activeVoucher?.priceModifier ?? 0;
 
   const effectivePrice = (basePrice: number) =>
     Math.max(0, basePrice - totalVoucherDiscount);
@@ -416,28 +413,29 @@ export default function BillingPage() {
                 </div>
               </div>
 
-              {/* Active vouchers */}
-              {activeVouchers.length > 0 && (
+              {/* Active voucher */}
+              {activeVoucher && (
                 <div className="mb-3 flex flex-wrap gap-2">
-                  {activeVouchers.map((v) => (
-                    <span
-                      key={v.id}
-                      className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
-                    >
-                      🏷️ {v.code} {v.priceModifier > 0
-                        ? `(-${
-                          formatPrice(v.priceModifier, activePlan.currency)
-                        })`
-                        : v.priceModifier < 0
-                        ? `(+${
-                          formatPrice(
-                            Math.abs(v.priceModifier),
-                            activePlan.currency,
-                          )
-                        })`
-                        : ""}
-                    </span>
-                  ))}
+                  <span
+                    key={activeVoucher.id}
+                    className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
+                  >
+                    🏷️ {activeVoucher.code} {activeVoucher.priceModifier > 0
+                      ? `(-${
+                        formatPrice(
+                          activeVoucher.priceModifier,
+                          activePlan.currency,
+                        )
+                      })`
+                      : activeVoucher.priceModifier < 0
+                      ? `(+${
+                        formatPrice(
+                          Math.abs(activeVoucher.priceModifier),
+                          activePlan.currency,
+                        )
+                      })`
+                      : ""}
+                  </span>
                 </div>
               )}
 
@@ -904,30 +902,25 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* Applied vouchers list */}
-        {activeVouchers.length > 0 && (
+        {/* Applied voucher */}
+        {activeVoucher && (
           <div className="mt-4 border-t border-[var(--color-dark-gray)] pt-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)] mb-2">
               {t("billing.voucher.applied")}
             </p>
             <div className="flex flex-wrap gap-2">
-              {activeVouchers.map((v) => (
-                <span
-                  key={v.id}
-                  className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-3 py-1 rounded-full"
-                >
-                  🏷️ {v.code}
-                  {v.priceModifier !== 0 && activePlan && (
-                    <span className="ml-1 opacity-70">
-                      {v.priceModifier > 0 ? "-" : "+"}
-                      {formatPrice(
-                        Math.abs(v.priceModifier),
-                        activePlan.currency,
-                      )}
-                    </span>
-                  )}
-                </span>
-              ))}
+              <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-3 py-1 rounded-full">
+                🏷️ {activeVoucher.code}
+                {activeVoucher.priceModifier !== 0 && activePlan && (
+                  <span className="ml-1 opacity-70">
+                    {activeVoucher.priceModifier > 0 ? "-" : "+"}
+                    {formatPrice(
+                      Math.abs(activeVoucher.priceModifier),
+                      activePlan.currency,
+                    )}
+                  </span>
+                )}
+              </span>
             </div>
           </div>
         )}

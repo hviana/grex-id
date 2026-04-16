@@ -6,8 +6,8 @@ export function withRateLimit(config: RateLimitConfig): Middleware {
     const forwarded = req.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
 
-    const key = ctx.companyId && ctx.systemId
-      ? `${ctx.companyId}:${ctx.systemId}`
+    const key = ctx.tenant.companyId && ctx.tenant.systemId
+      ? `${ctx.tenant.companyId}:${ctx.tenant.systemId}`
       : `ip:${ip}`;
 
     const result = checkRateLimit(key, config);

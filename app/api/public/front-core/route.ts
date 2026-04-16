@@ -10,7 +10,8 @@ export async function GET() {
     const frontCore = FrontCore.getInstance();
     await frontCore.load();
 
-    const settingsMap: Record<string, { value: string; description: string }> = {};
+    const settingsMap: Record<string, { value: string; description: string }> =
+      {};
     for (const [key, setting] of frontCore.settings) {
       settingsMap[key] = {
         value: setting.value,

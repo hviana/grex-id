@@ -3,20 +3,20 @@ import { getDb } from "../db/connection.ts";
 
 export function withPlanAccess(featureNames: string[]): Middleware {
   return async (_req, ctx, next) => {
-    if (!ctx.companyId || !ctx.systemId) {
+    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
       return Response.json(
         {
           success: false,
           error: {
             code: "BAD_REQUEST",
-            message: "Company and system context required",
+            message: "common.error.scopeMismatch",
           },
         },
         { status: 400 },
       );
     }
 
-    if (ctx.roles.includes("superuser")) {
+    if (ctx.tenant.roles.includes("superuser")) {
       return next();
     }
 
@@ -28,7 +28,7 @@ export function withPlanAccess(featureNames: string[]): Middleware {
       `SELECT planId, status, currentPeriodEnd FROM subscription
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
        LIMIT 1`,
-      { companyId: ctx.companyId, systemId: ctx.systemId },
+      { companyId: ctx.tenant.companyId, systemId: ctx.tenant.systemId },
     );
 
     const sub = subs[0]?.[0];
@@ -38,7 +38,7 @@ export function withPlanAccess(featureNames: string[]): Middleware {
           success: false,
           error: {
             code: "NO_SUBSCRIPTION",
-            message: "No active subscription found",
+            message: "billing.error.noSubscription",
           },
         },
         { status: 403 },
@@ -51,7 +51,7 @@ export function withPlanAccess(featureNames: string[]): Middleware {
           success: false,
           error: {
             code: "SUBSCRIPTION_EXPIRED",
-            message: "Subscription period has ended",
+            message: "billing.error.subscriptionExpired",
           },
         },
         { status: 403 },
@@ -72,7 +72,7 @@ export function withPlanAccess(featureNames: string[]): Middleware {
             success: false,
             error: {
               code: "PLAN_LIMIT",
-              message: "This feature is not included in your plan",
+              message: "billing.error.planLimit",
             },
           },
           { status: 403 },

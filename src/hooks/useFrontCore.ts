@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface FrontCoreState {
   settings: Map<string, string>;
@@ -25,9 +25,11 @@ export function useFrontCore() {
       const json = await res.json();
       if (json.success && json.data) {
         const map = new Map<string, string>();
-        for (const [key, setting] of Object.entries(
-          json.data as Record<string, { value: string }>,
-        )) {
+        for (
+          const [key, setting] of Object.entries(
+            json.data as Record<string, { value: string }>,
+          )
+        ) {
           map.set(key, setting.value);
         }
         cachedSettings = map;

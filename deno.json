@@ -14,6 +14,11 @@
   },
   "allowScripts": {
     "allow": [],
-    "deny": ["npm:esbuild@0.27.3", "npm:sharp@0.34.5", "npm:unrs-resolver@1.11.1", "npm:workerd@1.20260409.1"]
+    "deny": [
+      "npm:esbuild@0.27.3",
+      "npm:sharp@0.34.5",
+      "npm:unrs-resolver@1.11.1",
+      "npm:workerd@1.20260409.1"
+    ]
   }
 }

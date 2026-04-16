@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, rid } from "@/server/db/connection";
-import { createSystemToken, verifySystemToken } from "@/server/utils/token";
+import {
+  generateSecureToken,
+  hashToken,
+  verifyTenantToken,
+} from "@/server/utils/token";
 import { standardizeField } from "@/server/utils/field-standardizer";
 
 /**
@@ -29,9 +33,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let payload: Awaited<ReturnType<typeof verifySystemToken>>;
+  let payload: Awaited<ReturnType<typeof verifyTenantToken>>;
   try {
-    payload = await verifySystemToken(authHeader.slice(7));
+    payload = await verifyTenantToken(authHeader.slice(7));
   } catch {
     return NextResponse.json(
       {
@@ -89,20 +93,11 @@ export async function POST(req: NextRequest) {
     ? permissions
     : [];
 
-  const userId = payload.userId as string;
+  const userId = payload.actorId;
 
-  // Generate a raw token for the connected app
-  const rawToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  // Hash the token for storage
-  const encoder = new TextEncoder();
-  const data = encoder.encode(rawToken);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const tokenHash = Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  // Generate a raw token for the connected app and hash it for storage
+  const rawToken = generateSecureToken();
+  const tokenHash = await hashToken(rawToken);
 
   // Single batched query: create connected_app + api_token
   const result = await db.query<

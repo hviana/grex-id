@@ -76,7 +76,9 @@ export function getCorsHeaders(
   const origin = req.headers.get("Origin");
   if (!origin || claims.actorType === "user") return {};
 
-  if (apiToken?.frontendUse && (apiToken.frontendDomains ?? []).includes(origin)) {
+  if (
+    apiToken?.frontendUse && (apiToken.frontendDomains ?? []).includes(origin)
+  ) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Credentials": "true",

@@ -85,7 +85,11 @@ async function postHandler(req: NextRequest, _ctx: RequestContext) {
       applicablePlanIds = $applicablePlanIds,
       priceModifier = $priceModifier,
       permissions = $permissions,
-      ${hasEntityLimitModifiers ? "entityLimitModifiers = $entityLimitModifiers," : ""}
+      ${
+      hasEntityLimitModifiers
+        ? "entityLimitModifiers = $entityLimitModifiers,"
+        : ""
+    }
       apiRateLimitModifier = $apiRateLimitModifier,
       storageLimitModifier = $storageLimitModifier,
       expiresAt = $expiresAt`,
@@ -194,8 +198,7 @@ async function putHandler(req: NextRequest, _ctx: RequestContext) {
 
   // Auto-removal cascade: if applicablePlanIds was updated and is non-empty,
   // strip voucherId from subscriptions whose planId is no longer in the list
-  const shouldCascade =
-    applicablePlanIds !== undefined &&
+  const shouldCascade = applicablePlanIds !== undefined &&
     Array.isArray(applicablePlanIds) &&
     applicablePlanIds.length > 0;
 

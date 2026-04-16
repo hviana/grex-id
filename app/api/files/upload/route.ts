@@ -50,11 +50,11 @@ async function tryGetAuth(
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
-    const { verifySystemToken } = await import("@/server/utils/token");
-    const payload = await verifySystemToken(authHeader.slice(7));
-    if (payload?.userId) {
+    const { verifyTenantToken } = await import("@/server/utils/token");
+    const payload = await verifyTenantToken(authHeader.slice(7));
+    if (payload?.actorId) {
       return {
-        userId: payload.userId as string,
+        userId: payload.actorId as string,
         companyId: payload.companyId as string | undefined,
         roles: (payload.roles as string[]) ?? [],
       };

@@ -113,7 +113,13 @@ export async function POST(req: NextRequest) {
   // Resolve the user's first company+system membership for the initial tenant
   const db = await getDb();
   const membership = await db.query<
-    [{ companyId: string; systemId: string; systemSlug: string; roles: string[]; permissions: string[] }[]]
+    [{
+      companyId: string;
+      systemId: string;
+      systemSlug: string;
+      roles: string[];
+      permissions: string[];
+    }[]]
   >(
     `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
      IF array::len($ucs) > 0 {
@@ -135,19 +141,19 @@ export async function POST(req: NextRequest) {
   const mem = membership[0]?.[0];
   const tenant = mem
     ? {
-        systemId: String(mem.systemId),
-        companyId: String(mem.companyId),
-        systemSlug: mem.systemSlug ?? "core",
-        roles: (mem.roles ?? []) as string[],
-        permissions: (mem.permissions ?? []) as string[],
-      }
+      systemId: String(mem.systemId),
+      companyId: String(mem.companyId),
+      systemSlug: mem.systemSlug ?? "core",
+      roles: (mem.roles ?? []) as string[],
+      permissions: (mem.permissions ?? []) as string[],
+    }
     : {
-        systemId: "0",
-        companyId: "0",
-        systemSlug: "core",
-        roles: [] as string[],
-        permissions: [] as string[],
-      };
+      systemId: "0",
+      companyId: "0",
+      systemSlug: "core",
+      roles: [] as string[],
+      permissions: [] as string[],
+    };
 
   // Superuser detection from user.roles (global)
   const isSuperuser = (user.roles ?? []).includes("superuser");

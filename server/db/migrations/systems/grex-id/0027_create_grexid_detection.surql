@@ -1,3 +1,4 @@
+-- Grex-ID uses the shared location table
 DEFINE TABLE grexid_detection SCHEMAFULL;
 DEFINE FIELD locationId  ON grexid_detection TYPE record<location>;
 DEFINE FIELD leadId      ON grexid_detection TYPE option<record<lead>>;

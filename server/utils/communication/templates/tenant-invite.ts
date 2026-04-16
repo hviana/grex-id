@@ -56,10 +56,12 @@ export function tenantInviteTemplate(
     <!-- Summary -->
     <tr>
       <td style="padding: 0 0 28px 0; font-size: 14px; line-height: 1.7; color: #aaaaaa; text-align: center;">
-        ${t("templates.tenantInvite.body", locale, {
-          inviterName: data.inviterName,
-          companyName: data.companyName,
-        })}
+        ${
+    t("templates.tenantInvite.body", locale, {
+      inviterName: data.inviterName,
+      companyName: data.companyName,
+    })
+  }
       </td>
     </tr>
 
@@ -173,7 +175,9 @@ export function tenantInviteTemplate(
       <td style="padding: 0 0 24px 0; text-align: center;">
         <a href="${data.loginUrl}" target="_blank" style="display: inline-block; padding: 16px 48px; background: linear-gradient(135deg, #02d07d 0%, #00ccff 100%); color: #000000; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 10px; letter-spacing: 0.3px; mso-padding-alt: 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
           <!--[if mso]><i style="mso-font-width: 200%; mso-text-raise: 21pt;">&nbsp;</i><![endif]-->
-          <span style="mso-text-raise: 10pt;">${t("templates.tenantInvite.cta", locale)}</span>
+          <span style="mso-text-raise: 10pt;">${
+    t("templates.tenantInvite.cta", locale)
+  }</span>
           <!--[if mso]><i style="mso-font-width: 200%;">&nbsp;</i><![endif]-->
         </a>
       </td>
@@ -186,7 +190,9 @@ export function tenantInviteTemplate(
           <tr>
             <td style="padding: 14px 24px; background-color: rgba(2, 208, 125, 0.06); border: 1px solid rgba(2, 208, 125, 0.12); border-radius: 10px;">
               <span style="font-size: 13px; line-height: 1.5; color: #02d07d;">
-                &#x2139;&#xFE0F; ${t("templates.tenantInvite.existingAccountNote", locale)}
+                &#x2139;&#xFE0F; ${
+    t("templates.tenantInvite.existingAccountNote", locale)
+  }
               </span>
             </td>
           </tr>

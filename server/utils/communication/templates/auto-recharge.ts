@@ -49,7 +49,9 @@ export function autoRechargeTemplate(
     <!-- Summary -->
     <tr>
       <td style="padding: 0 0 28px 0; font-size: 14px; line-height: 1.7; color: #aaaaaa; text-align: center;">
-        ${t("templates.autoRecharge.body", locale, { systemName: data.systemName })}
+        ${
+    t("templates.autoRecharge.body", locale, { systemName: data.systemName })
+  }
       </td>
     </tr>
 
@@ -149,7 +151,9 @@ export function autoRechargeTemplate(
       <td style="padding: 0 0 24px 0; text-align: center;">
         <a href="${data.billingUrl}" target="_blank" style="display: inline-block; padding: 16px 48px; background: linear-gradient(135deg, #02d07d 0%, #00ccff 100%); color: #000000; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 10px; letter-spacing: 0.3px; mso-padding-alt: 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
           <!--[if mso]><i style="mso-font-width: 200%; mso-text-raise: 21pt;">&nbsp;</i><![endif]-->
-          <span style="mso-text-raise: 10pt;">${t("templates.autoRecharge.cta", locale)}</span>
+          <span style="mso-text-raise: 10pt;">${
+    t("templates.autoRecharge.cta", locale)
+  }</span>
           <!--[if mso]><i style="mso-font-width: 200%;">&nbsp;</i><![endif]-->
         </a>
       </td>
@@ -162,7 +166,9 @@ export function autoRechargeTemplate(
           <tr>
             <td style="padding: 14px 24px; background-color: rgba(0, 204, 255, 0.06); border: 1px solid rgba(0, 204, 255, 0.15); border-radius: 10px;">
               <span style="font-size: 13px; line-height: 1.5; color: #00ccff;">
-                &#x2139;&#xFE0F; ${t("templates.autoRecharge.disableHint", locale)}
+                &#x2139;&#xFE0F; ${
+    t("templates.autoRecharge.disableHint", locale)
+  }
               </span>
             </td>
           </tr>

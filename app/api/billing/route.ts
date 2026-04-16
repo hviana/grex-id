@@ -375,7 +375,10 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       return NextResponse.json(
         {
           success: false,
-          error: { code: "NOT_FOUND", message: "billing.voucher.error.invalid" },
+          error: {
+            code: "NOT_FOUND",
+            message: "billing.voucher.error.invalid",
+          },
         },
         { status: 404 },
       );
@@ -415,7 +418,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     // Check applicablePlanIds (empty = valid for all plans)
     const applicablePlanIds = voucher.applicablePlanIds as string[];
     if (applicablePlanIds && applicablePlanIds.length > 0) {
-      const sub = await db.query<[ { planId: string }[] ]>(
+      const sub = await db.query<[{ planId: string }[]]>(
         `SELECT planId FROM subscription
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
          LIMIT 1`,
@@ -562,12 +565,10 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
 
 export const GET = compose(
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx, next) =>
-    getHandler(req as NextRequest, _ctx),
+  async (req, _ctx, next) => getHandler(req as NextRequest, _ctx),
 );
 
 export const POST = compose(
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx, next) =>
-    postHandler(req as NextRequest, _ctx),
+  async (req, _ctx, next) => postHandler(req as NextRequest, _ctx),
 );

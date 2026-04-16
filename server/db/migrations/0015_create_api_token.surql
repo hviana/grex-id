@@ -7,8 +7,16 @@ DEFINE FIELD description     ON api_token TYPE option<string>;
 DEFINE FIELD tokenHash       ON api_token TYPE string;
 DEFINE FIELD permissions     ON api_token TYPE array<string>;
 DEFINE FIELD monthlySpendLimit ON api_token TYPE option<int>;
+DEFINE FIELD tenant         ON api_token TYPE option<object> FLEXIBLE;
+DEFINE FIELD jti            ON api_token TYPE option<string>;
+DEFINE FIELD neverExpires   ON api_token TYPE option<bool> DEFAULT false;
+DEFINE FIELD frontendUse    ON api_token TYPE option<bool> DEFAULT false;
+DEFINE FIELD frontendDomains ON api_token TYPE option<array<string>> DEFAULT [];
+DEFINE FIELD revokedAt      ON api_token TYPE option<datetime>;
 DEFINE FIELD expiresAt       ON api_token TYPE option<datetime>;
 DEFINE FIELD createdAt       ON api_token TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_at_hash           ON api_token FIELDS tokenHash UNIQUE;
 DEFINE INDEX idx_at_user_company   ON api_token FIELDS userId, companyId, systemId;
+DEFINE INDEX idx_at_jti            ON api_token FIELDS jti UNIQUE;
+DEFINE INDEX idx_at_revoked        ON api_token FIELDS revokedAt;

@@ -19,20 +19,21 @@ import {
 } from "@/server/db/queries/leads";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { getAnonymousTenant } from "@/server/utils/tenant";
 
 const pipeline = compose(
   withRateLimit({ windowMs: 60000, maxRequests: 60 }),
   withAuth(),
 );
 
-export async function GET(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
+function initialCtx(): RequestContext {
+  return {
+    tenant: getAnonymousTenant("core"),
   };
+}
+
+export async function GET(req: NextRequest) {
+  const ctx: RequestContext = initialCtx();
 
   return pipeline(req, ctx, async () => {
     const url = new URL(req.url);
@@ -41,8 +42,8 @@ export async function GET(req: NextRequest) {
     const limit = Number(url.searchParams.get("limit") ?? "20");
     const action = url.searchParams.get("action");
 
-    const companyId = url.searchParams.get("companyId") || ctx.companyId;
-    const systemId = url.searchParams.get("systemId") || ctx.systemId;
+    const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
+    const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
 
     if (action === "search-owners") {
       const q = url.searchParams.get("q") ?? "";
@@ -73,18 +74,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+  const ctx: RequestContext = initialCtx();
 
   return pipeline(req, ctx, async () => {
     const body = await req.json();
-    const companyId = body.companyId || ctx.companyId;
-    const systemId = body.systemId || ctx.systemId;
+    const companyId = body.companyId || ctx.tenant.companyId;
+    const systemId = body.systemId || ctx.tenant.systemId;
     const inferredCompanyIds = companyId ? [companyId] : [];
     const { profile, ownerId } = body;
     const email = body.email
@@ -200,18 +195,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+  const ctx: RequestContext = initialCtx();
 
   return pipeline(req, ctx, async () => {
     const body = await req.json();
-    const companyId = body.companyId || ctx.companyId;
-    const systemId = body.systemId || ctx.systemId;
+    const companyId = body.companyId || ctx.tenant.companyId;
+    const systemId = body.systemId || ctx.tenant.systemId;
     const { id, profile, ownerId } = body;
     const email = body.email
       ? standardizeField("email", body.email, "lead")
@@ -264,13 +253,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+  const ctx: RequestContext = initialCtx();
 
   return pipeline(req, ctx, async () => {
     const url = new URL(req.url);
@@ -286,8 +269,8 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const companyId = url.searchParams.get("companyId") || ctx.companyId;
-    const systemId = url.searchParams.get("systemId") || ctx.systemId;
+    const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
+    const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
     await removeLeadFromCompanySystem(id, companyId, systemId);
     return NextResponse.json({ success: true });
   });

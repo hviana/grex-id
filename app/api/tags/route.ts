@@ -14,165 +14,148 @@ import {
   updateTag,
 } from "@/server/db/queries/tags";
 
-const pipeline = compose(
+async function getHandler(req: NextRequest, ctx: RequestContext) {
+  const url = new URL(req.url);
+  const search = url.searchParams.get("search");
+
+  if (search) {
+    const tags = await searchTags(
+      ctx.tenant.companyId,
+      ctx.tenant.systemId,
+      search,
+    );
+    return NextResponse.json({ success: true, data: tags });
+  }
+
+  const tags = await listTags(ctx.tenant.companyId, ctx.tenant.systemId);
+  return NextResponse.json({ success: true, data: tags });
+}
+
+async function postHandler(req: NextRequest, ctx: RequestContext) {
+  const body = await req.json();
+  const name = body.name
+    ? standardizeField("name", body.name, "tag")
+    : undefined;
+  const color = body.color?.trim() ?? "";
+
+  const nameErrors = validateField("name", name, "tag");
+  if (nameErrors.length > 0) {
+    return NextResponse.json(
+      { success: false, error: { code: "VALIDATION", errors: nameErrors } },
+      { status: 400 },
+    );
+  }
+
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.color.invalid"],
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const dup = await checkDuplicates("tag", [
+    { field: "name", value: name },
+  ]);
+  if (dup.isDuplicate) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { code: "DUPLICATE", message: "validation.tag.duplicate" },
+      },
+      { status: 409 },
+    );
+  }
+
+  const tag = await createTag({
+    name: name!,
+    color,
+    companyId: ctx.tenant.companyId,
+    systemId: ctx.tenant.systemId,
+  });
+
+  return NextResponse.json({ success: true, data: tag }, { status: 201 });
+}
+
+async function putHandler(req: NextRequest, _ctx: RequestContext) {
+  const body = await req.json();
+  const { id } = body;
+
+  if (!id) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { code: "VALIDATION", message: "validation.id.required" },
+      },
+      { status: 400 },
+    );
+  }
+
+  const name = body.name
+    ? standardizeField("name", body.name, "tag")
+    : undefined;
+  const color = body.color?.trim();
+
+  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.color.invalid"],
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const tag = await updateTag(id, { name, color });
+  return NextResponse.json({ success: true, data: tag });
+}
+
+async function deleteHandler(req: NextRequest, _ctx: RequestContext) {
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id") ?? "";
+
+  if (!id) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: { code: "VALIDATION", message: "validation.id.required" },
+      },
+      { status: 400 },
+    );
+  }
+
+  await deleteTag(id);
+  return NextResponse.json({ success: true });
+}
+
+export const GET = compose(
   withRateLimit({ windowMs: 60000, maxRequests: 60 }),
-  withAuth(),
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
 );
 
-export async function GET(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
+export const POST = compose(
+  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => postHandler(req as NextRequest, _ctx),
+);
 
-  return pipeline(req, ctx, async () => {
-    const url = new URL(req.url);
-    const search = url.searchParams.get("search");
+export const PUT = compose(
+  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => putHandler(req as NextRequest, _ctx),
+);
 
-    if (search) {
-      const tags = await searchTags(ctx.companyId, ctx.systemId, search);
-      return NextResponse.json({ success: true, data: tags });
-    }
-
-    const tags = await listTags(ctx.companyId, ctx.systemId);
-    return NextResponse.json({ success: true, data: tags });
-  });
-}
-
-export async function POST(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
-
-  return pipeline(req, ctx, async () => {
-    const body = await req.json();
-    const name = body.name
-      ? standardizeField("name", body.name, "tag")
-      : undefined;
-    const color = body.color?.trim() ?? "";
-
-    const nameErrors = validateField("name", name, "tag");
-    if (nameErrors.length > 0) {
-      return NextResponse.json(
-        { success: false, error: { code: "VALIDATION", errors: nameErrors } },
-        { status: 400 },
-      );
-    }
-
-    if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            errors: ["validation.color.invalid"],
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    const dup = await checkDuplicates("tag", [
-      { field: "name", value: name },
-    ]);
-    if (dup.isDuplicate) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "DUPLICATE", message: "validation.tag.duplicate" },
-        },
-        { status: 409 },
-      );
-    }
-
-    const tag = await createTag({
-      name: name!,
-      color,
-      companyId: ctx.companyId,
-      systemId: ctx.systemId,
-    });
-
-    return NextResponse.json({ success: true, data: tag }, { status: 201 });
-  });
-}
-
-export async function PUT(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
-
-  return pipeline(req, ctx, async () => {
-    const body = await req.json();
-    const { id } = body;
-
-    if (!id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "VALIDATION", message: "validation.id.required" },
-        },
-        { status: 400 },
-      );
-    }
-
-    const name = body.name
-      ? standardizeField("name", body.name, "tag")
-      : undefined;
-    const color = body.color?.trim();
-
-    if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            errors: ["validation.color.invalid"],
-          },
-        },
-        { status: 400 },
-      );
-    }
-
-    const tag = await updateTag(id, { name, color });
-    return NextResponse.json({ success: true, data: tag });
-  });
-}
-
-export async function DELETE(req: NextRequest) {
-  const ctx: RequestContext = {
-    userId: "",
-    companyId: "",
-    systemId: "",
-    roles: [],
-    permissions: [],
-  };
-
-  return pipeline(req, ctx, async () => {
-    const url = new URL(req.url);
-    const id = url.searchParams.get("id") ?? "";
-
-    if (!id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "VALIDATION", message: "validation.id.required" },
-        },
-        { status: 400 },
-      );
-    }
-
-    await deleteTag(id);
-    return NextResponse.json({ success: true });
-  });
-}
+export const DELETE = compose(
+  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => deleteHandler(req as NextRequest, _ctx),
+);

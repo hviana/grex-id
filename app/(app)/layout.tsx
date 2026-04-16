@@ -154,7 +154,8 @@ function findFirstComponent(items: MenuItem[]): string | null {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { systemToken, tenant, exchangeTenant, loading: authLoading } = useAuth();
+  const { systemToken, tenant, exchangeTenant, loading: authLoading } =
+    useAuth();
   const ctx = useSystemContextProvider();
   const { t, setLocale } = useLocale();
   const [menus, setMenus] = useState<MenuItem[]>([]);
@@ -333,7 +334,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
 
         // Load plan
-        const plan = await loadPlan(activeCompanyId, activeSys.id, systemToken!);
+        const plan = await loadPlan(
+          activeCompanyId,
+          activeSys.id,
+          systemToken!,
+        );
         if (cancelled) return;
         ctx.setPlan(plan);
 
@@ -408,7 +413,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           if (cancelled) return;
 
-          const plan = await loadPlan(ctx.companyId!, firstSys.id, systemToken!);
+          const plan = await loadPlan(
+            ctx.companyId!,
+            firstSys.id,
+            systemToken!,
+          );
           ctx.setPlan(plan);
 
           const tree = await loadMenus(
@@ -452,7 +461,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         if (cancelled) return;
 
-        const plan = await loadPlan(ctx.companyId!, ctx.systemId!, systemToken!);
+        const plan = await loadPlan(
+          ctx.companyId!,
+          ctx.systemId!,
+          systemToken!,
+        );
         ctx.setPlan(plan);
 
         const tree = await loadMenus(

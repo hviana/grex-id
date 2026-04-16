@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
-import { verifySystemToken } from "@/server/utils/token";
+import { verifyTenantToken } from "@/server/utils/token";
 import { updateUserLocale } from "@/server/db/queries/users";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -38,14 +38,14 @@ export async function GET(req: NextRequest) {
       );
     }
     try {
-      const payload = await verifySystemToken(token);
+      const payload = await verifyTenantToken(token);
       const db = await getDb();
       const result = await db.query<[{ roles: string[] }[]]>(
         `SELECT roles FROM user_company_system
          WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
          LIMIT 1`,
         {
-          userId: rid(payload.userId),
+          userId: rid(payload.actorId),
           companyId: rid(companyId),
           systemId: rid(systemId),
         },
@@ -285,7 +285,7 @@ export async function PUT(req: NextRequest) {
     }
     let tokenPayload;
     try {
-      tokenPayload = await verifySystemToken(authHeader.slice(7));
+      tokenPayload = await verifyTenantToken(authHeader.slice(7));
     } catch {
       return NextResponse.json(
         {
@@ -308,7 +308,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    await updateUserLocale(tokenPayload.userId as string, locale);
+    await updateUserLocale(tokenPayload.actorId as string, locale);
     return NextResponse.json({ success: true });
   }
 
@@ -326,7 +326,7 @@ export async function PUT(req: NextRequest) {
     }
     let tokenPayload;
     try {
-      tokenPayload = await verifySystemToken(authHeader.slice(7));
+      tokenPayload = await verifyTenantToken(authHeader.slice(7));
     } catch {
       return NextResponse.json(
         {
@@ -339,7 +339,7 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
     const { name, phone, avatarUri, age } = body;
-    const userId = tokenPayload.userId;
+    const userId = tokenPayload.actorId;
     const db = await getDb();
 
     const profileSets: string[] = ["updatedAt = time::now()"];

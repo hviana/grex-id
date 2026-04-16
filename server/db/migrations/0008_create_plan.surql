@@ -10,6 +10,7 @@ DEFINE FIELD permissions      ON plan TYPE array<string>;
 DEFINE FIELD entityLimits     ON plan TYPE option<object> FLEXIBLE;
 DEFINE FIELD apiRateLimit     ON plan TYPE int DEFAULT 1000;
 DEFINE FIELD storageLimitBytes ON plan TYPE int DEFAULT 1073741824;
+DEFINE FIELD planCredits      ON plan TYPE int DEFAULT 0;
 DEFINE FIELD isActive         ON plan TYPE bool DEFAULT true;
 DEFINE FIELD createdAt        ON plan TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt        ON plan TYPE datetime DEFAULT time::now();

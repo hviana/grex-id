@@ -5,10 +5,7 @@ import type { ApiToken } from "@/src/contracts/token.ts";
 import { hashToken, verifyTenantToken } from "../utils/token.ts";
 import { findTokenByHash } from "../db/queries/tokens.ts";
 import { isJtiRevoked } from "../utils/token-revocation.ts";
-import {
-  enforceCors,
-  getCorsHeaders,
-} from "../utils/cors.ts";
+import { enforceCors, getCorsHeaders } from "../utils/cors.ts";
 import { getAnonymousTenant } from "../utils/tenant.ts";
 
 function isLikelyJwt(token: string): boolean {
@@ -90,8 +87,8 @@ export function withAuth(
       // Determine system slug from URL if possible
       const url = new URL(req.url);
       const systemSlug = url.pathname.startsWith("/api/core/") ||
-        url.pathname.startsWith("/api/auth/") ||
-        url.pathname.startsWith("/api/public/")
+          url.pathname.startsWith("/api/auth/") ||
+          url.pathname.startsWith("/api/public/")
         ? "core"
         : url.searchParams.get("systemSlug") ?? "core";
 
@@ -197,8 +194,8 @@ export function withAuth(
           ),
           systemSlug: apiToken.tenant?.systemSlug ?? "",
           roles: apiToken.tenant?.roles ?? [],
-          permissions:
-            apiToken.tenant?.permissions ?? apiToken.permissions ?? [],
+          permissions: apiToken.tenant?.permissions ?? apiToken.permissions ??
+            [],
           actorType: "api_token",
           actorId: String(apiToken.id),
           jti: apiToken.jti ?? "",
@@ -228,14 +225,15 @@ export function withAuth(
 
       // Role check
       if (options?.roles && options.roles.length > 0) {
-        const hasRole = options.roles.some((r) =>
-          ctx.tenant.roles.includes(r)
-        );
+        const hasRole = options.roles.some((r) => ctx.tenant.roles.includes(r));
         if (!hasRole) {
           return Response.json(
             {
               success: false,
-              error: { code: "FORBIDDEN", message: "auth.error.insufficientRole" },
+              error: {
+                code: "FORBIDDEN",
+                message: "auth.error.insufficientRole",
+              },
             },
             { status: 403 },
           );
@@ -245,9 +243,7 @@ export function withAuth(
       // Permission check
       if (options?.permissions && options.permissions.length > 0) {
         const hasPermission = ctx.tenant.permissions.includes("*") ||
-          options.permissions.some((p) =>
-            ctx.tenant.permissions.includes(p)
-          );
+          options.permissions.some((p) => ctx.tenant.permissions.includes(p));
         if (!hasPermission) {
           return Response.json(
             {
