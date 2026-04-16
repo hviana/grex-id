@@ -1,16 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb, rid } from "@/server/db/connection";
-import { generateSecureToken, hashToken } from "@/server/utils/token";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
-import { revokeToken } from "@/server/db/queries/tokens";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
+import { getDb, rid } from "@/server/db/connection";
+import { generateSecureToken, hashToken } from "@/server/utils/token";
+import { revokeToken } from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
 
-async function getHandler(req: NextRequest, ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const userId = url.searchParams.get("userId");
-  const companyId = url.searchParams.get("companyId");
+  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
 
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
@@ -24,7 +24,7 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
     conditions.push("userId = $userId");
     bindings.userId = rid(userId);
   }
-  if (companyId) {
+  if (companyId && companyId !== "0") {
     conditions.push("companyId = $companyId");
     bindings.companyId = rid(companyId);
   }
@@ -33,10 +33,10 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
   query += " ORDER BY createdAt DESC LIMIT 50";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  return NextResponse.json({ success: true, data: result[0] ?? [] });
+  return Response.json({ success: true, data: result[0] ?? [] });
 }
 
-async function postHandler(req: NextRequest, ctx: RequestContext) {
+async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const {
     name,
@@ -53,7 +53,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
   } = body;
 
   if (!name || !userId || !companyId || !systemId) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -67,7 +67,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
 
   // Validate neverExpires XOR expiresAt
   if (neverExpires && expiresAt) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -83,7 +83,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
   const useFrontend = frontendUse === true;
   const domains: string[] = frontendDomains ?? [];
   if (useFrontend && domains.length === 0) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -143,18 +143,18 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     },
   );
 
-  return NextResponse.json(
+  return Response.json(
     { success: true, data: { token: rawToken } },
     { status: 201 },
   );
 }
 
-async function deleteHandler(req: NextRequest, ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -165,20 +165,23 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
 
   // Soft-delete: set revokedAt instead of hard-deleting
   await revokeToken(id);
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }
 
 export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+  async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => postHandler(req as NextRequest, _ctx),
+  async (req, ctx) => postHandler(req, ctx),
 );
 
 export const DELETE = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => deleteHandler(req as NextRequest, _ctx),
+  async (req, ctx) => deleteHandler(req, ctx),
 );

@@ -7,6 +7,8 @@ import { paymentFailureTemplate } from "../../utils/communication/templates/paym
 import { autoRechargeTemplate } from "../../utils/communication/templates/auto-recharge.ts";
 import { insufficientCreditTemplate } from "../../utils/communication/templates/insufficient-credit.ts";
 import { tenantInviteTemplate } from "../../utils/communication/templates/tenant-invite.ts";
+import { recoveryVerifyTemplate } from "../../utils/communication/templates/recovery-verify.ts";
+import { recoveryChannelResetTemplate } from "../../utils/communication/templates/recovery-channel-reset.ts";
 import type { HandlerFn } from "../worker.ts";
 import type { TemplateFunction } from "@/src/contracts/communication";
 
@@ -21,6 +23,8 @@ const templateRegistry: Record<string, TemplateFunction> = {
   "insufficient-credit":
     insufficientCreditTemplate as unknown as TemplateFunction,
   "tenant-invite": tenantInviteTemplate as unknown as TemplateFunction,
+  "recovery-verify": recoveryVerifyTemplate as unknown as TemplateFunction,
+  "recovery-channel-reset": recoveryChannelResetTemplate as unknown as TemplateFunction,
 };
 
 export const sendEmail: HandlerFn = async (payload) => {

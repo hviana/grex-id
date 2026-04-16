@@ -9,14 +9,15 @@ if (typeof window !== "undefined") {
 
 /**
  * Auto-recharge handler — triggered when credits are insufficient and
- * autoRechargeEnabled is true.
+ * autoRechargeEnabled is true (§22.5).
  *
  * Steps:
  * 1. Verify subscription flags
  * 2. Load default payment method
  * 3. Notify user that auto-recharge is being attempted
  * 4. Create credit_purchase and publish PAYMENT_DUE
- * 5. Clear autoRechargeInProgress on completion
+ *
+ * All DB lookups batched into a single query (§7.2).
  */
 export async function handleAutoRecharge(payload: {
   subscriptionId: string;
@@ -26,59 +27,53 @@ export async function handleAutoRecharge(payload: {
 }): Promise<void> {
   const db = await getDb();
 
-  // Load subscription
-  const subResult = await db.query<
-    [{
-      id: string;
-      autoRechargeEnabled: boolean;
-      autoRechargeAmount: number;
-      autoRechargeInProgress: boolean;
-      companyId: string;
-      systemId: string;
-    }[]]
+  // Batch: subscription + default payment method + owner info + system name
+  const result = await db.query<
+    [
+      {
+        id: string;
+        autoRechargeEnabled: boolean;
+        autoRechargeAmount: number;
+        autoRechargeInProgress: boolean;
+        companyId: string;
+        systemId: string;
+      }[],
+      { id: string }[],
+      { email: string; name: string }[],
+      { name: string; slug: string }[],
+    ]
   >(
     `SELECT id, autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
             companyId, systemId
-     FROM subscription WHERE id = $subId LIMIT 1`,
+     FROM subscription WHERE id = $subId LIMIT 1;
+     SELECT id FROM payment_method
+       WHERE companyId = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0]
+       AND isDefault = true LIMIT 1;
+     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1)[0];
+     SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT name, slug FROM system WHERE id = (SELECT VALUE systemId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1;`,
     { subId: rid(payload.subscriptionId) },
   );
 
-  const sub = subResult[0]?.[0];
+  const sub = result[0]?.[0];
   if (!sub || !sub.autoRechargeEnabled || !sub.autoRechargeInProgress) {
-    // Nothing to do — mark as done
     return;
   }
 
-  // Load default payment method
-  const pmResult = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM payment_method
-     WHERE companyId = $companyId AND isDefault = true LIMIT 1`,
-    { companyId: rid(String(sub.companyId)) },
-  );
+  const paymentMethod = result[1]?.[0];
+  const owner = result[2]?.[0];
+  const systemInfo = result[3]?.[0];
+  const systemName = systemInfo?.name ?? "";
+  const systemSlug = systemInfo?.slug ?? "";
 
-  if (!pmResult[0] || pmResult[0].length === 0) {
-    // No payment method — notify failure
-    const ownerInfo = await db.query<
-      [{ email: string; profile: { name: string } }[]]
-    >(
-      `LET $comp = (SELECT ownerId FROM company WHERE id = $companyId LIMIT 1);
-       SELECT email, profile.name AS name FROM user WHERE id = $comp[0].ownerId LIMIT 1 FETCH profile;`,
-      { companyId: rid(String(sub.companyId)) },
-    );
-    const owner = ownerInfo[0]?.[0];
-    const sysResult = await db.query<[{ name: string; slug: string }[]]>(
-      `SELECT name, slug FROM system WHERE id = $systemId LIMIT 1`,
-      { systemId: rid(String(sub.systemId)) },
-    );
-    const systemName = sysResult[0]?.[0]?.name ?? "";
-    const systemSlug = sysResult[0]?.[0]?.slug ?? "";
-
+  // No payment method — notify failure, clear flag
+  if (!paymentMethod) {
     if (owner?.email) {
       await publish("SEND_EMAIL", {
         recipients: [owner.email],
         template: "payment-failure",
         templateData: {
-          name: owner.profile?.name ?? "",
+          name: owner.name ?? "",
           systemName,
           kind: "auto-recharge",
           amount: String(sub.autoRechargeAmount),
@@ -90,7 +85,6 @@ export async function handleAutoRecharge(payload: {
       });
     }
 
-    // Clear flag
     await db.query(
       `UPDATE $subId SET autoRechargeInProgress = false`,
       { subId: rid(sub.id) },
@@ -99,27 +93,12 @@ export async function handleAutoRecharge(payload: {
   }
 
   // Notify user that auto-recharge is being attempted
-  const ownerInfo = await db.query<
-    [{ email: string; profile: { name: string } }[]]
-  >(
-    `LET $comp = (SELECT ownerId FROM company WHERE id = $companyId LIMIT 1);
-     SELECT email, profile.name AS name FROM user WHERE id = $comp[0].ownerId LIMIT 1 FETCH profile;`,
-    { companyId: rid(String(sub.companyId)) },
-  );
-  const owner = ownerInfo[0]?.[0];
-  const sysResult = await db.query<[{ name: string; slug: string }[]]>(
-    `SELECT name, slug FROM system WHERE id = $systemId LIMIT 1`,
-    { systemId: rid(String(sub.systemId)) },
-  );
-  const systemName = sysResult[0]?.[0]?.name ?? "";
-  const systemSlug = sysResult[0]?.[0]?.slug ?? "";
-
   if (owner?.email) {
     await publish("SEND_EMAIL", {
       recipients: [owner.email],
       template: "auto-recharge",
       templateData: {
-        name: owner.profile?.name ?? "",
+        name: owner.name ?? "",
         systemName,
         amount: String(sub.autoRechargeAmount),
         currency: "cents",
@@ -133,16 +112,16 @@ export async function handleAutoRecharge(payload: {
   // Create credit purchase and publish PAYMENT_DUE
   const purchase = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
-      companyId = $companyId,
-      systemId = $systemId,
-      amount = $amount,
-      paymentMethodId = $paymentMethodId,
-      status = "pending"`,
+       companyId = $companyId,
+       systemId = $systemId,
+       amount = $amount,
+       paymentMethodId = $paymentMethodId,
+       status = "pending"`,
     {
       companyId: rid(String(sub.companyId)),
       systemId: rid(String(sub.systemId)),
       amount: sub.autoRechargeAmount,
-      paymentMethodId: rid(String(pmResult[0][0].id)),
+      paymentMethodId: rid(String(paymentMethod.id)),
     },
   );
 
@@ -154,7 +133,4 @@ export async function handleAutoRecharge(payload: {
     amount: String(sub.autoRechargeAmount),
     purpose: "auto-recharge",
   });
-
-  // Note: autoRechargeInProgress will be cleared by the payment success/failure handler
-  // or by the billing page after confirming the charge result.
 }

@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from "next/server";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
@@ -11,14 +10,14 @@ import {
   updateLocation,
 } from "@/server/db/queries/locations";
 
-async function getHandler(req: NextRequest, ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
 
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
     const location = await getLocationById(id);
-    return NextResponse.json({ success: true, data: location });
+    return Response.json({ success: true, data: location });
   }
 
   const search = url.searchParams.get("search") ?? undefined;
@@ -35,10 +34,10 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
     systemId,
   });
 
-  return NextResponse.json({ success: true, ...result });
+  return Response.json({ success: true, ...result });
 }
 
-async function postHandler(req: NextRequest, ctx: RequestContext) {
+async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { name, description, address, companyId, systemId } = body;
 
@@ -46,7 +45,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
   const resolvedSystemId = systemId || ctx.tenant.systemId;
 
   if (!name || !address || !resolvedCompanyId || !resolvedSystemId) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.fields.required" },
@@ -63,18 +62,18 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     address,
   });
 
-  return NextResponse.json(
+  return Response.json(
     { success: true, data: location },
     { status: 201 },
   );
 }
 
-async function putHandler(req: NextRequest, _ctx: RequestContext) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id, name, description, address } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -84,15 +83,15 @@ async function putHandler(req: NextRequest, _ctx: RequestContext) {
   }
 
   const location = await updateLocation(id, { name, description, address });
-  return NextResponse.json({ success: true, data: location });
+  return Response.json({ success: true, data: location });
 }
 
-async function deleteHandler(req: NextRequest, _ctx: RequestContext) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id") ?? "";
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -102,35 +101,29 @@ async function deleteHandler(req: NextRequest, _ctx: RequestContext) {
   }
 
   await deleteLocation(id);
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }
 
-const readPipeline = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.list_locations"] }),
-);
-
-const writePipeline = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
-  withAuth(),
-);
-
 export const GET = compose(
-  readPipeline,
-  async (req, ctx) => getHandler(req as NextRequest, ctx),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ permissions: ["grexid.list_locations"] }),
+  async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  writePipeline,
-  async (req, ctx) => postHandler(req as NextRequest, ctx),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  writePipeline,
-  async (req, ctx) => putHandler(req as NextRequest, ctx),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  writePipeline,
-  async (req, ctx) => deleteHandler(req as NextRequest, ctx),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => deleteHandler(req, ctx),
 );

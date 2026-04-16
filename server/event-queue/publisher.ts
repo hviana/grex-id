@@ -7,37 +7,44 @@ export async function publish(
   availableAt?: Date,
 ): Promise<string> {
   const db = await getDb();
-
-  const result = await db.query<[{ id: string }[]]>(
-    `CREATE queue_event SET
-      name = $name,
-      payload = $payload,
-      availableAt = $availableAt`,
-    {
-      name,
-      payload,
-      availableAt: availableAt ?? new Date(),
-    },
-  );
-
-  const eventId = result[0][0].id;
   const handlers = getHandlersForEvent(name);
+  const available = availableAt ?? new Date();
 
-  for (const handler of handlers) {
-    await db.query(
-      `CREATE delivery SET
-        eventId = $eventId,
-        handler = $handler,
-        status = "pending",
-        availableAt = $availableAt,
-        maxAttempts = 5`,
-      {
-        eventId,
-        handler,
-        availableAt: availableAt ?? new Date(),
-      },
-    );
-  }
+  // Build a single batched query: create event + all deliveries in one call
+  const deliveryStatements = handlers
+    .map(
+      (_, i) =>
+        `CREATE delivery SET
+          eventId = $eventId,
+          handler = $handler_${i},
+          status = "pending",
+          availableAt = $availableAt,
+          maxAttempts = 5`,
+    )
+    .join(";\n");
 
+  const bindings: Record<string, unknown> = {
+    name,
+    payload,
+    availableAt: available,
+  };
+
+  // Add handler bindings
+  handlers.forEach((h, i) => {
+    bindings[`handler_${i}`] = h;
+  });
+
+  const fullQuery = `LET $event = (CREATE queue_event SET
+    name = $name,
+    payload = $payload,
+    availableAt = $availableAt RETURN id);
+  LET $eventId = $event[0].id;
+  ${deliveryStatements};
+`;
+
+  const result = await db.query<[{ id: string }[]]>(fullQuery, bindings);
+
+  // The event ID is in the first result set
+  const eventId = result[0]?.[0]?.id ?? String(result[0]);
   return eventId;
 }

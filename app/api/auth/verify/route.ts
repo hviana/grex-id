@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
+import Core from "@/server/utils/Core";
 import {
   findVerificationRequest,
   markEmailVerified,
   markVerificationUsed,
 } from "@/server/db/queries/auth";
+import {
+  verifyRecoveryChannel,
+} from "@/server/db/queries/recovery-channels";
 import {
   associateLeadWithCompanySystem,
   isLeadAssociated,
@@ -31,24 +37,16 @@ interface LeadUpdatePayload {
 function parseLeadUpdatePayload(
   payload: Record<string, unknown> | null | undefined,
 ): LeadUpdatePayload {
-  if (!payload) {
-    return {};
-  }
+  if (!payload) return {};
 
   const rawProfile = payload.profile;
   const profile = rawProfile && typeof rawProfile === "object"
     ? (() => {
-      const profileObject = rawProfile as Record<string, unknown>;
+      const p = rawProfile as Record<string, unknown>;
       return {
-        name: typeof profileObject.name === "string"
-          ? profileObject.name
-          : undefined,
-        avatarUri: typeof profileObject.avatarUri === "string"
-          ? profileObject.avatarUri
-          : undefined,
-        age: typeof profileObject.age === "number"
-          ? profileObject.age
-          : undefined,
+        name: typeof p.name === "string" ? p.name : undefined,
+        avatarUri: typeof p.avatarUri === "string" ? p.avatarUri : undefined,
+        age: typeof p.age === "number" ? p.age : undefined,
       };
     })()
     : undefined;
@@ -66,12 +64,8 @@ function parseLeadUpdatePayload(
         (companyId): companyId is string => typeof companyId === "string",
       )
       : undefined,
-    systemId: typeof payload.systemId === "string"
-      ? payload.systemId
-      : undefined,
-    systemSlug: typeof payload.systemSlug === "string"
-      ? payload.systemSlug
-      : undefined,
+    systemId: typeof payload.systemId === "string" ? payload.systemId : undefined,
+    systemSlug: typeof payload.systemSlug === "string" ? payload.systemSlug : undefined,
     faceDescriptor: Array.isArray(payload.faceDescriptor)
       ? payload.faceDescriptor.filter(
         (value): value is number => typeof value === "number",
@@ -80,50 +74,52 @@ function parseLeadUpdatePayload(
   };
 }
 
-export async function POST(req: NextRequest) {
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
+    );
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
+
+async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { token } = body;
 
   if (!token) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "VALIDATION", message: "validation.token.required" },
-      },
+    return Response.json(
+      { success: false, error: { code: "VALIDATION", message: "validation.token.required" } },
       { status: 400 },
     );
   }
 
   const request = await findVerificationRequest(token);
   if (!request) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" },
-      },
+    return Response.json(
+      { success: false, error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" } },
       { status: 400 },
     );
   }
 
   if (request.usedAt) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: "ALREADY_USED",
-          message: "auth.error.linkUsed",
-        },
-      },
+    return Response.json(
+      { success: false, error: { code: "ALREADY_USED", message: "auth.error.linkUsed" } },
       { status: 400 },
     );
   }
 
   if (new Date(request.expiresAt) < new Date()) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "EXPIRED", message: "auth.error.linkExpired" },
-      },
+    return Response.json(
+      { success: false, error: { code: "EXPIRED", message: "auth.error.linkExpired" } },
       { status: 400 },
     );
   }
@@ -134,13 +130,18 @@ export async function POST(req: NextRequest) {
     request.userId.startsWith("user:")
   ) {
     await markEmailVerified(request.userId);
+  } else if (request.type === "recovery_verify") {
+    // Verify a recovery channel
+    const payload = request.payload as Record<string, unknown> | null;
+    const channelId = payload?.channelId as string | undefined;
+    if (channelId) {
+      await verifyRecoveryChannel(channelId);
+    }
   } else if (
     request.type === "lead_update" ||
-    (
-      request.type === "email_verify" &&
+    (request.type === "email_verify" &&
       typeof request.userId === "string" &&
-      request.userId.startsWith("lead:")
-    )
+      request.userId.startsWith("lead:"))
   ) {
     const payload = parseLeadUpdatePayload(request.payload);
 
@@ -159,7 +160,6 @@ export async function POST(req: NextRequest) {
           companyId,
           payload.systemId,
         );
-
         if (!alreadyAssociated) {
           await associateLeadWithCompanySystem({
             leadId: request.userId,
@@ -190,8 +190,10 @@ export async function POST(req: NextRequest) {
 
   await markVerificationUsed(request.id);
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: { message: "auth.verify.success" },
   });
 }
+
+export const POST = compose(withAuthRateLimit(), handler);

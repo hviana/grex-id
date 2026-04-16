@@ -1,70 +1,53 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import { withAuth } from "@/server/middleware/withAuth";
+import type { RequestContext } from "@/src/contracts/auth";
+import Core from "@/server/utils/Core";
 import { getDb, rid } from "@/server/db/connection";
 import {
   generateSecureToken,
   hashToken,
-  verifyTenantToken,
 } from "@/server/utils/token";
 import { standardizeField } from "@/server/utils/field-standardizer";
+
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
+    );
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
 
 /**
  * POST /api/auth/oauth/authorize
  *
  * Called by the OAuth authorize page after the user approves access.
  * Creates a connected_app record and an api_token for the requesting app.
- *
- * Body:
- *   clientName    — display name of the external app
- *   permissions   — comma-separated permission list
- *   systemSlug    — slug of the system being accessed
- *   companyId     — company the user is granting access to
- *   redirectOrigin — origin the popup came from (for postMessage validation)
- *   monthlySpendLimit? — optional spend cap in cents
  */
-export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-      },
-      { status: 401 },
-    );
-  }
-
-  let payload: Awaited<ReturnType<typeof verifyTenantToken>>;
-  try {
-    payload = await verifyTenantToken(authHeader.slice(7));
-  } catch {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-      },
+async function handler(req: Request, ctx: RequestContext): Promise<Response> {
+  const claims = ctx.claims;
+  if (!claims) {
+    return Response.json(
+      { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" } },
       { status: 401 },
     );
   }
 
   const body = await req.json();
-  const {
-    clientName,
-    permissions,
-    systemSlug,
-    companyId,
-    redirectOrigin,
-    monthlySpendLimit,
-  } = body;
+  const { clientName, permissions, systemSlug, companyId, redirectOrigin, monthlySpendLimit } = body;
 
   if (!clientName || !systemSlug || !companyId) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: "VALIDATION",
-          message: "validation.oauth.requiredFields",
-        },
-      },
+    return Response.json(
+      { success: false, error: { code: "VALIDATION", message: "validation.oauth.requiredFields" } },
       { status: 400 },
     );
   }
@@ -78,11 +61,8 @@ export async function POST(req: NextRequest) {
   );
   const systemId = sysResult[0]?.[0]?.id;
   if (!systemId) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "NOT_FOUND", message: "common.error.notFound" },
-      },
+    return Response.json(
+      { success: false, error: { code: "NOT_FOUND", message: "common.error.notFound" } },
       { status: 404 },
     );
   }
@@ -90,19 +70,15 @@ export async function POST(req: NextRequest) {
   const grantedPermissions: string[] = typeof permissions === "string"
     ? permissions.split(",").map((p: string) => p.trim()).filter(Boolean)
     : Array.isArray(permissions)
-    ? permissions
-    : [];
+      ? permissions
+      : [];
 
-  const userId = payload.actorId;
-
-  // Generate a raw token for the connected app and hash it for storage
+  const userId = claims.actorId;
   const rawToken = generateSecureToken();
   const tokenHash = await hashToken(rawToken);
 
   // Single batched query: create connected_app + api_token
-  const result = await db.query<
-    [unknown, unknown, Record<string, unknown>[]]
-  >(
+  const result = await db.query<[unknown, unknown, Record<string, unknown>[]]>(
     `LET $app = CREATE connected_app SET
        name = $clientName,
        companyId = $companyId,
@@ -124,9 +100,7 @@ export async function POST(req: NextRequest) {
       companyId: rid(companyId),
       systemId: rid(systemId),
       permissions: grantedPermissions,
-      monthlySpendLimit: monthlySpendLimit
-        ? Number(monthlySpendLimit)
-        : undefined,
+      monthlySpendLimit: monthlySpendLimit ? Number(monthlySpendLimit) : undefined,
       userId: rid(userId),
       redirectOrigin: redirectOrigin ?? "",
       tokenHash,
@@ -135,8 +109,10 @@ export async function POST(req: NextRequest) {
 
   const app = result[2]?.[0];
 
-  return NextResponse.json(
+  return Response.json(
     { success: true, data: { token: rawToken, app } },
     { status: 201 },
   );
 }
+
+export const POST = compose(withAuthRateLimit(), withAuth({ requireAuthenticated: true }), handler);

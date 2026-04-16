@@ -8,9 +8,19 @@ if (typeof window !== "undefined") {
   );
 }
 
-function getJwtSecret(): Uint8Array {
-  const secret = "dev-secret-change-in-production#23472347239872394";
-  return new TextEncoder().encode(secret);
+let _cachedSecret: Uint8Array | null = null;
+
+async function getJwtSecret(): Promise<Uint8Array> {
+  if (_cachedSecret) return _cachedSecret;
+  const core = Core.getInstance();
+  const secret = await core.getSetting("auth.jwt.secret");
+  if (!secret) {
+    throw new Error(
+      "[Auth] Missing core setting: auth.jwt.secret. Set it in the Core settings panel.",
+    );
+  }
+  _cachedSecret = new TextEncoder().encode(secret);
+  return _cachedSecret;
 }
 
 /**
@@ -45,7 +55,7 @@ export async function createTenantToken(
     .setIssuedAt()
     .setExpirationTime(`${expiryMinutes}m`)
     .setIssuer("core")
-    .sign(getJwtSecret());
+    .sign(await getJwtSecret());
 
   return jwt;
 }
@@ -56,7 +66,7 @@ export async function createTenantToken(
 export async function verifyTenantToken(
   token: string,
 ): Promise<TenantClaims> {
-  const { payload } = await jose.jwtVerify(token, getJwtSecret(), {
+  const { payload } = await jose.jwtVerify(token, await getJwtSecret(), {
     issuer: "core",
   });
 

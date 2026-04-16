@@ -1,19 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
-import type { RequestContext } from "@/src/contracts/auth";
 
-async function getHandler(req: NextRequest, _ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId");
-  const systemId = url.searchParams.get("systemId");
+  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
+  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
-  if (!companyId || !systemId) {
-    return NextResponse.json(
+  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+    return Response.json(
       {
         success: false,
         error: {
@@ -33,7 +33,7 @@ async function getHandler(req: NextRequest, _ctx: RequestContext) {
   // Validate max 31 days
   const diffMs = new Date(end).getTime() - new Date(start).getTime();
   if (diffMs > 31 * 86400000) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -126,7 +126,7 @@ async function getHandler(req: NextRequest, _ctx: RequestContext) {
 
   const creditExpenses = creditResult[0] ?? [];
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: {
       storage: {
@@ -139,6 +139,7 @@ async function getHandler(req: NextRequest, _ctx: RequestContext) {
 }
 
 export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+  async (req, ctx) => getHandler(req, ctx),
 );

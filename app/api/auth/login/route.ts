@@ -1,34 +1,40 @@
-import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/server/utils/rate-limiter";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import { findUserByEmail, verifyPassword } from "@/server/db/queries/auth";
 import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { getDb, rid } from "@/server/db/connection";
+import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
 
-export async function POST(req: NextRequest) {
-  const core = Core.getInstance();
-  const rateLimitPerMinute = Number(
-    (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-  );
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
-  const rl = checkRateLimit(`ip:${ip}:login`, {
-    windowMs: 60_000,
-    maxRequests: rateLimitPerMinute,
-  });
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
-      },
-      { status: 429 },
+/**
+ * Auth rate limit middleware — reads config from Core settings.
+ * Falls back to default (5 req/min) when settings are unavailable.
+ */
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
     );
-  }
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
 
+async function handler(
+  req: Request,
+  ctx: RequestContext,
+): Promise<Response> {
+  const core = Core.getInstance();
   const body = await req.json();
   const { password, stayLoggedIn } = body;
   const email = body.email
@@ -40,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   const allErrors = [...emailErrors, ...passwordErrors];
   if (allErrors.length > 0) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: allErrors },
@@ -51,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   const user = await findUserByEmail(email!);
   if (!user) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -65,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   const passwordValid = await verifyPassword(email!, password);
   if (!passwordValid) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -78,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!user.emailVerified) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -90,13 +96,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Two-factor authentication check
   const twoFactorGloballyEnabled =
     (await core.getSetting("auth.twoFactor.enabled")) === "true";
 
   if (twoFactorGloballyEnabled && user.twoFactorEnabled) {
     const { twoFactorCode } = body;
     if (!twoFactorCode) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -107,7 +114,29 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
-    // TODO: Verify TOTP code against user.twoFactorSecret
+
+    // Verify TOTP code using otplib (v13 async API)
+    if (user.twoFactorSecret) {
+      const totp = new TOTP({
+        secret: user.twoFactorSecret,
+        window: 1,
+        crypto: new NobleCryptoPlugin(),
+        base32: new ScureBase32Plugin(),
+      });
+      const result = await totp.verify({ token: twoFactorCode });
+      if (!result.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "2FA_INVALID",
+              message: "auth.error.twoFactorInvalid",
+            },
+          },
+          { status: 401 },
+        );
+      }
+    }
   }
 
   // Resolve the user's first company+system membership for the initial tenant
@@ -141,19 +170,19 @@ export async function POST(req: NextRequest) {
   const mem = membership[0]?.[0];
   const tenant = mem
     ? {
-      systemId: String(mem.systemId),
-      companyId: String(mem.companyId),
-      systemSlug: mem.systemSlug ?? "core",
-      roles: (mem.roles ?? []) as string[],
-      permissions: (mem.permissions ?? []) as string[],
-    }
+        systemId: String(mem.systemId),
+        companyId: String(mem.companyId),
+        systemSlug: mem.systemSlug ?? "core",
+        roles: (mem.roles ?? []) as string[],
+        permissions: (mem.permissions ?? []) as string[],
+      }
     : {
-      systemId: "0",
-      companyId: "0",
-      systemSlug: "core",
-      roles: [] as string[],
-      permissions: [] as string[],
-    };
+        systemId: "0",
+        companyId: "0",
+        systemSlug: "core",
+        roles: [] as string[],
+        permissions: [] as string[],
+      };
 
   // Superuser detection from user.roles (global)
   const isSuperuser = (user.roles ?? []).includes("superuser");
@@ -176,7 +205,7 @@ export async function POST(req: NextRequest) {
 
   // TODO: Issue SurrealDB user token for frontend WebSocket (Phase 9)
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: {
       systemToken,
@@ -190,3 +219,6 @@ export async function POST(req: NextRequest) {
     },
   });
 }
+
+// Auth routes use compose() with withRateLimit only (§11)
+export const POST = compose(withAuthRateLimit(), handler);

@@ -17,5 +17,8 @@
   "tag.duplicate": "Uma tag com esse nome j\u00e1 existe",
   "terms.required": "Voc\u00ea deve aceitar os termos de servi\u00e7o para continuar",
   "email.duplicate": "J\u00e1 existe uma conta com este e-mail",
-  "phone.duplicate": "J\u00e1 existe uma conta com este n\u00famero de telefone"
+  "phone.duplicate": "J\u00e1 existe uma conta com este n\u00famero de telefone",
+  "recoveryChannel.type.required": "Tipo de canal \u00e9 obrigat\u00f3rio",
+  "recoveryChannel.value.required": "Valor do canal \u00e9 obrigat\u00f3rio",
+  "recoveryChannel.value.invalid": "Formato de e-mail ou telefone inv\u00e1lido"
 }

@@ -1,26 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb, rid } from "@/server/db/connection";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
-import { generateSecureToken, hashToken } from "@/server/utils/token";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
+import { getDb, rid } from "@/server/db/connection";
+import { generateSecureToken, hashToken } from "@/server/utils/token";
 import type { Tenant } from "@/src/contracts/tenant";
 
-async function getHandler(req: NextRequest, ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId");
-  const systemId = url.searchParams.get("systemId");
+  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
+  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
 
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
   let query = "SELECT * FROM connected_app";
   const conditions: string[] = [];
 
-  if (companyId) {
+  if (companyId && companyId !== "0") {
     conditions.push("companyId = $companyId");
     bindings.companyId = rid(companyId);
   }
-  if (systemId) {
+  if (systemId && systemId !== "0") {
     conditions.push("systemId = $systemId");
     bindings.systemId = rid(systemId);
   }
@@ -29,19 +29,19 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
   query += " ORDER BY createdAt DESC LIMIT 50";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  return NextResponse.json({ success: true, data: result[0] ?? [] });
+  return Response.json({ success: true, data: result[0] ?? [] });
 }
 
 /**
  * POST — creates a connected_app AND its backing api_token in one batched query.
  * The connected_app is linked to the api_token via apiTokenId.
  */
-async function postHandler(req: NextRequest, ctx: RequestContext) {
+async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { name, companyId, systemId, permissions, monthlySpendLimit } = body;
 
   if (!name || !companyId || !systemId) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -105,7 +105,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
   );
 
   const app = result[2]?.[0];
-  return NextResponse.json(
+  return Response.json(
     {
       success: true,
       data: {
@@ -117,12 +117,12 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
   );
 }
 
-async function putHandler(req: NextRequest, ctx: RequestContext) {
+async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id, name, permissions, monthlySpendLimit } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -149,7 +149,7 @@ async function putHandler(req: NextRequest, ctx: RequestContext) {
   }
 
   if (sets.length === 0) {
-    return NextResponse.json({ success: true });
+    return Response.json({ success: true });
   }
 
   const result = await db.query<[Record<string, unknown>[]]>(
@@ -157,19 +157,19 @@ async function putHandler(req: NextRequest, ctx: RequestContext) {
     bindings,
   );
 
-  return NextResponse.json({ success: true, data: result[0]?.[0] });
+  return Response.json({ success: true, data: result[0]?.[0] });
 }
 
 /**
  * DELETE — revokes the linked api_token AND deletes the connected_app
  * in a single batched query (revocation guarantee per §19.12).
  */
-async function deleteHandler(req: NextRequest, ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -190,25 +190,29 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
     { id: rid(id) },
   );
 
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }
 
 export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+  async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => postHandler(req as NextRequest, _ctx),
+  async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => putHandler(req as NextRequest, _ctx),
+  async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => deleteHandler(req as NextRequest, _ctx),
+  async (req, ctx) => deleteHandler(req, ctx),
 );

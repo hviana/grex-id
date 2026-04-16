@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
+import { getAnonymousTenant } from "@/server/utils/tenant";
 import {
   associateLeadWithCompanySystem,
   createLead,
@@ -16,15 +19,15 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: Request, _ctx: RequestContext) {
   let body: Record<string, unknown> | null = null;
   try {
-    const parsedBody: any = await req.json() as Record<string, unknown>;
+    const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyIds: any = Array.isArray(parsedBody.companyIds)
+    const companyIds: string[] = Array.isArray(parsedBody.companyIds)
       ? [
         ...new Set(
-          parsedBody.companyIds.filter((companyId: any): companyId is string =>
+          parsedBody.companyIds.filter((companyId: unknown): companyId is string =>
             typeof companyId === "string" && companyId.trim().length > 0
           ),
         ),
@@ -41,17 +44,17 @@ export async function POST(req: NextRequest) {
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const tags = Array.isArray(parsedBody.tags) ? parsedBody.tags : undefined;
     const email = parsedBody.email
-      ? standardizeField("email", parsedBody.email, "lead")
+      ? standardizeField("email", String(parsedBody.email), "lead")
       : undefined;
     const phone = parsedBody.phone
-      ? standardizeField("phone", parsedBody.phone, "lead")
+      ? standardizeField("phone", String(parsedBody.phone), "lead")
       : undefined;
     const name = parsedBody.name
-      ? standardizeField("name", parsedBody.name, "lead")
+      ? standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
     if (!botToken) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: { code: "BOT_CHECK", message: "common.error.botCheck" },
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!termsAccepted) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
     const allErrors = [...emailErrors, ...nameErrors];
 
     if (!profile?.name || !systemSlug || allErrors.length > 0) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (
       !companyIds || !Array.isArray(companyIds) || companyIds.length === 0
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -124,7 +127,7 @@ export async function POST(req: NextRequest) {
     const systemId = systemResult[0]?.[0]?.id;
 
     if (!systemId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: { code: "NOT_FOUND", message: "common.error.systemNotFound" },
@@ -150,7 +153,7 @@ export async function POST(req: NextRequest) {
         const elapsed =
           (Date.now() - new Date(lastRequest.createdAt).getTime()) / 1000;
         if (elapsed < cooldownSeconds) {
-          return NextResponse.json(
+          return Response.json(
             {
               success: false,
               error: {
@@ -231,7 +234,7 @@ export async function POST(req: NextRequest) {
         systemSlug,
       });
 
-      return NextResponse.json({
+      return Response.json({
         success: true,
         data: {
           requiresVerification: true,
@@ -245,7 +248,7 @@ export async function POST(req: NextRequest) {
       { field: "phone", value: phone },
     ]);
     if (dup.isDuplicate) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -261,7 +264,7 @@ export async function POST(req: NextRequest) {
       name: name!,
       email: email!,
       phone,
-      profile: mergedProfile as any,
+      profile: mergedProfile as { name: string; avatarUri?: string; age?: number },
       companyIds,
       tags,
     });
@@ -281,7 +284,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
+    return Response.json(
       { success: true, data: { id: lead.id, requiresVerification: false } },
       { status: 201 },
     );
@@ -298,7 +301,7 @@ export async function POST(req: NextRequest) {
     ) {
       const field = err.message.slice("INVALID_RECORD_ID:".length);
       if (field === "companyId") {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -311,7 +314,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -323,3 +326,10 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export { postHandler as publicLeadPostHandler };
+
+export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
+  async (req, _ctx) => postHandler(req, _ctx),
+);

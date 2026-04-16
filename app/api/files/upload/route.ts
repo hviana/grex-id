@@ -1,25 +1,13 @@
-import { NextRequest } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getFS } from "@/server/utils/fs";
 import type { SaveControlResult } from "@hviana/surreal-fs";
+import Core from "@/server/utils/Core";
 
-// --- In-memory rate limiter for unauthenticated uploads ---
-const publicUploadLog = new Map<string, number[]>();
-const PUBLIC_RATE_LIMIT_PER_MINUTE = 3;
 const PUBLIC_MAX_SIZE_BYTES = 2_097_152; // 2 MB
-const PUBLIC_ALLOWED_EXTENSIONS = ["svg", "png", "jpg", "jpeg", "webp"];
-const PUBLIC_ALLOWED_PATH_PATTERNS = ["*/*/*/logos/*", "*/*/*/avatars/*"];
 const AUTH_MAX_SIZE_BYTES = 52_428_800; // 50 MB
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60_000;
-  const timestamps = publicUploadLog.get(ip) ?? [];
-  const recent = timestamps.filter((t) => now - t < windowMs);
-  if (recent.length >= PUBLIC_RATE_LIMIT_PER_MINUTE) return true;
-  recent.push(now);
-  publicUploadLog.set(ip, recent);
-  return false;
-}
 
 function matchesGlob(pathSegments: string[], pattern: string): boolean {
   const patternParts = pattern.split("/");
@@ -38,60 +26,34 @@ function isPathAllowed(
   return patterns.some((p) => matchesGlob(pathSegments, p));
 }
 
-async function tryGetAuth(
-  req: NextRequest,
-): Promise<
-  {
-    userId: string;
-    companyId?: string;
-    roles: string[];
-  } | null
-> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const { verifyTenantToken } = await import("@/server/utils/token");
-    const payload = await verifyTenantToken(authHeader.slice(7));
-    if (payload?.actorId) {
-      return {
-        userId: payload.actorId as string,
-        companyId: payload.companyId as string | undefined,
-        roles: (payload.roles as string[]) ?? [],
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+/**
+ * Dual-mode upload handler.
+ * - Authenticated: `withAuth` populates ctx.tenant + ctx.claims; file stored under token's scope.
+ * - Unauthenticated: `withAuth` synthesizes an anonymous tenant; strict rate limit, path whitelist, size + extension checks.
+ */
+async function postHandler(req: Request, ctx: RequestContext) {
+  const isAuthenticated = ctx.claims !== undefined;
+  const isSuperuser = ctx.tenant.roles.includes("superuser");
 
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      req.headers.get("x-real-ip") ??
-      "unknown"
-  );
-}
-
-export async function POST(req: NextRequest) {
-  const auth = await tryGetAuth(req);
-  const isAuthenticated = auth !== null;
-  const isSuperuser = auth?.roles?.includes("superuser") ?? false;
-
-  // Authenticated users are allowed — companyId comes from FormData, not the token
-
-  // Unauthenticated: strict rate limit
+  // Unauthenticated: strict per-IP rate limit
   if (!isAuthenticated) {
-    const ip = getClientIp(req);
-    if (isRateLimited(ip)) {
-      return Response.json(
-        {
-          success: false,
-          error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
-        },
-        { status: 429 },
-      );
-    }
+    const core = Core.getInstance();
+    const publicRateLimit = Number(
+      (await core.getSetting("files.publicUpload.rateLimit.perMinute")) ?? "3",
+    );
+    const rateResult = await new Promise<Response | null>((resolve) => {
+      const rateLimitMiddleware = withRateLimit({
+        windowMs: 60_000,
+        maxRequests: publicRateLimit,
+      });
+      rateLimitMiddleware(req, ctx, async () => {
+        resolve(null);
+        return new Response(null);
+      }).then((res) => {
+        if (res.status === 429) resolve(res);
+      });
+    });
+    if (rateResult) return rateResult;
   }
 
   const formData = await req.formData();
@@ -152,6 +114,41 @@ export async function POST(req: NextRequest) {
     description: description || undefined,
   };
 
+  // Resolve allowed patterns from Core settings for unauthenticated uploads
+  let publicAllowedExtensions = ["svg", "png", "jpg", "jpeg", "webp"];
+  let publicAllowedPathPatterns = ["*/*/*/logos/*", "*/*/*/avatars/*"];
+  let publicMaxSizeBytes = PUBLIC_MAX_SIZE_BYTES;
+
+  if (!isAuthenticated) {
+    const core = Core.getInstance();
+    try {
+      const extSetting = await core.getSetting("files.publicUpload.allowedExtensions");
+      if (extSetting) publicAllowedExtensions = JSON.parse(extSetting);
+    } catch { /* use defaults */ }
+    try {
+      const patternSetting = await core.getSetting("files.publicUpload.allowedPathPatterns");
+      if (patternSetting) publicAllowedPathPatterns = JSON.parse(patternSetting);
+    } catch { /* use defaults */ }
+    try {
+      const sizeSetting = await core.getSetting("files.publicUpload.maxSizeBytes");
+      if (sizeSetting) publicMaxSizeBytes = Number(sizeSetting);
+    } catch { /* use defaults */ }
+  }
+
+  let authMaxSizeBytes = AUTH_MAX_SIZE_BYTES;
+  if (isAuthenticated) {
+    const core = Core.getInstance();
+    try {
+      const sizeSetting = await core.getSetting("files.maxUploadSizeBytes");
+      if (sizeSetting) authMaxSizeBytes = Number(sizeSetting);
+    } catch { /* use defaults */ }
+  }
+
+  const finalAllowedExtensions = publicAllowedExtensions;
+  const finalAllowedPathPatterns = publicAllowedPathPatterns;
+  const finalPublicMaxSize = publicMaxSizeBytes;
+  const finalAuthMaxSize = authMaxSizeBytes;
+
   // All validation happens inside the control callback
   const control = (
     savePath: string[],
@@ -160,9 +157,9 @@ export async function POST(req: NextRequest) {
     if (!isAuthenticated) {
       // Unauthenticated: strict path whitelist, size, extensions, concurrency
       return {
-        accessAllowed: isPathAllowed(savePath, PUBLIC_ALLOWED_PATH_PATTERNS),
-        maxFileSizeBytes: PUBLIC_MAX_SIZE_BYTES,
-        allowedExtensions: PUBLIC_ALLOWED_EXTENSIONS,
+        accessAllowed: isPathAllowed(savePath, finalAllowedPathPatterns),
+        maxFileSizeBytes: finalPublicMaxSize,
+        allowedExtensions: finalAllowedExtensions,
         concurrencyIdentifiers: [savePath.slice(0, 3).join("/")],
         kbytesPerSecond: 10,
       };
@@ -170,7 +167,7 @@ export async function POST(req: NextRequest) {
     // Authenticated
     return {
       accessAllowed: true,
-      maxFileSizeBytes: AUTH_MAX_SIZE_BYTES,
+      maxFileSizeBytes: finalAuthMaxSize,
       allowedExtensions: [],
       concurrencyIdentifiers: [savePath.slice(0, 3).join("/")],
     };
@@ -257,3 +254,11 @@ export async function POST(req: NextRequest) {
     { status: 201 },
   );
 }
+
+// withAuth is used without requireAuthenticated so it synthesizes an anonymous
+// tenant for unauthenticated requests, allowing the dual-mode handler to
+// differentiate based on ctx.claims presence.
+export const POST = compose(
+  withAuth(),
+  async (req, ctx) => postHandler(req, ctx),
+);

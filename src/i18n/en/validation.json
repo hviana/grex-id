@@ -17,5 +17,8 @@
   "tag.duplicate": "A tag with this name already exists",
   "terms.required": "You must accept the terms of service to continue",
   "email.duplicate": "An account with this email already exists",
-  "phone.duplicate": "An account with this phone number already exists"
+  "phone.duplicate": "An account with this phone number already exists",
+  "recoveryChannel.type.required": "Channel type is required",
+  "recoveryChannel.value.required": "Channel value is required",
+  "recoveryChannel.value.invalid": "Invalid email or phone number format"
 }

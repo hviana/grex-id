@@ -193,7 +193,7 @@ permission errors, and status messages.
 │   ├── layout.tsx                    # Root: locale provider, system context
 │   ├── page.tsx                      # Public homepage (reads ?system=)
 │   ├── (auth)/                       # No sidebar, reads ?system=
-│   │   ├── login/ register/ verify/ forgot-password/ reset-password/
+│   │   ├── login/ register/ verify/ forgot-password/ reset-password/ account-recovery/
 │   │   ├── terms/page.tsx            # Public terms (new tab, ?system=)
 │   │   └── oauth/authorize/page.tsx  # OAuth server page (§24)
 │   ├── (app)/                        # Authenticated user panel
@@ -208,7 +208,7 @@ permission errors, and status messages.
 │   │   ├── data-deletion/ front-settings/ settings/
 │   └── api/
 │       ├── public/{system,front-core}/route.ts
-│       ├── auth/{login,register,verify,forgot-password,reset-password,refresh,exchange,oauth/[provider],oauth/authorize}/route.ts
+│       ├── auth/{login,register,verify,forgot-password,reset-password,refresh,exchange,oauth/[provider],oauth/authorize,recovery-channel-reset}/route.ts
 │       ├── core/{systems,roles,plans,vouchers,menus,terms,data-deletion,settings,settings/missing,front-settings}/route.ts
 │       ├── users/route.ts
 │       ├── companies/route.ts + [companyId]/systems/route.ts
@@ -216,6 +216,7 @@ permission errors, and status messages.
 │       ├── usage/route.ts
 │       ├── connected-apps/route.ts
 │       ├── tokens/route.ts
+│       ├── recovery-channels/route.ts
 │       ├── leads/{route.ts,public/route.ts}
 │       ├── tags/route.ts
 │       ├── files/{upload,download}/route.ts
@@ -232,7 +233,7 @@ permission errors, and status messages.
 │   │                  connected-app, token, file, event-queue,
 │   │                  communication, payment-provider, usage,
 │   │                  core-settings, front-core-settings, tag, lead,
-│   │                  location, common)
+│   │                  location, recovery-channel, common)
 │   ├── i18n/         (§5.1)
 │   ├── hooks/        (§17.3)
 │   └── lib/          (formatters, validators — isomorphic, no secrets)
@@ -244,7 +245,7 @@ permission errors, and status messages.
 │   │   ├── queries/ (auth, users, companies, systems, roles, plans,
 │   │   │            vouchers, menus, billing, connected-apps, tokens,
 │   │   │            usage, event-queue, core-settings, tags, leads,
-│   │   │            locations, data-deletion, systems/[slug]/)
+│   │   │            locations, data-deletion, recovery-channels, systems/[slug]/)
 │   │   └── frontend-queries/ (messages, notifications, systems/[slug]/)
 │   ├── middleware/   (compose, withAuth, withRateLimit, withPlanAccess, withEntityLimit)
 │   ├── utils/        (Core, FrontCore, fs, token, token-revocation, cors,
@@ -424,11 +425,13 @@ this table.
 | `0024_create_lead_company_system.surql`    | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                            |
 | `0025_create_location.surql`               | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                             |
 | `0029_create_tag.surql`                    | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                |
-| `0030_create_profile.surql`                | `profile`                | Composable. Fields: name, avatarUri, age, locale. FULLTEXT `name`.                                                                                                                                                                                                 |
+| `0030_create_profile.surql`                | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                           |
 | `0031_create_address.surql`                | `address`                | Composable.                                                                                                                                                                                                                                                        |
 | `0032_create_credit_expense.surql`         | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                 |
 | `0033_create_front_core_setting.surql`     | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                  |
 | `0034_create_token_revocation.surql`       | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                            |
+| `0035_create_recovery_channel.surql`      | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                 |
+| `0036_alter_verification_request_type.surql` | `verification_request` | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                     |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -590,6 +593,8 @@ menus, settings), the route handler calls `Core.getInstance().reload()`.
 | `terms.generic`                          | `""`                                       | Generic LGPD fallback HTML                      |
 | `billing.autoRecharge.minAmount`         | `"500"`                                    | Min auto-recharge (cents)                       |
 | `billing.autoRecharge.maxAmount`         | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
+| `auth.recoveryChannel.maxPerUser`        | `"10"`                                     | Max recovery channels per user                  |
+| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                           | Recovery channel verification link expiry (min) |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -1186,11 +1191,14 @@ produces a mobile-first, email-client-safe skeleton:
 | `auto-recharge`       | `auto-recharge.ts`       | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
 | `insufficient-credit` | `insufficient-credit.ts` | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                         |
 | `tenant-invite`       | `tenant-invite.ts`       | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`     |
+| `recovery-verify`     | `recovery-verify.ts`     | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                  |
+| `recovery-channel-reset` | `recovery-channel-reset.ts` | Password reset initiated via verified recovery channel (§19.13)                                    | `name`, `resetLink`                                                         |
 
 i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
 `templates.paymentSuccess.*`, `templates.paymentFailure.*`,
 `templates.autoRecharge.*`, `templates.insufficientCredit.*`,
-`templates.tenantInvite.*`.
+`templates.tenantInvite.*`, `templates.recoveryVerify.*`,
+`templates.recoveryChannelReset.*`.
 
 #### 15.5 Channel handlers
 
@@ -1885,6 +1893,11 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 5. User clicks link → `reset-password` page validates token → submit new
    password → backend updates `passwordHash` and marks the request `usedAt`.
 
+**Alternative path via recovery channels (§19.13).** Users who have lost access
+to their primary email can initiate password reset through any **verified**
+recovery channel at `/account-recovery`. The flow reuses the `password_reset`
+verification-request type with the `recovery-channel-reset` template.
+
 #### 19.8 OAuth login flow (if `auth.oauth.enabled = "true"`)
 
 1. Redirect to provider.
@@ -1979,6 +1992,52 @@ tokens as well as persisted `api_token` / connected-app tokens.
   audit, then `server/jobs/token-cleanup.ts` hard-deletes them. Third parties
   who hold the raw bearer value cannot continue calling the API after the user
   revokes.
+
+#### 19.13 Recovery Channels
+
+Users register alternative email addresses and phone numbers as **recovery
+channels** to regain access when they lose their primary credentials.
+
+**Lifecycle:**
+
+1. **Add.** Authenticated user adds a channel (email or phone) via
+   `POST /api/recovery-channels`. Creates an unverified `recovery_channel`
+   record linked to the user's profile. Publishes `SEND_EMAIL` or `SEND_SMS`
+   with `recovery-verify` template containing a verification link.
+2. **Verify.** User clicks the link → `POST /api/auth/verify` handles
+   `recovery_verify` type → sets `recovery_channel.verified = true` and marks
+   the verification request `usedAt`. Only verified channels can be used for
+   recovery.
+3. **Use for recovery.** Unauthenticated user visits `/account-recovery`, enters
+   a recovery channel value. `POST /api/auth/recovery-channel-reset` looks up
+   the channel (must be verified), creates a `password_reset` verification
+   request for the associated user, and publishes `SEND_EMAIL` or `SEND_SMS`
+   with `recovery-channel-reset` template. The reset flow from §19.7 applies
+   unchanged. Always returns generic success to prevent enumeration.
+4. **Resend verification.** `POST /api/recovery-channels?action=resend-verification`
+   re-sends the verification email/SMS for an existing unverified channel,
+   subject to the cooldown in `auth.verification.cooldown.seconds`.
+5. **Remove.** Authenticated user removes a channel via
+   `DELETE /api/recovery-channels`. Removes from profile's `recoveryChannels`
+   array and deletes the record in one batched query.
+
+**Limits:**
+
+- Maximum 10 channels per user (`auth.recoveryChannel.maxPerUser`, default 10).
+- Verification link expiry: `auth.recoveryChannel.verification.expiry.minutes`
+  (default 15).
+- Cooldown for resend: `auth.verification.cooldown.seconds` (default 120).
+
+**Management UI.** The ProfilePage (`src/components/shared/ProfilePage.tsx`)
+renders a "Recovery Channels" section listing all channels with type emoji
+(`📧` email / `📱` phone), masked value, verified/unverified badge (`✅` /
+`⚠️`), verify and remove buttons, and an "Add Channel" form with type toggle
+and value input.
+
+**Account recovery page.** `app/(auth)/account-recovery/page.tsx` —
+unauthenticated page following the same pattern as `forgot-password/page.tsx`.
+Links from the forgot-password page via
+`auth.forgotPassword.useRecoveryChannel`.
 
 ### 20. Superuser Core Admin Panel `(core)`
 

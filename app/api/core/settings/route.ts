@@ -1,72 +1,62 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb, rid } from "@/server/db/connection";
-import { sanitizeString } from "@/src/lib/validators";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
+import { listSettings, upsertSetting } from "@/server/db/queries/core-settings";
+import type { CoreSetting } from "@/src/contracts/core-settings";
+import { standardizeField } from "@/server/utils/field-standardizer";
+import Core from "@/server/utils/Core";
 
-export async function GET() {
-  const db = await getDb();
-  const result = await db.query<[Record<string, unknown>[]]>(
-    "SELECT * FROM core_setting ORDER BY key ASC",
-  );
-
-  return NextResponse.json({
+async function getHandler(_req: Request, _ctx: RequestContext) {
+  const data = await listSettings();
+  return Response.json({
     success: true,
-    data: result[0] ?? [],
+    data,
   });
 }
 
-export async function PUT(req: NextRequest) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { settings } = body;
 
   if (!Array.isArray(settings)) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "settings must be an array" },
+        error: { code: "VALIDATION", errors: ["validation.settings.arrayRequired"] },
       },
       { status: 400 },
     );
   }
 
-  const db = await getDb();
-  const results: Record<string, unknown>[] = [];
+  const results: CoreSetting[] = [];
 
   for (const setting of settings) {
-    const { id, key, value, description } = setting;
+    const { key, value, description } = setting;
 
     if (!key) continue;
 
-    if (id) {
-      const updated = await db.query<[Record<string, unknown>[]]>(
-        `UPDATE $id SET
-          key = $key,
-          value = $value,
-          description = $description,
-          updatedAt = time::now()
-        RETURN AFTER`,
-        {
-          id: rid(id),
-          key: sanitizeString(key),
-          value: sanitizeString(value ?? ""),
-          description: sanitizeString(description ?? ""),
-        },
-      );
-      if (updated[0]?.[0]) results.push(updated[0][0]);
-    } else {
-      const created = await db.query<[Record<string, unknown>[]]>(
-        `CREATE core_setting SET
-          key = $key,
-          value = $value,
-          description = $description`,
-        {
-          key: sanitizeString(key),
-          value: sanitizeString(value ?? ""),
-          description: sanitizeString(description ?? ""),
-        },
-      );
-      if (created[0]?.[0]) results.push(created[0][0]);
-    }
+    const result = await upsertSetting({
+      key: standardizeField("name", key),
+      value: standardizeField("name", value ?? ""),
+      description: standardizeField("name", description ?? ""),
+    });
+    if (result) results.push(result);
   }
 
-  return NextResponse.json({ success: true, data: results });
+  await Core.getInstance().reload();
+
+  return Response.json({ success: true, data: results });
 }
+
+export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  getHandler,
+);
+
+export const PUT = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  putHandler,
+);

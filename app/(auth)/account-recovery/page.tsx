@@ -11,13 +11,13 @@ import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
 import Link from "next/link";
 
-function ForgotPasswordContent() {
+function AccountRecoveryContent() {
   const searchParams = useSearchParams();
   const systemSlug = searchParams.get("system");
   const { t } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
-  const [email, setEmail] = useState("");
+  const [channelValue, setChannelValue] = useState("");
   const [botToken, setBotToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +34,11 @@ function ForgotPasswordContent() {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch("/api/auth/recovery-channel-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          channelValue,
           botToken,
           systemSlug: systemSlug || undefined,
         }),
@@ -69,10 +69,10 @@ function ForgotPasswordContent() {
 
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
-              {t("auth.forgotPassword.title")}
+              {t("auth.accountRecovery.title")}
             </h1>
             <p className="mt-2 text-[var(--color-light-text)]">
-              {t("auth.forgotPassword.subtitle")}
+              {t("auth.accountRecovery.subtitle")}
             </p>
           </div>
 
@@ -80,13 +80,13 @@ function ForgotPasswordContent() {
             ? (
               <div className="text-center space-y-4">
                 <p className="text-[var(--color-primary-green)]">
-                  {t("auth.forgotPassword.success")}
+                  {t("auth.accountRecovery.success")}
                 </p>
                 <Link
                   href={`/login${systemParam}`}
                   className="inline-block text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors"
                 >
-                  {t("auth.forgotPassword.backToLogin")}
+                  {t("auth.accountRecovery.backToLogin")}
                 </Link>
               </div>
             )
@@ -96,17 +96,18 @@ function ForgotPasswordContent() {
                 <form onSubmit={handleSubmit} className="mt-6 space-y-5">
                   <div>
                     <label
-                      htmlFor="email"
+                      htmlFor="channelValue"
                       className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
                     >
-                      {t("auth.forgotPassword.email")}
+                      {t("auth.accountRecovery.channelValue")}
                     </label>
                     <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      id="channelValue"
+                      type="text"
+                      value={channelValue}
+                      onChange={(e) => setChannelValue(e.target.value)}
                       required
+                      placeholder={t("common.placeholder.recoveryChannel")}
                       className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
                     />
                   </div>
@@ -126,24 +127,28 @@ function ForgotPasswordContent() {
                         />
                       )
                       : null}
-                    {t("auth.forgotPassword.submit")}
+                    {t("auth.accountRecovery.submit")}
                   </button>
                 </form>
 
-                <p className="mt-6 text-center text-sm">
-                  <Link
-                    href={`/account-recovery${systemParam}`}
-                    className="text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors block mb-2"
-                  >
-                    {t("auth.forgotPassword.useRecoveryChannel")}
-                  </Link>
-                  <Link
-                    href={`/login${systemParam}`}
-                    className="text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors"
-                  >
-                    {t("auth.forgotPassword.backToLogin")}
-                  </Link>
-                </p>
+                <div className="mt-6 text-center space-y-2">
+                  <p className="text-sm">
+                    <Link
+                      href={`/forgot-password${systemParam}`}
+                      className="text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors"
+                    >
+                      {t("auth.forgotPassword.title")}
+                    </Link>
+                  </p>
+                  <p className="text-sm">
+                    <Link
+                      href={`/login${systemParam}`}
+                      className="text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors"
+                    >
+                      {t("auth.accountRecovery.backToLogin")}
+                    </Link>
+                  </p>
+                </div>
               </>
             )}
         </div>
@@ -152,7 +157,7 @@ function ForgotPasswordContent() {
   );
 }
 
-export default function ForgotPasswordPage() {
+export default function AccountRecoveryPage() {
   return (
     <Suspense
       fallback={
@@ -161,7 +166,7 @@ export default function ForgotPasswordPage() {
         </div>
       }
     >
-      <ForgotPasswordContent />
+      <AccountRecoveryContent />
     </Suspense>
   );
 }

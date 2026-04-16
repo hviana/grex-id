@@ -1,0 +1,2 @@
+-- Live query permissions for frontend LIVE SELECT queries (section 7.6)
+-- Only SELECT is allowed from the frontend; ownership-based filtering per table.

@@ -147,5 +147,22 @@
   "users.rolesHint": "Search available roles for this system",
   "users.inviteHint": "If the user already has an account, they will be invited to this system without creating a new account.",
   "error.scopeMismatch": "Scope mismatch",
-  "error.cors": "CORS origin not allowed"
+  "error.cors": "CORS origin not allowed",
+  "recoveryChannels.title": "Recovery Channels",
+  "recoveryChannels.description": "Add backup email addresses or phone numbers to recover your account if you lose access.",
+  "recoveryChannels.add": "Add Channel",
+  "recoveryChannels.type.email": "Email",
+  "recoveryChannels.type.phone": "Phone",
+  "recoveryChannels.value": "Email or phone number",
+  "recoveryChannels.verified": "Verified",
+  "recoveryChannels.unverified": "Unverified",
+  "recoveryChannels.verify": "Verify",
+  "recoveryChannels.remove": "Remove",
+  "recoveryChannels.removeConfirm": "Remove this recovery channel?",
+  "recoveryChannels.maxReached": "Maximum recovery channels reached",
+  "recoveryChannels.verifySent": "Verification sent! Check your email or phone.",
+  "recoveryChannels.added": "Recovery channel added",
+  "recoveryChannels.removed": "Recovery channel removed",
+  "recoveryChannels.resendVerification": "Resend verification",
+  "placeholder.recoveryChannel": "email@example.com or +1 555 123-4567"
 }

@@ -1,18 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
+import Core from "@/server/utils/Core";
 import { createTenantToken, verifyTenantToken } from "@/server/utils/token";
 import { isJtiRevoked } from "@/server/utils/token-revocation";
 import { getDb, rid } from "@/server/db/connection";
 
-export async function POST(req: NextRequest) {
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
+    );
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
+
+async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { systemToken } = body;
 
   if (!systemToken) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "VALIDATION", message: "validation.token.required" },
-      },
+    return Response.json(
+      { success: false, error: { code: "VALIDATION", message: "validation.token.required" } },
       { status: 400 },
     );
   }
@@ -22,111 +39,67 @@ export async function POST(req: NextRequest) {
 
     // Check if token has been revoked
     if (claims.jti && (await isJtiRevoked(claims.jti))) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" },
-        },
+      return Response.json(
+        { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" } },
         { status: 401 },
       );
     }
 
-    // Verify user still exists
     const db = await getDb();
-    const userResult = await db.query<
-      [{ id: string; email: string; stayLoggedIn: boolean }[]]
+
+    // Batch user lookup + superuser check + membership + role permissions into one query
+    const result = await db.query<
+      [
+        { id: string; email: string; stayLoggedIn: boolean; roles: string[] }[],
+        { roles: string[] }[],
+        { permissions: string[] }[],
+      ]
     >(
-      `SELECT id, email, stayLoggedIn FROM user WHERE id = $userId LIMIT 1`,
-      { userId: rid(claims.actorId) },
+      `SELECT id, email, stayLoggedIn, roles FROM user WHERE id = $userId LIMIT 1;
+       SELECT roles FROM user_company_system
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+         LIMIT 1;
+       SELECT permissions FROM role WHERE systemId = $systemId AND id IN (SELECT VALUE roles FROM user_company_system
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
+      {
+        userId: rid(claims.actorId),
+        companyId: rid(claims.companyId),
+        systemId: rid(claims.systemId),
+      },
     );
 
-    const user = userResult[0]?.[0];
+    const user = result[0]?.[0];
     if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "USER_NOT_FOUND", message: "auth.error.userNotFound" },
-        },
+      return Response.json(
+        { success: false, error: { code: "USER_NOT_FOUND", message: "auth.error.userNotFound" } },
         { status: 401 },
       );
     }
 
-    // For user tokens, re-resolve roles/permissions from current membership
+    // Resolve updated claims
     let updatedClaims = claims;
     if (claims.actorType === "user" && claims.systemId !== "0") {
-      const membership = await db.query<
-        [{ roles: string[] }[]]
-      >(
-        `SELECT roles FROM user_company_system
-         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-         LIMIT 1`,
-        {
-          userId: rid(claims.actorId),
-          companyId: rid(claims.companyId),
-          systemId: rid(claims.systemId),
-        },
-      );
-
-      const currentRoles = membership[0]?.[0]?.roles ?? claims.roles;
-
-      // Check if user is superuser
-      const superuserCheck = await db.query<[{ roles: string[] }[]]>(
-        `SELECT roles FROM user WHERE id = $userId LIMIT 1`,
-        { userId: rid(claims.actorId) },
-      );
-      const isSuperuser = (superuserCheck[0]?.[0]?.roles ?? []).includes(
-        "superuser",
-      );
+      const isSuperuser = (user.roles ?? []).includes("superuser");
 
       if (isSuperuser) {
-        updatedClaims = {
-          ...claims,
-          roles: ["superuser"],
-          permissions: ["*"],
-        };
+        updatedClaims = { ...claims, roles: ["superuser"], permissions: ["*"] };
       } else {
-        // Refresh roles from DB
-        const ucs = await db.query<[{ roles: string[] }[]]>(
-          `SELECT roles FROM user_company_system
-           WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-           LIMIT 1`,
-          {
-            userId: rid(claims.actorId),
-            companyId: rid(claims.companyId),
-            systemId: rid(claims.systemId),
-          },
-        );
-        const roles = ucs[0]?.[0]?.roles ?? claims.roles;
-
-        const rolePerms = await db.query<[{ permissions: string[] }[]]>(
-          `SELECT permissions FROM role WHERE id IN $roles`,
-          { roles: roles.map((r: string) => rid(r)) },
-        );
+        const roles = result[1]?.[0]?.roles ?? claims.roles;
         const permissions = [
-          ...new Set(
-            rolePerms[0]?.flatMap((r) => r.permissions ?? []) ?? [],
-          ),
+          ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
         ];
-
-        updatedClaims = {
-          ...claims,
-          roles,
-          permissions,
-        };
+        updatedClaims = { ...claims, roles, permissions };
       }
     }
 
     // Issue new token with same tenant but fresh expiry
     const newJti = crypto.randomUUID();
     const newToken = await createTenantToken(
-      {
-        ...updatedClaims,
-        jti: newJti,
-      },
+      { ...updatedClaims, jti: newJti },
       user.stayLoggedIn ?? false,
     );
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: {
         systemToken: newToken,
@@ -134,12 +107,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" },
-      },
+    return Response.json(
+      { success: false, error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" } },
       { status: 401 },
     );
   }
 }
+
+export const POST = compose(withAuthRateLimit(), handler);

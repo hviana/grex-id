@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/server/utils/rate-limiter";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import {
   createUser,
   createVerificationRequest,
@@ -11,33 +12,33 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 
-export async function POST(req: NextRequest) {
-  const core = Core.getInstance();
-  const rateLimitPerMinute = Number(
-    await core.getSetting("auth.rateLimit.perMinute"),
-  );
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
-  const rl = checkRateLimit(`ip:${ip}:register`, {
-    windowMs: 60_000,
-    maxRequests: rateLimitPerMinute,
-  });
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
-      },
-      { status: 429 },
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
     );
-  }
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
 
+async function handler(
+  req: Request,
+  ctx: RequestContext,
+): Promise<Response> {
+  const core = Core.getInstance();
   const body = await req.json();
   const { password, confirmPassword, termsAccepted } = body;
 
   if (!termsAccepted) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: ["validation.terms.required"] },
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
   const email = body.email
     ? standardizeField("email", body.email, "user")
     : undefined;
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
   ];
 
   if (allErrors.length > 0) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: allErrors },
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (password !== confirmPassword) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
     const conflictErrors = dup.conflicts.map((c) =>
       `validation.${c.field}.duplicate`
     );
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -143,7 +145,7 @@ export async function POST(req: NextRequest) {
     systemSlug,
   });
 
-  return NextResponse.json(
+  return Response.json(
     {
       success: true,
       data: { message: "auth.register.success" },
@@ -151,3 +153,5 @@ export async function POST(req: NextRequest) {
     { status: 201 },
   );
 }
+
+export const POST = compose(withAuthRateLimit(), handler);

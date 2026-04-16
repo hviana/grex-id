@@ -24,15 +24,13 @@ export interface CreditDeductionResult {
 }
 
 /**
- * Attempts to consume credits for an operation.
+ * Attempts to consume credits for an operation (§22.3).
  *
  * Deduction priority:
  * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
  * 2. Purchased credits (usage_record with resource="credits") — persistent
  *
- * If insufficient credits in both sources combined:
- * - If autoRechargeEnabled, publishes TRIGGER_AUTO_RECHARGE
- * - Otherwise sends insufficient-credit email alert (once per cycle via creditAlertSent)
+ * All DB lookups batched into single queries per logical step (§7.2).
  */
 export async function consumeCredits(params: {
   resourceKey: string;
@@ -44,6 +42,7 @@ export async function consumeCredits(params: {
   const db = await getDb();
   const day = getCurrentDay();
 
+  // Batch: subscription + purchased credit balance in one call
   const result = await db.query<
     [
       {
@@ -108,38 +107,34 @@ export async function consumeCredits(params: {
 
     // No auto-recharge or already in progress — send alert (once per cycle)
     if (!sub.creditAlertSent) {
-      await db.query(
-        `UPDATE $subId SET creditAlertSent = true`,
-        { subId: rid(sub.id) },
-      );
-
-      const info = await db.query<
+      // Batch: alert flag + company owner info + system info in one call
+      const alertResult = await db.query<
         [
+          unknown[],
           { name: string; ownerId: string }[],
-          { email: string; profile: { name: string } }[],
+          { email: string; name: string }[],
+          { name: string; slug: string }[],
         ]
       >(
-        `SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
-         LET $comp = (SELECT ownerId FROM company WHERE id = $companyId LIMIT 1);
-         SELECT email, profile.name AS name FROM user WHERE id = $comp[0].ownerId LIMIT 1 FETCH profile;`,
-        { companyId: rid(params.companyId) },
+        `UPDATE $subId SET creditAlertSent = true;
+         SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
+         LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
+         SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+         SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
+        {
+          subId: rid(sub.id),
+          companyId: rid(params.companyId),
+          systemId: rid(params.systemId),
+        },
       );
 
-      const company = info[0]?.[0];
-      const user = (info as unknown[])[2] as
-        | { email: string; name: string }[]
-        | undefined;
-      const ownerEmail = user?.[0]?.email;
-      const ownerName = user?.[0]?.name ?? company?.name ?? "";
+      const user = alertResult[2]?.[0];
+      const ownerEmail = user?.email;
+      const ownerName = user?.name ?? "";
+      const systemName = alertResult[3]?.[0]?.name ?? "";
+      const systemSlug = alertResult[3]?.[0]?.slug ?? "";
 
       if (ownerEmail) {
-        const sysResult = await db.query<[{ name: string; slug: string }[]]>(
-          `SELECT name, slug FROM system WHERE id = $systemId LIMIT 1`,
-          { systemId: rid(params.systemId) },
-        );
-        const systemName = sysResult[0]?.[0]?.name ?? "";
-        const systemSlug = sysResult[0]?.[0]?.slug ?? "";
-
         await publish("SEND_EMAIL", {
           recipients: [ownerEmail],
           template: "insufficient-credit",

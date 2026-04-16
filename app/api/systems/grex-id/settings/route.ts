@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from "next/server";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
@@ -8,22 +7,22 @@ import {
   upsertSettings,
 } from "@/server/db/queries/systems/grex-id/settings";
 
-async function getHandler(req: NextRequest, ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
   const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
   const settings = await getAllSettings(companyId, systemId);
-  return NextResponse.json({ success: true, data: settings });
+  return Response.json({ success: true, data: settings });
 }
 
-async function putHandler(req: NextRequest, ctx: RequestContext) {
+async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { settings, companyId: bodyCompanyId, systemId: bodySystemId } = body;
   const companyId = bodyCompanyId || ctx.tenant.companyId;
   const systemId = bodySystemId || ctx.tenant.systemId;
 
   if (!settings || typeof settings !== "object") {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.settings.required" },
@@ -38,17 +37,17 @@ async function putHandler(req: NextRequest, ctx: RequestContext) {
   }
 
   const updated = await upsertSettings(companyId, systemId, normalized);
-  return NextResponse.json({ success: true, data: updated });
+  return Response.json({ success: true, data: updated });
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+  async (req, ctx) => getHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx) => putHandler(req as NextRequest, _ctx),
+  async (req, ctx) => putHandler(req, ctx),
 );

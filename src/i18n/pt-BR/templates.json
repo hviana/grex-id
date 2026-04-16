@@ -85,6 +85,17 @@
   "tenantInvite.rolesLabel": "Seus Papéis",
   "tenantInvite.cta": "Ir para o Painel",
   "tenantInvite.existingAccountNote": "Como você já possui uma conta, basta fazer login para acessar seu novo espaço de trabalho.",
-  "layout.footer": "Esta é uma mensagem segura e automatizada. Por favor, não responda diretamente a este e-mail.",
-  "layout.automated": "Powered by Grex"
+  "layout.footer": "Esta \u00e9 uma mensagem segura e automatizada. Por favor, n\u00e3o responda diretamente a este e-mail.",
+  "layout.automated": "Powered by Grex",
+  "recoveryVerify.subject": "Verifique seu canal de recupera\u00e7\u00e3o",
+  "recoveryVerify.greeting": "Ol\u00e1, {name}!",
+  "recoveryVerify.body": "Verifique este canal de recupera\u00e7\u00e3o clicando no bot\u00e3o abaixo. Isso confirma que voc\u00ea \u00e9 dono deste endere\u00e7o de e-mail ou n\u00famero de telefone.",
+  "recoveryVerify.action": "Verificar Canal",
+  "recoveryVerify.expiry": "Este link expira em 15 minutos.",
+  "recoveryChannelReset.subject": "Redefina sua senha via canal de recupera\u00e7\u00e3o",
+  "recoveryChannelReset.greeting": "Ol\u00e1, {name}!",
+  "recoveryChannelReset.body": "Recebemos uma solicita\u00e7\u00e3o para redefinir sua senha via canal de recupera\u00e7\u00e3o. Clique no bot\u00e3o abaixo para escolher uma nova.",
+  "recoveryChannelReset.action": "Redefinir Minha Senha",
+  "recoveryChannelReset.expiry": "Este link expira em 30 minutos.",
+  "recoveryChannelReset.ignore": "Se voc\u00ea n\u00e3o solicitou isso, pode ignorar este e-mail com seguran\u00e7a. Sua senha n\u00e3o ser\u00e1 alterada."
 }

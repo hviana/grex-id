@@ -8,6 +8,16 @@ interface DefaultSetting {
 
 const defaults: DefaultSetting[] = [
   {
+    key: "auth.jwt.secret",
+    value: "dev-secret-change-in-production#234A723as472da3987GG2394",
+    description: "Secret key for signing JWT tokens (must be changed in production)",
+  },
+  {
+    key: "auth.twoFactor.issuer",
+    value: "Core",
+    description: "Issuer name shown in authenticator apps for TOTP 2FA",
+  },
+  {
     key: "app.name",
     value: "Core",
     description: "Application display name",
@@ -130,6 +140,16 @@ const defaults: DefaultSetting[] = [
     key: "communication.email.senders",
     value: "[]",
     description: "JSON array of default sender email addresses",
+  },
+  {
+    key: "auth.recoveryChannel.maxPerUser",
+    value: "10",
+    description: "Maximum recovery channels per user",
+  },
+  {
+    key: "auth.recoveryChannel.verification.expiry.minutes",
+    value: "15",
+    description: "Recovery channel verification link expiry in minutes",
   },
 ];
 

@@ -1,29 +1,10 @@
-import { NextRequest } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getFS } from "@/server/utils/fs";
 import type { ReadControlResult } from "@hviana/surreal-fs";
 
-async function tryGetAuth(
-  req: NextRequest,
-): Promise<{ userId: string; companyId?: string; roles: string[] } | null> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const { verifyTenantToken } = await import("@/server/utils/token");
-    const payload = await verifyTenantToken(authHeader.slice(7));
-    if (payload?.actorId) {
-      return {
-        userId: payload.actorId as string,
-        companyId: payload.companyId as string | undefined,
-        roles: (payload.roles as string[]) ?? [],
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export async function GET(req: NextRequest) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const uri = url.searchParams.get("uri");
 
@@ -40,9 +21,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const auth = await tryGetAuth(req);
-  const isAuthenticated = auth !== null;
-
+  const isAuthenticated = ctx.claims !== undefined;
   const path = uri.split("/");
   const fs = await getFS();
 
@@ -90,3 +69,9 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+// withAuth without requireAuthenticated allows both authenticated and anonymous access
+export const GET = compose(
+  withAuth(),
+  async (req, ctx) => getHandler(req, ctx),
+);

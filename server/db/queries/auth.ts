@@ -5,7 +5,8 @@ export type VerificationRequestType =
   | "email_verify"
   | "phone_verify"
   | "password_reset"
-  | "lead_update";
+  | "lead_update"
+  | "recovery_verify";
 
 export interface VerificationRequestRecord {
   id: string;

@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getDb } from "@/server/db/connection";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("q") ?? "";
   const systemSlug = url.searchParams.get("systemSlug") ?? "grex-id";
 
   if (!search || search.length < 2) {
-    return NextResponse.json({ success: true, data: [] });
+    return Response.json({ success: true, data: [] });
   }
 
   try {
@@ -37,9 +40,9 @@ export async function GET(req: NextRequest) {
         return { id: company.id, label: company.name };
       });
 
-    return NextResponse.json({ success: true, data });
+    return Response.json({ success: true, data });
   } catch {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "ERROR", message: "common.error.generic" },
@@ -48,3 +51,9 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => getHandler(req, ctx),
+);

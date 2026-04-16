@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from "next/server";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
@@ -9,12 +8,12 @@ import {
 } from "@/server/db/queries/data-deletion";
 import { getDb } from "@/server/db/connection";
 
-async function deleteHandler(req: NextRequest, ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { companyId, systemId, password } = body;
 
   if (!companyId || !systemId || !password) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -32,7 +31,7 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
     password,
   );
   if (!passwordValid) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -53,7 +52,7 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
   const systemSlug = systemResult[0]?.[0]?.slug;
 
   if (!systemSlug) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -71,7 +70,7 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
     { companyId },
   );
   if (!companyResult[0]?.[0]) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -85,14 +84,14 @@ async function deleteHandler(req: NextRequest, ctx: RequestContext) {
 
   await deleteCompanySystemData(companyId, systemId, systemSlug);
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: { message: "core.dataDeletion.success" },
   });
 }
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 5 }),
+  withRateLimit({ windowMs: 60_000, maxRequests: 5 }),
   withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
-  async (req, _ctx) => deleteHandler(req as NextRequest, _ctx),
+  deleteHandler,
 );

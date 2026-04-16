@@ -16,7 +16,7 @@ export function withRateLimit(config: RateLimitConfig): Middleware {
       return Response.json(
         {
           success: false,
-          error: { code: "RATE_LIMITED", message: "Too many requests" },
+          error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
         },
         {
           status: 429,

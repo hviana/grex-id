@@ -384,7 +384,7 @@ export default function TermsEditor() {
       >
         <div className="space-y-4">
           <ErrorDisplay message={error} />
-          <div className="backdrop-blur-md bg-white/5 border border-[var(--color-dark-gray)] rounded-lg p-3">
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-3">
             <span className="text-sm text-[var(--color-light-text)]">
               {editingSystem?.name}
             </span>
@@ -443,7 +443,7 @@ export default function TermsEditor() {
           {/* System Search */}
           {selectedSystem
             ? (
-              <div className="flex items-center gap-3 backdrop-blur-md bg-white/5 border border-[var(--color-dark-gray)] rounded-lg p-3">
+              <div className="flex items-center gap-3 backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-3">
                 <span className="text-sm text-white font-medium">
                   {selectedSystem.name}
                 </span>

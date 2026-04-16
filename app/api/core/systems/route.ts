@@ -1,4 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import {
   createSystem,
   deleteSystem,
@@ -7,22 +10,23 @@ import {
 } from "@/server/db/queries/systems";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import Core from "@/server/utils/Core";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
   const result = await listSystems({ search, cursor, limit });
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: result.data,
     nextCursor: result.nextCursor,
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, slug, logoUri, termsOfService } = body;
 
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
   const allErrors = [...nameErrors, ...slugErrors];
 
   if (allErrors.length > 0) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: allErrors },
@@ -47,15 +51,17 @@ export async function POST(req: NextRequest) {
     termsOfService: termsOfService || undefined,
   });
 
-  return NextResponse.json({ success: true, data: system }, { status: 201 });
+  await Core.getInstance().reload();
+
+  return Response.json({ success: true, data: system }, { status: 201 });
 }
 
-export async function PUT(req: NextRequest) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id, name, slug, logoUri, termsOfService } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: ["validation.id.required"] },
@@ -69,7 +75,7 @@ export async function PUT(req: NextRequest) {
   if (slug !== undefined) errors.push(...validateField("slug", slug));
 
   if (errors.length > 0) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors },
@@ -85,15 +91,18 @@ export async function PUT(req: NextRequest) {
   if (termsOfService !== undefined) data.termsOfService = termsOfService;
 
   const system = await updateSystem(id, data);
-  return NextResponse.json({ success: true, data: system });
+
+  await Core.getInstance().reload();
+
+  return Response.json({ success: true, data: system });
 }
 
-export async function DELETE(req: NextRequest) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", errors: ["validation.id.required"] },
@@ -103,5 +112,32 @@ export async function DELETE(req: NextRequest) {
   }
 
   await deleteSystem(id);
-  return NextResponse.json({ success: true });
+
+  await Core.getInstance().reload();
+
+  return Response.json({ success: true });
 }
+
+export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  getHandler,
+);
+
+export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  postHandler,
+);
+
+export const PUT = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  putHandler,
+);
+
+export const DELETE = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  deleteHandler,
+);

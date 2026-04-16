@@ -1,12 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import { withAuth } from "@/server/middleware/withAuth";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
-import { verifyTenantToken } from "@/server/utils/token";
 import { updateUserLocale } from "@/server/db/queries/users";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { publish } from "@/server/event-queue/publisher";
+import Core from "@/server/utils/Core";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
   const companyId = url.searchParams.get("companyId");
@@ -15,7 +19,7 @@ export async function GET(req: NextRequest) {
   // Return the authenticated user's roles for a specific company+system
   if (action === "context") {
     if (!companyId || !systemId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -26,41 +30,19 @@ export async function GET(req: NextRequest) {
         { status: 400 },
       );
     }
-    const authHeader = req.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "AUTH", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
-    try {
-      const payload = await verifyTenantToken(token);
-      const db = await getDb();
-      const result = await db.query<[{ roles: string[] }[]]>(
-        `SELECT roles FROM user_company_system
-         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-         LIMIT 1`,
-        {
-          userId: rid(payload.actorId),
-          companyId: rid(companyId),
-          systemId: rid(systemId),
-        },
-      );
-      const roles = result[0]?.[0]?.roles ?? [];
-      return NextResponse.json({ success: true, data: { roles } });
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "AUTH", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
+    const db = await getDb();
+    const result = await db.query<[{ roles: string[] }[]]>(
+      `SELECT roles FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+       LIMIT 1`,
+      {
+        userId: rid(ctx.claims!.actorId),
+        companyId: rid(companyId),
+        systemId: rid(systemId),
+      },
+    );
+    const roles = result[0]?.[0]?.roles ?? [];
+    return Response.json({ success: true, data: { roles } });
   }
 
   const search = url.searchParams.get("search");
@@ -80,7 +62,7 @@ export async function GET(req: NextRequest) {
     const userIds = (ucsResult[0] ?? []).map((u) => u.id);
 
     if (userIds.length === 0) {
-      return NextResponse.json({
+      return Response.json({
         success: true,
         data: [],
         nextCursor: null,
@@ -132,7 +114,7 @@ export async function GET(req: NextRequest) {
         rolesMap.get(String(item.id)) ?? [];
     }
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data,
       nextCursor: hasMore && data.length > 0
@@ -163,7 +145,7 @@ export async function GET(req: NextRequest) {
   const hasMore = items.length > limit;
   const data = hasMore ? items.slice(0, limit) : items;
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data,
     nextCursor: hasMore && data.length > 0
@@ -172,7 +154,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { email, phone, password, name, companyId, systemId, roles } = body;
 
@@ -192,7 +174,7 @@ export async function POST(req: NextRequest) {
   if (!systemId) errors.push("validation.systemId.required");
 
   if (errors.length > 0) {
-    return NextResponse.json(
+    return Response.json(
       { success: false, error: { code: "VALIDATION", errors } },
       { status: 400 },
     );
@@ -226,7 +208,42 @@ export async function POST(req: NextRequest) {
         roles: roles ?? [],
       },
     );
-    return NextResponse.json(
+
+    // Send tenant-invite email
+    const core = Core.getInstance();
+    const inviterUser = await db.query<[{ profile: { name: string } }[]]>(
+      `SELECT profile FROM $userId FETCH profile`,
+      { userId: rid(ctx.claims!.actorId) },
+    );
+    const inviterName = (inviterUser[0]?.[0] as any)?.profile?.name ?? "";
+    const systemResult = await db.query<[{ name: string }[]]>(
+      `SELECT name FROM system WHERE id = $systemId LIMIT 1`,
+      { systemId: rid(systemId) },
+    );
+    const systemName = systemResult[0]?.[0]?.name ?? "";
+    const companyResult = await db.query<[{ name: string }[]]>(
+      `SELECT name FROM company WHERE id = $companyId LIMIT 1`,
+      { companyId: rid(companyId) },
+    );
+    const companyName = companyResult[0]?.[0]?.name ?? "";
+    const baseUrl = (await core.getSetting("app.baseUrl")) ?? "http://localhost:3000";
+
+    await publish("SEND_EMAIL", {
+      recipients: [stdEmail],
+      template: "tenant-invite",
+      templateData: {
+        name: (existingUser as any).profile?.name ?? stdEmail,
+        inviterName,
+        companyName,
+        systemName,
+        roles: (roles ?? []).join(", "),
+        loginUrl: `${baseUrl}/login?system=${ctx.tenant.systemSlug}`,
+      },
+      locale: undefined,
+      systemSlug: ctx.tenant.systemSlug,
+    });
+
+    return Response.json(
       { success: true, data: existingUser, invited: true },
       { status: 200 },
     );
@@ -262,44 +279,21 @@ export async function POST(req: NextRequest) {
     },
   );
 
-  return NextResponse.json(
+  return Response.json(
     { success: true, data: result[4]?.[0] },
     { status: 201 },
   );
 }
 
-export async function PUT(req: NextRequest) {
+async function putHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
 
   if (action === "locale") {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
-    let tokenPayload;
-    try {
-      tokenPayload = await verifyTenantToken(authHeader.slice(7));
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
-
     const body = await req.json();
     const locale = body.locale as string | undefined;
     if (!locale || typeof locale !== "string") {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: { code: "VALIDATION", errors: ["validation.locale.required"] },
@@ -308,38 +302,15 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    await updateUserLocale(tokenPayload.actorId as string, locale);
-    return NextResponse.json({ success: true });
+    await updateUserLocale(ctx.claims!.actorId, locale);
+    return Response.json({ success: true });
   }
 
   // Self-service profile update (authenticated user updates their own profile)
   if (action === "profile") {
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
-    let tokenPayload;
-    try {
-      tokenPayload = await verifyTenantToken(authHeader.slice(7));
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
-        },
-        { status: 401 },
-      );
-    }
-
     const body = await req.json();
     const { name, phone, avatarUri, age } = body;
-    const userId = tokenPayload.actorId;
+    const userId = ctx.claims!.actorId;
     const db = await getDb();
 
     const profileSets: string[] = ["updatedAt = time::now()"];
@@ -349,7 +320,7 @@ export async function PUT(req: NextRequest) {
       const stdName = standardizeField("name", name, "user");
       const nameErrors = validateField("name", stdName, "user");
       if (nameErrors.length > 0) {
-        return NextResponse.json(
+        return Response.json(
           { success: false, error: { code: "VALIDATION", errors: nameErrors } },
           { status: 400 },
         );
@@ -374,7 +345,7 @@ export async function PUT(req: NextRequest) {
       if (stdPhone) {
         const phoneErrors = validateField("phone", stdPhone, "user");
         if (phoneErrors.length > 0) {
-          return NextResponse.json(
+          return Response.json(
             {
               success: false,
               error: { code: "VALIDATION", errors: phoneErrors },
@@ -402,7 +373,7 @@ export async function PUT(req: NextRequest) {
     );
     const updatedUser = result[result.length - 1]?.[0];
 
-    return NextResponse.json({ success: true, data: updatedUser });
+    return Response.json({ success: true, data: updatedUser });
   }
 
   // Edit user profile + roles (admin)
@@ -410,7 +381,7 @@ export async function PUT(req: NextRequest) {
   const { id, name, phone, companyId, systemId, roles } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.id.required" },
@@ -420,8 +391,6 @@ export async function PUT(req: NextRequest) {
   }
 
   const db = await getDb();
-  const sets: string[] = [];
-  const bindings: Record<string, unknown> = { id: rid(id) };
 
   if (name !== undefined) {
     const stdName = standardizeField("name", name, "user");
@@ -432,6 +401,9 @@ export async function PUT(req: NextRequest) {
       { id: rid(id), name: stdName },
     );
   }
+
+  const sets: string[] = [];
+  const bindings: Record<string, unknown> = { id: rid(id) };
 
   if (phone !== undefined) {
     const stdPhone = phone ? standardizeField("phone", phone, "user") : null;
@@ -460,15 +432,15 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }
 
-export async function DELETE(req: NextRequest) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { userId, companyId, systemId } = body;
 
   if (!userId || !companyId || !systemId) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "VALIDATION", message: "validation.fields.required" },
@@ -490,5 +462,29 @@ export async function DELETE(req: NextRequest) {
     },
   );
 
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }
+
+export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => getHandler(req, ctx),
+);
+
+export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => postHandler(req, ctx),
+);
+
+export const PUT = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => putHandler(req, ctx),
+);
+
+export const DELETE = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
+  withAuth({ requireAuthenticated: true }),
+  async (req, ctx) => deleteHandler(req, ctx),
+);

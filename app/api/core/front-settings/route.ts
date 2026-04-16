@@ -1,17 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/server/db/connection";
-import FrontCore from "@/server/utils/FrontCore";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
+import { getDb } from "@/server/db/connection";
+import { standardizeField } from "@/server/utils/field-standardizer";
+import FrontCore from "@/server/utils/FrontCore";
 
-async function getHandler(req: NextRequest) {
+async function getHandler(_req: Request, _ctx: RequestContext) {
   const frontCore = FrontCore.getInstance();
   await frontCore.load();
 
-  const settings: Record<
-    string,
-    { id: string; key: string; value: string; description: string }
-  >[] = [];
+  const settings: { id: string; key: string; value: string; description: string }[] = [];
   for (const [, setting] of frontCore.settings) {
     settings.push({
       id: setting.id,
@@ -23,23 +22,23 @@ async function getHandler(req: NextRequest) {
 
   const missing = await frontCore.getMissingSettings();
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: { settings, missing },
   });
 }
 
-async function putHandler(req: NextRequest) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { settings } = body as {
     settings: { key: string; value: string; description?: string }[];
   };
 
   if (!settings || !Array.isArray(settings)) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.settings.required" },
+        error: { code: "VALIDATION", errors: ["validation.settings.arrayRequired"] },
       },
       { status: 400 },
     );
@@ -57,7 +56,7 @@ async function putHandler(req: NextRequest) {
         updatedAt = time::now()
       WHERE key = $key`,
       {
-        key: s.key,
+        key: standardizeField("name", s.key),
         value: s.value ?? "",
         description: s.description ?? "",
       },
@@ -67,22 +66,17 @@ async function putHandler(req: NextRequest) {
   // Reload FrontCore cache
   await FrontCore.getInstance().reload();
 
-  return NextResponse.json({
-    success: true,
-    message: "core.frontSettings.saved",
-  });
+  return Response.json({ success: true });
 }
 
 export const GET = compose(
-  withAuth({ roles: ["superuser"] }),
-  async (req, _ctx, next) => {
-    return getHandler(req as NextRequest);
-  },
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  getHandler,
 );
 
 export const PUT = compose(
-  withAuth({ roles: ["superuser"] }),
-  async (req, _ctx, next) => {
-    return putHandler(req as NextRequest);
-  },
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  putHandler,
 );

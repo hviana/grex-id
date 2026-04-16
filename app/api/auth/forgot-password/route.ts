@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/server/utils/rate-limiter";
+import { compose } from "@/server/middleware/compose";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import {
   createVerificationRequest,
   findUserByEmail,
@@ -11,35 +12,35 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 
-export async function POST(req: NextRequest) {
-  const core = Core.getInstance();
-  const rateLimitPerMinute = Number(
-    await core.getSetting("auth.rateLimit.perMinute"),
-  );
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
-  const rl = checkRateLimit(`ip:${ip}:forgot`, {
-    windowMs: 60_000,
-    maxRequests: rateLimitPerMinute,
-  });
-  if (!rl.allowed) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
-      },
-      { status: 429 },
+function withAuthRateLimit() {
+  return async (
+    req: Request,
+    ctx: RequestContext,
+    next: () => Promise<Response>,
+  ): Promise<Response> => {
+    const core = Core.getInstance();
+    const rateLimitPerMinute = Number(
+      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
     );
-  }
+    return withRateLimit({
+      windowMs: 60_000,
+      maxRequests: rateLimitPerMinute,
+    })(req, ctx, next);
+  };
+}
 
+async function handler(
+  req: Request,
+  ctx: RequestContext,
+): Promise<Response> {
+  const core = Core.getInstance();
   const body = await req.json();
   const email = body.email
     ? standardizeField("email", body.email, "user")
     : undefined;
 
   // Always return success to avoid user enumeration
-  const successResponse = NextResponse.json({
+  const successResponse = Response.json({
     success: true,
     data: {
       message: "auth.forgotPassword.success",
@@ -97,3 +98,5 @@ export async function POST(req: NextRequest) {
 
   return successResponse;
 }
+
+export const POST = compose(withAuthRateLimit(), handler);

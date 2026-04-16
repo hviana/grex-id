@@ -1,16 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb, rid } from "@/server/db/connection";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
+import { getDb, rid } from "@/server/db/connection";
+import Core from "@/server/utils/Core";
 
-async function getHandler(req: NextRequest, ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId");
-  const systemId = url.searchParams.get("systemId");
+  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
+  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
 
-  if (!companyId || !systemId) {
-    return NextResponse.json(
+  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+    return Response.json(
       {
         success: false,
         error: {
@@ -39,7 +40,7 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: {
       subscriptions: result[0] ?? [],
@@ -50,7 +51,7 @@ async function getHandler(req: NextRequest, ctx: RequestContext) {
   });
 }
 
-async function postHandler(req: NextRequest, ctx: RequestContext) {
+async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { action } = body;
 
@@ -60,7 +61,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     const { companyId, systemId, planId, paymentMethodId } = body;
 
     if (!companyId || !systemId || !planId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -82,7 +83,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     );
     const plan = plans[0]?.[0];
     if (!plan) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: { code: "NOT_FOUND", message: "billing.plans.notFound" },
@@ -92,7 +93,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     }
 
     if (plan.price > 0 && !paymentMethodId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -151,14 +152,14 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       params,
     );
 
-    return NextResponse.json({ success: true, data: result }, { status: 201 });
+    return Response.json({ success: true, data: result }, { status: 201 });
   }
 
   if (action === "cancel") {
     const { companyId, systemId } = body;
 
     if (!companyId || !systemId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -176,7 +177,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       { companyId: rid(companyId), systemId: rid(systemId) },
     );
 
-    return NextResponse.json({ success: true });
+    return Response.json({ success: true });
   }
 
   if (action === "add_payment_method") {
@@ -192,7 +193,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     if (
       !companyId || !cardToken || !cardMask || !holderName || !billingAddress
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -245,7 +246,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       },
     );
 
-    return NextResponse.json(
+    return Response.json(
       { success: true, data: result[3]?.[0] },
       { status: 201 },
     );
@@ -255,7 +256,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     const { companyId, paymentMethodId } = body;
 
     if (!companyId || !paymentMethodId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -273,14 +274,14 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       { companyId: rid(companyId), pmId: rid(paymentMethodId) },
     );
 
-    return NextResponse.json({ success: true });
+    return Response.json({ success: true });
   }
 
   if (action === "remove_payment_method") {
     const { paymentMethodId } = body;
 
     if (!paymentMethodId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -307,14 +308,14 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       { id: rid(paymentMethodId) },
     );
 
-    return NextResponse.json({ success: true });
+    return Response.json({ success: true });
   }
 
   if (action === "purchase_credits") {
     const { companyId, systemId, amount, paymentMethodId } = body;
 
     if (!companyId || !systemId || !amount || !paymentMethodId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -343,7 +344,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       },
     );
 
-    return NextResponse.json(
+    return Response.json(
       { success: true, data: result[0]?.[0] },
       { status: 201 },
     );
@@ -353,7 +354,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     const { companyId, systemId, voucherCode } = body;
 
     if (!companyId || !systemId || !voucherCode) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -372,7 +373,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     const voucher = vouchers[0]?.[0];
 
     if (!voucher) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -388,7 +389,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       voucher.expiresAt &&
       new Date(voucher.expiresAt as string) < new Date()
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: { code: "EXPIRED", message: "billing.voucher.error.expired" },
@@ -402,7 +403,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     if (applicableIds && applicableIds.length > 0) {
       const companyIdStr = String(companyId);
       if (!applicableIds.some((id) => String(id) === companyIdStr)) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -429,7 +430,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
         !currentPlanId ||
         !applicablePlanIds.some((id) => String(id) === currentPlanId)
       ) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -453,7 +454,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       },
     );
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: voucher,
       message: "billing.voucher.success",
@@ -464,7 +465,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     const { companyId, systemId, enabled, amount } = body;
 
     if (!companyId || !systemId) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -477,12 +478,16 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
     }
 
     if (enabled) {
-      // Validate amount
-      const minAmount = 500; // billing.autoRecharge.minAmount (default 500 cents)
-      const maxAmount = 50000; // billing.autoRecharge.maxAmount (default 50000 cents)
+      const core = Core.getInstance();
+      const minAmount = Number(
+        (await core.getSetting("billing.autoRecharge.minAmount")) ?? "500",
+      );
+      const maxAmount = Number(
+        (await core.getSetting("billing.autoRecharge.maxAmount")) ?? "50000",
+      );
 
       if (!amount || amount < minAmount) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -495,7 +500,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       }
 
       if (amount > maxAmount) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -513,7 +518,7 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
         { companyId: rid(companyId) },
       );
       if (!pm[0] || pm[0].length === 0) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -551,10 +556,10 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return Response.json({ success: true });
   }
 
-  return NextResponse.json(
+  return Response.json(
     {
       success: false,
       error: { code: "INVALID_ACTION", message: "common.error.invalidAction" },
@@ -564,11 +569,13 @@ async function postHandler(req: NextRequest, ctx: RequestContext) {
 }
 
 export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx, next) => getHandler(req as NextRequest, _ctx),
+  async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true }),
-  async (req, _ctx, next) => postHandler(req as NextRequest, _ctx),
+  async (req, ctx) => postHandler(req, ctx),
 );

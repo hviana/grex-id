@@ -28,7 +28,7 @@ export default function SearchField(
       value={query}
       onChange={(e) => setQuery(e.target.value)}
       placeholder={placeholder ?? t("common.search")}
-      className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-sm text-white placeholder-[var(--color-light-text)]/50 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+      className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
     />
   );
 }

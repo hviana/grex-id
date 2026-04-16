@@ -1,22 +1,32 @@
 import type { HandlerFn } from "../worker.ts";
-import { getDb } from "../../db/connection.ts";
+import { getDb, rid } from "../../db/connection.ts";
+import { publish } from "../publisher.ts";
 
 export const processPayment: HandlerFn = async (payload) => {
   const subscriptionId = payload.subscriptionId as string;
   const db = await getDb();
 
-  const subs = await db.query<[{
-    id: string;
-    planId: string;
-    paymentMethodId: string;
-    companyId: string;
-    currentPeriodEnd: string;
-  }[]]>(
-    "SELECT * FROM subscription WHERE id = $id LIMIT 1",
-    { id: subscriptionId },
+  // Batch: subscription + plan in one call (§7.2)
+  const result = await db.query<
+    [
+      {
+        id: string;
+        planId: string;
+        paymentMethodId: string;
+        companyId: string;
+        systemId: string;
+        currentPeriodEnd: string;
+      }[],
+      { price: number; recurrenceDays: number; planCredits: number }[],
+    ]
+  >(
+    `SELECT * FROM subscription WHERE id = $id LIMIT 1;
+     LET $planId = (SELECT VALUE planId FROM subscription WHERE id = $id LIMIT 1)[0];
+     SELECT price, recurrenceDays, planCredits FROM plan WHERE id = $planId LIMIT 1;`,
+    { id: rid(subscriptionId) },
   );
 
-  const sub = subs[0]?.[0];
+  const sub = result[0]?.[0];
   if (!sub) {
     console.log(
       `[payment] Subscription ${subscriptionId} not found, skipping.`,
@@ -24,14 +34,7 @@ export const processPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  const plans = await db.query<
-    [{ price: number; recurrenceDays: number; planCredits: number }[]]
-  >(
-    "SELECT price, recurrenceDays, planCredits FROM plan WHERE id = $planId LIMIT 1",
-    { planId: sub.planId },
-  );
-
-  const plan = plans[0]?.[0];
+  const plan = result[1]?.[0];
   if (!plan) return;
 
   // TODO: Call actual payment provider (Phase 6)
@@ -51,7 +54,7 @@ export const processPayment: HandlerFn = async (payload) => {
         remainingPlanCredits = $planCredits,
         creditAlertSent = false`,
       {
-        id: sub.id,
+        id: rid(sub.id),
         newStart,
         newEnd,
         planCredits: plan.planCredits ?? 0,
@@ -60,7 +63,7 @@ export const processPayment: HandlerFn = async (payload) => {
   } else {
     await db.query(
       `UPDATE $id SET status = "past_due"`,
-      { id: sub.id },
+      { id: rid(sub.id) },
     );
   }
 };

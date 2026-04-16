@@ -1,12 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { withRateLimit } from "@/server/middleware/withRateLimit";
+import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
+import { standardizeField } from "@/server/utils/field-standardizer";
+import { validateField } from "@/server/utils/field-validator";
+import Core from "@/server/utils/Core";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
-  const direction = url.searchParams.get("direction") ?? "next";
+  const direction = (url.searchParams.get("direction") as "next" | "prev") ?? "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const systemId = url.searchParams.get("systemId") ?? undefined;
 
@@ -16,7 +22,7 @@ export async function GET(req: NextRequest) {
   const conditions: string[] = [];
 
   if (search) {
-    conditions.push("name CONTAINS $search");
+    conditions.push("name @@ $search");
     bindings.search = search;
   }
 
@@ -41,7 +47,7 @@ export async function GET(req: NextRequest) {
   const hasMore = items.length > limit;
   const data = hasMore ? items.slice(0, limit) : items;
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data,
     nextCursor: hasMore && data.length > 0
@@ -50,18 +56,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, systemId, permissions, isBuiltIn } = body;
 
-  if (!name || !systemId) {
-    return NextResponse.json(
+  const errors: string[] = [];
+  errors.push(...validateField("name", name));
+  if (!systemId) errors.push("validation.system.required");
+
+  if (errors.length > 0) {
+    return Response.json(
       {
         success: false,
-        error: {
-          code: "VALIDATION",
-          message: "validation.role.requiredFields",
-        },
+        error: { code: "VALIDATION", errors },
       },
       { status: 400 },
     );
@@ -76,19 +83,21 @@ export async function POST(req: NextRequest) {
         permissions = $permissions,
         isBuiltIn = $isBuiltIn`,
       {
-        name: sanitizeString(name),
+        name: standardizeField("name", sanitizeString(name)),
         systemId: rid(systemId),
         permissions: permissions ?? [],
         isBuiltIn: isBuiltIn ?? false,
       },
     );
 
-    return NextResponse.json({ success: true, data: result[0]?.[0] }, {
-      status: 201,
-    });
-  } catch (err) {
-    console.error("Failed to create role:", err);
-    return NextResponse.json(
+    await Core.getInstance().reload();
+
+    return Response.json(
+      { success: true, data: result[0]?.[0] },
+      { status: 201 },
+    );
+  } catch {
+    return Response.json(
       {
         success: false,
         error: { code: "ERROR", message: "common.error.generic" },
@@ -98,15 +107,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function PUT(req: NextRequest) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id, ...data } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.id.required" },
+        error: { code: "VALIDATION", errors: ["validation.id.required"] },
       },
       { status: 400 },
     );
@@ -119,7 +128,7 @@ export async function PUT(req: NextRequest) {
 
     if (data.name !== undefined) {
       sets.push("name = $name");
-      bindings.name = sanitizeString(data.name);
+      bindings.name = standardizeField("name", sanitizeString(data.name));
     }
     if (data.permissions !== undefined) {
       sets.push("permissions = $permissions");
@@ -130,15 +139,20 @@ export async function PUT(req: NextRequest) {
       bindings.isBuiltIn = data.isBuiltIn;
     }
 
+    if (sets.length === 0) {
+      return Response.json({ success: true, data: null });
+    }
+
     const result = await db.query<[Record<string, unknown>[]]>(
       `UPDATE $id SET ${sets.join(", ")} RETURN AFTER`,
       bindings,
     );
 
-    return NextResponse.json({ success: true, data: result[0]?.[0] });
-  } catch (err) {
-    console.error("Failed to update role:", err);
-    return NextResponse.json(
+    await Core.getInstance().reload();
+
+    return Response.json({ success: true, data: result[0]?.[0] });
+  } catch {
+    return Response.json(
       {
         success: false,
         error: { code: "ERROR", message: "common.error.generic" },
@@ -148,15 +162,15 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
   if (!id) {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.id.required" },
+        error: { code: "VALIDATION", errors: ["validation.id.required"] },
       },
       { status: 400 },
     );
@@ -165,10 +179,12 @@ export async function DELETE(req: NextRequest) {
   try {
     const db = await getDb();
     await db.query("DELETE $id", { id: rid(id) });
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("Failed to delete role:", err);
-    return NextResponse.json(
+
+    await Core.getInstance().reload();
+
+    return Response.json({ success: true });
+  } catch {
+    return Response.json(
       {
         success: false,
         error: { code: "ERROR", message: "common.error.generic" },
@@ -177,3 +193,27 @@ export async function DELETE(req: NextRequest) {
     );
   }
 }
+
+export const GET = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  getHandler,
+);
+
+export const POST = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  postHandler,
+);
+
+export const PUT = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  putHandler,
+);
+
+export const DELETE = compose(
+  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
+  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  deleteHandler,
+);

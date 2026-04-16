@@ -1,11 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
 import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { publish } from "@/server/event-queue/publisher";
 
-async function postHandler(req: NextRequest, _ctx: RequestContext) {
+async function postHandler(req: Request, _ctx: RequestContext) {
   try {
     const body = await req.json();
     const { locationId, embeddings } = body;
@@ -13,7 +12,7 @@ async function postHandler(req: NextRequest, _ctx: RequestContext) {
     if (
       !locationId || !Array.isArray(embeddings) || embeddings.length === 0
     ) {
-      return NextResponse.json(
+      return Response.json(
         {
           success: false,
           error: {
@@ -27,7 +26,7 @@ async function postHandler(req: NextRequest, _ctx: RequestContext) {
 
     for (const embedding of embeddings) {
       if (!Array.isArray(embedding) || embedding.length !== 1024) {
-        return NextResponse.json(
+        return Response.json(
           {
             success: false,
             error: {
@@ -45,14 +44,14 @@ async function postHandler(req: NextRequest, _ctx: RequestContext) {
       embeddings,
     });
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: {
         eventId,
       },
     });
   } catch {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: {
@@ -66,7 +65,7 @@ async function postHandler(req: NextRequest, _ctx: RequestContext) {
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60000, maxRequests: 60 }),
+  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
   withAuth({ requireAuthenticated: true, permissions: ["grexid.detect"] }),
-  async (req, _ctx) => postHandler(req as NextRequest, _ctx),
+  async (req, ctx) => postHandler(req, ctx),
 );
