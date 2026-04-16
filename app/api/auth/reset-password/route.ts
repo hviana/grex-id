@@ -32,7 +32,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (!token) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", errors: ["validation.token.required"] } },
+      {
+        success: false,
+        error: { code: "VALIDATION", errors: ["validation.token.required"] },
+      },
       { status: 400 },
     );
   }
@@ -47,7 +50,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (password !== confirmPassword) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", errors: ["validation.password.mismatch"] } },
+      {
+        success: false,
+        error: { code: "VALIDATION", errors: ["validation.password.mismatch"] },
+      },
       { status: 400 },
     );
   }
@@ -55,21 +61,30 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const request = await findVerificationRequest(token);
   if (!request || request.type !== "password_reset") {
     return Response.json(
-      { success: false, error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" } },
+      {
+        success: false,
+        error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" },
+      },
       { status: 400 },
     );
   }
 
   if (request.usedAt) {
     return Response.json(
-      { success: false, error: { code: "ALREADY_USED", message: "auth.error.linkUsed" } },
+      {
+        success: false,
+        error: { code: "ALREADY_USED", message: "auth.error.linkUsed" },
+      },
       { status: 400 },
     );
   }
 
   if (new Date(request.expiresAt) < new Date()) {
     return Response.json(
-      { success: false, error: { code: "EXPIRED", message: "auth.error.linkExpired" } },
+      {
+        success: false,
+        error: { code: "EXPIRED", message: "auth.error.linkExpired" },
+      },
       { status: 400 },
     );
   }

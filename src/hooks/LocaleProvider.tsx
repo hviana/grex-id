@@ -17,6 +17,27 @@ import {
 const LOCALE_COOKIE_NAME = "core_locale";
 const TOKEN_COOKIE_NAME = "core_token";
 
+function resolveBrowserLocale(): SupportedLocale | undefined {
+  if (typeof navigator === "undefined" || !navigator.languages) {
+    return undefined;
+  }
+  const locales = supportedLocales as readonly string[];
+  // Pass 1: exact match
+  for (const tag of navigator.languages) {
+    if (locales.includes(tag)) return tag as SupportedLocale;
+  }
+  // Pass 2: primary subtag prefix match
+  for (const tag of navigator.languages) {
+    const prefix = tag.split("-")[0];
+    for (const supported of locales) {
+      if (supported.split("-")[0] === prefix) {
+        return supported as SupportedLocale;
+      }
+    }
+  }
+  return undefined;
+}
+
 function getCookie(name: string): string | undefined {
   if (typeof document === "undefined") return undefined;
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -47,12 +68,11 @@ interface LocaleProviderProps {
 export function LocaleProvider(
   { children, defaultLocale }: LocaleProviderProps,
 ) {
-  const resolvedDefault: SupportedLocale = (
-      defaultLocale &&
-      (supportedLocales as readonly string[]).includes(defaultLocale)
-    )
-    ? (defaultLocale as SupportedLocale)
-    : fallbackLocale;
+  const resolvedDefault: SupportedLocale = resolveBrowserLocale() ??
+    ((defaultLocale &&
+        (supportedLocales as readonly string[]).includes(defaultLocale))
+      ? (defaultLocale as SupportedLocale)
+      : fallbackLocale);
 
   const [locale, setLocaleState] = useState<SupportedLocale>(resolvedDefault);
 

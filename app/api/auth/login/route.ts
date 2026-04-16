@@ -7,7 +7,7 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { getDb, rid } from "@/server/db/connection";
-import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from "otplib";
+import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
 
 /**
  * Auth rate limit middleware — reads config from Core settings.
@@ -170,19 +170,19 @@ async function handler(
   const mem = membership[0]?.[0];
   const tenant = mem
     ? {
-        systemId: String(mem.systemId),
-        companyId: String(mem.companyId),
-        systemSlug: mem.systemSlug ?? "core",
-        roles: (mem.roles ?? []) as string[],
-        permissions: (mem.permissions ?? []) as string[],
-      }
+      systemId: String(mem.systemId),
+      companyId: String(mem.companyId),
+      systemSlug: mem.systemSlug ?? "core",
+      roles: (mem.roles ?? []) as string[],
+      permissions: (mem.permissions ?? []) as string[],
+    }
     : {
-        systemId: "0",
-        companyId: "0",
-        systemSlug: "core",
-        roles: [] as string[],
-        permissions: [] as string[],
-      };
+      systemId: "0",
+      companyId: "0",
+      systemSlug: "core",
+      roles: [] as string[],
+      permissions: [] as string[],
+    };
 
   // Superuser detection from user.roles (global)
   const isSuperuser = (user.roles ?? []).includes("superuser");

@@ -23,7 +23,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", errors: ["validation.settings.arrayRequired"] },
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.settings.arrayRequired"],
+        },
       },
       { status: 400 },
     );

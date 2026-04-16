@@ -27,7 +27,9 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const companyIds: string[] = Array.isArray(parsedBody.companyIds)
       ? [
         ...new Set(
-          parsedBody.companyIds.filter((companyId: unknown): companyId is string =>
+          parsedBody.companyIds.filter((
+            companyId: unknown,
+          ): companyId is string =>
             typeof companyId === "string" && companyId.trim().length > 0
           ),
         ),
@@ -264,7 +266,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       name: name!,
       email: email!,
       phone,
-      profile: mergedProfile as { name: string; avatarUri?: string; age?: number },
+      profile: mergedProfile as {
+        name: string;
+        avatarUri?: string;
+        age?: number;
+      },
       companyIds,
       tags,
     });

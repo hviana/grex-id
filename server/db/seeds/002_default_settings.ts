@@ -10,7 +10,8 @@ const defaults: DefaultSetting[] = [
   {
     key: "auth.jwt.secret",
     value: "dev-secret-change-in-production#234A723as472da3987GG2394",
-    description: "Secret key for signing JWT tokens (must be changed in production)",
+    description:
+      "Secret key for signing JWT tokens (must be changed in production)",
   },
   {
     key: "auth.twoFactor.issuer",

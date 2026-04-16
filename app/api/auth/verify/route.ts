@@ -7,9 +7,7 @@ import {
   markEmailVerified,
   markVerificationUsed,
 } from "@/server/db/queries/auth";
-import {
-  verifyRecoveryChannel,
-} from "@/server/db/queries/recovery-channels";
+import { verifyRecoveryChannel } from "@/server/db/queries/recovery-channels";
 import {
   associateLeadWithCompanySystem,
   isLeadAssociated,
@@ -64,8 +62,12 @@ function parseLeadUpdatePayload(
         (companyId): companyId is string => typeof companyId === "string",
       )
       : undefined,
-    systemId: typeof payload.systemId === "string" ? payload.systemId : undefined,
-    systemSlug: typeof payload.systemSlug === "string" ? payload.systemSlug : undefined,
+    systemId: typeof payload.systemId === "string"
+      ? payload.systemId
+      : undefined,
+    systemSlug: typeof payload.systemSlug === "string"
+      ? payload.systemSlug
+      : undefined,
     faceDescriptor: Array.isArray(payload.faceDescriptor)
       ? payload.faceDescriptor.filter(
         (value): value is number => typeof value === "number",
@@ -97,7 +99,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (!token) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", message: "validation.token.required" } },
+      {
+        success: false,
+        error: { code: "VALIDATION", message: "validation.token.required" },
+      },
       { status: 400 },
     );
   }
@@ -105,21 +110,30 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const request = await findVerificationRequest(token);
   if (!request) {
     return Response.json(
-      { success: false, error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" } },
+      {
+        success: false,
+        error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" },
+      },
       { status: 400 },
     );
   }
 
   if (request.usedAt) {
     return Response.json(
-      { success: false, error: { code: "ALREADY_USED", message: "auth.error.linkUsed" } },
+      {
+        success: false,
+        error: { code: "ALREADY_USED", message: "auth.error.linkUsed" },
+      },
       { status: 400 },
     );
   }
 
   if (new Date(request.expiresAt) < new Date()) {
     return Response.json(
-      { success: false, error: { code: "EXPIRED", message: "auth.error.linkExpired" } },
+      {
+        success: false,
+        error: { code: "EXPIRED", message: "auth.error.linkExpired" },
+      },
       { status: 400 },
     );
   }

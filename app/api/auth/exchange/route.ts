@@ -28,7 +28,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const claims = ctx.claims;
   if (!claims) {
     return Response.json(
-      { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" } },
+      {
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
+      },
       { status: 401 },
     );
   }
@@ -36,7 +39,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   // Only user tokens can be exchanged
   if (claims.actorType !== "user" || !claims.exchangeable) {
     return Response.json(
-      { success: false, error: { code: "FORBIDDEN", message: "auth.error.exchangeNotAllowed" } },
+      {
+        success: false,
+        error: { code: "FORBIDDEN", message: "auth.error.exchangeNotAllowed" },
+      },
       { status: 403 },
     );
   }
@@ -44,7 +50,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   // Check current token not revoked
   if (claims.jti && (await isJtiRevoked(claims.jti))) {
     return Response.json(
-      { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" } },
+      {
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" },
+      },
       { status: 401 },
     );
   }
@@ -54,7 +63,13 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (!companyId || !systemId) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", message: "validation.exchange.companyAndSystem" } },
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.exchange.companyAndSystem",
+        },
+      },
       { status: 400 },
     );
   }
@@ -84,7 +99,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (!result[0] || result[0].length === 0) {
     return Response.json(
-      { success: false, error: { code: "FORBIDDEN", message: "auth.error.notMemberOfTenant" } },
+      {
+        success: false,
+        error: { code: "FORBIDDEN", message: "auth.error.notMemberOfTenant" },
+      },
       { status: 403 },
     );
   }
@@ -130,4 +148,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 }
 
 // Exchange uses withAuth since it requires authentication
-export const POST = compose(withAuthRateLimit(), withAuth({ requireAuthenticated: true }), handler);
+export const POST = compose(
+  withAuthRateLimit(),
+  withAuth({ requireAuthenticated: true }),
+  handler,
+);

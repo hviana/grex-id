@@ -24,7 +24,8 @@ const templateRegistry: Record<string, TemplateFunction> = {
     insufficientCreditTemplate as unknown as TemplateFunction,
   "tenant-invite": tenantInviteTemplate as unknown as TemplateFunction,
   "recovery-verify": recoveryVerifyTemplate as unknown as TemplateFunction,
-  "recovery-channel-reset": recoveryChannelResetTemplate as unknown as TemplateFunction,
+  "recovery-channel-reset":
+    recoveryChannelResetTemplate as unknown as TemplateFunction,
 };
 
 export const sendEmail: HandlerFn = async (payload) => {

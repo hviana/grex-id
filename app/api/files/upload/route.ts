@@ -122,15 +122,23 @@ async function postHandler(req: Request, ctx: RequestContext) {
   if (!isAuthenticated) {
     const core = Core.getInstance();
     try {
-      const extSetting = await core.getSetting("files.publicUpload.allowedExtensions");
+      const extSetting = await core.getSetting(
+        "files.publicUpload.allowedExtensions",
+      );
       if (extSetting) publicAllowedExtensions = JSON.parse(extSetting);
     } catch { /* use defaults */ }
     try {
-      const patternSetting = await core.getSetting("files.publicUpload.allowedPathPatterns");
-      if (patternSetting) publicAllowedPathPatterns = JSON.parse(patternSetting);
+      const patternSetting = await core.getSetting(
+        "files.publicUpload.allowedPathPatterns",
+      );
+      if (patternSetting) {
+        publicAllowedPathPatterns = JSON.parse(patternSetting);
+      }
     } catch { /* use defaults */ }
     try {
-      const sizeSetting = await core.getSetting("files.publicUpload.maxSizeBytes");
+      const sizeSetting = await core.getSetting(
+        "files.publicUpload.maxSizeBytes",
+      );
       if (sizeSetting) publicMaxSizeBytes = Number(sizeSetting);
     } catch { /* use defaults */ }
   }

@@ -29,7 +29,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   if (!systemToken) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", message: "validation.token.required" } },
+      {
+        success: false,
+        error: { code: "VALIDATION", message: "validation.token.required" },
+      },
       { status: 400 },
     );
   }
@@ -40,7 +43,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // Check if token has been revoked
     if (claims.jti && (await isJtiRevoked(claims.jti))) {
       return Response.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" } },
+        {
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" },
+        },
         { status: 401 },
       );
     }
@@ -71,7 +77,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     const user = result[0]?.[0];
     if (!user) {
       return Response.json(
-        { success: false, error: { code: "USER_NOT_FOUND", message: "auth.error.userNotFound" } },
+        {
+          success: false,
+          error: { code: "USER_NOT_FOUND", message: "auth.error.userNotFound" },
+        },
         { status: 401 },
       );
     }
@@ -108,7 +117,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     });
   } catch {
     return Response.json(
-      { success: false, error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" } },
+      {
+        success: false,
+        error: { code: "INVALID_TOKEN", message: "auth.error.invalidToken" },
+      },
       { status: 401 },
     );
   }

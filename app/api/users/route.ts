@@ -226,7 +226,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       { companyId: rid(companyId) },
     );
     const companyName = companyResult[0]?.[0]?.name ?? "";
-    const baseUrl = (await core.getSetting("app.baseUrl")) ?? "http://localhost:3000";
+    const baseUrl = (await core.getSetting("app.baseUrl")) ??
+      "http://localhost:3000";
 
     await publish("SEND_EMAIL", {
       recipients: [stdEmail],
@@ -418,11 +419,17 @@ async function putHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Update context roles
+  // Update context roles — enforce admin invariant (§21.1, §7.2)
   if (roles !== undefined && companyId && systemId) {
-    await db.query(
-      `UPDATE user_company_system SET roles = $roles
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId`,
+    const res = await db.query(
+      `LET $ac = (SELECT count() AS c FROM user_company_system
+         WHERE companyId = $companyId AND systemId = $systemId
+           AND roles CONTAINS "admin" AND userId != $userId)[0].c;
+       IF $ac > 0 OR $roles CONTAINS "admin" {
+         UPDATE user_company_system SET roles = $roles
+           WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+       };
+       RETURN $ac;`,
       {
         userId: rid(id),
         companyId: rid(companyId),
@@ -430,6 +437,19 @@ async function putHandler(req: Request, ctx: RequestContext) {
         roles,
       },
     );
+    const otherAdmins = res[2] as number;
+    if (otherAdmins === 0 && !roles.includes("admin")) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: ["users.error.lastAdminRole"],
+          },
+        },
+        { status: 400 },
+      );
+    }
   }
 
   return Response.json({ success: true });
@@ -451,16 +471,39 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Remove user_company_system association (NOT the user record)
-  await db.query(
-    `DELETE user_company_system
-     WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId`,
+  // Admin invariant (§21.1): atomic check + delete in single batched query (§7.2)
+  const res = await db.query(
+    `LET $isTargetAdmin = (SELECT count() AS c FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+         AND roles CONTAINS "admin" LIMIT 1)[0].c;
+     LET $ac = (SELECT count() AS c FROM user_company_system
+       WHERE companyId = $companyId AND systemId = $systemId
+         AND roles CONTAINS "admin" AND userId != $userId)[0].c;
+     IF $isTargetAdmin = 0 OR $ac > 0 {
+       DELETE user_company_system
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+     };
+     RETURN [$isTargetAdmin, $ac];`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
       systemId: rid(systemId),
     },
   );
+  const [isTargetAdmin, otherAdmins] = res[3] as [number, number];
+
+  if (isTargetAdmin > 0 && otherAdmins === 0) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["users.error.lastAdminDelete"],
+        },
+      },
+      { status: 400 },
+    );
+  }
 
   return Response.json({ success: true });
 }

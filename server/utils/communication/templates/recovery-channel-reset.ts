@@ -14,7 +14,9 @@ export function recoveryChannelResetTemplate(
     </tr>
     <tr>
       <td style="padding: 0 0 8px 0; font-size: 24px; font-weight: 700; color: #ffffff; text-align: center; letter-spacing: -0.5px;">
-        ${t("templates.recoveryChannelReset.greeting", locale, { name: data.name })}
+        ${
+    t("templates.recoveryChannelReset.greeting", locale, { name: data.name })
+  }
       </td>
     </tr>
     <tr>

@@ -22,9 +22,11 @@ setting `app.defaultSystem` determines which homepage is rendered when no
 All public pages (homepage, auth pages, terms) receive system branding (logo +
 name) through the same `?system=` parameter.
 
-**Subframeworks** (§26) extend the Core at build time by mirroring its structure
-under `frameworks/<name>/`. **Systems** are runtime tenants; subframeworks are
-design-time code bundles.
+**Subframeworks** (§26) extend the Core at build time as self-contained,
+namespace-isolated modules under `frameworks/<name>/`. Each framework owns its
+own `AGENTS.md`, API routes, queries, migrations, components, and i18n files —
+never mixed into Core folders. **Systems** are runtime tenants; subframeworks
+are design-time code bundles.
 
 ### 1.1 Runtime invariants (non-negotiable)
 
@@ -54,15 +56,16 @@ design-time code bundles.
 
 ### 2. Tech Stack
 
-| Layer        | Technology         | Version      |
-| ------------ | ------------------ | ------------ |
-| Framework    | Next.js            | 16           |
-| Database     | SurrealDB          | 3.0          |
-| Styling      | TailwindCSS        | 4.2          |
-| Charts       | react-chartjs-2    | latest       |
-| File storage | @hviana/surreal-fs | latest (jsr) |
-| Token/JWT    | @panva/jose        | latest (jsr) |
-| Language     | TypeScript         | strict mode  |
+| Layer         | Technology         | Version      |
+| ------------- | ------------------ | ------------ |
+| Framework     | Next.js            | 16           |
+| Database      | SurrealDB          | 3.0          |
+| Styling       | TailwindCSS        | 4.2          |
+| Charts        | react-chartjs-2    | latest       |
+| File storage  | @hviana/surreal-fs | latest (jsr) |
+| Token/JWT     | @panva/jose        | latest (jsr) |
+| HOTP and TOTP | otplib             | latest       |
+| Language      | TypeScript         | strict mode  |
 
 **Allowed packages (exhaustive — no others without explicit approval):**
 `jsr:@hviana/surreal-fs`, `jsr:@panva/jose`, `npm:react-chartjs-2`,
@@ -145,8 +148,24 @@ active locale, persists it in the `core_locale` cookie, and provides `t()` to
 all descendants. Changing the locale re-renders consumers immediately (no
 refresh).
 
-**Order (first non-null wins):** (1) `core_locale` cookie → (2)
-`System.defaultLocale` (per-system admin-configured) → (3) hardcoded `"en"`.
+**Order (first non-null wins):** (1) `core_locale` cookie → (2) browser
+`navigator.languages` (best match against `supportedLocales`) → (3)
+`System.defaultLocale` (per-system admin-configured) → (4) hardcoded `"en"`.
+
+**Browser language matching** (step 2). Iterates `navigator.languages` (BCP 47
+tag array, ordered by user preference) and selects the first supported locale.
+Two-pass resolution:
+
+1. **Exact match:** tag equals a `supportedLocales` entry (e.g. `"pt-BR"` →
+   `"pt-BR"`).
+2. **Prefix match:** tag's primary subtag matches (e.g. `"pt"` → `"pt-BR"`,
+   `"en-US"` → `"en"`). Only the first prefix match is used.
+
+If no entry matches, step 3 (`System.defaultLocale`) applies. This uses
+`navigator.languages` (exposed by all modern browsers) rather than the
+deprecated `navigator.language`, ensuring Safari, Firefox, Chrome, and Edge are
+handled uniformly. The matching runs once on `LocaleProvider` mount; it never
+re-executes on re-render.
 
 There is no global `app.defaultLocale`. Each system owns its default.
 
@@ -156,8 +175,12 @@ server-side operations (email/SMS) use the user's language even without cookie
 access. `profile.locale` is also set at registration from the active frontend
 locale.
 
-`LocaleProvider` accepts an optional `defaultLocale` prop. `(app)` layout and
-public pages (via `usePublicSystem`) resolve it from the current system.
+`LocaleProvider` accepts an optional `defaultLocale` prop (the system's
+`defaultLocale`). `(app)` layout and public pages (via `usePublicSystem`)
+resolve it from the current system. On mount, the provider resolves the active
+locale via the full chain (cookie → `defaultLocale` prop → browser → `"en"`) and
+stores the result in state; subsequent re-renders reuse the stored value until
+`setLocale()` is called.
 
 #### 5.4 Locale resolution (server — email/SMS handlers)
 
@@ -260,7 +283,18 @@ permission errors, and status messages.
 │   ├── queries/.gitkeep
 │   └── utils/payment/{interface,credit-card}.ts
 ├── public/systems/[slug]/logo.svg
-├── frameworks/[name]/                # §26 — mirrors Core structure
+├── frameworks/                       # §26 — each subframework is self-contained
+│   └── [name]/                       #   namespace-isolated; owns its own AGENTS.md
+│       ├── AGENTS.md
+│       ├── app/api/[name]/route.ts
+│       ├── src/
+│       │   ├── components/[name]/    # framework-specific components
+│       │   ├── contracts/            # framework contracts
+│       │   └── i18n/{en,pt-BR}/      # framework i18n files
+│       └── server/
+│           ├── db/migrations/        # framework migrations
+│           ├── db/queries/           # framework queries
+│           └── utils/                # framework utilities
 ├── tailwind.config.ts next.config.ts tsconfig.json package.json AGENTS.md
 ```
 
@@ -384,7 +418,7 @@ DEFINE TABLE notification SCHEMAFULL
 
 - `server/db/migrations/runner.ts` — tracks applied migrations in `_migrations`
   (UNIQUE `name`), scans root + `systems/<slug>/` + every
-  `frameworks/*/server/db/migrations/` subtree, sorts by numeric prefix
+  `frameworks/<name>/server/db/migrations/` subtree, sorts by numeric prefix
   globally, executes pending in a transaction, records the relative path.
 - `server/db/seeds/runner.ts` — each seed file exports an async function that
   checks existence before inserting (idempotent). Example: superuser seed skips
@@ -397,41 +431,41 @@ migration files below. Read the files directly for exact DDL. Each migration
 creates exactly one table; the rules that matter for app code are summarized in
 this table.
 
-| Migration file                             | Table                    | Key rules                                                                                                                                                                                                                                                          |
-| ------------------------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0000_db_generals.surql`                   | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                          |
-| `0001_create_user.surql`                   | `user`                   | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                       |
-| `0002_create_company.surql`                | `company`                | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                |
-| `0003_create_company_user.surql`           | `company_user`           | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                    |
-| `0004_create_system.surql`                 | `system`                 | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                   |
-| `0005_create_company_system.surql`         | `company_system`         | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                       |
-| `0006_create_user_company_system.surql`    | `user_company_system`    | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                |
-| `0007_create_role.surql`                   | `role`                   | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                       |
-| `0008_create_plan.surql`                   | `plan`                   | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive. |
-| `0009_create_voucher.surql`                | `voucher`                | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers.                 |
-| `0010_create_menu_item.surql`              | `menu_item`              | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                  |
-| `0011_create_subscription.surql`           | `subscription`           | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                      |
-| `0012_create_payment_method.surql`         | `payment_method`         | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                           |
-| `0013_create_credit_purchase.surql`        | `credit_purchase`        | Status ∈ `pending                                                                                                                                                                                                                                                  |
-| `0014_create_connected_app.surql`          | `connected_app`          | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade.                                                                                                                                                                  |
-| `0015_create_api_token.surql`              | `api_token`              | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                               |
-| `0017_create_usage_record.surql`           | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                  |
-| `0018_create_queue_event.surql`            | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                       |
-| `0019_create_delivery.surql`               | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                  |
-| `0020_create_core_setting.surql`           | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                      |
-| `0021_create_verification_request.surql`   | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                               |
-| `0022_create_live_query_permissions.surql` | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                 |
-| `0023_create_lead.surql`                   | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                            |
-| `0024_create_lead_company_system.surql`    | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                            |
-| `0025_create_location.surql`               | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                             |
-| `0029_create_tag.surql`                    | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                |
-| `0030_create_profile.surql`                | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                           |
-| `0031_create_address.surql`                | `address`                | Composable.                                                                                                                                                                                                                                                        |
-| `0032_create_credit_expense.surql`         | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                 |
-| `0033_create_front_core_setting.surql`     | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                  |
-| `0034_create_token_revocation.surql`       | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                            |
-| `0035_create_recovery_channel.surql`      | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                 |
-| `0036_alter_verification_request_type.surql` | `verification_request` | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                     |
+| Migration file                               | Table                    | Key rules                                                                                                                                                                                                                                                          |
+| -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0000_db_generals.surql`                     | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                          |
+| `0001_create_user.surql`                     | `user`                   | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                       |
+| `0002_create_company.surql`                  | `company`                | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                |
+| `0003_create_company_user.surql`             | `company_user`           | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                    |
+| `0004_create_system.surql`                   | `system`                 | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                   |
+| `0005_create_company_system.surql`           | `company_system`         | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                       |
+| `0006_create_user_company_system.surql`      | `user_company_system`    | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                |
+| `0007_create_role.surql`                     | `role`                   | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                       |
+| `0008_create_plan.surql`                     | `plan`                   | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive. |
+| `0009_create_voucher.surql`                  | `voucher`                | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers.                 |
+| `0010_create_menu_item.surql`                | `menu_item`              | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                  |
+| `0011_create_subscription.surql`             | `subscription`           | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                      |
+| `0012_create_payment_method.surql`           | `payment_method`         | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                           |
+| `0013_create_credit_purchase.surql`          | `credit_purchase`        | Status ∈ `pending                                                                                                                                                                                                                                                  |
+| `0014_create_connected_app.surql`            | `connected_app`          | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade.                                                                                                                                                                  |
+| `0015_create_api_token.surql`                | `api_token`              | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                               |
+| `0017_create_usage_record.surql`             | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                  |
+| `0018_create_queue_event.surql`              | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                       |
+| `0019_create_delivery.surql`                 | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                  |
+| `0020_create_core_setting.surql`             | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                      |
+| `0021_create_verification_request.surql`     | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                               |
+| `0022_create_live_query_permissions.surql`   | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                 |
+| `0023_create_lead.surql`                     | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                            |
+| `0024_create_lead_company_system.surql`      | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                            |
+| `0025_create_location.surql`                 | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                             |
+| `0029_create_tag.surql`                      | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                |
+| `0030_create_profile.surql`                  | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                           |
+| `0031_create_address.surql`                  | `address`                | Composable.                                                                                                                                                                                                                                                        |
+| `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                 |
+| `0033_create_front_core_setting.surql`       | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                  |
+| `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                            |
+| `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                 |
+| `0036_alter_verification_request_type.surql` | `verification_request`   | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                    |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -571,30 +605,30 @@ menus, settings), the route handler calls `Core.getInstance().reload()`.
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts`)
 
-| Key                                      | Seed value                                 | Used by                                         |
-| ---------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
-| `app.name`                               | `"Core"`                                   | Email templates (`appName`)                     |
-| `app.baseUrl`                            | `"http://localhost:3000"`                  | Verification/reset links                        |
-| `app.defaultSystem`                      | `""`                                       | Homepage fallback system slug                   |
-| `auth.token.expiry.minutes`              | `"15"`                                     | System API token lifetime                       |
-| `auth.token.expiry.stayLoggedIn.hours`   | `"168"`                                    | Stay-logged-in lifetime (7 days)                |
-| `auth.rateLimit.perMinute`               | `"5"`                                      | Auth route rate limit                           |
-| `auth.verification.expiry.minutes`       | `"15"`                                     | Email verification link                         |
-| `auth.passwordReset.expiry.minutes`      | `"30"`                                     | Password reset link                             |
-| `auth.verification.cooldown.seconds`     | `"120"`                                    | Min interval between verification/reset emails  |
-| `auth.twoFactor.enabled`                 | `"true"`                                   | Global 2FA toggle                               |
-| `auth.oauth.enabled`                     | `"false"`                                  | Global OAuth (login) toggle                     |
-| `auth.oauth.providers`                   | `"[]"`                                     | JSON array of enabled providers                 |
-| `files.maxUploadSizeBytes`               | `"52428800"`                               | 50 MB                                           |
-| `files.publicUpload.rateLimit.perMinute` | `"3"`                                      | Strict per-IP limit for unauthenticated uploads |
-| `files.publicUpload.maxSizeBytes`        | `"2097152"`                                | 2 MB                                            |
-| `files.publicUpload.allowedExtensions`   | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist               |
-| `files.publicUpload.allowedPathPatterns` | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist               |
-| `terms.generic`                          | `""`                                       | Generic LGPD fallback HTML                      |
-| `billing.autoRecharge.minAmount`         | `"500"`                                    | Min auto-recharge (cents)                       |
-| `billing.autoRecharge.maxAmount`         | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
-| `auth.recoveryChannel.maxPerUser`        | `"10"`                                     | Max recovery channels per user                  |
-| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                           | Recovery channel verification link expiry (min) |
+| Key                                                | Seed value                                 | Used by                                         |
+| -------------------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
+| `app.name`                                         | `"Core"`                                   | Email templates (`appName`)                     |
+| `app.baseUrl`                                      | `"http://localhost:3000"`                  | Verification/reset links                        |
+| `app.defaultSystem`                                | `""`                                       | Homepage fallback system slug                   |
+| `auth.token.expiry.minutes`                        | `"15"`                                     | System API token lifetime                       |
+| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                                    | Stay-logged-in lifetime (7 days)                |
+| `auth.rateLimit.perMinute`                         | `"5"`                                      | Auth route rate limit                           |
+| `auth.verification.expiry.minutes`                 | `"15"`                                     | Email verification link                         |
+| `auth.passwordReset.expiry.minutes`                | `"30"`                                     | Password reset link                             |
+| `auth.verification.cooldown.seconds`               | `"120"`                                    | Min interval between verification/reset emails  |
+| `auth.twoFactor.enabled`                           | `"true"`                                   | Global 2FA toggle                               |
+| `auth.oauth.enabled`                               | `"false"`                                  | Global OAuth (login) toggle                     |
+| `auth.oauth.providers`                             | `"[]"`                                     | JSON array of enabled providers                 |
+| `files.maxUploadSizeBytes`                         | `"52428800"`                               | 50 MB                                           |
+| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Strict per-IP limit for unauthenticated uploads |
+| `files.publicUpload.maxSizeBytes`                  | `"2097152"`                                | 2 MB                                            |
+| `files.publicUpload.allowedExtensions`             | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist               |
+| `files.publicUpload.allowedPathPatterns`           | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist               |
+| `terms.generic`                                    | `""`                                       | Generic LGPD fallback HTML                      |
+| `billing.autoRecharge.minAmount`                   | `"500"`                                    | Min auto-recharge (cents)                       |
+| `billing.autoRecharge.maxAmount`                   | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
+| `auth.recoveryChannel.maxPerUser`                  | `"10"`                                     | Max recovery channels per user                  |
+| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                                     | Recovery channel verification link expiry (min) |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -1182,17 +1216,17 @@ produces a mobile-first, email-client-safe skeleton:
 
 #### 15.4 Template catalog
 
-| Template              | File                     | When published                                                                                         | Payload fields                                                              |
-| --------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `verification`        | `verification.ts`        | Registration / email change                                                                            | `name`, `verificationLink`                                                  |
-| `password-reset`      | `password-reset.ts`      | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                         |
-| `payment-success`     | `payment-success.ts`     | Recurring charge OK; credit purchase OK                                                                | `name`, `systemName`, `kind` (`"recurring"                                  |
-| `payment-failure`     | `payment-failure.ts`     | Recurring charge failed; credit purchase failed; auto-recharge attempt failed                          | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`  |
-| `auto-recharge`       | `auto-recharge.ts`       | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
-| `insufficient-credit` | `insufficient-credit.ts` | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                         |
-| `tenant-invite`       | `tenant-invite.ts`       | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`     |
-| `recovery-verify`     | `recovery-verify.ts`     | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                  |
-| `recovery-channel-reset` | `recovery-channel-reset.ts` | Password reset initiated via verified recovery channel (§19.13)                                    | `name`, `resetLink`                                                         |
+| Template                 | File                        | When published                                                                                         | Payload fields                                                              |
+| ------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `verification`           | `verification.ts`           | Registration / email change                                                                            | `name`, `verificationLink`                                                  |
+| `password-reset`         | `password-reset.ts`         | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                         |
+| `payment-success`        | `payment-success.ts`        | Recurring charge OK; credit purchase OK                                                                | `name`, `systemName`, `kind` (`"recurring"                                  |
+| `payment-failure`        | `payment-failure.ts`        | Recurring charge failed; credit purchase failed; auto-recharge attempt failed                          | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`  |
+| `auto-recharge`          | `auto-recharge.ts`          | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
+| `insufficient-credit`    | `insufficient-credit.ts`    | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                         |
+| `tenant-invite`          | `tenant-invite.ts`          | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`     |
+| `recovery-verify`        | `recovery-verify.ts`        | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                  |
+| `recovery-channel-reset` | `recovery-channel-reset.ts` | Password reset initiated via verified recovery channel (§19.13)                                        | `name`, `resetLink`                                                         |
 
 i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
 `templates.paymentSuccess.*`, `templates.paymentFailure.*`,
@@ -1642,6 +1676,7 @@ interface SubformProps {
 | `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                       | Company create/edit             |
 | `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform` | Payment method                  |
 | `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                     | Tokens, Connected Apps, generic |
+| `RecoveryChannelsSubform`      | Recovery channels (email/phone), verification status, add/remove/resend                                  | Profile                         |
 | `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                              | Leads                           |
 
 #### 18.6 Sidebar
@@ -2014,9 +2049,10 @@ channels** to regain access when they lose their primary credentials.
    request for the associated user, and publishes `SEND_EMAIL` or `SEND_SMS`
    with `recovery-channel-reset` template. The reset flow from §19.7 applies
    unchanged. Always returns generic success to prevent enumeration.
-4. **Resend verification.** `POST /api/recovery-channels?action=resend-verification`
-   re-sends the verification email/SMS for an existing unverified channel,
-   subject to the cooldown in `auth.verification.cooldown.seconds`.
+4. **Resend verification.**
+   `POST /api/recovery-channels?action=resend-verification` re-sends the
+   verification email/SMS for an existing unverified channel, subject to the
+   cooldown in `auth.verification.cooldown.seconds`.
 5. **Remove.** Authenticated user removes a channel via
    `DELETE /api/recovery-channels`. Removes from profile's `recoveryChannels`
    array and deletes the record in one batched query.
@@ -2029,10 +2065,9 @@ channels** to regain access when they lose their primary credentials.
 - Cooldown for resend: `auth.verification.cooldown.seconds` (default 120).
 
 **Management UI.** The ProfilePage (`src/components/shared/ProfilePage.tsx`)
-renders a "Recovery Channels" section listing all channels with type emoji
-(`📧` email / `📱` phone), masked value, verified/unverified badge (`✅` /
-`⚠️`), verify and remove buttons, and an "Add Channel" form with type toggle
-and value input.
+renders a "Recovery Channels" card using `RecoveryChannelsSubform` (§18.5),
+which manages channel listing, add/remove/resend actions internally via
+`/api/recovery-channels`.
 
 **Account recovery page.** `app/(auth)/account-recovery/page.tsx` —
 unauthenticated page following the same pattern as `forgot-password/page.tsx`.
@@ -2242,6 +2277,29 @@ visible only to users whose `useSystemContext().roles` contains `admin`.
 user can have different roles in different systems. `DELETE /api/users` only
 removes the `user_company_system` association — never the `user` record or other
 associations.
+
+**Admin invariant (no tenant without an admin).** Every (company, system) pair
+must have at least one user with the `admin` role in `user_company_system`. The
+backend enforces this on two operations:
+
+1. **Role update** (`PUT /api/users` with `roles`): if the new roles array does
+   not contain `"admin"`, the server counts how many other users hold the
+   `admin` role for the same (companyId, systemId). If the count is zero, the
+   request is rejected with
+   `{ code: "VALIDATION", errors: ["users.error.lastAdminRole"] }`.
+2. **User removal** (`DELETE /api/users`): if the target user holds the `admin`
+   role for the (companyId, systemId), the server counts how many other admins
+   remain. If the target is the sole admin, the request is rejected with
+   `{ code: "VALIDATION", errors: ["users.error.lastAdminDelete"] }`.
+
+Both checks are performed in the same batched `db.query()` as the mutation — a
+`SELECT count()` of admins precedes the conditional update/delete via
+`IF … ELSE` branching, ensuring atomicity under concurrency (§7.2).
+
+The company owner who creates the subscription always receives
+`roles: ["admin"]` (§22.1), guaranteeing the invariant starts satisfied.
+Superuser operations (core admin panel) bypass this check — they operate outside
+the tenant scope.
 
 **Features:**
 
@@ -2858,36 +2916,78 @@ Admin management is covered in §20.5 (`TermsEditor`).
 
 ### 26. Subframeworks
 
-The Core supports **subframeworks** — reusable extensions that plug into the
-existing structure without a parallel namespace. A subframework is **not** a
-system (systems are runtime tenants; subframeworks are design-time code
-bundles).
+The Core supports **subframeworks** — reusable, self-contained extensions that
+live under `frameworks/<name>/` in a **strictly separate namespace**. A
+subframework is **not** a system (systems are runtime tenants; subframeworks are
+design-time code bundles). Each framework is an isolated module with its own
+`AGENTS.md`, API routes, queries, migrations, components, and i18n files.
+**There is no mixing of names or folders between the Core and any framework, or
+between different frameworks, under any circumstances** — the same
+namespace-separation discipline applied to systems (§6) applies here.
 
 #### 26.1 Folder layout
 
-Each subframework lives under `frameworks/<name>/` and **mirrors the Core root**
-(`app/`, `src/`, `server/`, `client/`, `public/`, i18n under `src/i18n/`,
-migrations under `server/db/migrations/`, etc.). Example:
+Each subframework lives under `frameworks/<name>/` and contains a
+**self-contained subtree** that mirrors the Core's logical layers but remains
+physically isolated. No framework file is ever merged, symlinked, or aliased
+into the Core's own directories.
 
 ```
-frameworks/foo/
-├── AGENTS.md
-├── app/api/foo/route.ts
-├── src/
-│   ├── components/shared/FooCard.tsx
-│   ├── contracts/foo.ts
-│   └── i18n/en/foo.json
-└── server/
-    ├── db/migrations/0100_create_foo.surql
-    ├── db/queries/foo.ts
-    └── utils/foo-helper.ts
+frameworks/
+└── foo/                                  # framework name = top-level folder
+    ├── AGENTS.md                         # framework-specific specification
+    ├── app/
+    │   └── api/
+    │       └── foo/                      # framework API routes (namespaced)
+    │           └── route.ts
+    ├── src/
+    │   ├── components/
+    │   │   └── foo/                      # framework components (namespaced)
+    │   │       └── FooCard.tsx
+    │   ├── contracts/
+    │   │   └── foo.ts                    # framework contracts
+    │   └── i18n/
+    │       ├── en/foo.json               # framework i18n (en)
+    │       └── pt-BR/foo.json            # framework i18n (pt-BR)
+    ├── server/
+    │   ├── db/
+    │   │   ├── migrations/
+    │   │   │   └── 0100_create_foo.surql # framework migrations (globally numbered)
+    │   │   └── queries/
+    │   │       └── foo.ts                # framework queries
+    │   └── utils/
+    │       └── foo-helper.ts             # framework utilities
+    └── public/
+        └── foo/                          # framework static assets
 ```
 
-The build process symlinks/merges these paths into the Core trees. **No separate
-namespace** — a file at `frameworks/foo/server/db/queries/foo.ts` behaves
-exactly as `server/db/queries/foo.ts`. Migrations are numbered globally (the
-migration runner scans root + `systems/<slug>/` + every
-`frameworks/*/server/db/migrations/` subtree).
+**Namespace rules (non-negotiable):**
+
+1. **Every file belongs to exactly one framework or to the Core.** A framework
+   file lives under `frameworks/<name>/`; a Core file lives under the project
+   root. Never the twain shall mix.
+2. **Framework names are unique.** No two frameworks share the same `<name>`
+   folder. The name is the namespace identifier — it appears in route paths,
+   component directories, i18n file names, and migration relative paths.
+3. **API routes are namespaced.** A framework's routes live under
+   `frameworks/<name>/app/api/<name>/`. The resulting HTTP path is
+   `/api/<name>/…`. This prevents route collisions with Core or other
+   frameworks.
+4. **Components are namespaced.** Framework components live under
+   `frameworks/<name>/src/components/<name>/`. Import paths always include the
+   framework name.
+5. **i18n files are namespaced.** Framework translation files follow the pattern
+   `frameworks/<name>/src/i18n/<locale>/<name>.json`. Keys live under the
+   framework name domain (e.g. `foo.section.label`).
+6. **Migrations are globally numbered** but physically isolated. The migration
+   runner scans `frameworks/<name>/server/db/migrations/` for each framework,
+   merges the found files with root and system migrations, sorts by numeric
+   prefix globally, and records the relative path (e.g.
+   `frameworks/foo/0100_create_foo.surql`) in `_migrations`.
+
+**Adding a new framework** creates the full folder skeleton above, plus a
+`.gitkeep` in every empty structural directory. The framework is registered via
+`frameworks/index.ts` (§26.4).
 
 #### 26.2 AGENTS.md inheritance
 
@@ -2915,27 +3015,40 @@ Every framework AGENTS.md starts with:
 Frameworks and systems are orthogonal. A framework may publish:
 
 - Components registered in `src/components/systems/registry.ts` — a system's
-  menus can reference these.
-- API routes consumable by systems.
+  menus can reference these. Registration imports from the framework's
+  namespaced component path.
+- API routes consumable by systems (under `/api/<name>/…`).
 - Event handlers and templates that systems publish events to.
 - Migrations creating new tables or extending existing ones (with the usual
   `companyId` + `systemId` scoping when tenant-specific).
 
 A framework **MUST NOT**:
 
-- Duplicate the Core file tree in a separate namespace.
+- Place files outside `frameworks/<name>/`. No exceptions.
+- Import from or export to another framework's namespace directly —
+  inter-framework communication goes through the Core's event queue or shared
+  contracts.
 - Introduce a routing prefix that bypasses `withAuth` + `ctx.tenant`.
 - Read `companyId`/`systemId` from request bodies or cookies.
 - Break backwards compatibility with Core routes, tables, or contracts. Additive
   changes only; renames require a full migration-and-cleanup commit.
+- Share component, query, migration, or i18n files with the Core or another
+  framework. Each namespace is physically and logically isolated.
 
 #### 26.4 Registration
 
-Frameworks opt into the build via `next.config.ts` (webpack aliases merging
-trees) and via `frameworks/index.ts` (imports each framework's side-effect
-modules: component registries, handler registries, migration metadata). Exactly
-one public entry per framework — a single `index.ts`. The Core's job starter
-imports them at boot.
+Frameworks register with the Core via `frameworks/index.ts`, which imports each
+framework's single public entry point (`frameworks/<name>/index.ts`). This entry
+file wires the framework into the Core at boot:
+
+- Registers components in `src/components/systems/registry.ts`.
+- Registers event handlers in `server/event-queue/registry.ts`.
+- Exposes migration metadata for the runner to scan.
+- Provides any framework-specific seed data.
+
+Exactly one `index.ts` per framework — no other file from a framework is
+imported by the Core except through this entry point. The Core's job starter
+imports `frameworks/index.ts` at boot.
 
 ---
 
@@ -3010,18 +3123,18 @@ integration with UI.
 
 ### 28. Technical Decisions & Trade-offs
 
-| Decision                                           | Rationale                                                                                                                                |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| SurrealDB HTTP for backend, WebSocket for frontend | Serverless runtimes support HTTP; WebSocket is needed only for live queries in the browser.                                              |
-| In-memory rate limiter                             | Serverless instances share no state; rate limits are per-instance approximations. Migrate to DB-backed counter for strict enforcement.   |
-| Cursor-based pagination (never SKIP)               | Stable performance regardless of dataset size; no missed/duplicated rows on concurrent writes.                                           |
-| Event queue in SurrealDB (not external broker)     | Reduces infra dependencies. Suitable for moderate throughput. Move to an external broker if throughput exceeds SurrealDB capacity.       |
-| Core singleton with reload                         | Avoids repeated DB queries for config. Trade-off: briefly stale during reload. Acceptable for config data.                               |
-| Argon2 via SurrealDB built-in                      | Avoids native module dependencies. Password hashing/verification inside the DB.                                                          |
-| No custom CSS beyond variables                     | Enforces design consistency. Tailwind covers all styling.                                                                                |
-| Emojis instead of icons                            | Zero icon-library dependency.                                                                                                            |
-| `@panva/jose` for JWTs                             | Pure JS; works in all serverless runtimes.                                                                                               |
-| `react-chartjs-2` for charts                       | Flexible, well-documented; covers all chart needs.                                                                                       |
-| Token embeds the full Tenant                       | Single source of context for frontend + backend. Eliminates scattered `companyId`/`systemId`. Token exchange is the only context switch. |
-| Split Core vs FrontCore settings tables            | Physical separation guarantees the frontend bundle cannot leak server-only secrets.                                                      |
-| Subframeworks live beside Core files               | Avoids a separate namespace; keeps conventions uniform. A framework cannot be misrouted or mis-scoped against the Core.                  |
+| Decision                                           | Rationale                                                                                                                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SurrealDB HTTP for backend, WebSocket for frontend | Serverless runtimes support HTTP; WebSocket is needed only for live queries in the browser.                                                                                                                               |
+| In-memory rate limiter                             | Serverless instances share no state; rate limits are per-instance approximations. Migrate to DB-backed counter for strict enforcement.                                                                                    |
+| Cursor-based pagination (never SKIP)               | Stable performance regardless of dataset size; no missed/duplicated rows on concurrent writes.                                                                                                                            |
+| Event queue in SurrealDB (not external broker)     | Reduces infra dependencies. Suitable for moderate throughput. Move to an external broker if throughput exceeds SurrealDB capacity.                                                                                        |
+| Core singleton with reload                         | Avoids repeated DB queries for config. Trade-off: briefly stale during reload. Acceptable for config data.                                                                                                                |
+| Argon2 via SurrealDB built-in                      | Avoids native module dependencies. Password hashing/verification inside the DB.                                                                                                                                           |
+| No custom CSS beyond variables                     | Enforces design consistency. Tailwind covers all styling.                                                                                                                                                                 |
+| Emojis instead of icons                            | Zero icon-library dependency.                                                                                                                                                                                             |
+| `@panva/jose` for JWTs                             | Pure JS; works in all serverless runtimes.                                                                                                                                                                                |
+| `react-chartjs-2` for charts                       | Flexible, well-documented; covers all chart needs.                                                                                                                                                                        |
+| Token embeds the full Tenant                       | Single source of context for frontend + backend. Eliminates scattered `companyId`/`systemId`. Token exchange is the only context switch.                                                                                  |
+| Split Core vs FrontCore settings tables            | Physical separation guarantees the frontend bundle cannot leak server-only secrets.                                                                                                                                       |
+| Subframeworks use separate namespaces              | Physical isolation under `frameworks/<name>/` prevents route collisions, import entanglement, and accidental scope leakage between frameworks and Core. Each framework is a self-contained module with its own AGENTS.md. |

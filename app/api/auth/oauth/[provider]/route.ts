@@ -29,7 +29,13 @@ async function getHandler(
 
   // OAuth redirect to provider — implementation pending
   return Response.json(
-    { success: false, error: { code: "NOT_IMPLEMENTED", message: "auth.error.oauthNotConfigured" } },
+    {
+      success: false,
+      error: {
+        code: "NOT_IMPLEMENTED",
+        message: "auth.error.oauthNotConfigured",
+      },
+    },
     { status: 501 },
   );
 }
@@ -43,7 +49,13 @@ async function postHandler(
 
   // OAuth callback handler — implementation pending
   return Response.json(
-    { success: false, error: { code: "NOT_IMPLEMENTED", message: "auth.error.oauthNotConfigured" } },
+    {
+      success: false,
+      error: {
+        code: "NOT_IMPLEMENTED",
+        message: "auth.error.oauthNotConfigured",
+      },
+    },
     { status: 501 },
   );
 }

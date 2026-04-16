@@ -71,7 +71,10 @@ async function handler(
   const cooldownSeconds = Number(
     await core.getSetting("auth.verification.cooldown.seconds"),
   );
-  const lastRequest = await getLastVerificationRequest(userId, "password_reset");
+  const lastRequest = await getLastVerificationRequest(
+    userId,
+    "password_reset",
+  );
   if (lastRequest) {
     const elapsed = Date.now() - new Date(lastRequest.createdAt).getTime();
     if (elapsed < cooldownSeconds * 1000) {
@@ -95,7 +98,7 @@ async function handler(
     "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
 
-  // Get user profile for template name
+  // Get user profile name in the same call style as forgot-password route
   const db = await getDb();
   const userResult = await db.query<[{ profile: { name: string } }[]]>(
     "SELECT profile FROM $userId FETCH profile",
@@ -103,21 +106,14 @@ async function handler(
   );
   const name = (userResult[0]?.[0] as any)?.profile?.name ?? "";
 
-  if (type === "email") {
-    await publish("SEND_EMAIL", {
-      recipients: [stdValue],
-      template: "recovery-channel-reset",
-      templateData: { name, resetLink },
-      systemSlug,
-    });
-  } else {
-    await publish("SEND_SMS", {
-      recipients: [stdValue],
-      template: "recovery-channel-reset",
-      templateData: { name, resetLink },
-      systemSlug,
-    });
-  }
+  const eventData = {
+    recipients: [stdValue],
+    template: "recovery-channel-reset",
+    templateData: { name, resetLink },
+    systemSlug,
+  };
+
+  await publish(type === "email" ? "SEND_EMAIL" : "SEND_SMS", eventData);
 
   return successResponse;
 }

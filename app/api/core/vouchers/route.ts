@@ -11,7 +11,8 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
-  const direction = (url.searchParams.get("direction") as "next" | "prev") ?? "next";
+  const direction = (url.searchParams.get("direction") as "next" | "prev") ??
+    "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
   const db = await getDb();
@@ -70,7 +71,9 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         success: false,
         error: {
           code: "VALIDATION",
-          errors: codeErrors.length > 0 ? codeErrors : ["validation.voucher.codeRequired"],
+          errors: codeErrors.length > 0
+            ? codeErrors
+            : ["validation.voucher.codeRequired"],
         },
       },
       { status: 400 },

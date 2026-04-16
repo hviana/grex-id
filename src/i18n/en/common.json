@@ -164,5 +164,7 @@
   "recoveryChannels.added": "Recovery channel added",
   "recoveryChannels.removed": "Recovery channel removed",
   "recoveryChannels.resendVerification": "Resend verification",
-  "placeholder.recoveryChannel": "email@example.com or +1 555 123-4567"
+  "placeholder.recoveryChannel": "email@example.com or +1 555 123-4567",
+  "users.error.lastAdminRole": "Cannot remove admin role from the last administrator. Assign another admin first.",
+  "users.error.lastAdminDelete": "Cannot remove the last administrator. Assign another admin first."
 }

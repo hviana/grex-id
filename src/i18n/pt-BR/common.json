@@ -164,5 +164,7 @@
   "recoveryChannels.added": "Canal de recuperação adicionado",
   "recoveryChannels.removed": "Canal de recuperação removido",
   "recoveryChannels.resendVerification": "Reenviar verificação",
-  "placeholder.recoveryChannel": "email@exemplo.com ou +55 11 91234-5678"
+  "placeholder.recoveryChannel": "email@exemplo.com ou +55 11 91234-5678",
+  "users.error.lastAdminRole": "N\u00e3o \u00e9 poss\u00edvel remover o papel de administrador do \u00faltimo administrador. Atribua outro administrador primeiro.",
+  "users.error.lastAdminDelete": "N\u00e3o \u00e9 poss\u00edvel remover o \u00faltimo administrador. Atribua outro administrador primeiro."
 }

@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
-import type { RecoveryChannel, RecoveryChannelType } from "@/src/contracts/recovery-channel";
+import type {
+  RecoveryChannel,
+  RecoveryChannelType,
+} from "@/src/contracts/recovery-channel";
 
 export async function listRecoveryChannels(
   userId: string,
@@ -92,6 +95,21 @@ export async function findRecoveryChannelById(
   const result = await db.query<[RecoveryChannel[]]>(
     "SELECT * FROM $channelId",
     { channelId: rid(channelId) },
+  );
+  return result[0]?.[0] ?? null;
+}
+
+export async function findRecoveryChannelByUserAndValue(
+  userId: string,
+  type: RecoveryChannelType,
+  value: string,
+): Promise<RecoveryChannel | null> {
+  const db = await getDb();
+  const result = await db.query<[RecoveryChannel[]]>(
+    `SELECT * FROM recovery_channel
+     WHERE userId = $userId AND type = $type AND value = $value
+     LIMIT 1`,
+    { userId: rid(userId), type, value },
   );
   return result[0]?.[0] ?? null;
 }

@@ -4,10 +4,7 @@ import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { getDb, rid } from "@/server/db/connection";
-import {
-  generateSecureToken,
-  hashToken,
-} from "@/server/utils/token";
+import { generateSecureToken, hashToken } from "@/server/utils/token";
 import { standardizeField } from "@/server/utils/field-standardizer";
 
 function withAuthRateLimit() {
@@ -37,17 +34,33 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const claims = ctx.claims;
   if (!claims) {
     return Response.json(
-      { success: false, error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" } },
+      {
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
+      },
       { status: 401 },
     );
   }
 
   const body = await req.json();
-  const { clientName, permissions, systemSlug, companyId, redirectOrigin, monthlySpendLimit } = body;
+  const {
+    clientName,
+    permissions,
+    systemSlug,
+    companyId,
+    redirectOrigin,
+    monthlySpendLimit,
+  } = body;
 
   if (!clientName || !systemSlug || !companyId) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", message: "validation.oauth.requiredFields" } },
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.oauth.requiredFields",
+        },
+      },
       { status: 400 },
     );
   }
@@ -62,7 +75,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const systemId = sysResult[0]?.[0]?.id;
   if (!systemId) {
     return Response.json(
-      { success: false, error: { code: "NOT_FOUND", message: "common.error.notFound" } },
+      {
+        success: false,
+        error: { code: "NOT_FOUND", message: "common.error.notFound" },
+      },
       { status: 404 },
     );
   }
@@ -70,8 +86,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const grantedPermissions: string[] = typeof permissions === "string"
     ? permissions.split(",").map((p: string) => p.trim()).filter(Boolean)
     : Array.isArray(permissions)
-      ? permissions
-      : [];
+    ? permissions
+    : [];
 
   const userId = claims.actorId;
   const rawToken = generateSecureToken();
@@ -100,7 +116,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       companyId: rid(companyId),
       systemId: rid(systemId),
       permissions: grantedPermissions,
-      monthlySpendLimit: monthlySpendLimit ? Number(monthlySpendLimit) : undefined,
+      monthlySpendLimit: monthlySpendLimit
+        ? Number(monthlySpendLimit)
+        : undefined,
       userId: rid(userId),
       redirectOrigin: redirectOrigin ?? "",
       tokenHash,
@@ -115,4 +133,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   );
 }
 
-export const POST = compose(withAuthRateLimit(), withAuth({ requireAuthenticated: true }), handler);
+export const POST = compose(
+  withAuthRateLimit(),
+  withAuth({ requireAuthenticated: true }),
+  handler,
+);

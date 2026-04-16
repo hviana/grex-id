@@ -6,15 +6,52 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import { generateSecureToken } from "@/server/utils/token";
-import { createVerificationRequest, getLastVerificationRequest } from "@/server/db/queries/auth";
 import {
-  listRecoveryChannels,
+  createVerificationRequest,
+  getLastVerificationRequest,
+} from "@/server/db/queries/auth";
+import {
   createRecoveryChannel,
   deleteRecoveryChannel,
   findRecoveryChannelById,
+  findRecoveryChannelByUserAndValue,
+  listRecoveryChannels,
 } from "@/server/db/queries/recovery-channels";
 import Core from "@/server/utils/Core";
-import { getDb, rid } from "@/server/db/connection";
+
+async function sendChannelVerification(
+  userId: string,
+  channelId: string,
+  channelType: "email" | "phone",
+  channelValue: string,
+  userName: string,
+  systemSlug: string,
+): Promise<void> {
+  const core = Core.getInstance();
+  const verificationExpiryMinutes = Number(
+    await core.getSetting("auth.recoveryChannel.verification.expiry.minutes"),
+  );
+  const token = generateSecureToken();
+  await createVerificationRequest({
+    userId,
+    type: "recovery_verify",
+    token,
+    expiresAt: new Date(Date.now() + verificationExpiryMinutes * 60_000),
+    payload: { channelId },
+  });
+
+  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+    "http://localhost:3000";
+  const verificationLink = `${baseUrl}/verify?token=${token}`;
+  const eventData = {
+    recipients: [channelValue],
+    template: "recovery-verify",
+    templateData: { name: userName, verificationLink },
+    systemSlug,
+  };
+
+  await publish(channelType === "email" ? "SEND_EMAIL" : "SEND_SMS", eventData);
+}
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const userId = ctx.claims!.actorId;
@@ -34,7 +71,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     if (!channelId) {
       return Response.json(
-        { success: false, error: { code: "VALIDATION", errors: ["validation.id.required"] } },
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: ["validation.id.required"] },
+        },
         { status: 400 },
       );
     }
@@ -42,14 +82,23 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const channel = await findRecoveryChannelById(channelId);
     if (!channel || String(channel.userId) !== String(userId)) {
       return Response.json(
-        { success: false, error: { code: "ERROR", message: "common.error.generic" } },
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.generic" },
+        },
         { status: 404 },
       );
     }
 
     if (channel.verified) {
       return Response.json(
-        { success: false, error: { code: "ERROR", message: "auth.recoveryChannel.error.notVerified" } },
+        {
+          success: false,
+          error: {
+            code: "ERROR",
+            message: "auth.recoveryChannel.error.notVerified",
+          },
+        },
         { status: 400 },
       );
     }
@@ -59,56 +108,34 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const cooldownSeconds = Number(
       await core.getSetting("auth.verification.cooldown.seconds"),
     );
-    const lastRequest = await getLastVerificationRequest(userId, "recovery_verify");
+    const lastRequest = await getLastVerificationRequest(
+      userId,
+      "recovery_verify",
+    );
     if (lastRequest) {
       const elapsed = Date.now() - new Date(lastRequest.createdAt).getTime();
       if (elapsed < cooldownSeconds * 1000) {
         return Response.json(
-          { success: false, error: { code: "ERROR", message: "common.error.rateLimited" } },
+          {
+            success: false,
+            error: { code: "ERROR", message: "common.error.rateLimited" },
+          },
           { status: 429 },
         );
       }
     }
 
-    // Create new verification request
-    const verificationExpiryMinutes = Number(
-      await core.getSetting("auth.recoveryChannel.verification.expiry.minutes"),
-    );
-    const token = generateSecureToken();
-    await createVerificationRequest({
+    // Get user name from claims profile
+    const name = (ctx.claims as any)?.profile?.name ?? "";
+
+    await sendChannelVerification(
       userId,
-      type: "recovery_verify",
-      token,
-      expiresAt: new Date(Date.now() + verificationExpiryMinutes * 60_000),
-      payload: { channelId: channel.id },
-    });
-
-    const baseUrl = (await core.getSetting("app.baseUrl")) ?? "http://localhost:3000";
-    const verificationLink = `${baseUrl}/verify?token=${token}`;
-
-    // Get user profile for template name
-    const db = await getDb();
-    const userResult = await db.query<[{ profile: { name: string } }[]]>(
-      "SELECT profile FROM $userId FETCH profile",
-      { userId: rid(userId) },
+      String(channel.id),
+      channel.type as "email" | "phone",
+      channel.value,
+      name,
+      ctx.tenant.systemSlug,
     );
-    const name = (userResult[0]?.[0] as any)?.profile?.name ?? "";
-
-    if (channel.type === "email") {
-      await publish("SEND_EMAIL", {
-        recipients: [channel.value],
-        template: "recovery-verify",
-        templateData: { name, verificationLink },
-        systemSlug: ctx.tenant.systemSlug,
-      });
-    } else {
-      await publish("SEND_SMS", {
-        recipients: [channel.value],
-        template: "recovery-verify",
-        templateData: { name, verificationLink },
-        systemSlug: ctx.tenant.systemSlug,
-      });
-    }
 
     return Response.json({ success: true });
   }
@@ -135,26 +162,44 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   if (type !== "email" && type !== "phone") {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", errors: ["validation.recoveryChannel.type.required"] } },
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.recoveryChannel.type.required"],
+        },
+      },
       { status: 400 },
     );
   }
 
-  const stdValue = standardizeField(
-    type === "email" ? "email" : "phone",
-    value,
-    "recovery_channel",
-  );
+  const fieldType = type === "email" ? "email" : "phone";
+  const stdValue = standardizeField(fieldType, value, "recovery_channel");
 
-  const valueErrors = validateField(
-    type === "email" ? "email" : "phone",
-    stdValue,
-    "user",
-  );
+  const valueErrors = validateField(fieldType, stdValue, "user");
   if (valueErrors.length > 0) {
     return Response.json(
       { success: false, error: { code: "VALIDATION", errors: valueErrors } },
       { status: 400 },
+    );
+  }
+
+  // Check duplicate channel for this user
+  const existing = await findRecoveryChannelByUserAndValue(
+    userId,
+    type,
+    stdValue,
+  );
+  if (existing) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "ERROR",
+          message: "auth.recoveryChannel.error.duplicate",
+        },
+      },
+      { status: 409 },
     );
   }
 
@@ -172,50 +217,28 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   if (!channel) {
     return Response.json(
-      { success: false, error: { code: "ERROR", message: "auth.recoveryChannel.error.maxReached" } },
+      {
+        success: false,
+        error: {
+          code: "ERROR",
+          message: "auth.recoveryChannel.error.maxReached",
+        },
+      },
       { status: 400 },
     );
   }
 
-  // Create verification request
-  const verificationExpiryMinutes = Number(
-    await core.getSetting("auth.recoveryChannel.verification.expiry.minutes"),
-  );
-  const token = generateSecureToken();
-  await createVerificationRequest({
+  // Get user name from claims profile
+  const name = (ctx.claims as any)?.profile?.name ?? "";
+
+  await sendChannelVerification(
     userId,
-    type: "recovery_verify",
-    token,
-    expiresAt: new Date(Date.now() + verificationExpiryMinutes * 60_000),
-    payload: { channelId: channel.id },
-  });
-
-  const baseUrl = (await core.getSetting("app.baseUrl")) ?? "http://localhost:3000";
-  const verificationLink = `${baseUrl}/verify?token=${token}`;
-
-  // Get user profile for template name
-  const db = await getDb();
-  const userResult = await db.query<[{ profile: { name: string } }[]]>(
-    "SELECT profile FROM $userId FETCH profile",
-    { userId: rid(userId) },
+    String(channel.id),
+    type,
+    stdValue,
+    name,
+    ctx.tenant.systemSlug,
   );
-  const name = (userResult[0]?.[0] as any)?.profile?.name ?? "";
-
-  if (type === "email") {
-    await publish("SEND_EMAIL", {
-      recipients: [stdValue],
-      template: "recovery-verify",
-      templateData: { name, verificationLink },
-      systemSlug: ctx.tenant.systemSlug,
-    });
-  } else {
-    await publish("SEND_SMS", {
-      recipients: [stdValue],
-      template: "recovery-verify",
-      templateData: { name, verificationLink },
-      systemSlug: ctx.tenant.systemSlug,
-    });
-  }
 
   return Response.json({ success: true, data: channel }, { status: 201 });
 }
@@ -227,7 +250,10 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   if (!channelId) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", errors: ["validation.id.required"] } },
+      {
+        success: false,
+        error: { code: "VALIDATION", errors: ["validation.id.required"] },
+      },
       { status: 400 },
     );
   }
@@ -236,7 +262,10 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   const channel = await findRecoveryChannelById(channelId);
   if (!channel || String(channel.userId) !== String(userId)) {
     return Response.json(
-      { success: false, error: { code: "ERROR", message: "common.error.generic" } },
+      {
+        success: false,
+        error: { code: "ERROR", message: "common.error.generic" },
+      },
       { status: 404 },
     );
   }

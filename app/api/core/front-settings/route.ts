@@ -10,7 +10,12 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
   const frontCore = FrontCore.getInstance();
   await frontCore.load();
 
-  const settings: { id: string; key: string; value: string; description: string }[] = [];
+  const settings: {
+    id: string;
+    key: string;
+    value: string;
+    description: string;
+  }[] = [];
   for (const [, setting] of frontCore.settings) {
     settings.push({
       id: setting.id,
@@ -38,7 +43,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", errors: ["validation.settings.arrayRequired"] },
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.settings.arrayRequired"],
+        },
       },
       { status: 400 },
     );
