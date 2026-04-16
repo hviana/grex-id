@@ -1,6 +1,8 @@
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
 
-// NOTE: No server-only guard — this file is isomorphic (safe for frontend import)
+if (typeof window !== "undefined") {
+  throw new Error("FrontCore must not be imported in client-side code.");
+}
 
 export interface MissingFrontSetting {
   key: string;
@@ -11,8 +13,6 @@ class FrontCore {
   private static instance: FrontCore | null = null;
   private loaded = false;
   private loadPromise: Promise<void> | null = null;
-  private isServer = typeof window === "undefined";
-
   settings: Map<string, FrontCoreSetting> = new Map();
   private missingSettings: Map<string, MissingFrontSetting> = new Map();
 
@@ -37,14 +37,6 @@ class FrontCore {
   }
 
   async load(): Promise<void> {
-    if (this.isServer) {
-      await this.loadFromDb();
-    } else {
-      await this.loadFromApi();
-    }
-  }
-
-  private async loadFromDb(): Promise<void> {
     try {
       const { getDb } = await import("../db/connection.ts");
       const db = await getDb();
@@ -63,26 +55,6 @@ class FrontCore {
       );
     } catch (err) {
       console.error("[FrontCore] failed to load from DB:", err);
-    }
-  }
-
-  private async loadFromApi(): Promise<void> {
-    try {
-      const res = await fetch("/api/public/front-core");
-      const json = await res.json();
-      if (json.success && json.data) {
-        this.settings.clear();
-        const entries = json.data as Record<string, FrontCoreSetting>;
-        for (const [key, setting] of Object.entries(entries)) {
-          this.settings.set(key, setting);
-          this.missingSettings.delete(key);
-        }
-        console.log(
-          `[FrontCore] loaded ${this.settings.size} front settings from API`,
-        );
-      }
-    } catch (err) {
-      console.error("[FrontCore] failed to load from API:", err);
     }
   }
 

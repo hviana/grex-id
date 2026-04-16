@@ -636,21 +636,19 @@ defined. `/api/core/settings/missing` exposes the log; the settings panel
 renders a warning banner with an "Add all missing" button that pre-fills them as
 new rows.
 
-#### 10.2 FrontCore (isomorphic)
+#### 10.2 FrontCore (server-only)
 
-Mirrors Core for frontend-safe settings only. **Isomorphic** — the file is safe
-to import in both server and frontend bundles, and does not include a
-server-only guard.
+Mirrors Core for frontend-safe settings. **Server-only** — includes the same
+`typeof window` guard as `Core.ts` and must never be imported in frontend code.
+Frontend consumers use `useFrontCore` (§17.3) which calls the public API route
+directly.
 
 - Reads exclusively from `front_core_setting` (never `core_setting`).
-- **In the browser**, `FrontCore.getInstance()` loads via the public route
-  `GET /api/public/front-core` (no auth). Response cached in memory for the page
-  lifetime; refreshed on `reload()`.
-- **On the server**, reads DB directly through the same connection.
+- Reads DB directly through the shared connection.
 - Admin writes via `PUT /api/core/front-settings`: updates DB → calls
-  `FrontCore.getInstance().reload()` on server → broadcasts invalidation to open
-  clients (live SELECT on `front_core_setting`, when the user's SurrealDB token
-  has select permission).
+  `FrontCore.getInstance().reload()` → broadcasts invalidation to open clients
+  (live SELECT on `front_core_setting`, when the user's SurrealDB token has
+  select permission).
 
 **Contract:**
 
