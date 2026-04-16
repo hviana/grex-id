@@ -145,5 +145,7 @@
   "tokens.permissionsHint": "Search permissions defined in this system's roles",
   "users.inviteExisting": "User already exists and was invited to this system",
   "users.rolesHint": "Search available roles for this system",
-  "users.inviteHint": "If the user already has an account, they will be invited to this system without creating a new account."
+  "users.inviteHint": "If the user already has an account, they will be invited to this system without creating a new account.",
+  "error.scopeMismatch": "Scope mismatch",
+  "error.cors": "CORS origin not allowed"
 }

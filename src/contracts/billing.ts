@@ -5,13 +5,16 @@ export interface Subscription {
   companyId: string;
   systemId: string;
   planId: string;
-  paymentMethodId?: string;
+  paymentMethodId?: string; // optional for free plans
   status: "active" | "past_due" | "cancelled";
   currentPeriodStart: string;
   currentPeriodEnd: string;
-  voucherIds: string[];
-  remainingPlanCredits: number;
-  creditAlertSent: boolean;
+  voucherId?: string; // single voucher — replaced on re-apply
+  remainingPlanCredits: number; // resets on renewal
+  creditAlertSent: boolean; // one-shot alert mechanism
+  autoRechargeEnabled: boolean;
+  autoRechargeAmount: number; // cents; 0 when disabled
+  autoRechargeInProgress: boolean; // re-entrancy guard
   createdAt: string;
 }
 

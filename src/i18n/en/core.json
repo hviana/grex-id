@@ -141,5 +141,8 @@
   "dataDeletion.success": "All data for the selected company and system has been deleted",
   "dataDeletion.error.passwordInvalid": "Invalid password",
   "dataDeletion.error.notFound": "Company or system not found",
-  "dataDeletion.error.selectBoth": "Please select both a company and a system"
+  "dataDeletion.error.selectBoth": "Please select both a company and a system",
+  "nav.frontSettings": "Front Settings",
+  "frontSettings.title": "Frontend Settings",
+  "frontSettings.saved": "Frontend settings saved"
 }

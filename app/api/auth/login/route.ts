@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/server/utils/rate-limiter";
 import { findUserByEmail, verifyPassword } from "@/server/db/queries/auth";
-import { createSystemToken } from "@/server/utils/token";
+import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { getDb, rid } from "@/server/db/connection";
 
 export async function POST(req: NextRequest) {
   const core = Core.getInstance();
@@ -109,11 +110,60 @@ export async function POST(req: NextRequest) {
     // TODO: Verify TOTP code against user.twoFactorSecret
   }
 
-  const systemToken = await createSystemToken(
+  // Resolve the user's first company+system membership for the initial tenant
+  const db = await getDb();
+  const membership = await db.query<
+    [{ companyId: string; systemId: string; systemSlug: string; roles: string[]; permissions: string[] }[]]
+  >(
+    `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
+     IF array::len($ucs) > 0 {
+       LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
+       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
+       SELECT
+         $ucs[0].companyId AS companyId,
+         $ucs[0].systemId AS systemId,
+         $sys[0].slug AS systemSlug,
+         (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
+         math::flat($roleRecs[*].permissions) AS permissions
+       FROM system WHERE id = $ucs[0].systemId LIMIT 1;
+     } ELSE {
+       SELECT "0" AS companyId, "0" AS systemId, "core" AS systemSlug, [] AS roles, [] AS permissions SKIP 0 LIMIT 0;
+     };`,
+    { userId: rid(String(user.id)) },
+  );
+
+  const mem = membership[0]?.[0];
+  const tenant = mem
+    ? {
+        systemId: String(mem.systemId),
+        companyId: String(mem.companyId),
+        systemSlug: mem.systemSlug ?? "core",
+        roles: (mem.roles ?? []) as string[],
+        permissions: (mem.permissions ?? []) as string[],
+      }
+    : {
+        systemId: "0",
+        companyId: "0",
+        systemSlug: "core",
+        roles: [] as string[],
+        permissions: [] as string[],
+      };
+
+  // Superuser detection from user.roles (global)
+  const isSuperuser = (user.roles ?? []).includes("superuser");
+  if (isSuperuser) {
+    tenant.roles = ["superuser"];
+    tenant.permissions = ["*"];
+  }
+
+  const jti = crypto.randomUUID();
+  const systemToken = await createTenantToken(
     {
-      userId: String(user.id),
-      email: user.email,
-      roles: user.roles,
+      ...tenant,
+      actorType: "user",
+      actorId: String(user.id),
+      jti,
+      exchangeable: true,
     },
     stayLoggedIn ?? false,
   );

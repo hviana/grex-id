@@ -1,20 +1,5 @@
 {
-  "grexBaseUrl": "https://grex-id.hviana.deno.net",
-  "grexToken": "6b954deba61f1bbc1812071a60ecc0f151e21c062f0ffef1682a15c9f186b82f",
-  "connections": [
-    {
-      "cameraName": "192.168.100.66",
-      "username": "",
-      "password": "",
-      "ip": "192.168.100.66",
-      "port": "8080",
-      "path": "video",
-      "mac": "",
-      "locationId": "location:p82p9ncaurwniklp2sd5",
-      "locationName": "PIB - camera de entrada",
-      "fullUrl": "http://192.168.100.66:8080/video",
-      "id": "0c7f5c82-b122-45f6-a8f9-b20766b5de8d"
-    }
-  ],
-  "token": "tk_fbbcf6a7-cdac-44c4-90e2-880548612b6f"
+  "grexBaseUrl": "http://localhost:4000/",
+  "grexToken": "1c46c650ae1eb28fa65a6d5baf3a98cd9290afeac0ba4c8bf29d1414517aa4fb",
+  "connections": []
 }

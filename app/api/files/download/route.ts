@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       return {
         accessAllowed: true,
         concurrencyIdentifiers: [readPath.slice(0, 3).join("/")],
-        chunksPerSecond: 10,
+        kbytesPerSecond: 10,
       };
     }
     return {

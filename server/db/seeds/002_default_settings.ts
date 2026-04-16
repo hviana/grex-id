@@ -58,11 +58,6 @@ const defaults: DefaultSetting[] = [
     description: "JSON array of enabled OAuth provider names",
   },
   {
-    key: "communication.email.provider",
-    value: "",
-    description: "Email provider configuration (JSON)",
-  },
-  {
     key: "communication.email.mailgun_apikey",
     value: "",
     description: "Mailgun API key for sending emails",
@@ -78,16 +73,6 @@ const defaults: DefaultSetting[] = [
     value: "",
     description:
       "Mailgun sender address (e.g. App Name <noreply@yourdomain.com>)",
-  },
-  {
-    key: "communication.sms.provider",
-    value: "",
-    description: "SMS provider configuration (JSON)",
-  },
-  {
-    key: "payment.provider",
-    value: "",
-    description: "Payment provider configuration (JSON)",
   },
   {
     key: "files.maxUploadSizeBytes",
@@ -106,15 +91,46 @@ const defaults: DefaultSetting[] = [
     description: "Public base URL used in emails and verification links",
   },
   {
-    key: "communication.email.senders",
-    value: '["noreply@core.com"]',
-    description: "JSON array of default email sender addresses",
-  },
-  {
     key: "terms.generic",
     value: "",
     description:
       "Generic LGPD/terms of service HTML content (fallback when system has no specific terms)",
+  },
+  {
+    key: "files.publicUpload.rateLimit.perMinute",
+    value: "3",
+    description:
+      "Strict per-IP rate limit for unauthenticated file uploads",
+  },
+  {
+    key: "files.publicUpload.maxSizeBytes",
+    value: "2097152",
+    description: "Max size for public uploads (2 MB)",
+  },
+  {
+    key: "files.publicUpload.allowedExtensions",
+    value: '[".svg",".png",".jpg",".jpeg",".webp"]',
+    description: "JSON array of allowed file extensions for public uploads",
+  },
+  {
+    key: "files.publicUpload.allowedPathPatterns",
+    value: '["*/*/*/logos/*"]',
+    description: "JSON array of glob patterns for allowed public upload paths",
+  },
+  {
+    key: "billing.autoRecharge.minAmount",
+    value: "500",
+    description: "Minimum auto-recharge amount in cents",
+  },
+  {
+    key: "billing.autoRecharge.maxAmount",
+    value: "50000",
+    description: "Maximum auto-recharge amount per subscription in cents",
+  },
+  {
+    key: "communication.email.senders",
+    value: "[]",
+    description: "JSON array of default sender email addresses",
   },
 ];
 

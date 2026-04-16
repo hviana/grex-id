@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
         maxFileSizeBytes: PUBLIC_MAX_SIZE_BYTES,
         allowedExtensions: PUBLIC_ALLOWED_EXTENSIONS,
         concurrencyIdentifiers: [savePath.slice(0, 3).join("/")],
-        chunksPerSecond: 10,
+        kbytesPerSecond: 10,
       };
     }
     // Authenticated

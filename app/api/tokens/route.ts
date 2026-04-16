@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, rid } from "@/server/db/connection";
 import { generateSecureToken, hashToken } from "@/server/utils/token";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import { revokeToken } from "@/server/db/queries/tokens";
+import type { RequestContext } from "@/src/contracts/auth";
+import type { Tenant } from "@/src/contracts/tenant";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest, ctx: RequestContext) {
   const url = new URL(req.url);
   const userId = url.searchParams.get("userId");
   const companyId = url.searchParams.get("companyId");
@@ -10,7 +15,10 @@ export async function GET(req: NextRequest) {
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
   let query =
-    "SELECT id, name, description, permissions, monthlySpendLimit, expiresAt, createdAt FROM api_token";
+    `SELECT id, name, description, permissions, monthlySpendLimit,
+            neverExpires, expiresAt, frontendUse, frontendDomains,
+            jti, createdAt
+     FROM api_token WHERE revokedAt IS NONE`;
   const conditions: string[] = [];
 
   if (userId) {
@@ -29,7 +37,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ success: true, data: result[0] ?? [] });
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest, ctx: RequestContext) {
   const body = await req.json();
   const {
     name,
@@ -39,7 +47,10 @@ export async function POST(req: NextRequest) {
     systemId,
     permissions,
     monthlySpendLimit,
+    neverExpires,
     expiresAt,
+    frontendUse,
+    frontendDomains,
   } = body;
 
   if (!name || !userId || !companyId || !systemId) {
@@ -55,41 +66,91 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Validate neverExpires XOR expiresAt
+  if (neverExpires && expiresAt) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.token.expiryExclusive",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // Validate frontendUse requires domains
+  const useFrontend = frontendUse === true;
+  const domains: string[] = frontendDomains ?? [];
+  if (useFrontend && domains.length === 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.token.frontendDomainsRequired",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   const rawToken = generateSecureToken();
   const tokenHash = await hashToken(rawToken);
+  const jti = crypto.randomUUID();
+
+  // Build tenant from current context
+  const tenant: Tenant = {
+    systemId: ctx.tenant.systemId,
+    companyId: ctx.tenant.companyId,
+    systemSlug: ctx.tenant.systemSlug,
+    roles: [],
+    permissions: permissions ?? [],
+  };
 
   const db = await getDb();
-  await db.query(
+  const result = await db.query(
     `CREATE api_token SET
       userId = $userId,
       companyId = $companyId,
       systemId = $systemId,
+      tenant = $tenant,
       name = $name,
       description = $description,
       tokenHash = $tokenHash,
+      jti = $jti,
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
-      expiresAt = $expiresAt`,
+      neverExpires = $neverExpires,
+      expiresAt = $expiresAt,
+      frontendUse = $frontendUse,
+      frontendDomains = $frontendDomains`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
       systemId: rid(systemId),
+      tenant,
       name,
       description: description ?? undefined,
       tokenHash,
+      jti,
       permissions: permissions ?? [],
       monthlySpendLimit: monthlySpendLimit ?? undefined,
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      neverExpires: neverExpires === true,
+      expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
+      frontendUse: useFrontend,
+      frontendDomains: domains,
     },
   );
 
-  return NextResponse.json({
-    success: true,
-    data: { token: rawToken },
-  }, { status: 201 });
+  return NextResponse.json(
+    { success: true, data: { token: rawToken } },
+    { status: 201 },
+  );
 }
 
-export async function DELETE(req: NextRequest) {
+async function deleteHandler(req: NextRequest, ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
@@ -103,7 +164,22 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
+  // Soft-delete: set revokedAt instead of hard-deleting
+  await revokeToken(id);
   return NextResponse.json({ success: true });
 }
+
+export const GET = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => getHandler(req as NextRequest, _ctx),
+);
+
+export const POST = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => postHandler(req as NextRequest, _ctx),
+);
+
+export const DELETE = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx) => deleteHandler(req as NextRequest, _ctx),
+);

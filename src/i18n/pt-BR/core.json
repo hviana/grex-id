@@ -141,5 +141,8 @@
   "dataDeletion.success": "Todos os dados da empresa e sistema selecionados foram excluídos",
   "dataDeletion.error.passwordInvalid": "Senha inválida",
   "dataDeletion.error.notFound": "Empresa ou sistema não encontrado",
-  "dataDeletion.error.selectBoth": "Selecione uma empresa e um sistema"
+  "dataDeletion.error.selectBoth": "Selecione uma empresa e um sistema",
+  "nav.frontSettings": "Config. Front-end",
+  "frontSettings.title": "Configurações Front-end",
+  "frontSettings.saved": "Configurações front-end salvas"
 }

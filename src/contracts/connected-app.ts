@@ -5,5 +5,6 @@ export interface ConnectedApp {
   systemId: string;
   permissions: string[];
   monthlySpendLimit?: number;
+  apiTokenId?: string; // linked api_token for revocation cascade
   createdAt: string;
 }

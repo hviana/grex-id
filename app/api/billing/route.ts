@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, rid } from "@/server/db/connection";
-import { verifySystemToken } from "@/server/utils/token";
+import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
+import type { RequestContext } from "@/src/contracts/auth";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest, ctx: RequestContext) {
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId");
   const systemId = url.searchParams.get("systemId");
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest) {
       Record<string, unknown>[],
     ]
   >(
-    `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherIds;
+    `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
      SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddress;
      SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
      SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";`,
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest, ctx: RequestContext) {
   const body = await req.json();
   const { action } = body;
 
@@ -70,16 +72,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve the authenticated user so we can assign admin role
-    let userId: string | null = null;
-    const authHeader = req.headers.get("authorization");
-    const bearerToken = authHeader?.replace("Bearer ", "");
-    if (bearerToken) {
-      try {
-        const payload = await verifySystemToken(bearerToken);
-        userId = payload.userId as string;
-      } catch { /* token optional for this route */ }
-    }
+    const userId = ctx.claims?.actorId ?? null;
 
     const plans = await db.query<
       [{ recurrenceDays: number; price: number; planCredits: number }[]]
@@ -114,17 +107,6 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const periodEnd = new Date(now.getTime() + plan.recurrenceDays * 86400000);
 
-    const subSetClause = `companyId = $companyId,
-        systemId = $systemId,
-        planId = $planId,
-        paymentMethodId = ${paymentMethodId ? "$paymentMethodId" : "NONE"},
-        status = "active",
-        currentPeriodStart = $start,
-        currentPeriodEnd = $end,
-        voucherIds = [],
-        remainingPlanCredits = $planCredits,
-        creditAlertSent = false`;
-
     const params: Record<string, unknown> = {
       companyId: rid(companyId),
       systemId: rid(systemId),
@@ -140,9 +122,6 @@ export async function POST(req: NextRequest) {
       params.userId = rid(userId);
     }
 
-    // Create company_system only if it doesn't already exist (idempotent)
-    // Also cancel any existing active subscription, create the new one,
-    // and UPSERT user_company_system with admin role for the subscribing user.
     const ucsClause = userId
       ? `IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
            CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = ["admin"];
@@ -154,7 +133,20 @@ export async function POST(req: NextRequest) {
          CREATE company_system SET companyId = $companyId, systemId = $systemId;
        };
        UPDATE subscription SET status = "cancelled" WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
-       CREATE subscription SET ${subSetClause};
+       CREATE subscription SET
+         companyId = $companyId,
+         systemId = $systemId,
+         planId = $planId,
+         paymentMethodId = ${paymentMethodId ? "$paymentMethodId" : "NONE"},
+         status = "active",
+         currentPeriodStart = $start,
+         currentPeriodEnd = $end,
+         voucherId = NONE,
+         remainingPlanCredits = $planCredits,
+         creditAlertSent = false,
+         autoRechargeEnabled = false,
+         autoRechargeAmount = 0,
+         autoRechargeInProgress = false;
        ${ucsClause}`,
       params,
     );
@@ -373,7 +365,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate voucher exists, not expired, applicable
     const vouchers = await db.query<[Record<string, unknown>[]]>(
       `SELECT * FROM voucher WHERE code = $code LIMIT 1`,
       { code: voucherCode },
@@ -384,10 +375,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: {
-            code: "NOT_FOUND",
-            message: "billing.voucher.error.invalid",
-          },
+          error: { code: "NOT_FOUND", message: "billing.voucher.error.invalid" },
         },
         { status: 404 },
       );
@@ -400,10 +388,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: {
-            code: "EXPIRED",
-            message: "billing.voucher.error.expired",
-          },
+          error: { code: "EXPIRED", message: "billing.voucher.error.expired" },
         },
         { status: 400 },
       );
@@ -427,9 +412,36 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Add voucher to active subscription
+    // Check applicablePlanIds (empty = valid for all plans)
+    const applicablePlanIds = voucher.applicablePlanIds as string[];
+    if (applicablePlanIds && applicablePlanIds.length > 0) {
+      const sub = await db.query<[ { planId: string }[] ]>(
+        `SELECT planId FROM subscription
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+         LIMIT 1`,
+        { companyId: rid(companyId), systemId: rid(systemId) },
+      );
+      const currentPlanId = String(sub[0]?.[0]?.planId ?? "");
+      if (
+        !currentPlanId ||
+        !applicablePlanIds.some((id) => String(id) === currentPlanId)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "NOT_APPLICABLE",
+              message: "billing.voucher.planNotApplicable",
+            },
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Single voucher invariant: replace (not append)
     await db.query(
-      `UPDATE subscription SET voucherIds += [$voucherId]
+      `UPDATE subscription SET voucherId = $voucherId
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
       {
         companyId: rid(companyId),
@@ -445,6 +457,100 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  if (action === "set_auto_recharge") {
+    const { companyId, systemId, enabled, amount } = body;
+
+    if (!companyId || !systemId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "validation.billing.companyAndSystem",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (enabled) {
+      // Validate amount
+      const minAmount = 500; // billing.autoRecharge.minAmount (default 500 cents)
+      const maxAmount = 50000; // billing.autoRecharge.maxAmount (default 50000 cents)
+
+      if (!amount || amount < minAmount) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              message: "validation.amount.tooSmall",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      if (amount > maxAmount) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              message: "validation.amount.tooLarge",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      // Verify default payment method exists
+      const pm = await db.query<[{ id: string }[]]>(
+        `SELECT id FROM payment_method WHERE companyId = $companyId AND isDefault = true LIMIT 1`,
+        { companyId: rid(companyId) },
+      );
+      if (!pm[0] || pm[0].length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              message: "billing.autoRecharge.noDefaultPaymentMethod",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      await db.query(
+        `UPDATE subscription SET
+          autoRechargeEnabled = true,
+          autoRechargeAmount = $amount
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
+        {
+          companyId: rid(companyId),
+          systemId: rid(systemId),
+          amount: Number(amount),
+        },
+      );
+    } else {
+      // Disable auto-recharge
+      await db.query(
+        `UPDATE subscription SET
+          autoRechargeEnabled = false,
+          autoRechargeAmount = 0,
+          autoRechargeInProgress = false
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
+        {
+          companyId: rid(companyId),
+          systemId: rid(systemId),
+        },
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
   return NextResponse.json(
     {
       success: false,
@@ -453,3 +559,15 @@ export async function POST(req: NextRequest) {
     { status: 400 },
   );
 }
+
+export const GET = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx, next) =>
+    getHandler(req as NextRequest, _ctx),
+);
+
+export const POST = compose(
+  withAuth({ requireAuthenticated: true }),
+  async (req, _ctx, next) =>
+    postHandler(req as NextRequest, _ctx),
+);

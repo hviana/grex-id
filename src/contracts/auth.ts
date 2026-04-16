@@ -1,3 +1,5 @@
+import type { Tenant, TenantClaims } from "./tenant.ts";
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -24,6 +26,7 @@ export interface RegisterRequest {
   phone?: string;
   name: string;
   botToken: string;
+  termsAccepted?: boolean;
 }
 
 export interface VerifyRequest {
@@ -50,10 +53,22 @@ export interface RefreshResponse {
   surrealToken: string;
 }
 
-export interface RequestContext {
-  userId: string;
+export interface ExchangeRequest {
   companyId: string;
   systemId: string;
-  roles: string[];
-  permissions: string[];
+}
+
+export interface ExchangeResponse {
+  systemToken: string;
+  tenant: Tenant;
+}
+
+/**
+ * Unified request context — every middleware handler receives this.
+ * `tenant` is ALWAYS populated (anonymous tenants are synthesized).
+ * `claims` is present only for authenticated requests.
+ */
+export interface RequestContext {
+  tenant: Tenant;
+  claims?: TenantClaims;
 }

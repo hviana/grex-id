@@ -1,5 +1,6 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
+import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -12,31 +13,33 @@ function getJwtSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export interface TokenPayload {
-  userId: string;
-  email: string;
-  roles: string[];
-  companyId?: string;
-  systemId?: string;
-  permissions?: string[];
-}
-
-export async function createSystemToken(
-  payload: TokenPayload,
+/**
+ * Creates a tenant-bearing JWT.
+ * All tokens now embed the full Tenant + actor metadata + jti for revocation.
+ */
+export async function createTenantToken(
+  claims: TenantClaims,
   stayLoggedIn: boolean = false,
 ): Promise<string> {
   const core = Core.getInstance();
   const expiryMinutes = stayLoggedIn
-    ? Number(await core.getSetting("auth.token.expiry.stayLoggedIn.hours")) * 60
+    ? Number(
+        await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
+      ) * 60
     : Number(await core.getSetting("auth.token.expiry.minutes"));
 
   const jwt = await new jose.SignJWT({
-    userId: payload.userId,
-    email: payload.email,
-    roles: payload.roles,
-    companyId: payload.companyId,
-    systemId: payload.systemId,
-    permissions: payload.permissions,
+    tenant: {
+      systemId: claims.systemId,
+      companyId: claims.companyId,
+      systemSlug: claims.systemSlug,
+      roles: claims.roles,
+      permissions: claims.permissions,
+    },
+    actorType: claims.actorType,
+    actorId: claims.actorId,
+    jti: claims.jti,
+    exchangeable: claims.exchangeable,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -47,18 +50,34 @@ export async function createSystemToken(
   return jwt;
 }
 
-export async function verifySystemToken(token: string): Promise<TokenPayload> {
+/**
+ * Verifies a tenant-bearing JWT and returns the full claims.
+ */
+export async function verifyTenantToken(
+  token: string,
+): Promise<TenantClaims> {
   const { payload } = await jose.jwtVerify(token, getJwtSecret(), {
     issuer: "core",
   });
 
+  const tenant = payload.tenant as {
+    systemId: string;
+    companyId: string;
+    systemSlug: string;
+    roles: string[];
+    permissions: string[];
+  };
+
   return {
-    userId: payload.userId as string,
-    email: payload.email as string,
-    roles: payload.roles as string[],
-    companyId: payload.companyId as string | undefined,
-    systemId: payload.systemId as string | undefined,
-    permissions: payload.permissions as string[] | undefined,
+    systemId: tenant.systemId ?? "0",
+    companyId: tenant.companyId ?? "0",
+    systemSlug: tenant.systemSlug ?? "core",
+    roles: tenant.roles ?? [],
+    permissions: tenant.permissions ?? [],
+    actorType: (payload.actorType as TenantClaims["actorType"]) ?? "user",
+    actorId: (payload.actorId as string) ?? "0",
+    jti: (payload.jti as string) ?? "",
+    exchangeable: (payload.exchangeable as boolean) ?? false,
   };
 }
 

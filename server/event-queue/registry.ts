@@ -2,6 +2,7 @@ const handlerRegistry: Record<string, string[]> = {
   SEND_EMAIL: ["send_email"],
   SEND_SMS: ["send_sms"],
   PAYMENT_DUE: ["process_payment"],
+  TRIGGER_AUTO_RECHARGE: ["auto_recharge"],
   GREXID_DETECTION: ["grexid_process_detection"],
 };
 

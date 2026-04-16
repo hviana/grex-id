@@ -1,5 +1,6 @@
 import { getDb, rid } from "../db/connection.ts";
 import { publish } from "../event-queue/publisher.ts";
+import type { Tenant } from "@/src/contracts/tenant.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -29,36 +30,38 @@ export interface CreditDeductionResult {
  * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
  * 2. Purchased credits (usage_record with resource="credits") — persistent
  *
- * If insufficient credits in both sources combined, publishes an
- * "insufficient credits" email alert (once per exhaustion cycle via
- * creditAlertSent flag).
- *
- * Also records the expense in the credit_expense daily container for
- * usage reporting.
+ * If insufficient credits in both sources combined:
+ * - If autoRechargeEnabled, publishes TRIGGER_AUTO_RECHARGE
+ * - Otherwise sends insufficient-credit email alert (once per cycle via creditAlertSent)
  */
 export async function consumeCredits(params: {
   resourceKey: string;
   amount: number;
   companyId: string;
   systemId: string;
+  tenant: Tenant;
 }): Promise<CreditDeductionResult> {
   const db = await getDb();
   const day = getCurrentDay();
 
-  // Fetch subscription + purchased balance in a single query
   const result = await db.query<
     [
       {
         id: string;
         remainingPlanCredits: number;
         creditAlertSent: boolean;
+        autoRechargeEnabled: boolean;
+        autoRechargeAmount: number;
+        autoRechargeInProgress: boolean;
         companyId: string;
         systemId: string;
       }[],
       { balance: number }[],
     ]
   >(
-    `SELECT id, remainingPlanCredits, creditAlertSent, companyId, systemId
+    `SELECT id, remainingPlanCredits, creditAlertSent,
+            autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
+            companyId, systemId
      FROM subscription
      WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
      LIMIT 1;
@@ -82,14 +85,34 @@ export async function consumeCredits(params: {
 
   // Insufficient credits
   if (totalAvailable < params.amount) {
+    // Try auto-recharge first
+    if (
+      sub.autoRechargeEnabled === true &&
+      sub.autoRechargeInProgress === false
+    ) {
+      // Set re-entrancy guard
+      await db.query(
+        `UPDATE $subId SET autoRechargeInProgress = true`,
+        { subId: rid(sub.id) },
+      );
+
+      await publish("TRIGGER_AUTO_RECHARGE", {
+        subscriptionId: String(sub.id),
+        companyId: String(sub.companyId),
+        systemId: String(sub.systemId),
+        resourceKey: params.resourceKey,
+      });
+
+      return { success: false, source: "insufficient" };
+    }
+
+    // No auto-recharge or already in progress — send alert (once per cycle)
     if (!sub.creditAlertSent) {
-      // Set flag and send alert email — single query
       await db.query(
         `UPDATE $subId SET creditAlertSent = true`,
         { subId: rid(sub.id) },
       );
 
-      // Fetch company name + user email for the alert
       const info = await db.query<
         [
           { name: string; ownerId: string }[],
@@ -110,7 +133,6 @@ export async function consumeCredits(params: {
       const ownerName = user?.[0]?.name ?? company?.name ?? "";
 
       if (ownerEmail) {
-        // Fetch system name for the email
         const sysResult = await db.query<[{ name: string; slug: string }[]]>(
           `SELECT name, slug FROM system WHERE id = $systemId LIMIT 1`,
           { systemId: rid(params.systemId) },
@@ -137,7 +159,6 @@ export async function consumeCredits(params: {
 
   // Deduct: plan credits first, then purchased
   if (planCredits >= params.amount) {
-    // All from plan credits
     await db.query(
       `UPDATE $subId SET remainingPlanCredits -= $amount;
        UPSERT credit_expense SET
@@ -203,7 +224,6 @@ export async function consumeCredits(params: {
 
 /**
  * Records a credit expense for reporting purposes only (no deduction).
- * Used by trackCreditExpense() for backward compatibility.
  */
 export async function trackCreditExpense(params: {
   resourceKey: string;

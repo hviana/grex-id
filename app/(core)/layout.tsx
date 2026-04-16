@@ -98,6 +98,17 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
       hiddenInPlanIds: [],
       createdAt: "",
     },
+    {
+      id: "c9",
+      systemId: "",
+      label: t("core.nav.frontSettings"),
+      emoji: "🎨",
+      componentName: "front-settings",
+      sortOrder: 8,
+      requiredRoles: ["superuser"],
+      hiddenInPlanIds: [],
+      createdAt: "",
+    },
   ];
 }
 

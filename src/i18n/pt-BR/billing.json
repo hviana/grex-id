@@ -66,5 +66,10 @@
   "onboarding.plan.days": "dias",
   "plans.notFound": "Plano não encontrado.",
   "paymentMethods.required": "Um método de pagamento é necessário para planos pagos.",
-  "voucher.applied": "Vouchers Aplicados"
+  "voucher.applied": "Vouchers Aplicados",
+  "autoRecharge.title": "Recarga Automática",
+  "autoRecharge.description": "Compre créditos automaticamente quando seu saldo estiver baixo.",
+  "autoRecharge.amountLabel": "Valor da recarga",
+  "autoRecharge.noDefaultPaymentMethod": "Um método de pagamento padrão é necessário para ativar a recarga automática.",
+  "voucher.planNotApplicable": "Este voucher não é válido para seu plano atual."
 }

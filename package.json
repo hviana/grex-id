@@ -15,7 +15,7 @@
     "start:vinext": "vinext start"
   },
   "dependencies": {
-    "@hviana/surreal-fs": "npm:@jsr/hviana__surreal-fs@^1.0.1",
+    "@hviana/surreal-fs": "npm:@jsr/hviana__surreal-fs@^1.0.3",
     "@panva/jose": "npm:@jsr/panva__jose@^6.2.2",
     "chart.js": "^4.5.1",
     "next": "^16.2.3",

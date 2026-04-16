@@ -2,6 +2,11 @@ import Core from "../../utils/Core.ts";
 import { verificationTemplate } from "../../utils/communication/templates/verification.ts";
 import { passwordResetTemplate } from "../../utils/communication/templates/password-reset.ts";
 import { leadUpdateVerificationTemplate } from "../../utils/communication/templates/lead-update-verification.ts";
+import { paymentSuccessTemplate } from "../../utils/communication/templates/payment-success.ts";
+import { paymentFailureTemplate } from "../../utils/communication/templates/payment-failure.ts";
+import { autoRechargeTemplate } from "../../utils/communication/templates/auto-recharge.ts";
+import { insufficientCreditTemplate } from "../../utils/communication/templates/insufficient-credit.ts";
+import { tenantInviteTemplate } from "../../utils/communication/templates/tenant-invite.ts";
 import type { HandlerFn } from "../worker.ts";
 import type { TemplateFunction } from "@/src/contracts/communication";
 
@@ -10,6 +15,12 @@ const templateRegistry: Record<string, TemplateFunction> = {
   "password-reset": passwordResetTemplate as unknown as TemplateFunction,
   "lead-update-verification":
     leadUpdateVerificationTemplate as unknown as TemplateFunction,
+  "payment-success": paymentSuccessTemplate as unknown as TemplateFunction,
+  "payment-failure": paymentFailureTemplate as unknown as TemplateFunction,
+  "auto-recharge": autoRechargeTemplate as unknown as TemplateFunction,
+  "insufficient-credit":
+    insufficientCreditTemplate as unknown as TemplateFunction,
+  "tenant-invite": tenantInviteTemplate as unknown as TemplateFunction,
 };
 
 export const sendEmail: HandlerFn = async (payload) => {

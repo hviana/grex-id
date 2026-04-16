@@ -12,11 +12,21 @@ interface SettingItem {
   key: string;
   value: string;
   description: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
-export default function SettingsEditor() {
+interface SettingsEditorProps {
+  mode?: "core" | "front";
+}
+
+export default function SettingsEditor(
+  { mode = "core" }: SettingsEditorProps,
+) {
   const { t } = useLocale();
+  const isFront = mode === "front";
+  const apiPath = isFront ? "/api/core/front-settings" : "/api/core/settings";
+  const titleKey = isFront ? "core.frontSettings.title" : "core.settings.title";
+
   const [settings, setSettings] = useState<SettingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -25,7 +35,6 @@ export default function SettingsEditor() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 200);
 
-  // Track local edits
   const [edits, setEdits] = useState<
     Map<string, { value: string; description: string }>
   >(new Map());
@@ -33,9 +42,9 @@ export default function SettingsEditor() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/core/settings");
+      const res = await fetch(apiPath);
       const json = await res.json();
-      if (json.success) setSettings(json.data ?? []);
+      if (json.success) setSettings(json.data?.settings ?? json.data ?? []);
     } finally {
       setLoading(false);
     }
@@ -43,7 +52,7 @@ export default function SettingsEditor() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [apiPath]);
 
   const getEdit = (setting: SettingItem) => {
     return edits.get(setting.key) ??
@@ -72,13 +81,15 @@ export default function SettingsEditor() {
     setSavingKey(setting.key);
     setError(null);
     try {
-      const res = await fetch("/api/core/settings", {
+      const res = await fetch(apiPath, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          key: setting.key,
-          value: edit.value,
-          description: edit.description,
+          settings: [{
+            key: setting.key,
+            value: edit.value,
+            description: edit.description,
+          }],
         }),
       });
       const json = await res.json();
@@ -98,7 +109,7 @@ export default function SettingsEditor() {
     setError(null);
     setDeletingKey(key);
     try {
-      await fetch("/api/core/settings", {
+      await fetch(apiPath, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key }),
@@ -147,6 +158,15 @@ export default function SettingsEditor() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3 mb-2">
+        <h2 className="text-xl font-bold text-white">
+          {t(titleKey)}
+        </h2>
+        <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-[var(--color-light-text)]">
+          {isFront ? "front_core_setting" : "core_setting"}
+        </span>
+      </div>
+
       <ErrorDisplay message={error} />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -235,7 +255,7 @@ export default function SettingsEditor() {
                     value={edit.description}
                     onChange={(e) =>
                       updateEdit(setting.key, "description", e.target.value)}
-                    placeholder={t("core.settings.description")}
+                    placeholder={t("core.settings.descriptionPlaceholder")}
                     className={`${inputCls} text-[var(--color-light-text)]`}
                   />
                 </div>
