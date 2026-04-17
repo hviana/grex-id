@@ -46,7 +46,12 @@ async function sendChannelVerification(
   const eventData = {
     recipients: [channelValue],
     template: "recovery-verify",
-    templateData: { name: userName, verificationLink },
+    templateData: {
+      name: userName,
+      verificationLink,
+      channelValue,
+      expiryMinutes: String(verificationExpiryMinutes),
+    },
     systemSlug,
   };
 

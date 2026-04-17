@@ -26,19 +26,17 @@ async function getJwtSecret(): Promise<Uint8Array> {
 /**
  * Creates a tenant-bearing JWT.
  * All tokens now embed the full Tenant + actor metadata + jti for revocation.
+ *
+ * @param expiresAt - When provided, uses this explicit expiry (for token exchange
+ *   lifetime carry-over per §19.11). Otherwise calculates from Core settings.
  */
 export async function createTenantToken(
   claims: TenantClaims,
   stayLoggedIn: boolean = false,
+  expiresAt?: Date,
 ): Promise<string> {
   const core = Core.getInstance();
-  const expiryMinutes = stayLoggedIn
-    ? Number(
-      await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
-    ) * 60
-    : Number(await core.getSetting("auth.token.expiry.minutes"));
-
-  const jwt = await new jose.SignJWT({
+  const jwtBuilder = new jose.SignJWT({
     tenant: {
       systemId: claims.systemId,
       companyId: claims.companyId,
@@ -53,11 +51,21 @@ export async function createTenantToken(
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${expiryMinutes}m`)
-    .setIssuer("core")
-    .sign(await getJwtSecret());
+    .setIssuer("core");
 
-  return jwt;
+  if (expiresAt) {
+    jwtBuilder.setExpirationTime(expiresAt);
+  } else {
+    // Setting stores hours for stay-logged-in; convert to total minutes for jose
+    const expiryTotalMinutes = stayLoggedIn
+      ? Number(
+        await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
+      ) * 60
+      : Number(await core.getSetting("auth.token.expiry.minutes"));
+    jwtBuilder.setExpirationTime(`${expiryTotalMinutes}m`);
+  }
+
+  return jwtBuilder.sign(await getJwtSecret());
 }
 
 /**
@@ -88,6 +96,7 @@ export async function verifyTenantToken(
     actorId: (payload.actorId as string) ?? "0",
     jti: (payload.jti as string) ?? "",
     exchangeable: (payload.exchangeable as boolean) ?? false,
+    exp: payload.exp,
   };
 }
 

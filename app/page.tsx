@@ -14,7 +14,7 @@ function HomeContent() {
   const systemSlug = searchParams.get("system");
 
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(systemSlug);
-  const [loading, setLoading] = useState(!!systemSlug || true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Only fetch when we need to resolve a system (explicit param or default)
   useEffect(() => {

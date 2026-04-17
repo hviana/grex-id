@@ -10,7 +10,10 @@
   --color-light-text: #cccccc;
 }
 
-/* Custom Scrollbar - Works in Webkit browsers (Chrome, Safari, Edge) */
+/*
+ * Minimal scrollbar styling (§4 exception — cannot be replicated via Tailwind).
+ * Only global Webkit + Firefox styles retained; all variant classes removed.
+ */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -20,32 +23,21 @@
   background: #000;
   border: 1px solid #333;
   border-radius: 10px;
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #02d07d 0%, #00ccff 100%);
   border-radius: 10px;
   border: 1px solid rgba(2, 208, 125, 0.3);
-  box-shadow:
-    0 0 10px rgba(0, 255, 136, 0.3),
-    inset 0 0 5px rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #02b570 0%, #00ccff 100%);
-  box-shadow:
-    0 0 20px rgba(0, 255, 136, 0.5),
-    inset 0 0 10px rgba(255, 255, 255, 0.2);
-  border-color: rgba(2, 181, 112, 0.5);
 }
 
-::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(180deg, #00ff88 0%, #00ccff 100%);
-  box-shadow:
-    0 0 30px rgba(0, 255, 136, 0.7),
-    inset 0 0 15px rgba(255, 255, 255, 0.3);
+::-webkit-scrollbar-corner {
+  background: #000;
+  border: 1px solid #333;
 }
 
 /* Firefox */
@@ -54,162 +46,7 @@
   scrollbar-color: #02d07d #000;
 }
 
-/* For Firefox - More detailed styling */
-@supports (scrollbar-width: thin) {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: #02d07d #000;
-  }
-}
-
-/* Enhanced version with animations (Webkit only) */
-@keyframes scrollbarGlow {
-  0% {
-    box-shadow:
-      0 0 10px rgba(0, 255, 136, 0.3),
-      inset 0 0 5px rgba(255, 255, 255, 0.1);
-  }
-  50% {
-    box-shadow:
-      0 0 20px rgba(0, 255, 136, 0.5),
-      inset 0 0 10px rgba(255, 255, 255, 0.2);
-  }
-  100% {
-    box-shadow:
-      0 0 10px rgba(0, 255, 136, 0.3),
-      inset 0 0 5px rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* Optional: Add glow animation on hover */
-::-webkit-scrollbar-thumb:hover {
-  animation: scrollbarGlow 2s ease-in-out infinite;
-}
-
-/* Corner where horizontal and vertical scrollbars meet */
-::-webkit-scrollbar-corner {
-  background: #000;
-  border: 1px solid #333;
-}
-
-/* Buttons (arrows) - Optional */
-::-webkit-scrollbar-button {
-  background: linear-gradient(180deg, #333 0%, #000 100%);
-  border: 1px solid #333;
-  height: 0;
-  width: 0;
-}
-
-/* Alternative minimalist version */
-.minimal-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.minimal-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.minimal-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #02d07d 0%, #00ccff 100%);
-  border-radius: 3px;
-  opacity: 0.7;
-}
-
-.minimal-scrollbar::-webkit-scrollbar-thumb:hover {
-  opacity: 1;
-}
-
-/* Glassmorphism version */
-.glass-scrollbar::-webkit-scrollbar {
-  width: 14px;
-}
-
-.glass-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px dashed #333;
-  border-radius: 10px;
-}
-
-.glass-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(2, 208, 125, 0.8) 0%,
-    rgba(0, 204, 255, 0.8) 100%
-  );
-  backdrop-filter: blur(10px);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow:
-    0 0 20px rgba(0, 255, 136, 0.3),
-    inset 0 0 10px rgba(255, 255, 255, 0.1);
-}
-
-/* Fallback for browsers that don't support custom scrollbars */
-@supports not selector(::-webkit-scrollbar) {
-  body {
-    scrollbar-width: thin;
-    scrollbar-color: #02d07d #000;
-  }
-}
-
-/* IE and Legacy Edge scrollbar styling */
-body {
-  -ms-overflow-style: -ms-autohiding-scrollbar;
-  scrollbar-face-color: #02d07d;
-  scrollbar-track-color: #000;
-  scrollbar-arrow-color: #02b570;
-  scrollbar-shadow-color: #333;
-}
-
-/* Optional: Hide scrollbar but keep functionality */
-.hide-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
-
-.hide-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
-}
-
-/* Smooth scrolling behavior */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar for specific containers */
-.custom-scroll-container {
-  overflow-y: auto;
-  overflow-x: hidden;
-  max-height: 500px;
-  position: relative;
-}
-
-/* Fade effect at top and bottom of scrollable container */
-.custom-scroll-container::before,
-.custom-scroll-container::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 30px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.custom-scroll-container::before {
-  top: 0;
-  background: linear-gradient(to bottom, #000 0%, transparent 100%);
-}
-
-.custom-scroll-container::after {
-  bottom: 0;
-  background: linear-gradient(to top, #000 0%, transparent 100%);
-}
-/* END CUSTOM SCROLLBAR */
-
-/* Sidebar menu item expand animation */
+/* Sidebar menu expand animation (Tailwind arbitrary value animate-[fadeSlideIn_...]) */
 @keyframes fadeSlideIn {
   from {
     opacity: 0;

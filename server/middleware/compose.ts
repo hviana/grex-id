@@ -1,4 +1,5 @@
 import type { RequestContext } from "@/src/contracts/auth";
+import { getAnonymousTenant } from "@/server/utils/tenant";
 
 export type Middleware = (
   req: Request,
@@ -6,12 +7,21 @@ export type Middleware = (
   next: () => Promise<Response>,
 ) => Promise<Response>;
 
-export function compose(...middlewares: Middleware[]): Middleware {
+/**
+ * Composes middlewares into a function compatible with Next.js App Router
+ * route handlers. The returned function satisfies the
+ * `(req, ctx) => Promise<Response>` signature expected by Next.js while
+ * internally running the middleware chain with our RequestContext.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function compose(...middlewares: Middleware[]): any {
   return async (
     req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ) => {
+    _nextCtx?: unknown,
+  ): Promise<Response> => {
+    const ctx: RequestContext = {
+      tenant: getAnonymousTenant("core"),
+    };
     let index = -1;
 
     async function dispatch(i: number): Promise<Response> {
@@ -21,7 +31,7 @@ export function compose(...middlewares: Middleware[]): Middleware {
       index = i;
 
       if (i === middlewares.length) {
-        return next();
+        throw new Error("No terminal handler");
       }
 
       const middleware = middlewares[i];

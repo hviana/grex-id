@@ -1,4 +1,4 @@
-import { getDb, rid, undefined } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import type { MenuItem } from "@/src/contracts/menu";
 
 export async function listMenuItems(systemId?: string): Promise<MenuItem[]> {

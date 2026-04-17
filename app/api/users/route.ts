@@ -9,6 +9,7 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import Core from "@/server/utils/Core";
+import { generateSecureToken } from "@/server/utils/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -54,25 +55,17 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   // If companyId+systemId provided, filter by user_company_system association
   if (companyId && systemId) {
-    let query =
-      `SELECT userId AS id FROM user_company_system WHERE companyId = $companyId AND systemId = $systemId`;
-    bindings.companyId = rid(companyId);
-    bindings.systemId = rid(systemId);
-    const ucsResult = await db.query<[{ id: string }[]]>(query, bindings);
-    const userIds = (ucsResult[0] ?? []).map((u) => u.id);
-
-    if (userIds.length === 0) {
-      return Response.json({
-        success: true,
-        data: [],
-        nextCursor: null,
-      });
-    }
-
+    // Single query: fetch user IDs with inline contextRoles via subquery (§7.2, §1.9)
     let userQuery =
-      "SELECT id, email, emailVerified, phone, profile, roles, createdAt FROM user WHERE id IN $userIds";
+      `SELECT id, email, emailVerified, phone, profile, roles, createdAt,
+         (SELECT VALUE roles FROM user_company_system
+           WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
+       FROM user
+       WHERE id IN (SELECT VALUE userId FROM user_company_system
+         WHERE companyId = $companyId AND systemId = $systemId)`;
     const userBindings: Record<string, unknown> = {
-      userIds: userIds.map((id) => rid(id)),
+      companyId: rid(companyId),
+      systemId: rid(systemId),
       limit: limit + 1,
     };
 
@@ -94,25 +87,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
     const items = result[0] ?? [];
     const hasMore = items.length > limit;
     const data = hasMore ? items.slice(0, limit) : items;
-
-    // Attach context roles from user_company_system
-    const rolesQuery = await db.query<[{ userId: string; roles: string[] }[]]>(
-      `SELECT userId, roles FROM user_company_system
-       WHERE companyId = $companyId AND systemId = $systemId AND userId IN $userIds`,
-      {
-        companyId: rid(companyId),
-        systemId: rid(systemId),
-        userIds: userIds.map((id) => rid(id)),
-      },
-    );
-    const rolesMap = new Map<string, string[]>();
-    for (const r of rolesQuery[0] ?? []) {
-      rolesMap.set(String(r.userId), r.roles ?? []);
-    }
-    for (const item of data) {
-      (item as Record<string, unknown>).contextRoles =
-        rolesMap.get(String(item.id)) ?? [];
-    }
 
     return Response.json({
       success: true,
@@ -191,7 +165,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   if (existingUser) {
     // User already exists — invite them to this company+system
-    await db.query(
+    // Batch: association creation + inviter/system/company lookups in one query (§7.2, §1.6)
+    const batchResult = await db.query<
+      [
+        unknown,
+        unknown,
+        { name: string }[],
+        { email: string; profileName: string }[],
+        { name: string }[],
+      ]
+    >(
       `IF array::len((SELECT id FROM company_user WHERE companyId = $companyId AND userId = $userId)) = 0 {
          CREATE company_user SET companyId = $companyId, userId = $userId;
        };
@@ -200,32 +183,27 @@ async function postHandler(req: Request, ctx: RequestContext) {
        } ELSE {
          UPDATE user_company_system SET roles = $roles
            WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
-       };`,
+       };
+       LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
+       LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
+       LET $inviter = (SELECT email, profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
+       RETURN [$sys, $comp, $inviter];`,
       {
         userId: rid(String(existingUser.id)),
         companyId: rid(companyId),
         systemId: rid(systemId),
         roles: roles ?? [],
+        inviterId: rid(ctx.claims!.actorId),
       },
     );
 
-    // Send tenant-invite email
+    const returnData = batchResult[4] as unknown[];
+    const sysName = (returnData?.[0] as any)?.[0]?.name ?? "";
+    const compName = (returnData?.[1] as any)?.[0]?.name ?? "";
+    const inviterData = (returnData?.[2] as any)?.[0];
+    const inviterName = inviterData?.profileName ?? inviterData?.email ?? "";
+
     const core = Core.getInstance();
-    const inviterUser = await db.query<[{ profile: { name: string } }[]]>(
-      `SELECT profile FROM $userId FETCH profile`,
-      { userId: rid(ctx.claims!.actorId) },
-    );
-    const inviterName = (inviterUser[0]?.[0] as any)?.profile?.name ?? "";
-    const systemResult = await db.query<[{ name: string }[]]>(
-      `SELECT name FROM system WHERE id = $systemId LIMIT 1`,
-      { systemId: rid(systemId) },
-    );
-    const systemName = systemResult[0]?.[0]?.name ?? "";
-    const companyResult = await db.query<[{ name: string }[]]>(
-      `SELECT name FROM company WHERE id = $companyId LIMIT 1`,
-      { companyId: rid(companyId) },
-    );
-    const companyName = companyResult[0]?.[0]?.name ?? "";
     const baseUrl = (await core.getSetting("app.baseUrl")) ??
       "http://localhost:3000";
 
@@ -235,8 +213,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       templateData: {
         name: (existingUser as any).profile?.name ?? stdEmail,
         inviterName,
-        companyName,
-        systemName,
+        companyName: compName,
+        systemName: sysName,
         roles: (roles ?? []).join(", "),
         loginUrl: `${baseUrl}/login?system=${ctx.tenant.systemSlug}`,
       },
@@ -250,9 +228,18 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // New user — create with profile, then associate
+  // New user — create with profile, then associate (§19.3: emailVerified = false)
+  const verifyToken = generateSecureToken();
+  const core = Core.getInstance();
+  const expiryMinutes = Number(
+    (await core.getSetting("auth.verification.expiry.minutes")) ?? "15",
+  );
+  const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+    "http://localhost:3000";
+
   const result = await db.query<
-    [unknown, unknown, unknown, unknown, Record<string, unknown>[]]
+    [unknown, unknown, unknown, unknown, unknown, Record<string, unknown>[]]
   >(
     `LET $prof = CREATE profile SET name = $name;
      LET $usr = CREATE user SET
@@ -261,13 +248,18 @@ async function postHandler(req: Request, ctx: RequestContext) {
        passwordHash = crypto::argon2::generate($password),
        profile = $prof[0].id,
        roles = [],
-       emailVerified = true;
+       emailVerified = false;
      CREATE company_user SET companyId = $companyId, userId = $usr[0].id;
      CREATE user_company_system SET
        userId = $usr[0].id,
        companyId = $companyId,
        systemId = $systemId,
        roles = $roles;
+     CREATE verification_request SET
+       type = "email_verify",
+       userId = $usr[0].id,
+       token = $verifyToken,
+       expiresAt = $expiresAt;
      SELECT * FROM $usr[0].id FETCH profile;`,
     {
       name: stdName,
@@ -277,11 +269,31 @@ async function postHandler(req: Request, ctx: RequestContext) {
       companyId: rid(companyId),
       systemId: rid(systemId),
       roles: roles ?? [],
+      verifyToken,
+      expiresAt,
     },
   );
 
+  const newUser = result[5]?.[0];
+  const verificationLink = `${baseUrl}/verify?token=${verifyToken}&email=${
+    encodeURIComponent(stdEmail)
+  }`;
+
+  await publish("SEND_EMAIL", {
+    recipients: [stdEmail],
+    template: "verification",
+    templateData: {
+      name: stdName,
+      verificationLink,
+      email: stdEmail,
+      expiryMinutes: String(expiryMinutes),
+    },
+    locale: undefined,
+    systemSlug: ctx.tenant.systemSlug,
+  });
+
   return Response.json(
-    { success: true, data: result[4]?.[0] },
+    { success: true, data: newUser },
     { status: 201 },
   );
 }
@@ -359,7 +371,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       userBindings.phone = stdPhone;
     }
 
-    // Single batched query: update profile + user fields + return updated user
+    // Single batched query: update profile + user fields + return updated user (§7.2)
     const stmts = [
       `LET $prof = (SELECT profile FROM user WHERE id = $userId)[0].profile`,
       `UPDATE $prof SET ${profileSets.join(", ")}`,
@@ -393,30 +405,27 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
+  // Batch profile + user updates into one query (§7.2, §1.8)
+  const stmts: string[] = [];
+  const bindings: Record<string, unknown> = { id: rid(id) };
+
   if (name !== undefined) {
     const stdName = standardizeField("name", name, "user");
-    // Update profile.name via the profile record
-    await db.query(
+    bindings.name = stdName;
+    stmts.push(
       `LET $prof = (SELECT profile FROM $id);
-       UPDATE $prof[0].profile SET name = $name, updatedAt = time::now();`,
-      { id: rid(id), name: stdName },
+       UPDATE $prof[0].profile SET name = $name, updatedAt = time::now()`,
     );
   }
-
-  const sets: string[] = [];
-  const bindings: Record<string, unknown> = { id: rid(id) };
 
   if (phone !== undefined) {
     const stdPhone = phone ? standardizeField("phone", phone, "user") : null;
-    sets.push("phone = $phone");
     bindings.phone = stdPhone;
+    stmts.push(`UPDATE $id SET phone = $phone, updatedAt = time::now()`);
   }
 
-  if (sets.length > 0) {
-    await db.query(
-      `UPDATE $id SET ${sets.join(", ")}, updatedAt = time::now()`,
-      bindings,
-    );
+  if (stmts.length > 0) {
+    await db.query(stmts.join("; "), bindings);
   }
 
   // Update context roles — enforce admin invariant (§21.1, §7.2)

@@ -42,7 +42,8 @@ export async function consumeCredits(params: {
   const db = await getDb();
   const day = getCurrentDay();
 
-  // Batch: subscription + purchased credit balance in one call
+  // Single batched query: fetch subscription + credit balance + conditionally set
+  // auto-recharge re-entrancy guard (§22.3, §7.2)
   const result = await db.query<
     [
       {
@@ -54,13 +55,24 @@ export async function consumeCredits(params: {
         autoRechargeInProgress: boolean;
         companyId: string;
         systemId: string;
+        autoRechargeGuardSet: boolean;
       }[],
       { balance: number }[],
     ]
   >(
-    `SELECT id, remainingPlanCredits, creditAlertSent,
+    `LET $sub = (SELECT id, remainingPlanCredits, creditAlertSent,
             autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
             companyId, systemId
+     FROM subscription
+     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     LIMIT 1)[0];
+     IF $sub != NONE AND $sub.autoRechargeEnabled = true AND $sub.autoRechargeInProgress = false {
+       UPDATE $sub.id SET autoRechargeInProgress = true;
+     };
+     SELECT id, remainingPlanCredits, creditAlertSent,
+            autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
+            companyId, systemId,
+            (IF autoRechargeEnabled = true AND autoRechargeInProgress = false THEN true ELSE false END) AS autoRechargeGuardSet
      FROM subscription
      WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
      LIMIT 1;
@@ -84,17 +96,8 @@ export async function consumeCredits(params: {
 
   // Insufficient credits
   if (totalAvailable < params.amount) {
-    // Try auto-recharge first
-    if (
-      sub.autoRechargeEnabled === true &&
-      sub.autoRechargeInProgress === false
-    ) {
-      // Set re-entrancy guard
-      await db.query(
-        `UPDATE $subId SET autoRechargeInProgress = true`,
-        { subId: rid(sub.id) },
-      );
-
+    // Auto-recharge guard was set atomically in the batched query above
+    if (sub.autoRechargeGuardSet) {
       await publish("TRIGGER_AUTO_RECHARGE", {
         subscriptionId: String(sub.id),
         companyId: String(sub.companyId),
@@ -107,19 +110,19 @@ export async function consumeCredits(params: {
 
     // No auto-recharge or already in progress — send alert (once per cycle)
     if (!sub.creditAlertSent) {
-      // Batch: alert flag + company owner info + system info in one call
+      // Batch: alert flag + company/system/user info in one call (§7.2)
       const alertResult = await db.query<
         [
           unknown[],
           { name: string; ownerId: string }[],
-          { email: string; name: string }[],
+          { email: string; name: string; locale: string }[],
           { name: string; slug: string }[],
         ]
       >(
         `UPDATE $subId SET creditAlertSent = true;
          SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
          LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-         SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+         SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
          SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
         {
           subId: rid(sub.id),
@@ -131,6 +134,7 @@ export async function consumeCredits(params: {
       const user = alertResult[2]?.[0];
       const ownerEmail = user?.email;
       const ownerName = user?.name ?? "";
+      const ownerLocale = user?.locale;
       const systemName = alertResult[3]?.[0]?.name ?? "";
       const systemSlug = alertResult[3]?.[0]?.slug ?? "";
 
@@ -144,6 +148,7 @@ export async function consumeCredits(params: {
             resourceKey: params.resourceKey,
             purchaseLink: `/billing?system=${systemSlug}`,
           },
+          locale: ownerLocale || undefined,
           systemSlug,
         });
       }

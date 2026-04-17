@@ -211,6 +211,10 @@ export function paymentFailureTemplate(
     title: t("templates.paymentFailure.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(content, locale),
+    body: emailLayout(
+      content,
+      locale,
+      t("templates.paymentFailure.preheader", locale),
+    ),
   };
 }

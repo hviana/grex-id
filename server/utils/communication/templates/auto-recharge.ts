@@ -180,6 +180,10 @@ export function autoRechargeTemplate(
     title: t("templates.autoRecharge.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(content, locale),
+    body: emailLayout(
+      content,
+      locale,
+      t("templates.autoRecharge.preheader", locale),
+    ),
   };
 }

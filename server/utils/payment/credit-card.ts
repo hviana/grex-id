@@ -1,13 +1,21 @@
 import type { IPaymentProvider, PaymentResult } from "./interface.ts";
 
+/**
+ * Stub payment provider.
+ *
+ * Replace with a real gateway integration (e.g. Stripe, PagSeguro, MercadoPago).
+ * The gateway credentials should be stored as core_settings and read via Core.getInstance().
+ *
+ * ⚠ This stub returns fake successful charges — do NOT use in production.
+ */
 export class CreditCardPaymentProvider implements IPaymentProvider {
   async charge(
     amountCents: number,
     params: Record<string, string>,
   ): Promise<PaymentResult> {
-    // TODO: Implement with actual payment gateway (Stripe, etc.)
-    // Configured via core_setting "payment.provider"
-    console.log(`[payment] Charging ${amountCents} cents with params:`, params);
+    console.warn(
+      `[payment] STUB: would charge ${amountCents} cents. Replace with real gateway.`,
+    );
 
     return {
       success: true,

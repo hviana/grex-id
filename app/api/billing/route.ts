@@ -1,17 +1,13 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
+import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
 
-async function getHandler(req: Request, ctx: RequestContext) {
-  const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
-
-  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+function tenantGuard(ctx: RequestContext): Response | null {
+  if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
     return Response.json(
       {
         success: false,
@@ -23,6 +19,15 @@ async function getHandler(req: Request, ctx: RequestContext) {
       { status: 400 },
     );
   }
+  return null;
+}
+
+async function getHandler(req: Request, ctx: RequestContext) {
+  // §9.2: read companyId/systemId from ctx.tenant only
+  const guard = tenantGuard(ctx);
+  if (guard) return guard;
+
+  const { companyId, systemId } = ctx.tenant;
 
   const db = await getDb();
 
@@ -57,11 +62,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const { action } = body;
 
   const db = await getDb();
+  const core = Core.getInstance();
+  // §9.2: companyId/systemId come from ctx.tenant, except subscribe which
+  // accepts them from body for the onboarding flow (user hasn't exchanged yet)
+  const companyId = action === "subscribe" && body.companyId
+    ? body.companyId
+    : ctx.tenant.companyId;
+  const systemId = action === "subscribe" && body.systemId
+    ? body.systemId
+    : ctx.tenant.systemId;
 
   if (action === "subscribe") {
-    const { companyId, systemId, planId, paymentMethodId } = body;
+    const { planId, paymentMethodId } = body;
 
-    if (!companyId || !systemId || !planId) {
+    if (!planId) {
       return Response.json(
         {
           success: false,
@@ -74,15 +88,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const userId = ctx.claims?.actorId ?? null;
-
-    const plans = await db.query<
-      [{ recurrenceDays: number; price: number; planCredits: number }[]]
-    >(
-      "SELECT recurrenceDays, price, planCredits FROM plan WHERE id = $planId LIMIT 1",
-      { planId: rid(planId) },
-    );
-    const plan = plans[0]?.[0];
+    // Use Core cache for plan lookup (no db.query) — §7.2 single-call rule
+    const plans = await core.getPlansForSystem(systemId);
+    const plan = plans.find((p) => String(p.id) === String(planId));
     if (!plan) {
       return Response.json(
         {
@@ -106,8 +114,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
+    // During onboarding, companyId/systemId may come from body before token exchange
+    if (!body.companyId && !body.systemId) {
+      const guard = tenantGuard(ctx);
+      if (guard) return guard;
+    }
+
+    const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
-    const periodEnd = new Date(now.getTime() + plan.recurrenceDays * 86400000);
+    const periodEnd = new Date(
+      now.getTime() + (plan.recurrenceDays ?? 30) * 86400000,
+    );
 
     const params: Record<string, unknown> = {
       companyId: rid(companyId),
@@ -157,20 +174,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "cancel") {
-    const { companyId, systemId } = body;
-
-    if (!companyId || !systemId) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            message: "validation.billing.companyAndSystem",
-          },
-        },
-        { status: 400 },
-      );
-    }
+    const guard = tenantGuard(ctx);
+    if (guard) return guard;
 
     await db.query(
       `UPDATE subscription SET status = "cancelled"
@@ -183,7 +188,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   if (action === "add_payment_method") {
     const {
-      companyId,
       cardToken,
       cardMask,
       holderName,
@@ -192,7 +196,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     } = body;
 
     if (
-      !companyId || !cardToken || !cardMask || !holderName || !billingAddress
+      !cardToken || !cardMask || !holderName || !billingAddress
     ) {
       return Response.json(
         {
@@ -254,9 +258,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "set_default_payment_method") {
-    const { companyId, paymentMethodId } = body;
+    const { paymentMethodId } = body;
 
-    if (!companyId || !paymentMethodId) {
+    if (!paymentMethodId) {
       return Response.json(
         {
           success: false,
@@ -313,9 +317,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "purchase_credits") {
-    const { companyId, systemId, amount, paymentMethodId } = body;
+    const { amount, paymentMethodId } = body;
 
-    if (!companyId || !systemId || !amount || !paymentMethodId) {
+    if (!amount || !paymentMethodId) {
       return Response.json(
         {
           success: false,
@@ -327,6 +331,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
         { status: 400 },
       );
     }
+
+    const guard = tenantGuard(ctx);
+    if (guard) return guard;
 
     const result = await db.query<
       [Record<string, unknown>[], { id: string }[]]
@@ -369,9 +376,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "apply_voucher") {
-    const { companyId, systemId, voucherCode } = body;
+    const { voucherCode } = body;
 
-    if (!companyId || !systemId || !voucherCode) {
+    if (!voucherCode) {
       return Response.json(
         {
           success: false,
@@ -383,6 +390,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
         { status: 400 },
       );
     }
+
+    const guard = tenantGuard(ctx);
+    if (guard) return guard;
 
     // Batch: voucher + current subscription + old voucher creditIncrement (§7.2)
     const batchResult = await db.query<
@@ -435,7 +445,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    // Check applicableCompanyIds (empty = universal)
     const applicableIds = voucher.applicableCompanyIds as string[];
     if (applicableIds && applicableIds.length > 0) {
       const companyIdStr = String(companyId);
@@ -453,7 +462,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    // Check applicablePlanIds (empty = valid for all plans)
     const applicablePlanIds = voucher.applicablePlanIds as string[];
     const currentPlanId = String(batchResult[1]?.[0]?.planId ?? "");
     if (applicablePlanIds && applicablePlanIds.length > 0) {
@@ -474,8 +482,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    // Single voucher invariant: replace (not append)
-    // Subtract old voucher's creditIncrement, add new voucher's creditIncrement
     const oldCreditInc = Number(batchResult[2]?.[0]?.creditIncrement ?? 0);
     const newCreditInc = Number(voucher.creditIncrement ?? 0);
     const creditDelta = newCreditInc - oldCreditInc;
@@ -501,23 +507,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "set_auto_recharge") {
-    const { companyId, systemId, enabled, amount } = body;
+    const { enabled, amount } = body;
 
-    if (!companyId || !systemId) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            message: "validation.billing.companyAndSystem",
-          },
-        },
-        { status: 400 },
-      );
-    }
+    const guard = tenantGuard(ctx);
+    if (guard) return guard;
 
     if (enabled) {
-      const core = Core.getInstance();
       const minAmount = Number(
         (await core.getSetting("billing.autoRecharge.minAmount")) ?? "500",
       );
@@ -551,12 +546,30 @@ async function postHandler(req: Request, ctx: RequestContext) {
         );
       }
 
-      // Verify default payment method exists
-      const pm = await db.query<[{ id: string }[]]>(
-        `SELECT id FROM payment_method WHERE companyId = $companyId AND isDefault = true LIMIT 1`,
-        { companyId: rid(companyId) },
+      // Batch: check payment method + update subscription in one query (§7.2)
+      const pmResult = await db.query<
+        [{ id: string }[], unknown[]]
+      >(
+        `LET $pm = (SELECT id FROM payment_method WHERE companyId = $companyId AND isDefault = true LIMIT 1);
+         IF array::len($pm) > 0 {
+           UPDATE subscription SET
+             autoRechargeEnabled = true,
+             autoRechargeAmount = $amount
+           WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
+         };
+         RETURN $pm;`,
+        {
+          companyId: rid(companyId),
+          systemId: rid(systemId),
+          amount: Number(amount),
+        },
       );
-      if (!pm[0] || pm[0].length === 0) {
+
+      const pm = pmResult[1];
+      if (
+        !pm || (Array.isArray(pm) && pm.length === 0) ||
+        (pm as any)[0]?.id === undefined
+      ) {
         return Response.json(
           {
             success: false,
@@ -568,20 +581,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           { status: 400 },
         );
       }
-
-      await db.query(
-        `UPDATE subscription SET
-          autoRechargeEnabled = true,
-          autoRechargeAmount = $amount
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
-        {
-          companyId: rid(companyId),
-          systemId: rid(systemId),
-          amount: Number(amount),
-        },
-      );
     } else {
-      // Disable auto-recharge
       await db.query(
         `UPDATE subscription SET
           autoRechargeEnabled = false,

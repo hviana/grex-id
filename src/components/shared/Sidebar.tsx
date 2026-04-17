@@ -198,7 +198,7 @@ export default function Sidebar(
           </div>
 
           {/* ── Menu items ── */}
-          <nav className="flex-1 overflow-y-auto px-3 pb-6 space-y-1 minimal-scrollbar">
+          <nav className="flex-1 overflow-y-auto px-3 pb-6 space-y-1">
             {menus.length === 0
               ? (
                 <div className="flex items-center justify-center py-12">

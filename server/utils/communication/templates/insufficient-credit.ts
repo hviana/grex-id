@@ -153,6 +153,10 @@ export function insufficientCreditTemplate(
     title: t("templates.insufficientCredit.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(content, locale),
+    body: emailLayout(
+      content,
+      locale,
+      t("templates.insufficientCredit.preheader", locale),
+    ),
   };
 }

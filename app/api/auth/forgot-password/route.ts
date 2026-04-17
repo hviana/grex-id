@@ -91,7 +91,12 @@ async function handler(
   await publish("SEND_EMAIL", {
     recipients: [email!],
     template: "password-reset",
-    templateData: { name: user.profile?.name ?? email!, resetLink },
+    templateData: {
+      name: user.profile?.name ?? email!,
+      resetLink,
+      email: email!,
+      expiryMinutes: String(resetExpiryMinutes),
+    },
     locale: user.profile?.locale || undefined,
     systemSlug,
   });

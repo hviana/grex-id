@@ -205,6 +205,10 @@ export function tenantInviteTemplate(
       inviterName: data.inviterName,
       companyName: data.companyName,
     }),
-    body: emailLayout(content, locale),
+    body: emailLayout(
+      content,
+      locale,
+      t("templates.tenantInvite.preheader", locale),
+    ),
   };
 }

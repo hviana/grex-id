@@ -131,10 +131,7 @@ export default function SidebarMenuItem(
 
         {/* Children container */}
         {hasChildren && isExpanded && (
-          <div
-            className="mt-1 ml-4 relative"
-            style={{ animation: "fadeSlideIn 250ms ease-out" }}
-          >
+          <div className="mt-1 ml-4 relative animate-[fadeSlideIn_250ms_ease-out]">
             {/* Vertical tree line */}
             <div className="absolute left-2 top-1 bottom-1 w-px bg-gradient-to-b from-[var(--color-primary-green)]/20 via-white/[0.07] to-transparent" />
 
@@ -230,10 +227,7 @@ export default function SidebarMenuItem(
 
       {/* Deeper children */}
       {hasChildren && isExpanded && (
-        <div
-          className="mt-0.5 ml-4 relative"
-          style={{ animation: "fadeSlideIn 250ms ease-out" }}
-        >
+        <div className="mt-0.5 ml-4 relative animate-[fadeSlideIn_250ms_ease-out]">
           {/* Continuation tree line */}
           <div className="absolute left-2 top-1 bottom-1 w-px bg-gradient-to-b from-white/[0.06] via-white/[0.04] to-transparent" />
 

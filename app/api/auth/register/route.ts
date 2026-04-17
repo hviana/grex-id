@@ -140,7 +140,12 @@ async function handler(
   await publish("SEND_EMAIL", {
     recipients: [email!],
     template: "verification",
-    templateData: { name: name!, verificationLink },
+    templateData: {
+      name: name!,
+      verificationLink,
+      email: email!,
+      expiryMinutes: String(verificationExpiryMinutes),
+    },
     locale,
     systemSlug,
   });

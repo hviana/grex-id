@@ -119,12 +119,11 @@ async function handler(
     if (user.twoFactorSecret) {
       const totp = new TOTP({
         secret: user.twoFactorSecret,
-        window: 1,
         crypto: new NobleCryptoPlugin(),
         base32: new ScureBase32Plugin(),
       });
-      const result = await totp.verify({ token: twoFactorCode });
-      if (!result.ok) {
+      const result = await totp.verify(twoFactorCode ?? "");
+      if (!result.valid) {
         return Response.json(
           {
             success: false,

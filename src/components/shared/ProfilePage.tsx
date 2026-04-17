@@ -229,7 +229,10 @@ export default function ProfilePage() {
         <h2 className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
           {t("common.recoveryChannels.title")}
         </h2>
-        <RecoveryChannelsSubform ref={recoveryRef} systemToken={systemToken} />
+        <RecoveryChannelsSubform
+          ref={recoveryRef}
+          systemToken={systemToken ?? undefined}
+        />
       </div>
     </div>
   );

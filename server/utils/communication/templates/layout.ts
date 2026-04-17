@@ -1,6 +1,19 @@
 import { t } from "@/src/i18n";
 
-export function emailLayout(content: string, locale: string): string {
+export function emailLayout(
+  content: string,
+  locale: string,
+  preheader?: string,
+): string {
+  const preheaderBlock = preheader
+    ? `<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: #000000;">
+  ${preheader}
+</div>
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">
+  &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+</div>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="${locale}" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -41,8 +54,10 @@ export function emailLayout(content: string, locale: string): string {
 </head>
 <body style="margin: 0; padding: 0; word-spacing: normal; background-color: #000000;">
 
+  ${preheaderBlock}
+
   <!-- Background wrapper -->
-  <div role="article" aria-roledescription="email" lang="${locale}" style="text-size-adjust: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #000000;">
+  <div lang="${locale}" style="text-size-adjust: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #000000;">
 
     <!--[if mso | IE]>
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #000000;">

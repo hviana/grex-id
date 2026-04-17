@@ -176,6 +176,10 @@ export function paymentSuccessTemplate(
     title: t("templates.paymentSuccess.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(content, locale),
+    body: emailLayout(
+      content,
+      locale,
+      t("templates.paymentSuccess.preheader", locale),
+    ),
   };
 }

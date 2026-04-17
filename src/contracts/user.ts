@@ -9,6 +9,7 @@ export interface User {
   profile: Profile;
   roles: string[];
   twoFactorEnabled: boolean;
+  twoFactorSecret?: string;
   oauthProvider?: string;
   stayLoggedIn: boolean;
   createdAt: string;

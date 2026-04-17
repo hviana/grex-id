@@ -109,7 +109,12 @@ async function handler(
   const eventData = {
     recipients: [stdValue],
     template: "recovery-channel-reset",
-    templateData: { name, resetLink },
+    templateData: {
+      name,
+      resetLink,
+      channelValue: stdValue,
+      expiryMinutes: String(resetExpiryMinutes),
+    },
     systemSlug,
   };
 

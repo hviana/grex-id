@@ -17,12 +17,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!companyId || !systemId || !systemToken) return;
+    const _companyId = companyId;
+    const _systemId = systemId;
     async function load() {
       setLoading(true);
       try {
         const qs = new URLSearchParams();
-        qs.set("companyId", companyId);
-        qs.set("systemId", systemId);
+        qs.set("companyId", _companyId);
+        qs.set("systemId", _systemId);
         const res = await fetch(
           `/api/systems/grex-id/settings?${qs.toString()}`,
           {

@@ -223,13 +223,13 @@ async function putHandler(req: Request, ctx: RequestContext) {
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const email = parsedBody.email
-      ? standardizeField("email", parsedBody.email, "lead")
+      ? standardizeField("email", String(parsedBody.email), "lead")
       : undefined;
     const phone = parsedBody.phone
-      ? standardizeField("phone", parsedBody.phone, "lead")
+      ? standardizeField("phone", String(parsedBody.phone), "lead")
       : undefined;
     const name = parsedBody.name
-      ? standardizeField("name", parsedBody.name, "lead")
+      ? standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
     if (!id) {

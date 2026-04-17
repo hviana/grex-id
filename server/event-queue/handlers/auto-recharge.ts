@@ -19,12 +19,15 @@ if (typeof window !== "undefined") {
  *
  * All DB lookups batched into a single query (§7.2).
  */
-export async function handleAutoRecharge(payload: {
-  subscriptionId: string;
-  companyId: string;
-  systemId: string;
-  resourceKey: string;
-}): Promise<void> {
+export async function handleAutoRecharge(
+  rawPayload: Record<string, unknown>,
+): Promise<void> {
+  const payload = rawPayload as {
+    subscriptionId: string;
+    companyId: string;
+    systemId: string;
+    resourceKey: string;
+  };
   const db = await getDb();
 
   // Batch: subscription + default payment method + owner info + system name

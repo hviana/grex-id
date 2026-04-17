@@ -17,4 +17,5 @@ export interface TenantClaims extends Tenant {
   actorId: string; // user/token/app id; "0" for anonymous
   jti: string; // unique token id for revocation
   exchangeable: boolean; // true only for actorType="user"
+  exp?: number; // unix seconds — present on JWT-decoded claims; absent for API tokens
 }

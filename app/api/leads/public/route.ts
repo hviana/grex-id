@@ -231,6 +231,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
           name: existing.name ?? existing.email,
           verificationLink,
           changes,
+          email: existing.email,
+          expiryMinutes: String(expiryMinutes),
         },
         locale: locale || undefined,
         systemSlug,

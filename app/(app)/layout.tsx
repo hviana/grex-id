@@ -15,6 +15,9 @@ import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 
+const COMPANY_COOKIE = "core_company";
+const SYSTEM_COOKIE = "core_system";
+
 /**
  * Returns a default set of menu items when no menus are configured for the system.
  * These represent the shared/common pages available to all systems.

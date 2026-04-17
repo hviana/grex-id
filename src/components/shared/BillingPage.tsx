@@ -37,6 +37,7 @@ interface PlanInfo {
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;
+  planCredits?: number;
   isActive: boolean;
 }
 
@@ -95,9 +96,7 @@ export default function BillingPage() {
     try {
       const [billingRes, plansRes] = await Promise.all([
         fetch(
-          `/api/billing?companyId=${encodeURIComponent(companyId)}&systemId=${
-            encodeURIComponent(systemId)
-          }`,
+          `/api/billing`,
           { headers: { Authorization: `Bearer ${systemToken}` } },
         ),
         fetch(
@@ -190,8 +189,6 @@ export default function BillingPage() {
         },
         body: JSON.stringify({
           action: "subscribe",
-          companyId,
-          systemId,
           planId,
           paymentMethodId: plan?.price > 0 ? defaultPm?.id : undefined,
         }),
@@ -220,7 +217,7 @@ export default function BillingPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({ action: "cancel", companyId, systemId }),
+        body: JSON.stringify({ action: "cancel" }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -248,7 +245,6 @@ export default function BillingPage() {
         },
         body: JSON.stringify({
           action: "set_default_payment_method",
-          companyId,
           paymentMethodId: pmId,
         }),
       });
@@ -297,8 +293,6 @@ export default function BillingPage() {
         },
         body: JSON.stringify({
           action: "apply_voucher",
-          companyId,
-          systemId,
           voucherCode: voucherCode.trim(),
         }),
       });
@@ -332,8 +326,6 @@ export default function BillingPage() {
         },
         body: JSON.stringify({
           action: "purchase_credits",
-          companyId,
-          systemId,
           amount: Number(creditAmount),
           paymentMethodId: creditPmId,
         }),
@@ -494,12 +486,11 @@ export default function BillingPage() {
                     💾 {t("billing.plans.storage")}:{" "}
                     {formatBytes(activePlan.storageLimitBytes)}
                   </span>
-                  {(activePlan as Record<string, unknown>).planCredits
+                  {activePlan.planCredits
                     ? (
                       <span>
                         🪙 {t("billing.plans.planCredits")}:{" "}
-                        {((activePlan as Record<string, unknown>)
-                          .planCredits as number).toLocaleString()}{" "}
+                        {activePlan.planCredits.toLocaleString()}{" "}
                         {t("billing.plans.creditsPerPeriod")}
                       </span>
                     )
@@ -653,12 +644,11 @@ export default function BillingPage() {
                           💾 {t("billing.plans.storage")}:{" "}
                           {formatBytes(plan.storageLimitBytes)}
                         </p>
-                        {(plan as Record<string, unknown>).planCredits
+                        {plan.planCredits
                           ? (
                             <p>
                               🪙 {t("billing.plans.planCredits")}:{" "}
-                              {((plan as Record<string, unknown>)
-                                .planCredits as number).toLocaleString()}{" "}
+                              {plan.planCredits.toLocaleString()}{" "}
                               {t("billing.plans.creditsPerPeriod")}
                             </p>
                           )
