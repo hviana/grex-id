@@ -10,10 +10,7 @@
   --color-light-text: #cccccc;
 }
 
-/*
- * Minimal scrollbar styling (§4 exception — cannot be replicated via Tailwind).
- * Only global Webkit + Firefox styles retained; all variant classes removed.
- */
+/* §4 exception: Scrollbar pseudo-elements have no Tailwind utilities. */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -46,7 +43,7 @@
   scrollbar-color: #02d07d #000;
 }
 
-/* Sidebar menu expand animation (Tailwind arbitrary value animate-[fadeSlideIn_...]) */
+/* §4 exception: Referenced by Tailwind arbitrary value animate-[fadeSlideIn_0.2s_ease-out]. */
 @keyframes fadeSlideIn {
   from {
     opacity: 0;

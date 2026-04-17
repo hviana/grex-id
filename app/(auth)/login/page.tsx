@@ -121,7 +121,7 @@ function LoginContent() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-                placeholder="you@example.com"
+                placeholder={t("common.placeholder.email")}
               />
             </div>
 
@@ -139,7 +139,7 @@ function LoginContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-                placeholder="••••••••"
+                placeholder={t("common.placeholder.password")}
               />
             </div>
 

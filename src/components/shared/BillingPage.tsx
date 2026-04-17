@@ -185,6 +185,17 @@ export default function BillingPage() {
     }
   };
 
+  const limitEmoji = (key: string) => {
+    const map: Record<string, string> = {
+      users: "👥",
+      storage: "💾",
+      locations: "📍",
+      leads: "👤",
+      tags: "🏷️",
+    };
+    return map[key] ?? "📦";
+  };
+
   const formatBytes = (bytes: number) => {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
     if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
@@ -551,7 +562,7 @@ export default function BillingPage() {
                       [key, val],
                     ) => (
                       <span key={key}>
-                        📁{" "}
+                        {limitEmoji(key)}{" "}
                         {t(`billing.limits.${key}`) !== `billing.limits.${key}`
                           ? t(`billing.limits.${key}`)
                           : key}: {val.toLocaleString()}
@@ -709,7 +720,7 @@ export default function BillingPage() {
                             [key, val],
                           ) => (
                             <p key={key}>
-                              👥 {t(`billing.limits.${key}`) !==
+                              {limitEmoji(key)} {t(`billing.limits.${key}`) !==
                                   `billing.limits.${key}`
                                 ? t(`billing.limits.${key}`)
                                 : key}: {val.toLocaleString()}

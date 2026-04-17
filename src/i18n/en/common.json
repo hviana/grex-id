@@ -84,6 +84,7 @@
   "address.country": "Country",
   "address.postalCode": "Postal Code",
   "placeholder.email": "you@example.com",
+  "placeholder.password": "••••••••",
   "placeholder.phone": "+1 (555) 123-4567",
   "placeholder.name": "John Doe",
   "placeholder.avatarUrl": "https://...",

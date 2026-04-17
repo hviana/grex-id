@@ -207,9 +207,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   ): Promise<{ id: string; name: string } | null> => {
     try {
       const billingRes = await fetch(
-        `/api/billing?companyId=${encodeURIComponent(cId)}&systemId=${
-          encodeURIComponent(sId)
-        }`,
+        `/api/billing`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const billingJson = await billingRes.json();
