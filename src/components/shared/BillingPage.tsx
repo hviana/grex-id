@@ -23,6 +23,8 @@ interface Subscription {
   currentPeriodStart: string;
   currentPeriodEnd: string;
   voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
+  autoRechargeEnabled: boolean;
+  autoRechargeAmount: number; // cents; 0 when disabled
 }
 
 interface PlanInfo {
@@ -88,6 +90,11 @@ export default function BillingPage() {
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [voucherSuccess, setVoucherSuccess] = useState<string | null>(null);
 
+  // Auto-recharge
+  const [autoRechargeEnabled, setAutoRechargeEnabled] = useState(false);
+  const [autoRechargeAmount, setAutoRechargeAmount] = useState("");
+  const [savingAutoRecharge, setSavingAutoRecharge] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!companyId || !systemId || !systemToken) return;
     setLoading(true);
@@ -132,6 +139,20 @@ export default function BillingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Sync auto-recharge state from active subscription
+  useEffect(() => {
+    const sub = subscriptions.find((s) => s.status === "active");
+    if (sub) {
+      setAutoRechargeEnabled(sub.autoRechargeEnabled ?? false);
+      setAutoRechargeAmount(
+        sub.autoRechargeAmount ? String(sub.autoRechargeAmount) : "",
+      );
+    } else {
+      setAutoRechargeEnabled(false);
+      setAutoRechargeAmount("");
+    }
+  }, [subscriptions]);
 
   const activeSub = subscriptions.find((s) => s.status === "active");
   const activePlan = activeSub ? planMap[activeSub.planId] : null;
@@ -341,6 +362,36 @@ export default function BillingPage() {
       setError("common.error.network");
     } finally {
       setPurchasingCredits(false);
+    }
+  };
+
+  const handleSaveAutoRecharge = async () => {
+    if (!companyId || !systemId || !systemToken) return;
+    setSavingAutoRecharge(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
+        body: JSON.stringify({
+          action: "set_auto_recharge",
+          enabled: autoRechargeEnabled,
+          amount: autoRechargeEnabled ? Number(autoRechargeAmount) : 0,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error?.message ?? "common.error.generic");
+      } else {
+        await loadData();
+      }
+    } catch {
+      setError("common.error.network");
+    } finally {
+      setSavingAutoRecharge(false);
     }
   };
 
@@ -841,7 +892,7 @@ export default function BillingPage() {
                           : "bg-yellow-500/20 text-yellow-400"
                       }`}
                     >
-                      {cp.status}
+                      {t("billing.credits.status." + cp.status)}
                     </span>
                     <span className="text-[var(--color-light-text)]">
                       {formatDate(cp.createdAt)}
@@ -850,6 +901,72 @@ export default function BillingPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Auto-Recharge Credits */}
+        {activeSub && (
+          <div className="border-t border-[var(--color-dark-gray)] pt-4 mb-4">
+            <h3 className="text-sm font-semibold text-white mb-3">
+              {t("billing.credits.autoRecharge.title")}
+            </h3>
+            <p className="text-sm text-[var(--color-light-text)] mb-3">
+              {t("billing.credits.autoRecharge.description")}
+            </p>
+            {!paymentMethods.some((pm) => pm.isDefault)
+              ? (
+                <p className="text-sm text-yellow-400">
+                  💡 {t("billing.credits.autoRecharge.noPaymentMethod")}
+                </p>
+              )
+              : (
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoRechargeEnabled}
+                      onChange={(e) => {
+                        if (!e.target.checked) {
+                          setAutoRechargeAmount("");
+                        }
+                        setAutoRechargeEnabled(e.target.checked);
+                      }}
+                      className="accent-[var(--color-primary-green)] w-4 h-4"
+                    />
+                    <span className="text-sm text-white">
+                      {t("billing.credits.autoRecharge.title")}
+                    </span>
+                  </label>
+                  {autoRechargeEnabled && (
+                    <input
+                      type="number"
+                      min="500"
+                      value={autoRechargeAmount}
+                      onChange={(e) => setAutoRechargeAmount(e.target.value)}
+                      placeholder={t(
+                        "billing.credits.autoRecharge.amountLabel",
+                      )}
+                      className={inputCls}
+                    />
+                  )}
+                  <button
+                    onClick={handleSaveAutoRecharge}
+                    disabled={savingAutoRecharge ||
+                      (autoRechargeEnabled && !autoRechargeAmount) ||
+                      (autoRechargeEnabled &&
+                        Number(autoRechargeAmount) < 500)}
+                    className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {savingAutoRecharge && (
+                      <Spinner
+                        size="sm"
+                        className="border-black border-t-transparent"
+                      />
+                    )}
+                    {t("common.save")}
+                  </button>
+                </div>
+              )}
           </div>
         )}
       </div>

@@ -60,9 +60,10 @@ export default function ProfileMenu() {
       const sel = selected[0];
       if (sel && sel.id !== companyId) {
         switchCompany(sel.id);
+        router.push("/entry");
       }
     },
-    [companyId, switchCompany],
+    [companyId, switchCompany, router],
   );
 
   const handleSystemChange = useCallback(
@@ -70,9 +71,10 @@ export default function ProfileMenu() {
       const sel = selected[0];
       if (sel && sel.id !== systemId) {
         switchSystem(sel.id);
+        router.push("/entry");
       }
     },
-    [systemId, switchSystem],
+    [systemId, switchSystem, router],
   );
 
   const handleClose = () => {

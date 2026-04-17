@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
+import { getCookie, setCookie } from "@/src/lib/cookies";
 
 const COMPANY_COOKIE = "core_company";
 const SYSTEM_COOKIE = "core_system";
@@ -531,18 +532,4 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     </SystemContext.Provider>
   );
-}
-
-// Cookie helpers (local to this module)
-function getCookie(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match?.[1];
-}
-
-function setCookie(name: string, value: string): void {
-  if (typeof document === "undefined") return;
-  const expires = new Date(Date.now() + 365 * 86400000).toUTCString();
-  document.cookie =
-    `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@/src/contracts/user";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
+import { getCookie, removeCookie, setCookie } from "@/src/lib/cookies";
 
 const TOKEN_COOKIE_NAME = "core_token";
 const SURREAL_TOKEN_COOKIE_NAME = "core_surreal_token";
@@ -12,24 +13,6 @@ interface AuthState {
   systemToken: string | null;
   surrealToken: string | null;
   loading: boolean;
-}
-
-function getCookie(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match?.[1];
-}
-
-function setCookie(name: string, value: string, days: number = 7): void {
-  if (typeof document === "undefined") return;
-  const expires = new Date(Date.now() + days * 86400000).toUTCString();
-  document.cookie =
-    `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function removeCookie(name: string): void {
-  if (typeof document === "undefined") return;
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 }
 
 /**
@@ -229,9 +212,13 @@ export function useAuth() {
       }
 
       setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
+      if (json.data.surrealToken) {
+        setCookie(SURREAL_TOKEN_COOKIE_NAME, json.data.surrealToken);
+      }
       setState((s) => ({
         ...s,
         systemToken: json.data.systemToken,
+        surrealToken: json.data.surrealToken ?? s.surrealToken,
       }));
 
       return json.data;

@@ -84,13 +84,24 @@ export function withAuth(
         );
       }
 
-      // Determine system slug from URL if possible
+      // Determine system slug from URL if possible (§9.2)
       const url = new URL(req.url);
-      const systemSlug = url.pathname.startsWith("/api/core/") ||
-          url.pathname.startsWith("/api/auth/") ||
-          url.pathname.startsWith("/api/public/")
-        ? "core"
-        : url.searchParams.get("systemSlug") ?? "core";
+      let systemSlug = "core";
+      if (
+        url.pathname.startsWith("/api/core/") ||
+        url.pathname.startsWith("/api/auth/")
+      ) {
+        systemSlug = "core";
+      } else if (url.pathname.startsWith("/api/public/")) {
+        // Public routes: use slug param if present, else "core"
+        systemSlug = url.searchParams.get("slug") ??
+          url.searchParams.get("systemSlug") ?? "core";
+      } else if (url.pathname.match(/^\/api\/systems\/([^/]+)/)) {
+        const match = url.pathname.match(/^\/api\/systems\/([^/]+)/);
+        systemSlug = match?.[1] ?? "core";
+      } else {
+        systemSlug = url.searchParams.get("systemSlug") ?? "core";
+      }
 
       ctx.tenant = getAnonymousTenant(systemSlug);
       ctx.claims = undefined;
@@ -166,20 +177,6 @@ export function withAuth(
               error: {
                 code: "UNAUTHORIZED",
                 message: "auth.error.tokenExpired",
-              },
-            },
-            { status: 401 },
-          );
-        }
-
-        // Check JTI revocation for API tokens
-        if (apiToken.jti && (await isJtiRevoked(apiToken.jti))) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "UNAUTHORIZED",
-                message: "auth.error.tokenRevoked",
               },
             },
             { status: 401 },

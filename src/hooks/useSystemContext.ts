@@ -3,23 +3,11 @@
 import { createContext, useCallback, useContext, useState } from "react";
 import type { Company } from "@/src/contracts/company";
 import type { System } from "@/src/contracts/system";
+import { setCookie } from "@/src/lib/cookies";
 import { useAuth } from "./useAuth.ts";
 
 const COMPANY_COOKIE = "core_company";
 const SYSTEM_COOKIE = "core_system";
-
-function getCookie(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match?.[1];
-}
-
-function setCookie(name: string, value: string): void {
-  if (typeof document === "undefined") return;
-  const expires = new Date(Date.now() + 365 * 86400000).toUTCString();
-  document.cookie =
-    `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-}
 
 interface SystemContextState {
   companies: Pick<Company, "id" | "name">[];

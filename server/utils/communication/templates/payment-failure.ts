@@ -180,13 +180,19 @@ export function paymentFailureTemplate(
     <!-- CTA Button -->
     <tr>
       <td style="padding: 0 0 24px 0; text-align: center;">
-        <a href="${data.billingUrl}" target="_blank" style="display: inline-block; padding: 16px 48px; background: linear-gradient(135deg, #02d07d 0%, #00ccff 100%); color: #000000; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 10px; letter-spacing: 0.3px; mso-padding-alt: 0; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-          <!--[if mso]><i style="mso-font-width: 200%; mso-text-raise: 21pt;">&nbsp;</i><![endif]-->
-          <span style="mso-text-raise: 10pt;">${
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+          <tr>
+            <td style="border-radius: 10px; background-image: linear-gradient(135deg, #02d07d 0%, #00ccff 100%); background-color: #02d07d; text-align: center;">
+              <a href="${data.billingUrl}" target="_blank" style="display: inline-block; padding: 16px 48px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; color: #000000; text-decoration: none; border-radius: 10px; letter-spacing: 0.3px;">
+                <!--[if mso]><i style="mso-font-width: 200%; mso-text-raise: 21pt;">&nbsp;</i><![endif]-->
+                <span style="mso-text-raise: 10pt;">${
     t("templates.paymentFailure.cta", locale)
   }</span>
-          <!--[if mso]><i style="mso-font-width: 200%;">&nbsp;</i><![endif]-->
-        </a>
+                <!--[if mso]><i style="mso-font-width: 200%;">&nbsp;</i><![endif]-->
+              </a>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
 

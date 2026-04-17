@@ -6,13 +6,13 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Enforces CORS for frontend-use API tokens.
+ * Enforces CORS for frontend-use API tokens only.
  * Returns a 403 Response on failure, or null on success.
  *
  * Rules:
+ * - ignore tokens with actorType!="api_token"
  * - Tokens with frontendUse=false: reject if browser Origin present (server-to-server only)
  * - Tokens with frontendUse=true: require Origin, validate against frontendDomains
- * - User-session tokens (actorType="user"): CORS governed by app.baseUrl
  */
 export function enforceCors(
   req: Request,
@@ -21,8 +21,8 @@ export function enforceCors(
 ): Response | null {
   const origin = req.headers.get("Origin");
 
-  // User tokens: allow from any origin (browser-based panel usage)
-  if (claims.actorType === "user") {
+  // others tokens: no CORS enforcement
+  if (claims.actorType != "api_token") {
     return null;
   }
 

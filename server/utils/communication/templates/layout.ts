@@ -1,10 +1,26 @@
 import { t } from "@/src/i18n";
+import Core from "../../Core.ts";
+import FrontCore from "../../FrontCore.ts";
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export function emailLayout(
   content: string,
   locale: string,
   preheader?: string,
 ): string {
+  // Read cached settings synchronously (Core/FrontCore are loaded at boot)
+  const core = Core.getInstance();
+  const frontCore = FrontCore.getInstance();
+  const appName = core.settings.get("app.name")?.value ?? "Core";
+  const supportEmail = frontCore.settings.get("front.support.email")?.value ??
+    "";
   const preheaderBlock = preheader
     ? `<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: #000000;">
   ${preheader}
@@ -98,7 +114,13 @@ export function emailLayout(
             <tr>
               <td style="padding: 24px 40px 32px 40px; text-align: center;" class="padding-mobile">
                 <p style="margin: 0 0 8px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.5; color: #555555;">
-                  ${t("templates.layout.footer", locale)}
+                  ${escapeHtml(appName)}${
+    supportEmail
+      ? ` · <a href="mailto:${
+        escapeHtml(supportEmail)
+      }" style="color: #02d07d;">${escapeHtml(supportEmail)}</a>`
+      : ""
+  }
                 </p>
                 <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #333333;">
                   ${t("templates.layout.automated", locale)}

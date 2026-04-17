@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   defaultLocale as fallbackLocale,
@@ -14,6 +8,7 @@ import {
   supportedLocales,
   t as translate,
 } from "@/src/i18n";
+import { getCookie, setCookie } from "@/src/lib/cookies";
 const LOCALE_COOKIE_NAME = "core_locale";
 const TOKEN_COOKIE_NAME = "core_token";
 
@@ -38,19 +33,6 @@ function resolveBrowserLocale(): SupportedLocale | undefined {
   return undefined;
 }
 
-function getCookie(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match?.[1];
-}
-
-function setCookie(name: string, value: string, days: number = 365): void {
-  if (typeof document === "undefined") return;
-  const expires = new Date(Date.now() + days * 86400000).toUTCString();
-  document.cookie =
-    `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
 export interface LocaleContextValue {
   locale: SupportedLocale;
   setLocale: (locale: SupportedLocale) => void;
@@ -65,23 +47,39 @@ interface LocaleProviderProps {
   defaultLocale?: string;
 }
 
+/**
+ * Resolve initial locale per §5.3 order:
+ * (1) core_locale cookie → (2) browser navigator.languages →
+ * (3) System.defaultLocale prop → (4) hardcoded "en"
+ */
+function resolveInitialLocale(
+  defaultLocale?: string,
+): SupportedLocale {
+  const valid = supportedLocales as readonly string[];
+
+  // Step 1: cookie
+  const stored = getCookie(LOCALE_COOKIE_NAME);
+  if (stored && valid.includes(stored)) return stored as SupportedLocale;
+
+  // Step 2: browser languages (two-pass per §5.3)
+  const browser = resolveBrowserLocale();
+  if (browser) return browser;
+
+  // Step 3: system defaultLocale prop
+  if (defaultLocale && valid.includes(defaultLocale)) {
+    return defaultLocale as SupportedLocale;
+  }
+
+  // Step 4: hardcoded fallback
+  return fallbackLocale;
+}
+
 export function LocaleProvider(
   { children, defaultLocale }: LocaleProviderProps,
 ) {
-  const resolvedDefault: SupportedLocale = resolveBrowserLocale() ??
-    ((defaultLocale &&
-        (supportedLocales as readonly string[]).includes(defaultLocale))
-      ? (defaultLocale as SupportedLocale)
-      : fallbackLocale);
-
-  const [locale, setLocaleState] = useState<SupportedLocale>(resolvedDefault);
-
-  useEffect(() => {
-    const stored = getCookie(LOCALE_COOKIE_NAME) as SupportedLocale | undefined;
-    if (stored && (supportedLocales as readonly string[]).includes(stored)) {
-      setLocaleState(stored);
-    }
-  }, []);
+  const [locale, setLocaleState] = useState<SupportedLocale>(
+    () => resolveInitialLocale(defaultLocale),
+  );
 
   const setLocale = useCallback((newLocale: SupportedLocale) => {
     setLocaleState(newLocale);

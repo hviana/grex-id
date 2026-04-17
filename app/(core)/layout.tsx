@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/src/components/shared/Sidebar";
+import Spinner from "@/src/components/shared/Spinner";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
@@ -166,17 +167,34 @@ export default function CoreLayout(
 ) {
   const router = useRouter();
   const { t } = useLocale();
+  const { tenant, loading: authLoading } = useAuth();
   const coreMenus = useCoreMenus(t);
+
+  // Superuser guard (§20)
+  useEffect(() => {
+    if (authLoading) return;
+    if (!tenant.roles.includes("superuser")) {
+      router.push("/entry");
+    }
+  }, [authLoading, tenant.roles, router]);
 
   const handleNavigate = (componentName: string) => {
     router.push(`/${componentName}`);
   };
 
+  if (authLoading || !tenant.roles.includes("superuser")) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--color-black)]">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[var(--color-black)]">
       <Sidebar
         menus={coreMenus}
-        systemName="Core Admin"
+        systemName={t("core.layout.superuserPanel")}
         onNavigate={handleNavigate}
       />
 

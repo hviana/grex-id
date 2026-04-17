@@ -911,7 +911,8 @@ start with a required check say so explicitly.
 
 #### 12.7 CORS (`server/utils/cors.ts`)
 
-Enforces `api_token.frontendDomains` for `frontendUse = true` tokens.
+Enforces `api_token.frontendDomains` for `frontendUse = true` tokens (only for
+`actorType="api_token"` otherwise it should be ignored).
 
 1. Missing/empty `Origin` header → rejected (frontend tokens must come from a
    browser).
@@ -925,9 +926,7 @@ Enforces `api_token.frontendDomains` for `frontendUse = true` tokens.
    preflight so the gateway can resolve it.
 
 Tokens with `frontendUse = false` are strictly server-to-server: any request
-carrying a browser `Origin` for such a token is rejected outright. Panel-issued
-user tokens (`actorType = "user"`) ignore `frontendUse` — their CORS is governed
-by `app.baseUrl`.
+carrying a browser `Origin` for such a token is rejected outright.
 
 #### 12.8 Token revocation (`server/utils/token-revocation.ts`)
 

@@ -67,9 +67,12 @@
   "plans.notFound": "Plan not found.",
   "paymentMethods.required": "A payment method is required for paid plans.",
   "voucher.applied": "Applied Vouchers",
-  "autoRecharge.title": "Auto-Recharge",
-  "autoRecharge.description": "Automatically purchase credits when your balance runs low.",
-  "autoRecharge.amountLabel": "Recharge amount",
-  "autoRecharge.noDefaultPaymentMethod": "A default payment method is required to enable auto-recharge.",
-  "voucher.planNotApplicable": "This voucher is not valid for your current plan."
+  "credits.autoRecharge.title": "Auto-Recharge",
+  "credits.autoRecharge.description": "Automatically purchase credits when your balance runs low",
+  "credits.autoRecharge.amountLabel": "Amount (cents)",
+  "credits.autoRecharge.noPaymentMethod": "Add a payment method to enable auto-recharge",
+  "voucher.planNotApplicable": "This voucher is not valid for your current plan.",
+  "credits.status.pending": "Pending",
+  "credits.status.completed": "Completed",
+  "credits.status.failed": "Failed"
 }
