@@ -1,32 +1,6 @@
 import Core from "../../utils/Core.ts";
-import { verificationTemplate } from "../../utils/communication/templates/verification.ts";
-import { passwordResetTemplate } from "../../utils/communication/templates/password-reset.ts";
-import { leadUpdateVerificationTemplate } from "../../utils/communication/templates/lead-update-verification.ts";
-import { paymentSuccessTemplate } from "../../utils/communication/templates/payment-success.ts";
-import { paymentFailureTemplate } from "../../utils/communication/templates/payment-failure.ts";
-import { autoRechargeTemplate } from "../../utils/communication/templates/auto-recharge.ts";
-import { insufficientCreditTemplate } from "../../utils/communication/templates/insufficient-credit.ts";
-import { tenantInviteTemplate } from "../../utils/communication/templates/tenant-invite.ts";
-import { recoveryVerifyTemplate } from "../../utils/communication/templates/recovery-verify.ts";
-import { recoveryChannelResetTemplate } from "../../utils/communication/templates/recovery-channel-reset.ts";
+import { getTemplate } from "../../module-registry.ts";
 import type { HandlerFn } from "../worker.ts";
-import type { TemplateFunction } from "@/src/contracts/communication";
-
-const templateRegistry: Record<string, TemplateFunction> = {
-  verification: verificationTemplate as unknown as TemplateFunction,
-  "password-reset": passwordResetTemplate as unknown as TemplateFunction,
-  "lead-update-verification":
-    leadUpdateVerificationTemplate as unknown as TemplateFunction,
-  "payment-success": paymentSuccessTemplate as unknown as TemplateFunction,
-  "payment-failure": paymentFailureTemplate as unknown as TemplateFunction,
-  "auto-recharge": autoRechargeTemplate as unknown as TemplateFunction,
-  "insufficient-credit":
-    insufficientCreditTemplate as unknown as TemplateFunction,
-  "tenant-invite": tenantInviteTemplate as unknown as TemplateFunction,
-  "recovery-verify": recoveryVerifyTemplate as unknown as TemplateFunction,
-  "recovery-channel-reset":
-    recoveryChannelResetTemplate as unknown as TemplateFunction,
-};
 
 export const sendEmail: HandlerFn = async (payload) => {
   const core = Core.getInstance();
@@ -50,8 +24,8 @@ export const sendEmail: HandlerFn = async (payload) => {
       (await core.getSetting("communication.email.senders")) ?? "[]",
     ) as string[];
 
-  // Resolve template
-  const templateFn = templateRegistry[template];
+  // Resolve template from registry
+  const templateFn = getTemplate(template);
   let subject: string | undefined;
   let body: string | undefined;
 

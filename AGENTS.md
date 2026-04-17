@@ -277,13 +277,20 @@ permission errors, and status messages.
 │   │                  field-validator, tenant,
 │   │                  communication/templates/*, payment/{interface,credit-card})
 │   ├── event-queue/  (publisher, worker, registry, handlers/*)
+│   ├── module-registry.ts            # §11.1 — central registration API
+│   ├── core-register.ts              # Core self-registration (handlers + jobs)
 │   └── jobs/         (index, start-event-queue, recurring-billing, token-cleanup)
 ├── client/                           # Frontend-only; NEVER imported by server
 │   ├── db/connection.ts              # WebSocket for LIVE SELECT
 │   ├── queries/.gitkeep
 │   └── utils/payment/{interface,credit-card}.ts
 ├── public/systems/[slug]/logo.svg
+├── systems/                            # Subsystem boot (§12.9)
+│   ├── index.ts                        # System boot entry — registers all systems
+│   └── [slug]/
+│       └── register.ts                 # Per-system self-registration
 ├── frameworks/                       # §26 — each subframework is self-contained
+│   ├── index.ts                      # Framework boot entry (§26.4)
 │   └── [name]/                       #   namespace-isolated; owns its own AGENTS.md
 │       ├── AGENTS.md
 │       ├── app/api/[name]/route.ts
@@ -306,6 +313,10 @@ permission errors, and status messages.
   `server/db/queries/systems/`, `server/db/frontend-queries/systems/`,
   `server/event-queue/handlers/systems/`, `app/api/systems/`, `public/systems/`,
   and `src/i18n/<locale>/systems/` for every locale.
+- Each system **creates a `register.ts`** at `systems/[slug]/register.ts` (at
+  the project root) that calls the module-registry registration functions
+  (§12.9). The subsystem's `register()` function is imported only by
+  `systems/index.ts` — never by core files.
 - **System-specific migrations** live in
   `server/db/migrations/systems/[slug]/*.surql` and use the same numeric prefix
   convention (e.g. `0026_create_foo.surql`). The runner scans the root
@@ -745,19 +756,21 @@ review rejects any helper that reintroduces scattered context.
 
 All of the following MUST be used — no ad-hoc reimplementations.
 
-| File                                  | Purpose                                            |
-| ------------------------------------- | -------------------------------------------------- |
-| `server/utils/rate-limiter.ts`        | §12.1                                              |
-| `server/utils/usage-tracker.ts`       | §12.2                                              |
-| `server/utils/credit-tracker.ts`      | §12.3                                              |
-| `server/utils/entity-deduplicator.ts` | §12.4                                              |
-| `server/utils/field-standardizer.ts`  | §12.5                                              |
-| `server/utils/field-validator.ts`     | §12.6                                              |
-| `server/utils/cors.ts`                | §12.7                                              |
-| `server/utils/token-revocation.ts`    | §12.8                                              |
-| `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13   |
-| `server/utils/tenant.ts`              | §9.3                                               |
-| `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant |
+| File                                  | Purpose                                                         |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `server/utils/rate-limiter.ts`        | §12.1                                                           |
+| `server/utils/usage-tracker.ts`       | §12.2                                                           |
+| `server/utils/credit-tracker.ts`      | §12.3                                                           |
+| `server/utils/entity-deduplicator.ts` | §12.4                                                           |
+| `server/utils/field-standardizer.ts`  | §12.5                                                           |
+| `server/utils/field-validator.ts`     | §12.6                                                           |
+| `server/utils/cors.ts`                | §12.7                                                           |
+| `server/utils/token-revocation.ts`    | §12.8                                                           |
+| `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13                |
+| `server/utils/tenant.ts`              | §9.3                                                            |
+| `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant              |
+| `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
+| `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
 
@@ -944,6 +957,58 @@ the TTL table).
 (cache + single-row lookup keeps the overhead negligible relative to JWT
 verification).
 
+#### 12.9 Module Registry (`server/module-registry.ts`)
+
+Central registration API that subsystems and frameworks call to register their
+handlers, jobs, and components. The core never imports subsystem code — all
+wiring goes through `register*` functions called at boot.
+
+```typescript
+// Handler functions — maps handler name → executable HandlerFn
+registerHandlerFunction(name: string, fn: HandlerFn): void;
+getHandlerFunction(name: string): HandlerFn | undefined;
+
+// Jobs — maps job name → start function for non-event-queue recurring jobs
+registerJob(name: string, startFn: () => void): void;
+getAllJobs(): Record<string, () => void>;
+
+// i18n — system-specific translation files
+registerSystemI18n(systemSlug: string, locale: string, data: TranslationMap): void;
+
+// Communication templates — email/SMS templates resolved by name at send time
+registerTemplate(name: string, fn: TemplateFunction): void;
+
+// Lifecycle hooks — subsystems react to core events without core importing them
+registerLifecycleHook(event: LifecycleEvent, hook: (payload) => Promise<void>): void;
+runLifecycleHooks(event: LifecycleEvent, payload: Record<string, unknown>): Promise<void>;
+// Lifecycle events: "lead:delete", "lead:verify"
+
+// Re-exports from existing registries for one-import convenience:
+registerEventHandler, registerComponent, registerHomePage
+```
+
+**Boot sequence** (in `server/jobs/index.ts`):
+
+1. `registerCore()` — `server/core-register.ts` registers core event handlers,
+   handler functions, and core jobs (recurring-billing, token-cleanup).
+2. `registerAllSystems()` — `systems/index.ts` calls each subsystem's
+   `register()` function.
+3. `registerAllFrameworks()` — `frameworks/index.ts` calls each framework's
+   `register()` function.
+4. `startEventQueue()` — resolves handler functions from the registry, starts
+   workers.
+5. Iterate `getAllJobs()` — starts all registered recurring jobs.
+
+**Systems vs frameworks.** Systems are runtime tenants (e.g. grex-id) with code
+under `server/db/queries/systems/`, `src/components/systems/`, etc. Frameworks
+are design-time code bundles under `frameworks/<name>/`. Both use the same
+module-registry API, but register through separate entry points:
+`systems/index.ts` and `frameworks/index.ts` respectively.
+
+Subsystems register via `systems/[slug]/register.ts`, exporting a single
+`register()` function. Frameworks follow the same pattern at
+`frameworks/[name]/register.ts`.
+
 ### 13. File Storage
 
 Uses `@hviana/surreal-fs` exclusively. All file data **and** metadata are stored
@@ -1082,10 +1147,12 @@ const handlerRegistry: Record<string, string[]> = {
   "SEND_SMS": ["send_sms"],
   "PAYMENT_DUE": ["process_payment"],
   "TRIGGER_AUTO_RECHARGE": ["auto_recharge"], // §22.5
-  // Systems/frameworks add more here
 };
 export function getHandlersForEvent(eventName: string): string[];
 ```
+
+Systems and frameworks add entries via `registerEventHandler()` (§12.9) at boot,
+never by editing this file directly.
 
 #### 14.4 Worker loop (`server/event-queue/worker.ts`)
 
@@ -1250,9 +1317,9 @@ Two handlers talk to external services — the **only** ones.
 ```
 
 Handler steps: (1) resolve locale via §5.4; (2) resolve senders:
-`payload.senders` → `communication.email.senders`; (3) look up the template
-function; (4) render; (5) call the email service configured in
-`communication.email.provider`.
+`payload.senders` → `communication.email.senders`; (3) resolve template function
+from the module registry (`getTemplate`); (4) render; (5) call the email service
+configured in `communication.email.provider`.
 
 **`send_sms`** (`handlers/send-sms.ts`) — same payload with phone numbers as
 `recipients`. Uses `communication.sms.provider`.
@@ -1274,9 +1341,14 @@ channel event.
 
 ### 16. Jobs
 
-- **`server/jobs/index.ts`** — starts all jobs at boot.
+- **`server/jobs/index.ts`** — boot entry point. Calls `registerCore()`,
+  `registerAllSystems()`, then `registerAllFrameworks()` (§12.9) to populate the
+  module registry, then starts the event queue and all registered recurring
+  jobs.
 - **`server/jobs/start-event-queue.ts`** — creates a worker per registered
-  handler name with its `WorkerConfig`.
+  handler name with its `WorkerConfig`. Resolves handler functions from the
+  module registry (`getHandlerFunction`) — never imports subsystem handlers
+  directly.
 - **`server/jobs/recurring-billing.ts`** — periodic (e.g. hourly) under the
   system Tenant. (1)
   `SELECT subscription WHERE status="active" AND
@@ -3041,18 +3113,59 @@ A framework **MUST NOT**:
 
 #### 26.4 Registration
 
-Frameworks register with the Core via `frameworks/index.ts`, which imports each
-framework's single public entry point (`frameworks/<name>/index.ts`). This entry
-file wires the framework into the Core at boot:
+**Systems and frameworks are distinct.** Systems are runtime tenants (e.g.
+grex-id) whose code lives under `server/db/queries/systems/`,
+`src/components/systems/`, etc. Frameworks are design-time code bundles under
+`frameworks/<name>/`. Both use the same module-registry API (§12.9), but
+register through separate entry points.
 
-- Registers components in `src/components/systems/registry.ts`.
-- Registers event handlers in `server/event-queue/registry.ts`.
-- Exposes migration metadata for the runner to scan.
-- Provides any framework-specific seed data.
+**System registration** — `systems/index.ts` imports each system's
+`systems/[slug]/register.ts`:
 
-Exactly one `index.ts` per framework — no other file from a framework is
-imported by the Core except through this entry point. The Core's job starter
-imports `frameworks/index.ts` at boot.
+```typescript
+// Example: systems/grex-id/register.ts
+import { registerEventHandler, registerHandlerFunction,
+         registerComponent, registerHomePage,
+         registerSystemI18n, registerTemplate,
+         registerLifecycleHook } from "@/server/module-registry";
+
+export function register(): void {
+  // Event handlers
+  registerEventHandler("GREXID_DETECTION", "grexid_process_detection");
+  registerHandlerFunction("grexid_process_detection", processDetection);
+
+  // Components
+  registerComponent("grexid-locations", () => import("..."));
+  registerHomePage("grex-id", () => import("..."));
+
+  // i18n
+  registerSystemI18n("grex-id", "en", enGrexId);
+  registerSystemI18n("grex-id", "pt-BR", ptBRGrexId);
+
+  // Lifecycle hooks
+  registerLifecycleHook("lead:delete", async ({ leadId }) => { ... });
+}
+```
+
+**Framework registration** — `frameworks/index.ts` imports each framework's
+`frameworks/[name]/register.ts` (same shape as above).
+
+**Boot wiring** (`server/jobs/index.ts`):
+
+1. `registerCore()` — core handlers + core jobs.
+2. `registerAllSystems()` — each system's `register()`.
+3. `registerAllFrameworks()` — each framework's `register()`.
+4. `startEventQueue()` — resolves handlers from registry.
+5. `getAllJobs()` — starts registered recurring jobs.
+
+**Invariants:**
+
+- The core never imports subsystem or framework code directly.
+- Exactly one `register()` function per system/framework — imported only by
+  `systems/index.ts` or `frameworks/index.ts` respectively.
+- Components, homepages, event handlers, handler functions, jobs, i18n, and
+  lifecycle hooks, and communication templates are all registered through the
+  module-registry API at boot.
 
 ---
 

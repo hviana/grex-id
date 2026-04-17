@@ -1,11 +1,21 @@
+import { registerCore } from "../core-register.ts";
+import { registerAllSystems } from "../../systems/index.ts";
+import { registerAllFrameworks } from "../../frameworks/index.ts";
+import { getAllJobs } from "../module-registry.ts";
 import { startEventQueue } from "./start-event-queue.ts";
-import { startRecurringBilling } from "./recurring-billing.ts";
-import { startTokenCleanup } from "./token-cleanup.ts";
 
 export async function startAllJobs(): Promise<void> {
-  console.log("[jobs] Starting all background jobs...");
+  registerCore();
+  registerAllSystems();
+  registerAllFrameworks();
+
   startEventQueue();
-  startRecurringBilling();
-  startTokenCleanup();
+
+  const jobs = getAllJobs();
+  console.log("[jobs] Starting all background jobs...");
+  for (const [name, startFn] of Object.entries(jobs)) {
+    console.log(`[jobs] Starting: ${name}`);
+    startFn();
+  }
   console.log("[jobs] All jobs started.");
 }

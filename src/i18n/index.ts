@@ -12,8 +12,6 @@ import ptBRBilling from "./pt-BR/billing.json";
 import ptBRHomepage from "./pt-BR/homepage.json";
 import ptBRTemplates from "./pt-BR/templates.json";
 import ptBRValidation from "./pt-BR/validation.json";
-import enGrexId from "./en/systems/grex-id.json";
-import ptBRGrexId from "./pt-BR/systems/grex-id.json";
 
 type TranslationMap = Record<string, string>;
 
@@ -38,12 +36,9 @@ const translations: Record<string, Record<string, TranslationMap>> = {
   },
 };
 
-const systemTranslations: Record<string, Record<string, TranslationMap>> = {
-  en: { "grex-id": enGrexId },
-  "pt-BR": { "grex-id": ptBRGrexId },
-};
+const systemTranslations: Record<string, Record<string, TranslationMap>> = {};
 
-export function loadSystemTranslations(
+export function registerSystemI18n(
   systemSlug: string,
   locale: string,
   data: TranslationMap,

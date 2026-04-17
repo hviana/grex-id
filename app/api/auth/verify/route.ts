@@ -14,7 +14,7 @@ import {
   syncLeadCompanyIds,
   updateLead,
 } from "@/server/db/queries/leads";
-import { tryUpsertFace } from "@/server/db/queries/systems/grex-id/faces";
+import { runLifecycleHooks } from "@/server/module-registry";
 
 interface LeadUpdatePayload {
   name?: string;
@@ -186,18 +186,12 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     await syncLeadCompanyIds(request.userId);
 
-    if (
-      payload.systemSlug === "grex-id" &&
-      payload.faceDescriptor &&
-      payload.faceDescriptor.length > 0
-    ) {
-      await tryUpsertFace({
+    if (payload.faceDescriptor && payload.faceDescriptor.length > 0) {
+      await runLifecycleHooks("lead:verify", {
         leadId: request.userId,
-        embedding_type1: payload.faceDescriptor,
-      }, {
-        route: "auth/verify:POST",
         systemSlug: payload.systemSlug,
         systemId: payload.systemId,
+        faceDescriptor: payload.faceDescriptor,
       });
     }
   }
