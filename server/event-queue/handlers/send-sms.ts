@@ -1,10 +1,6 @@
 import Core from "../../utils/Core.ts";
+import { getTemplate } from "../../module-registry.ts";
 import type { HandlerFn } from "../worker.ts";
-import type { TemplateFunction } from "@/src/contracts/communication";
-
-const templateRegistry: Record<string, TemplateFunction> = {
-  // SMS templates can be registered here as they are created
-};
 
 export const sendSms: HandlerFn = async (payload) => {
   const core = Core.getInstance();
@@ -22,8 +18,8 @@ export const sendSms: HandlerFn = async (payload) => {
   }
   locale ??= "en";
 
-  // Resolve template
-  const templateFn = templateRegistry[template];
+  // Resolve template from registry
+  const templateFn = getTemplate(template);
   let body: string | undefined;
 
   if (templateFn) {
