@@ -112,7 +112,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       success: true,
       data: {
         systemToken: newToken,
-        surrealToken: "", // Placeholder until Phase 9
       },
     });
   } catch {

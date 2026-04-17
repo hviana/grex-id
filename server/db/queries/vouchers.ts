@@ -1,41 +1,25 @@
 import { getDb, rid } from "../connection.ts";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { clampPageLimit } from "@/src/lib/validators";
+import { paginatedQuery } from "./pagination.ts";
 
 export async function listVouchers(
   params: CursorParams & { search?: string },
 ): Promise<PaginatedResult<Voucher>> {
-  const db = await getDb();
-  const limit = clampPageLimit(params.limit);
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
   const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
 
   if (params.search) {
     conditions.push("code CONTAINS $search");
     bindings.search = params.search;
   }
-  if (params.cursor) {
-    conditions.push(
-      params.direction === "prev" ? "id < $cursor" : "id > $cursor",
-    );
-    bindings.cursor = params.cursor;
-  }
 
-  let query = "SELECT * FROM voucher";
-  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[Voucher[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
-
-  return {
-    data,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
-  };
+  return paginatedQuery<Voucher>({
+    table: "voucher",
+    conditions,
+    bindings,
+    params,
+  });
 }
 
 export async function findVoucherByCode(code: string): Promise<Voucher | null> {

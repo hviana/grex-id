@@ -1,5 +1,6 @@
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
+import Core from "../../utils/Core.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -91,6 +92,11 @@ export async function handleAutoRecharge(
     await db.query(
       `UPDATE $subId SET autoRechargeInProgress = false`,
       { subId: rid(sub.id) },
+    );
+
+    await Core.getInstance().reloadSubscription(
+      String(sub.companyId),
+      String(sub.systemId),
     );
     return;
   }

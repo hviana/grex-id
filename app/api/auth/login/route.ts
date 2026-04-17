@@ -161,7 +161,7 @@ async function handler(
          math::flat($roleRecs[*].permissions) AS permissions
        FROM system WHERE id = $ucs[0].systemId LIMIT 1;
      } ELSE {
-       SELECT "0" AS companyId, "0" AS systemId, "core" AS systemSlug, [] AS roles, [] AS permissions SKIP 0 LIMIT 0;
+       SELECT "0" AS companyId, "0" AS systemId, "core" AS systemSlug, [] AS roles, [] AS permissions WHERE false;
      };`,
     { userId: rid(String(user.id)) },
   );
@@ -202,13 +202,10 @@ async function handler(
     stayLoggedIn ?? false,
   );
 
-  // TODO: Issue SurrealDB user token for frontend WebSocket (Phase 9)
-
   return Response.json({
     success: true,
     data: {
       systemToken,
-      surrealToken: "", // Placeholder until Phase 9
       user: {
         id: user.id,
         email: user.email,

@@ -133,7 +133,7 @@ export default function Sidebar(
         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[var(--color-secondary-blue)]/[0.02] to-transparent pointer-events-none" />
 
         {/* Corner radial highlights */}
-        <div className="absolute top-0 left-0 w-40 h-40 bg-[radial-gradient(circle_at_top_left,rgba(2,208,125,0.05),transparent_70%)] pointer-events-none" />
+        <div className="absolute top-0 left-0 w-40 h-40 bg-[radial-gradient(circle_at_top_left,rgba(2,208,125,0.06),transparent_70%)] pointer-events-none" />
 
         {/* ── Content ── */}
         <div className="relative flex flex-col h-full">

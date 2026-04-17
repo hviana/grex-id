@@ -6,12 +6,10 @@ import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
 import { getCookie, removeCookie, setCookie } from "@/src/lib/cookies";
 
 const TOKEN_COOKIE_NAME = "core_token";
-const SURREAL_TOKEN_COOKIE_NAME = "core_surreal_token";
 
 interface AuthState {
   user: User | null;
   systemToken: string | null;
-  surrealToken: string | null;
   loading: boolean;
 }
 
@@ -79,7 +77,6 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
     systemToken: null,
-    surrealToken: null,
     loading: true,
   });
 
@@ -90,7 +87,6 @@ export function useAuth() {
         setState({
           user: null,
           systemToken: null,
-          surrealToken: null,
           loading: false,
         });
       });
@@ -120,14 +116,10 @@ export function useAuth() {
 
       const days = stayLoggedIn ? 7 : 1;
       setCookie(TOKEN_COOKIE_NAME, json.data.systemToken, days);
-      if (json.data.surrealToken) {
-        setCookie(SURREAL_TOKEN_COOKIE_NAME, json.data.surrealToken, days);
-      }
 
       setState({
         user: json.data.user,
         systemToken: json.data.systemToken,
-        surrealToken: json.data.surrealToken,
         loading: false,
       });
 
@@ -138,11 +130,9 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     removeCookie(TOKEN_COOKIE_NAME);
-    removeCookie(SURREAL_TOKEN_COOKIE_NAME);
     setState({
       user: null,
       systemToken: null,
-      surrealToken: null,
       loading: false,
     });
   }, []);
@@ -160,26 +150,20 @@ export function useAuth() {
 
     if (!json.success) {
       removeCookie(TOKEN_COOKIE_NAME);
-      removeCookie(SURREAL_TOKEN_COOKIE_NAME);
       setState({
         user: null,
         systemToken: null,
-        surrealToken: null,
         loading: false,
       });
       return;
     }
 
     setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
-    if (json.data.surrealToken) {
-      setCookie(SURREAL_TOKEN_COOKIE_NAME, json.data.surrealToken);
-    }
 
     setState((s) => ({
       ...s,
       user: json.data.user ?? s.user,
       systemToken: json.data.systemToken,
-      surrealToken: json.data.surrealToken,
       loading: false,
     }));
   }, []);
@@ -212,13 +196,9 @@ export function useAuth() {
       }
 
       setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
-      if (json.data.surrealToken) {
-        setCookie(SURREAL_TOKEN_COOKIE_NAME, json.data.surrealToken);
-      }
       setState((s) => ({
         ...s,
         systemToken: json.data.systemToken,
-        surrealToken: json.data.surrealToken ?? s.surrealToken,
       }));
 
       return json.data;

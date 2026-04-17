@@ -26,9 +26,10 @@ ChartJS.register(
   Legend,
 );
 
+// Chart.js requires concrete hex values — CSS variables are not supported in canvas rendering.
 const EXPENSE_COLORS = [
-  "#02d07d",
-  "#00ccff",
+  "#02d07d", // --color-primary-green
+  "#00ccff", // --color-secondary-blue
   "#ff6384",
   "#ffce56",
   "#9966ff",

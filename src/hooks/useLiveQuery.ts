@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { connectFrontendDb } from "@/client/db/connection";
 
 interface UseLiveQueryOptions<T> {
   query: string;
   bindings?: Record<string, unknown>;
-  token: string | null;
   enabled?: boolean;
 }
 
 export function useLiveQuery<T>(
-  { query, bindings, token, enabled = true }: UseLiveQueryOptions<T>,
+  { query, bindings, enabled = true }: UseLiveQueryOptions<T>,
 ) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const liveIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!token || !enabled) {
+    if (!enabled) {
       setLoading(false);
       return;
     }
@@ -28,7 +26,7 @@ export function useLiveQuery<T>(
 
     (async () => {
       try {
-        const db = await connectFrontendDb(token);
+        const db = await connectFrontendDb();
 
         // Initial query
         const result = await db.query<[T[]]>(query, bindings);
@@ -51,7 +49,7 @@ export function useLiveQuery<T>(
     return () => {
       cancelled = true;
     };
-  }, [query, token, enabled]);
+  }, [query, enabled]);
 
   return { data, loading, error };
 }

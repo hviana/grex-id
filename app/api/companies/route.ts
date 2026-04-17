@@ -4,6 +4,8 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { createCompany, listCompanies } from "@/server/db/queries/companies";
 import { standardizeField } from "@/server/utils/field-standardizer";
+import { validateFields } from "@/server/utils/field-validator";
+import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -28,22 +30,42 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { name, document, documentType, billingAddress } = body;
 
-  if (!name || !document) {
+  const stdName = name ? standardizeField("name", name, "company") : undefined;
+  const stdDocument = document
+    ? standardizeField("document", document, "company")
+    : undefined;
+
+  const validationErrors = validateFields(
+    [
+      { field: "name", value: stdName },
+      { field: "cnpj", value: stdDocument },
+    ],
+    "company",
+  );
+  const flatErrors = Object.values(validationErrors).flat();
+  if (flatErrors.length > 0) {
     return Response.json(
-      {
-        success: false,
-        error: {
-          code: "VALIDATION",
-          message: "validation.company.requiredFields",
-        },
-      },
+      { success: false, error: { code: "VALIDATION", errors: flatErrors } },
       { status: 400 },
     );
   }
 
+  const dup = await checkDuplicates("company", [
+    { field: "document", value: stdDocument },
+  ]);
+  if (dup.isDuplicate) {
+    const conflictErrors = dup.conflicts.map((c) =>
+      `validation.${c.field}.duplicate`
+    );
+    return Response.json(
+      { success: false, error: { code: "CONFLICT", errors: conflictErrors } },
+      { status: 409 },
+    );
+  }
+
   const company = await createCompany({
-    name: standardizeField("name", name, "company"),
-    document: standardizeField("document", document, "company"),
+    name: stdName!,
+    document: stdDocument!,
     documentType: documentType ?? "cnpj",
     billingAddress: billingAddress ?? {},
     ownerId: ctx.claims?.actorId ?? "0",

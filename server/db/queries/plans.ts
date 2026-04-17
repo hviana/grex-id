@@ -1,7 +1,7 @@
 import { getDb, rid } from "../connection.ts";
 import type { Plan } from "@/src/contracts/plan";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { clampPageLimit } from "@/src/lib/validators";
+import { paginatedQuery } from "./pagination.ts";
 
 export async function listPlans(
   params: CursorParams & {
@@ -10,10 +10,8 @@ export async function listPlans(
     activeOnly?: boolean;
   },
 ): Promise<PaginatedResult<Plan>> {
-  const db = await getDb();
-  const limit = clampPageLimit(params.limit);
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
   const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
 
   if (params.systemId) {
     conditions.push("systemId = $systemId");
@@ -26,27 +24,13 @@ export async function listPlans(
     conditions.push("name CONTAINS $search");
     bindings.search = params.search;
   }
-  if (params.cursor) {
-    conditions.push(
-      params.direction === "prev" ? "id < $cursor" : "id > $cursor",
-    );
-    bindings.cursor = params.cursor;
-  }
 
-  let query = "SELECT * FROM plan";
-  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[Plan[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
-
-  return {
-    data,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
-  };
+  return paginatedQuery<Plan>({
+    table: "plan",
+    conditions,
+    bindings,
+    params,
+  });
 }
 
 export async function createPlan(data: {

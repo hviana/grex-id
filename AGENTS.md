@@ -274,7 +274,7 @@ permission errors, and status messages.
 │   ├── utils/        (Core, FrontCore, fs, token, token-revocation, cors,
 │   │                  rate-limiter, usage-tracker, credit-tracker,
 │   │                  entity-deduplicator, field-standardizer,
-│   │                  field-validator, tenant,
+│   │                  field-validator, guards, tenant,
 │   │                  communication/templates/*, payment/{interface,credit-card})
 │   ├── event-queue/  (publisher, worker, registry, handlers/*)
 │   ├── module-registry.ts            # §11.1 — central registration API
@@ -302,7 +302,7 @@ permission errors, and status messages.
 │           ├── db/migrations/        # framework migrations
 │           ├── db/queries/           # framework queries
 │           └── utils/                # framework utilities
-├── tailwind.config.ts next.config.ts tsconfig.json package.json AGENTS.md
+├── tailwind.config.ts next.config.ts tsconfig.json package.json AGENTS.md database.json
 ```
 
 **Rules:**
@@ -384,8 +384,9 @@ Every creation/update path MUST delegate to these utilities — no ad-hoc
 
 #### 7.4 Backend connection (`server/db/connection.ts`)
 
-HTTP connection (not WebSocket) for serverless compatibility. Credentials from
-static `Core.DB_*`. Singleton `getDb()`:
+HTTP connection (not WebSocket) for serverless compatibility. Credentials read
+from `database.json` (root directory) via `Core.DB_*` statics. Singleton
+`getDb()`:
 
 ```typescript
 let dbInstance: Surreal | null = null;
@@ -404,8 +405,20 @@ export async function getDb(): Promise<Surreal> {
 
 #### 7.5 Frontend connection (`client/db/connection.ts`)
 
-WebSocket using the SurrealDB user-scoped token. Exclusively for `LIVE SELECT`.
-`connectFrontendDb(userToken: string)`.
+WebSocket using SurrealDB user/password authentication. Exclusively for
+`LIVE
+SELECT`. Connection parameters (URL, namespace, database, user, password)
+are read from `core_setting` rows via the public API
+(`GET /api/public/front-core` resolves `db.frontend.*` keys).
+`connectFrontendDb()`.
+
+| `core_setting` key      | Seed value                  | Used by             |
+| ----------------------- | --------------------------- | ------------------- |
+| `db.frontend.url`       | `"ws://127.0.0.1:8000/rpc"` | WebSocket endpoint  |
+| `db.frontend.namespace` | `"main"`                    | SurrealDB namespace |
+| `db.frontend.database`  | `"grex-id"`                 | SurrealDB database  |
+| `db.frontend.user`      | `""`                        | SurrealDB auth user |
+| `db.frontend.pass`      | `""`                        | SurrealDB auth pass |
 
 #### 7.6 Live Query Permissions
 
@@ -413,8 +426,8 @@ WebSocket using the SurrealDB user-scoped token. Exclusively for `LIVE SELECT`.
 - Every table used by frontend queries MUST declare
   `PERMISSIONS FOR select WHERE <ownership>` (e.g. `WHERE userId = $auth.id`).
 - Always include cursor pagination with a reasonable limit.
-- The frontend WebSocket token is a SurrealDB user-scoped token (§19.1), not the
-  system API token.
+- The frontend WebSocket authenticates via SurrealDB user/password credentials
+  from `core_setting` (§7.5), not the system API token.
 
 Example:
 
@@ -572,18 +585,20 @@ in-memory cache, reload on write, missing-key log, admin editor.
 
 ```typescript
 class Core {
-  private static readonly DB_URL: string; // from environment
-  private static readonly DB_USER: string;
-  private static readonly DB_PASS: string;
-  private static readonly DB_NAMESPACE: string;
-  private static readonly DB_DATABASE: string;
+  static readonly DB_URL: string; // from database.json
+  static readonly DB_USER: string;
+  static readonly DB_PASS: string;
+  static readonly DB_NAMESPACE: string;
+  static readonly DB_DATABASE: string;
 
   systems: System[];
   roles: Role[];
   plans: Plan[];
+  vouchers: Voucher[];
   menus: MenuItem[];
   settings: Map<string, CoreSetting>;
-  // vouchers are NOT cached (queried on demand)
+  // Active subscriptions cached per-tenant (lazily loaded)
+  // private subscriptions: Map<string, Subscription>;
 
   async getSetting(key: string): Promise<string | undefined>;
   async getSystemBySlug(slug: string): Promise<System | undefined>;
@@ -596,6 +611,26 @@ class Core {
   async load(): Promise<void>;
   async reload(): Promise<void>;
   static getInstance(): Core;
+
+  // Plan / voucher lookup (sync, from cache)
+  getPlanById(planId: string): Plan | undefined;
+  getVoucherById(voucherId: string): Voucher | undefined;
+
+  // Subscription cache (lazily loaded, per-tenant)
+  getActiveSubscriptionCached(
+    companyId: string,
+    systemId: string,
+  ): Subscription | undefined;
+  async ensureSubscription(
+    companyId: string,
+    systemId: string,
+  ): Promise<Subscription | null>;
+  async reloadSubscription(
+    companyId: string,
+    systemId: string,
+  ): Promise<Subscription | null>;
+  evictSubscription(companyId: string, systemId: string): void;
+  evictAllSubscriptions(): void;
 }
 ```
 
@@ -607,8 +642,49 @@ if (typeof window !== "undefined") {
 }
 ```
 
+**Backend database credentials.** The static `DB_*` fields are read at class
+load time from `database.json` in the project root:
+
+```json
+{
+  "url": "https://…",
+  "user": "admin",
+  "pass": "…",
+  "namespace": "main",
+  "database": "grex-id"
+}
+```
+
+This file is server-only (never imported by frontend code) and should be
+excluded from version control (`.gitignore`).
+
+**Frontend database credentials.** The frontend WebSocket connection reads its
+parameters from `core_setting` rows (`db.frontend.url`, `db.frontend.namespace`,
+`db.frontend.database`, `db.frontend.user`, `db.frontend.pass` — see §7.5).
+These are resolved at runtime via `GET /api/public/front-core`, keeping all
+connection configuration in the database where the superuser can update it
+without redeployment.
+
 **Reload trigger.** Whenever a core entity is written (systems, roles, plans,
-menus, settings), the route handler calls `Core.getInstance().reload()`.
+vouchers, menus, settings), the route handler calls
+`Core.getInstance().reload()`.
+
+**Subscription cache.** Active subscriptions are cached per-tenant (keyed by
+`companyId:systemId`) and loaded lazily on first access. After any billing
+mutation (subscribe, cancel, apply_voucher, set_auto_recharge, purchase_credits)
+the route handler or event handler calls
+`Core.getInstance().reloadSubscription(companyId, systemId)`. The
+process-payment handler reloads subscriptions after renewal and after marking
+past_due. The `evictAllSubscriptions()` method clears the entire subscription
+cache; it is called after voucher mutations (which can cascade across multiple
+tenants).
+
+**Index maps — no array iteration.** The Core singleton must never use
+`.find()`, `.filter()`, or any linear scan over cached arrays. Every lookup
+method uses pre-built `Map` indexes populated during `load()` / `reload()`:
+`systemsBySlug`, `rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`,
+`vouchersById`, and `settings`. This rule applies to all caching mechanisms in
+the project — design for O(1) lookups, never iterate.
 
 **No hardcoded fallback constants.** Server-side config is read exclusively via
 `Core.getInstance().getSetting(key)`. If a key is missing, `getSetting` returns
@@ -640,6 +716,11 @@ menus, settings), the route handler calls `Core.getInstance().reload()`.
 | `billing.autoRecharge.maxAmount`                   | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
 | `auth.recoveryChannel.maxPerUser`                  | `"10"`                                     | Max recovery channels per user                  |
 | `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                                     | Recovery channel verification link expiry (min) |
+| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"`                | Frontend WebSocket endpoint (§7.5)              |
+| `db.frontend.namespace`                            | `"main"`                                   | Frontend SurrealDB namespace (§7.5)             |
+| `db.frontend.database`                             | `"grex-id"`                                | Frontend SurrealDB database (§7.5)              |
+| `db.frontend.user`                                 | `""`                                       | SurrealDB auth user for frontend WebSocket      |
+| `db.frontend.pass`                                 | `""`                                       | SurrealDB auth pass for frontend WebSocket      |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -727,7 +808,9 @@ interface RequestContext {
 **Standard execution order:**
 
 1. `withRateLimit(config)` — sliding window. Key: `{companyId}:{systemId}` for
-   general routes; `{ip}` for auth routes. Reads `ctx.tenant`.
+   general routes; `{ip}` for auth routes. Reads `ctx.tenant`. Plan rate limit
+   and voucher modifier from Core cache; only the actor count requires a DB
+   query. Delegates to `resolveRateLimitConfig()` (§12.10).
 2. `withAuth(options?)` — verifies the JWT, checks `jti` against the revocation
    list (§19.12), runs the CORS check (§12.7) for `frontendUse` tokens,
    populates `ctx.tenant` + `ctx.claims`. If no token, populates the anonymous
@@ -740,9 +823,12 @@ interface RequestContext {
    - Route handlers **never parse the `Authorization` header themselves**.
 3. `withPlanAccess(featureNames[])` — verifies the subscription for the tenant
    is active and within `currentPeriodEnd`, and that the plan grants at least
-   one of the listed permissions.
+   one of the listed permissions. Reads subscription and plan data from the Core
+   cache (no DB query). Delegates to `checkPlanAccess()` (§12.10).
 4. `withEntityLimit(entityName)` — (optional, before CREATE) checks the current
    entity count against plan limits + voucher modifiers.
+   Plan/voucher/subscription data from Core cache; only the entity count
+   requires a DB query. Delegates to `resolveEntityLimit()` (§12.10).
 
 **Auth routes (`/api/auth/*`) only use `withRateLimit`.** They still receive the
 synthesized anonymous `ctx.tenant` so downstream utilities keep the uniform
@@ -770,6 +856,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/utils/tenant.ts`              | §9.3                                                            |
 | `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant              |
 | `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
+| `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1008,6 +1095,38 @@ module-registry API, but register through separate entry points:
 Subsystems register via `systems/[slug]/register.ts`, exporting a single
 `register()` function. Frameworks follow the same pattern at
 `frameworks/[name]/register.ts`.
+
+#### 12.10 Guard functions (`server/utils/guards.ts`)
+
+Reusable internal functions for plan-limit enforcement. Used by middleware but
+also callable from queries, event handlers, and jobs. All plan, voucher, and
+subscription data is read from the Core.ts cache — these functions never query
+the DB directly. Dynamic data (entity counts, actor counts) still requires DB
+queries performed by the caller.
+
+```typescript
+// Resolve the effective entity limit from cached plan + voucher.
+// Returns { limit: number | null, planLimit: number | null, voucherModifier: number }
+async function resolveEntityLimit(params: {
+  companyId: string;
+  systemId: string;
+  entityName: string;
+}): Promise<EntityLimitResult>;
+
+// Check subscription status + plan permissions from cache.
+// Returns { granted: boolean, denyCode?: "NO_SUBSCRIPTION" | "SUBSCRIPTION_EXPIRED" | "PLAN_LIMIT" }
+async function checkPlanAccess(
+  tenant: Tenant,
+  featureNames: string[],
+): Promise<PlanAccessResult>;
+
+// Compute rate limit from cached plan + voucher.
+// Returns { globalLimit: number, planRateLimit: number, voucherModifier: number }
+async function resolveRateLimitConfig(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<RateLimitConfigResult>;
+```
 
 ### 13. File Storage
 
@@ -1375,11 +1494,13 @@ channel event.
 
 #### 17.1 SurrealDB frontend connection (`client/db/connection.ts`)
 
-WebSocket via the SurrealDB user-scoped token. Exclusively for `LIVE
-SELECT`.
+WebSocket via SurrealDB user/password authentication. Exclusively for
+`LIVE
+SELECT`. Credentials read from `core_setting` via
+`/api/public/front-core`.
 
 ```typescript
-export async function connectFrontendDb(userToken: string): Promise<Surreal>;
+export async function connectFrontendDb(): Promise<Surreal>;
 ```
 
 #### 17.2 Payment contracts
@@ -1434,7 +1555,7 @@ export interface PaymentResult {
 | Hook               | File                            | Purpose                                                                                                                                                                                           |
 | ------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `useDebounce`      | `src/hooks/useDebounce.ts`      | Debounced value (configurable delay)                                                                                                                                                              |
-| `useAuth`          | `src/hooks/useAuth.ts`          | Holds opaque `token` + `surrealToken`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only). |
+| `useAuth`          | `src/hooks/useAuth.ts`          | Holds opaque `token`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only).                  |
 | `useLiveQuery`     | `src/hooks/useLiveQuery.ts`     | Wraps `LIVE SELECT`; manages WebSocket; reactive data                                                                                                                                             |
 | `useSystemContext` | `src/hooks/useSystemContext.ts` | Thin wrapper over `useAuth` exposing `tenant` + `companies[]`, `systems[]`, `switchCompany()`, `switchSystem()`. Switchers call `useAuth().exchangeTenant()` — never mutate local state directly. |
 | `useLocale`        | `src/hooks/useLocale.ts`        | `locale`, `setLocale()`, `t()`, `supportedLocales`                                                                                                                                                |
@@ -1913,15 +2034,15 @@ system-specific API routes.
 
 ### 19. Authentication
 
-#### 19.1 Dual token architecture
+#### 19.1 Token architecture
 
-| Token                | Purpose                             | Issued by                               | Transport                       |
-| -------------------- | ----------------------------------- | --------------------------------------- | ------------------------------- |
-| System API Token     | API requests to backend routes      | Backend via `@panva/jose`               | `Authorization: Bearer <token>` |
-| SurrealDB User Token | Frontend live queries via WebSocket | SurrealDB `DEFINE ACCESS … TYPE RECORD` | WebSocket auth on connect       |
+| Token            | Purpose                        | Issued by                 | Transport                       |
+| ---------------- | ------------------------------ | ------------------------- | ------------------------------- |
+| System API Token | API requests to backend routes | Backend via `@panva/jose` | `Authorization: Bearer <token>` |
 
-Both refresh when appropriate: system token via `/api/auth/refresh`; SurrealDB
-token by re-authenticating the WebSocket.
+Frontend live queries authenticate via SurrealDB user/password credentials
+stored in `core_setting` (`db.frontend.user`, `db.frontend.pass` — §7.5), not
+via a separate token. The system token refreshes via `/api/auth/refresh`.
 
 #### 19.2 System branding on public pages
 
@@ -1958,8 +2079,7 @@ Without `?system=`, pages show the core app name (`app.name`) with no logo.
 5. `twoFactorEnabled = true` → require TOTP before issuing tokens.
 6. Issue System API Token (short-lived from `auth.token.expiry.minutes`;
    extended by `auth.token.expiry.stayLoggedIn.hours` when `stayLoggedIn`).
-7. Issue SurrealDB User Token.
-8. Return both to client.
+7. Return the System API Token to the client.
 
 #### 19.5 Post-login routing
 
@@ -2553,7 +2673,9 @@ GET /api/usage?companyId&systemId&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 
 #### 22.1 `POST /api/billing` actions
 
-All actions accept `action` in the body.
+All actions accept `action` in the body. Every billing mutation calls
+`Core.getInstance().reloadSubscription(companyId, systemId)` after the DB write
+to keep the subscription cache (§10.1) in sync.
 
 **`subscribe`** — create a new subscription (or change plan):
 
@@ -2793,9 +2915,12 @@ user can re-enter at any time).
 
 Because steps 1–3 are one batched statement, subscriptions never sit in an
 inconsistent state where the voucher still points to them but no longer applies.
-Open billing pages reflect the removal on their next reload (or instantly via
-live query on `subscription`). No email is sent for this removal — the
-billing-page reload communicates the change.
+After the batched query, the handler calls `Core.getInstance().reload()` (to
+refresh the voucher cache) followed by
+`Core.getInstance().evictAllSubscriptions()` (to clear potentially stale
+subscription cache entries). Open billing pages reflect the removal on their
+next reload (or instantly via live query on `subscription`). No email is sent
+for this removal — the billing-page reload communicates the change.
 
 **Plan-change & voucher.** When a user switches plan (`subscribe` with a
 different plan — §22.1), the old subscription is cancelled (voucher reference

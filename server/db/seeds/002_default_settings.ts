@@ -152,6 +152,31 @@ const defaults: DefaultSetting[] = [
     value: "15",
     description: "Recovery channel verification link expiry in minutes",
   },
+  {
+    key: "db.frontend.url",
+    value: "ws://127.0.0.1:8000/rpc",
+    description: "Frontend WebSocket endpoint for LIVE SELECT",
+  },
+  {
+    key: "db.frontend.namespace",
+    value: "main",
+    description: "SurrealDB namespace for frontend live queries",
+  },
+  {
+    key: "db.frontend.database",
+    value: "grex-id",
+    description: "SurrealDB database for frontend live queries",
+  },
+  {
+    key: "db.frontend.user",
+    value: "",
+    description: "SurrealDB auth user for frontend WebSocket connection",
+  },
+  {
+    key: "db.frontend.pass",
+    value: "",
+    description: "SurrealDB auth pass for frontend WebSocket connection",
+  },
 ];
 
 export async function seedDefaultSettings(db: Surreal): Promise<void> {

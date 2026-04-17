@@ -170,9 +170,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
       [
         unknown,
         unknown,
-        { name: string }[],
-        { email: string; profileName: string }[],
-        { name: string }[],
+        {
+          sys: { name: string }[];
+          comp: { name: string }[];
+          inviter: { email: string; profileName: string }[];
+        },
       ]
     >(
       `IF array::len((SELECT id FROM company_user WHERE companyId = $companyId AND userId = $userId)) = 0 {
@@ -187,7 +189,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
        LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
        LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
        LET $inviter = (SELECT email, profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
-       RETURN [$sys, $comp, $inviter];`,
+       RETURN {sys: $sys, comp: $comp, inviter: $inviter};`,
       {
         userId: rid(String(existingUser.id)),
         companyId: rid(companyId),
@@ -197,11 +199,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
       },
     );
 
-    const returnData = batchResult[4] as unknown[];
-    const sysName = (returnData?.[0] as any)?.[0]?.name ?? "";
-    const compName = (returnData?.[1] as any)?.[0]?.name ?? "";
-    const inviterData = (returnData?.[2] as any)?.[0];
-    const inviterName = inviterData?.profileName ?? inviterData?.email ?? "";
+    const returnData = batchResult[2] as {
+      sys: { name: string }[];
+      comp: { name: string }[];
+      inviter: { email: string; profileName: string }[];
+    } | undefined;
+    const sysName = returnData?.sys?.[0]?.name ?? "";
+    const compName = returnData?.comp?.[0]?.name ?? "";
+    const inviterName = returnData?.inviter?.[0]?.profileName ??
+      returnData?.inviter?.[0]?.email ?? "";
 
     const core = Core.getInstance();
     const baseUrl = (await core.getSetting("app.baseUrl")) ??

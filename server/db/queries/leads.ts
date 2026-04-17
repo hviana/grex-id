@@ -303,26 +303,17 @@ export async function updateLead(
 export async function syncLeadCompanyIds(leadId: string): Promise<string[]> {
   const db = await getDb();
   const normalizedLeadId = requireRecordId(leadId, "leadId");
-  const result = await db.query<[{ companyId: unknown }[]]>(
-    "SELECT companyId FROM lead_company_system WHERE leadId = $leadId",
+
+  const result = await db.query<[unknown, { companyId: unknown }[]]>(
+    `LET $rows = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
+     UPDATE $leadId SET companyIds = $rows[*].companyId, updatedAt = time::now();
+     SELECT companyId FROM lead_company_system WHERE leadId = $leadId`,
     { leadId: rid(normalizedLeadId) },
   );
 
-  const companyIds = normalizeRecordIds(
-    (result[0] ?? []).map((row) => row.companyId),
+  return normalizeRecordIds(
+    (result[1] ?? []).map((row: { companyId: unknown }) => row.companyId),
   );
-
-  await db.query(
-    "UPDATE $leadId SET companyIds = $companyIds, updatedAt = time::now()",
-    {
-      leadId: rid(normalizedLeadId),
-      companyIds: companyIds.map((companyId) =>
-        rid(requireRecordId(companyId, "companyId"))
-      ),
-    },
-  );
-
-  return companyIds;
 }
 
 export async function deleteLead(id: string): Promise<void> {

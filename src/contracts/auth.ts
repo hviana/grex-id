@@ -10,7 +10,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   systemToken: string;
-  surrealToken: string;
   user: {
     id: string;
     email: string;
@@ -50,7 +49,6 @@ export interface RefreshRequest {
 
 export interface RefreshResponse {
   systemToken: string;
-  surrealToken: string;
 }
 
 export interface ExchangeRequest {

@@ -89,9 +89,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     // Use Core cache for plan lookup (no db.query) — §7.2 single-call rule
-    const plans = await core.getPlansForSystem(systemId);
-    const plan = plans.find((p) => String(p.id) === String(planId));
-    if (!plan) {
+    const plan = core.getPlanById(planId);
+    if (!plan || String(plan.systemId) !== String(systemId)) {
       return Response.json(
         {
           success: false,
@@ -170,6 +169,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
       params,
     );
 
+    await Core.getInstance().reloadSubscription(
+      String(companyId),
+      String(systemId),
+    );
+
     return Response.json({ success: true, data: result }, { status: 201 });
   }
 
@@ -182,6 +186,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
       { companyId: rid(companyId), systemId: rid(systemId) },
     );
+
+    await Core.getInstance().reloadSubscription(companyId, systemId);
 
     return Response.json({ success: true });
   }
@@ -369,6 +375,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       purpose: "credits",
     });
 
+    await Core.getInstance().reloadSubscription(companyId, systemId);
+
     return Response.json(
       { success: true, data: purchase },
       { status: 201 },
@@ -499,6 +507,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       ...(creditDelta !== 0 ? { creditDelta } : {}),
     });
 
+    await Core.getInstance().reloadSubscription(companyId, systemId);
+
     return Response.json({
       success: true,
       data: voucher,
@@ -594,6 +604,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
         },
       );
     }
+
+    await Core.getInstance().reloadSubscription(companyId, systemId);
 
     return Response.json({ success: true });
   }

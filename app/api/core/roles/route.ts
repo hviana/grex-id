@@ -6,6 +6,8 @@ import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { checkDuplicates } from "@/server/utils/entity-deduplicator";
+import { paginatedQuery } from "@/server/db/queries/pagination";
 import Core from "@/server/utils/Core";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -17,43 +19,29 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const systemId = url.searchParams.get("systemId") ?? undefined;
 
-  const db = await getDb();
-  let query = "SELECT * FROM role";
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
   const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
 
   if (search) {
     conditions.push("name @@ $search");
     bindings.search = search;
   }
-
   if (systemId) {
     conditions.push("systemId = $systemId");
     bindings.systemId = rid(systemId);
   }
 
-  if (cursor) {
-    conditions.push(direction === "prev" ? "id < $cursor" : "id > $cursor");
-    bindings.cursor = cursor;
-  }
-
-  if (conditions.length > 0) {
-    query += " WHERE " + conditions.join(" AND ");
-  }
-
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
+  const result = await paginatedQuery({
+    table: "role",
+    conditions,
+    bindings,
+    params: { cursor, limit, direction },
+  });
 
   return Response.json({
     success: true,
-    data,
-    nextCursor: hasMore && data.length > 0
-      ? data[data.length - 1]?.id ?? null
-      : null,
+    data: result.data,
+    nextCursor: result.nextCursor,
   });
 }
 
@@ -76,6 +64,21 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
+    const stdName = standardizeField("name", sanitizeString(name));
+    const dup = await checkDuplicates("role", [
+      { field: "name", value: stdName },
+      { field: "systemId", value: systemId },
+    ]);
+    if (dup.isDuplicate) {
+      const conflictErrors = dup.conflicts.map((c) =>
+        `validation.${c.field}.duplicate`
+      );
+      return Response.json(
+        { success: false, error: { code: "CONFLICT", errors: conflictErrors } },
+        { status: 409 },
+      );
+    }
+
     const db = await getDb();
     const result = await db.query<[Record<string, unknown>[]]>(
       `CREATE role SET
@@ -84,7 +87,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         permissions = $permissions,
         isBuiltIn = $isBuiltIn`,
       {
-        name: standardizeField("name", sanitizeString(name)),
+        name: stdName,
         systemId: rid(systemId),
         permissions: permissions ?? [],
         isBuiltIn: isBuiltIn ?? false,
@@ -128,8 +131,16 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     const bindings: Record<string, unknown> = { id: rid(id) };
 
     if (data.name !== undefined) {
+      const stdName = standardizeField("name", sanitizeString(data.name));
+      const nameErrors = validateField("name", stdName);
+      if (nameErrors.length > 0) {
+        return Response.json(
+          { success: false, error: { code: "VALIDATION", errors: nameErrors } },
+          { status: 400 },
+        );
+      }
       sets.push("name = $name");
-      bindings.name = standardizeField("name", sanitizeString(data.name));
+      bindings.name = stdName;
     }
     if (data.permissions !== undefined) {
       sets.push("permissions = $permissions");

@@ -1,6 +1,7 @@
 import type { HandlerFn } from "../worker.ts";
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
+import Core from "../../utils/Core.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -116,6 +117,11 @@ export const processPayment: HandlerFn = async (payload) => {
           remainingPlanCredits,
         },
       );
+
+      await Core.getInstance().reloadSubscription(
+        String(sub.companyId),
+        String(sub.systemId),
+      );
     } else {
       // Credit purchase or auto-recharge — increment purchased credits (§22.3)
       const period = new Date().toISOString().slice(0, 7);
@@ -144,6 +150,11 @@ export const processPayment: HandlerFn = async (payload) => {
       }
 
       await db.query(stmts.join("\n"), params);
+
+      await Core.getInstance().reloadSubscription(
+        String(sub.companyId),
+        String(sub.systemId),
+      );
     }
 
     // Email on success (§16)
@@ -180,6 +191,11 @@ export const processPayment: HandlerFn = async (payload) => {
 
     if (stmts.length > 0) {
       await db.query(stmts.join("\n"), params);
+
+      await Core.getInstance().reloadSubscription(
+        String(sub.companyId),
+        String(sub.systemId),
+      );
     }
 
     if (ownerEmail) {

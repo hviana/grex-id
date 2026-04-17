@@ -1,40 +1,25 @@
 import { getDb, rid } from "../connection.ts";
 import type { System } from "@/src/contracts/system";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { clampPageLimit } from "@/src/lib/validators";
+import { paginatedQuery } from "./pagination.ts";
 
 export async function listSystems(
   params: CursorParams & { search?: string },
 ): Promise<PaginatedResult<System>> {
-  const db = await getDb();
-  const limit = clampPageLimit(params.limit);
-
-  let query = "SELECT * FROM system";
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
+  const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
 
   if (params.search) {
-    query += " WHERE name @@ $search";
+    conditions.push("name @@ $search");
     bindings.search = params.search;
   }
 
-  if (params.cursor) {
-    query += params.search ? " AND" : " WHERE";
-    query += params.direction === "prev" ? " id < $cursor" : " id > $cursor";
-    bindings.cursor = params.cursor;
-  }
-
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[System[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
-
-  return {
-    data,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
-  };
+  return paginatedQuery<System>({
+    table: "system",
+    conditions,
+    bindings,
+    params,
+  });
 }
 
 export async function getSystem(id: string): Promise<System | null> {

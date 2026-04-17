@@ -352,7 +352,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           systemToken!,
         );
         const first = findFirstComponent(tree);
-        if (first) router.push(`/${first}`);
+        if (first && (!pathname || pathname === "/entry" || pathname === "/")) {
+          router.push(`/${first}`);
+        }
       } catch {
         // Network error — stay on current page
       } finally {

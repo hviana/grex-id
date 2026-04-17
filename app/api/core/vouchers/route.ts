@@ -6,6 +6,7 @@ import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import Core from "@/server/utils/Core";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -117,6 +118,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
     );
+
+    const core = Core.getInstance();
+    await core.reload();
+    core.evictAllSubscriptions();
 
     return Response.json(
       { success: true, data: result[0]?.[0] },
@@ -238,6 +243,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       bindings,
     );
 
+    const core = Core.getInstance();
+    await core.reload();
+    core.evictAllSubscriptions();
+
     return Response.json({ success: true, data: result[0]?.[0] });
   } catch {
     return Response.json(
@@ -273,6 +282,10 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
        DELETE $id;`,
       { id: rid(id) },
     );
+
+    const core = Core.getInstance();
+    await core.reload();
+    core.evictAllSubscriptions();
 
     return Response.json({ success: true });
   } catch {

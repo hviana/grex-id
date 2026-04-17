@@ -1,9 +1,12 @@
-import { getDb } from "../db/connection.ts";
+import { getDb, rid } from "../db/connection.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
 import type { MenuItem } from "@/src/contracts/menu";
 import type { CoreSetting } from "@/src/contracts/core-settings";
+import type { Voucher } from "@/src/contracts/voucher";
+import type { Subscription } from "@/src/contracts/billing";
+import dbConfig from "../../database.json";
 
 if (typeof window !== "undefined") {
   throw new Error("Core must not be imported in client-side code.");
@@ -15,12 +18,11 @@ export interface MissingSetting {
 }
 
 class Core {
-  static readonly DB_URL =
-    "https://nimble-lotus-06ejcq1c1dtvf0lev6qi9hsejk.aws-euw1.surreal.cloud";
-  static readonly DB_USER = "admin";
-  static readonly DB_PASS = "Grex#1271237-SS";
-  static readonly DB_NAMESPACE = "main";
-  static readonly DB_DATABASE = "grex-id";
+  static readonly DB_URL = dbConfig.url;
+  static readonly DB_USER = dbConfig.user;
+  static readonly DB_PASS = dbConfig.pass;
+  static readonly DB_NAMESPACE = dbConfig.namespace;
+  static readonly DB_DATABASE = dbConfig.database;
 
   private static instance: Core | null = null;
   private loaded = false;
@@ -29,9 +31,19 @@ class Core {
   systems: System[] = [];
   roles: Role[] = [];
   plans: Plan[] = [];
+  vouchers: Voucher[] = [];
   menus: MenuItem[] = [];
   settings: Map<string, CoreSetting> = new Map();
   private missingSettings: Map<string, MissingSetting> = new Map();
+  private subscriptions: Map<string, Subscription> = new Map();
+
+  // Index maps — populated during load(), O(1) lookup
+  private systemsBySlug: Map<string, System> = new Map();
+  private rolesBySystem: Map<string, Role[]> = new Map();
+  private plansBySystem: Map<string, Plan[]> = new Map();
+  private menusBySystem: Map<string, MenuItem[]> = new Map();
+  private plansById: Map<string, Plan> = new Map();
+  private vouchersById: Map<string, Voucher> = new Map();
 
   private constructor() {}
 
@@ -57,28 +69,83 @@ class Core {
     const db = await getDb();
 
     const results = await db.query<
-      [System[], Role[], Plan[], MenuItem[], CoreSetting[]]
+      [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
     >(
       `SELECT * FROM system;
       SELECT * FROM role;
       SELECT * FROM plan;
       SELECT * FROM menu_item ORDER BY sortOrder ASC;
-      SELECT * FROM core_setting;`,
+      SELECT * FROM core_setting;
+      SELECT * FROM voucher;`,
     );
 
-    this.systems = results[0] ?? [];
-    this.roles = results[1] ?? [];
-    this.plans = results[2] ?? [];
-    this.menus = results[3] ?? [];
+    const systems = results[0] ?? [];
+    const roles = results[1] ?? [];
+    const plans = results[2] ?? [];
+    const menus = results[3] ?? [];
+    const settings = results[4] ?? [];
+    const vouchers = results[5] ?? [];
+
+    this.systems = systems;
+    this.roles = roles;
+    this.plans = plans;
+    this.menus = menus;
+    this.vouchers = vouchers;
+
+    // Rebuild index maps
+    this.systemsBySlug.clear();
+    for (const s of systems) {
+      this.systemsBySlug.set(s.slug, s);
+    }
+
+    this.rolesBySystem.clear();
+    for (const r of roles) {
+      const key = String(r.systemId);
+      let list = this.rolesBySystem.get(key);
+      if (!list) {
+        list = [];
+        this.rolesBySystem.set(key, list);
+      }
+      list.push(r);
+    }
+
+    this.plansBySystem.clear();
+    this.plansById.clear();
+    for (const p of plans) {
+      const sysKey = String(p.systemId);
+      let list = this.plansBySystem.get(sysKey);
+      if (!list) {
+        list = [];
+        this.plansBySystem.set(sysKey, list);
+      }
+      list.push(p);
+      this.plansById.set(String(p.id), p);
+    }
+
+    this.menusBySystem.clear();
+    for (const m of menus) {
+      const key = String(m.systemId);
+      let list = this.menusBySystem.get(key);
+      if (!list) {
+        list = [];
+        this.menusBySystem.set(key, list);
+      }
+      list.push(m);
+    }
+
+    this.vouchersById.clear();
+    for (const v of vouchers) {
+      this.vouchersById.set(String(v.id), v);
+    }
 
     this.settings.clear();
-    for (const setting of results[4] ?? []) {
+    for (const setting of settings) {
       this.settings.set(setting.key, setting);
       this.missingSettings.delete(setting.key);
     }
 
     console.log(
-      `[Core] loaded: ${this.systems.length} systems, ${this.roles.length} roles, ${this.plans.length} plans, ${this.menus.length} menus, ${this.settings.size} settings`,
+      `[Core] loaded: ${systems.length} systems, ${roles.length} roles, ${plans.length} plans, ${vouchers.length} vouchers, ${menus.length} menus, ${this.settings.size} settings`,
     );
   }
 
@@ -109,23 +176,80 @@ class Core {
 
   async getSystemBySlug(slug: string): Promise<System | undefined> {
     await this.ensureLoaded();
-    return this.systems.find((s) => s.slug === slug);
+    return this.systemsBySlug.get(slug);
   }
 
   async getRolesForSystem(systemId: string): Promise<Role[]> {
     await this.ensureLoaded();
-    return this.roles.filter((r) => r.systemId === systemId);
+    return this.rolesBySystem.get(String(systemId)) ?? [];
   }
 
   async getPlansForSystem(systemId: string): Promise<Plan[]> {
     await this.ensureLoaded();
-    return this.plans.filter((p) => p.systemId === systemId);
+    return this.plansBySystem.get(String(systemId)) ?? [];
   }
 
   async getMenusForSystem(systemId: string): Promise<MenuItem[]> {
     await this.ensureLoaded();
-    const systemMenus = this.menus.filter((m) => m.systemId === systemId);
+    const systemMenus = this.menusBySystem.get(String(systemId)) ?? [];
     return buildMenuTree(systemMenus);
+  }
+
+  getPlanById(planId: string): Plan | undefined {
+    return this.plansById.get(String(planId));
+  }
+
+  getVoucherById(voucherId: string): Voucher | undefined {
+    return this.vouchersById.get(String(voucherId));
+  }
+
+  getActiveSubscriptionCached(
+    companyId: string,
+    systemId: string,
+  ): Subscription | undefined {
+    return this.subscriptions.get(`${companyId}:${systemId}`);
+  }
+
+  async ensureSubscription(
+    companyId: string,
+    systemId: string,
+  ): Promise<Subscription | null> {
+    const key = `${companyId}:${systemId}`;
+    if (this.subscriptions.has(key)) {
+      return this.subscriptions.get(key)!;
+    }
+    return this.reloadSubscription(companyId, systemId);
+  }
+
+  async reloadSubscription(
+    companyId: string,
+    systemId: string,
+  ): Promise<Subscription | null> {
+    const db = await getDb();
+    const key = `${companyId}:${systemId}`;
+
+    const result = await db.query<[Subscription[]]>(
+      `SELECT * FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       LIMIT 1`,
+      { companyId: rid(companyId), systemId: rid(systemId) },
+    );
+
+    const sub = result[0]?.[0] ?? null;
+    if (sub) {
+      this.subscriptions.set(key, sub);
+    } else {
+      this.subscriptions.delete(key);
+    }
+    return sub;
+  }
+
+  evictSubscription(companyId: string, systemId: string): void {
+    this.subscriptions.delete(`${companyId}:${systemId}`);
+  }
+
+  evictAllSubscriptions(): void {
+    this.subscriptions.clear();
   }
 }
 

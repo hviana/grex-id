@@ -1,5 +1,5 @@
 import type { Middleware } from "./compose.ts";
-import { getDb } from "../db/connection.ts";
+import { checkPlanAccess } from "../utils/guards.ts";
 
 export function withPlanAccess(featureNames: string[]): Middleware {
   return async (_req, ctx, next) => {
@@ -20,64 +20,31 @@ export function withPlanAccess(featureNames: string[]): Middleware {
       return next();
     }
 
-    const db = await getDb();
+    const result = await checkPlanAccess(ctx.tenant, featureNames);
 
-    const subs = await db.query<
-      [{ planId: string; status: string; currentPeriodEnd: string }[]]
-    >(
-      `SELECT planId, status, currentPeriodEnd FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1`,
-      { companyId: ctx.tenant.companyId, systemId: ctx.tenant.systemId },
-    );
-
-    const sub = subs[0]?.[0];
-    if (!sub) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "NO_SUBSCRIPTION",
-            message: "billing.error.noSubscription",
-          },
+    if (!result.granted) {
+      const errorMap: Record<string, { code: string; message: string }> = {
+        NO_SUBSCRIPTION: {
+          code: "NO_SUBSCRIPTION",
+          message: "billing.error.noSubscription",
         },
+        SUBSCRIPTION_EXPIRED: {
+          code: "SUBSCRIPTION_EXPIRED",
+          message: "billing.error.subscriptionExpired",
+        },
+        PLAN_LIMIT: {
+          code: "PLAN_LIMIT",
+          message: "billing.error.planLimit",
+        },
+      };
+      const error = errorMap[result.denyCode!] ?? {
+        code: "PLAN_LIMIT",
+        message: "billing.error.planLimit",
+      };
+      return Response.json(
+        { success: false, error },
         { status: 403 },
       );
-    }
-
-    if (new Date(sub.currentPeriodEnd) < new Date()) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "SUBSCRIPTION_EXPIRED",
-            message: "billing.error.subscriptionExpired",
-          },
-        },
-        { status: 403 },
-      );
-    }
-
-    const plans = await db.query<[{ permissions: string[] }[]]>(
-      "SELECT permissions FROM plan WHERE id = $planId LIMIT 1",
-      { planId: sub.planId },
-    );
-
-    const plan = plans[0]?.[0];
-    if (plan && !plan.permissions.includes("*")) {
-      const hasAccess = featureNames.some((f) => plan.permissions.includes(f));
-      if (!hasAccess) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "PLAN_LIMIT",
-              message: "billing.error.planLimit",
-            },
-          },
-          { status: 403 },
-        );
-      }
     }
 
     return next();

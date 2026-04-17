@@ -1,0 +1,7 @@
+{
+  "url": "https://your-surrealdb-instance.example.com",
+  "user": "admin",
+  "pass": "your-password-here",
+  "namespace": "main",
+  "database": "grex-id"
+}

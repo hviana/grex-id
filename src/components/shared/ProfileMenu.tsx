@@ -103,7 +103,7 @@ export default function ProfileMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 z-50 backdrop-blur-md bg-[#111]/95 border border-[var(--color-dark-gray)] rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-80 z-50 backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl shadow-lg overflow-hidden">
           {/* Company selector */}
           {companies.length > 0 && (
             <div className="border-b border-[var(--color-dark-gray)] p-3">
