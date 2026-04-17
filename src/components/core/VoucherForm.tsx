@@ -60,7 +60,7 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
             onChange={(e) => setCode(e.target.value)}
             required
             className={inputCls}
-            placeholder="PROMO2026"
+            placeholder={t("core.vouchers.placeholder.code")}
           />
         </div>
 

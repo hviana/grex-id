@@ -80,7 +80,7 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
               onChange={(e) => setName(e.target.value)}
               required
               className={inputCls}
-              placeholder="plans.pro.name"
+              placeholder={t("core.plans.placeholder.name")}
             />
           </div>
           <div>
@@ -93,7 +93,7 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
               onChange={(e) => setSystemId(e.target.value)}
               required
               className={inputCls}
-              placeholder="system:..."
+              placeholder={t("core.plans.placeholder.system")}
             />
           </div>
         </div>
@@ -107,7 +107,7 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className={inputCls}
-            placeholder="plans.pro.description"
+            placeholder={t("core.plans.placeholder.description")}
           />
         </div>
 
@@ -133,7 +133,7 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className={inputCls}
-              placeholder="USD"
+              placeholder={t("core.plans.placeholder.currency")}
             />
           </div>
           <div>

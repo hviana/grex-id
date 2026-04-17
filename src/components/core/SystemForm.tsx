@@ -55,7 +55,7 @@ const SystemForm = forwardRef<SubformRef, SystemFormProps>(
             onChange={(e) => setSlug(e.target.value)}
             required
             className={inputCls}
-            placeholder="my-system"
+            placeholder={t("core.systems.placeholder.slug")}
           />
         </div>
         {slug.trim() && user?.id

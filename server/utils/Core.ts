@@ -15,6 +15,13 @@ export interface MissingSetting {
 }
 
 class Core {
+  static readonly DB_URL =
+    "https://nimble-lotus-06ejcq1c1dtvf0lev6qi9hsejk.aws-euw1.surreal.cloud";
+  static readonly DB_USER = "admin";
+  static readonly DB_PASS = "Grex#1271237-SS";
+  static readonly DB_NAMESPACE = "main";
+  static readonly DB_DATABASE = "grex-id";
+
   private static instance: Core | null = null;
   private loaded = false;
   private loadPromise: Promise<void> | null = null;

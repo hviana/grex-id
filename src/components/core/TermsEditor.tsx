@@ -351,7 +351,7 @@ export default function TermsEditor() {
               onChange={(e) => setGenericContent(e.target.value)}
               rows={16}
               className={inputCls}
-              placeholder="<p>Terms of service HTML content...</p>"
+              placeholder={t("core.terms.placeholder.content")}
             />
           </div>
           <button
@@ -404,7 +404,7 @@ export default function TermsEditor() {
               onChange={(e) => setSystemTermsContent(e.target.value)}
               rows={16}
               className={inputCls}
-              placeholder="<p>Terms of service HTML content...</p>"
+              placeholder={t("core.terms.placeholder.content")}
             />
           </div>
           <button
@@ -517,7 +517,7 @@ export default function TermsEditor() {
               onChange={(e) => setAddTermsContent(e.target.value)}
               rows={16}
               className={inputCls}
-              placeholder="<p>Terms of service HTML content...</p>"
+              placeholder={t("core.terms.placeholder.content")}
             />
           </div>
 

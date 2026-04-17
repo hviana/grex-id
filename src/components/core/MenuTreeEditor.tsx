@@ -553,7 +553,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
                 type="text"
                 value={formEmoji}
                 onChange={(e) => setFormEmoji(e.target.value)}
-                placeholder="📊"
+                placeholder={t("core.menus.placeholder.emoji")}
                 className={inputCls}
               />
             </div>
@@ -568,7 +568,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
                 type="text"
                 value={formComponentName}
                 onChange={(e) => setFormComponentName(e.target.value)}
-                placeholder="dashboard"
+                placeholder={t("core.menus.placeholder.componentName")}
                 className={inputCls}
               />
             </div>

@@ -46,7 +46,7 @@ const RoleForm = forwardRef<SubformRef, RoleFormProps>(
             onChange={(e) => setName(e.target.value)}
             required
             className={inputCls}
-            placeholder="roles.admin.name"
+            placeholder={t("core.roles.placeholder.name")}
           />
         </div>
         <div>
@@ -59,7 +59,7 @@ const RoleForm = forwardRef<SubformRef, RoleFormProps>(
             onChange={(e) => setSystemId(e.target.value)}
             required
             className={inputCls}
-            placeholder="system:..."
+            placeholder={t("core.roles.placeholder.systemId")}
           />
         </div>
         {isBuiltIn && (

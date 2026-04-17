@@ -1,4 +1,5 @@
 import { StringRecordId, Surreal } from "surrealdb";
+import Core from "../utils/Core.ts";
 
 /** Wrap a record ID string (e.g. "system:abc") for use as a SurrealDB binding. */
 export function rid(id: unknown): StringRecordId {
@@ -17,17 +18,16 @@ export async function getDb(): Promise<Surreal> {
   if (!dbInstance) {
     dbInstance = new Surreal();
 
-    await dbInstance.connect(
-      "https://nimble-lotus-06ejcq1c1dtvf0lev6qi9hsejk.aws-euw1.surreal.cloud",
-      {
-        namespace: "main",
-        database: "grex-id",
-        authentication: {
-          username: "admin",
-          password: "Grex#1271237-SS",
-        },
+    await dbInstance.connect(Core.DB_URL, {
+      authentication: {
+        username: Core.DB_USER,
+        password: Core.DB_PASS,
       },
-    );
+    });
+    await dbInstance.use({
+      namespace: Core.DB_NAMESPACE,
+      database: Core.DB_DATABASE,
+    });
   }
   return dbInstance;
 }

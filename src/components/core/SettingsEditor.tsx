@@ -238,7 +238,7 @@ export default function SettingsEditor(
                           )
                         );
                       }}
-                      placeholder="setting.key"
+                      placeholder={t("core.settings.placeholder.key")}
                       className={inputCls}
                     />
                   )}

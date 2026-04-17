@@ -11,11 +11,13 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 interface VoucherItem {
   id: string;
   code: string;
   applicableCompanyIds: string[];
+  applicablePlanIds: string[];
   priceModifier: number;
   permissions: string[];
   entityLimitModifiers: Record<string, number> | null;
@@ -80,6 +82,9 @@ export default function VouchersPage() {
   const [formApiRateLimitModifier, setFormApiRateLimitModifier] = useState("0");
   const [formStorageLimitModifier, setFormStorageLimitModifier] = useState("0");
   const [formCreditIncrement, setFormCreditIncrement] = useState("0");
+  const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
+    { id: string; label: string }[]
+  >([]);
   const [formExpiresAt, setFormExpiresAt] = useState("");
 
   const load = useCallback(async (q?: string) => {
@@ -112,6 +117,7 @@ export default function VouchersPage() {
     setFormApiRateLimitModifier("0");
     setFormStorageLimitModifier("0");
     setFormCreditIncrement("0");
+    setFormApplicablePlanIds([]);
     setFormExpiresAt("");
     setError(null);
     setShowCreate(true);
@@ -125,6 +131,12 @@ export default function VouchersPage() {
     setFormApiRateLimitModifier(String(item.apiRateLimitModifier));
     setFormStorageLimitModifier(String(item.storageLimitModifier / 1073741824));
     setFormCreditIncrement(String(item.creditIncrement));
+    setFormApplicablePlanIds(
+      (item.applicablePlanIds ?? []).map((id) => ({
+        id: String(id),
+        label: String(id),
+      })),
+    );
     setFormExpiresAt(item.expiresAt ? item.expiresAt.slice(0, 16) : "");
     setError(null);
     setEditItem(item);
@@ -147,6 +159,7 @@ export default function VouchersPage() {
           Number(formStorageLimitModifier) * 1073741824,
         ),
         creditIncrement: Number(formCreditIncrement),
+        applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
         expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
       };
 
@@ -273,6 +286,13 @@ export default function VouchersPage() {
                             +{voucher.creditIncrement}
                           </span>
                         )}
+                        {voucher.applicablePlanIds &&
+                          voucher.applicablePlanIds.length > 0 && (
+                          <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
+                            {voucher.applicablePlanIds.length}{" "}
+                            {t("core.vouchers.applicablePlanIds").toLowerCase()}
+                          </span>
+                        )}
                         {voucher.expiresAt && !isExpired(voucher.expiresAt) && (
                           <span>
                             {t("core.vouchers.expires")}:{" "}
@@ -342,7 +362,7 @@ export default function VouchersPage() {
               value={formCode}
               onChange={(e) => setFormCode(e.target.value)}
               required
-              placeholder="SUMMER2026"
+              placeholder={t("core.vouchers.placeholder.code")}
               className={`${inputCls} font-mono`}
             />
           </div>
@@ -438,6 +458,31 @@ export default function VouchersPage() {
                 className={inputCls}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.applicablePlanIds")}
+            </label>
+            <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+              {t("core.vouchers.applicablePlansHint")}
+            </p>
+            <SearchableSelectField
+              fetchFn={async (search: string) => {
+                const params = new URLSearchParams();
+                if (search) params.set("search", search);
+                const res = await fetch(`/api/core/plans?${params}`);
+                const json = await res.json();
+                return (json.data ?? []).map((
+                  p: { id: string; name: string },
+                ) => ({
+                  id: String(p.id),
+                  label: p.name,
+                }));
+              }}
+              multiple
+              onChange={setFormApplicablePlanIds}
+            />
           </div>
 
           <button
