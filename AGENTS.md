@@ -431,41 +431,41 @@ migration files below. Read the files directly for exact DDL. Each migration
 creates exactly one table; the rules that matter for app code are summarized in
 this table.
 
-| Migration file                               | Table                    | Key rules                                                                                                                                                                                                                                                          |
-| -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0000_db_generals.surql`                     | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                          |
-| `0001_create_user.surql`                     | `user`                   | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                       |
-| `0002_create_company.surql`                  | `company`                | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                |
-| `0003_create_company_user.surql`             | `company_user`           | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                    |
-| `0004_create_system.surql`                   | `system`                 | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                   |
-| `0005_create_company_system.surql`           | `company_system`         | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                       |
-| `0006_create_user_company_system.surql`      | `user_company_system`    | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                |
-| `0007_create_role.surql`                     | `role`                   | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                       |
-| `0008_create_plan.surql`                     | `plan`                   | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive. |
-| `0009_create_voucher.surql`                  | `voucher`                | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers.                 |
-| `0010_create_menu_item.surql`                | `menu_item`              | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                  |
-| `0011_create_subscription.surql`             | `subscription`           | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                      |
-| `0012_create_payment_method.surql`           | `payment_method`         | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                           |
-| `0013_create_credit_purchase.surql`          | `credit_purchase`        | Status ∈ `pending                                                                                                                                                                                                                                                  |
-| `0014_create_connected_app.surql`            | `connected_app`          | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade.                                                                                                                                                                  |
-| `0015_create_api_token.surql`                | `api_token`              | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                               |
-| `0017_create_usage_record.surql`             | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                  |
-| `0018_create_queue_event.surql`              | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                       |
-| `0019_create_delivery.surql`                 | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                  |
-| `0020_create_core_setting.surql`             | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                      |
-| `0021_create_verification_request.surql`     | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                               |
-| `0022_create_live_query_permissions.surql`   | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                 |
-| `0023_create_lead.surql`                     | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                            |
-| `0024_create_lead_company_system.surql`      | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                            |
-| `0025_create_location.surql`                 | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                             |
-| `0029_create_tag.surql`                      | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                |
-| `0030_create_profile.surql`                  | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                           |
-| `0031_create_address.surql`                  | `address`                | Composable.                                                                                                                                                                                                                                                        |
-| `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                 |
-| `0033_create_front_core_setting.surql`       | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                  |
-| `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                            |
-| `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                 |
-| `0036_alter_verification_request_type.surql` | `verification_request`   | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                    |
+| Migration file                               | Table                    | Key rules                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0000_db_generals.surql`                     | `_migrations`, analyzers | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                           |
+| `0001_create_user.surql`                     | `user`                   | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                        |
+| `0002_create_company.surql`                  | `company`                | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                 |
+| `0003_create_company_user.surql`             | `company_user`           | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                     |
+| `0004_create_system.surql`                   | `system`                 | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                    |
+| `0005_create_company_system.surql`           | `company_system`         | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                        |
+| `0006_create_user_company_system.surql`      | `user_company_system`    | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                 |
+| `0007_create_role.surql`                     | `role`                   | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                        |
+| `0008_create_plan.surql`                     | `plan`                   | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive.  |
+| `0009_create_voucher.surql`                  | `voucher`                | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers, creditIncrement. |
+| `0010_create_menu_item.surql`                | `menu_item`              | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                   |
+| `0011_create_subscription.surql`             | `subscription`           | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                       |
+| `0012_create_payment_method.surql`           | `payment_method`         | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                            |
+| `0013_create_credit_purchase.surql`          | `credit_purchase`        | Status ∈ `pending                                                                                                                                                                                                                                                   |
+| `0014_create_connected_app.surql`            | `connected_app`          | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade.                                                                                                                                                                   |
+| `0015_create_api_token.surql`                | `api_token`              | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`. Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                                |
+| `0017_create_usage_record.surql`             | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                   |
+| `0018_create_queue_event.surql`              | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                        |
+| `0019_create_delivery.surql`                 | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                   |
+| `0020_create_core_setting.surql`             | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                       |
+| `0021_create_verification_request.surql`     | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                                |
+| `0022_create_live_query_permissions.surql`   | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                  |
+| `0023_create_lead.surql`                     | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                             |
+| `0024_create_lead_company_system.surql`      | `lead_company_system`    | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                             |
+| `0025_create_location.surql`                 | `location`               | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                              |
+| `0029_create_tag.surql`                      | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                 |
+| `0030_create_profile.surql`                  | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                            |
+| `0031_create_address.surql`                  | `address`                | Composable.                                                                                                                                                                                                                                                         |
+| `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                  |
+| `0033_create_front_core_setting.surql`       | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                   |
+| `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                             |
+| `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                  |
+| `0036_alter_verification_request_type.surql` | `verification_request`   | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                     |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -1214,23 +1214,24 @@ produces a mobile-first, email-client-safe skeleton:
 
 #### 15.4 Template catalog
 
-| Template                 | File                        | When published                                                                                         | Payload fields                                                              |
-| ------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `verification`           | `verification.ts`           | Registration / email change                                                                            | `name`, `verificationLink`                                                  |
-| `password-reset`         | `password-reset.ts`         | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                         |
-| `payment-success`        | `payment-success.ts`        | Recurring charge OK; credit purchase OK                                                                | `name`, `systemName`, `kind` (`"recurring"                                  |
-| `payment-failure`        | `payment-failure.ts`        | Recurring charge failed; credit purchase failed; auto-recharge attempt failed                          | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`  |
-| `auto-recharge`          | `auto-recharge.ts`          | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl` |
-| `insufficient-credit`    | `insufficient-credit.ts`    | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                         |
-| `tenant-invite`          | `tenant-invite.ts`          | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`     |
-| `recovery-verify`        | `recovery-verify.ts`        | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                  |
-| `recovery-channel-reset` | `recovery-channel-reset.ts` | Password reset initiated via verified recovery channel (§19.13)                                        | `name`, `resetLink`                                                         |
+| Template                   | File                          | When published                                                                                         | Payload fields                                                                                               |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `verification`             | `verification.ts`             | Registration / email change                                                                            | `name`, `verificationLink`                                                                                   |
+| `password-reset`           | `password-reset.ts`           | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                                                          |
+| `payment-success`          | `payment-success.ts`          | Recurring charge OK; credit purchase OK; auto-recharge OK                                              | `name`, `systemName`, `kind` (`"recurring"\|"credits"\|"auto-recharge"`), `amount`, `currency`, `billingUrl` |
+| `payment-failure`          | `payment-failure.ts`          | Recurring charge failed; credit purchase failed; auto-recharge failed                                  | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`                                   |
+| `auto-recharge`            | `auto-recharge.ts`            | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl`                                  |
+| `insufficient-credit`      | `insufficient-credit.ts`      | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                                                          |
+| `tenant-invite`            | `tenant-invite.ts`            | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`                                      |
+| `recovery-verify`          | `recovery-verify.ts`          | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                                                   |
+| `recovery-channel-reset`   | `recovery-channel-reset.ts`   | Password reset initiated via verified recovery channel (§19.13)                                        | `name`, `resetLink`                                                                                          |
+| `lead-update-verification` | `lead-update-verification.ts` | Existing lead submits updated data via public form (§23.2)                                             | `name`, `verificationLink`, `changes` (array of `{field, from, to}`)                                         |
 
 i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
 `templates.paymentSuccess.*`, `templates.paymentFailure.*`,
 `templates.autoRecharge.*`, `templates.insufficientCredit.*`,
 `templates.tenantInvite.*`, `templates.recoveryVerify.*`,
-`templates.recoveryChannelReset.*`.
+`templates.recoveryChannelReset.*`, `templates.leadUpdate.*`.
 
 #### 15.5 Channel handlers
 
@@ -1284,10 +1285,10 @@ channel event.
   (2) for each, `publish("PAYMENT_DUE", …)`; `process_payment` handler charges
   via the server payment provider.
   - **Success:** advance `currentPeriodStart`/`currentPeriodEnd`, reset
-    `remainingPlanCredits = plan.planCredits`, reset
-    `creditAlertSent =
-    false`, publish `SEND_EMAIL` with `payment-success`
-    (`kind =
+    `remainingPlanCredits = plan.planCredits + voucher.creditIncrement` (0 when
+    no voucher), reset `creditAlertSent =
+    false`, publish `SEND_EMAIL` with
+    `payment-success` (`kind =
     "recurring"`).
   - **Failure:** set `status = "past_due"` and publish `SEND_EMAIL` with
     `payment-failure` (`kind = "recurring"`, with gateway `reason`).
@@ -1823,10 +1824,11 @@ glassmorphism design.
 **Voucher-adjusted effective price.** When the subscription has an active
 (non-expired) voucher whose `applicablePlanIds` is empty OR contains the current
 plan, show the original price with `line-through` and the effective price
-prominently next to it. Effective price = `plan.price − voucher.priceModifier`
-clamped to ≥ 0. This is cosmetic on the frontend — server-side charge
-calculations (recurring billing job + credit purchase handler) must also apply
-the voucher's modifiers.
+prominently next to it. `voucher.priceModifier` is a signed value: positive
+increases the price (surcharge), negative decreases it (discount). Effective
+price = `plan.price + voucher.priceModifier` clamped to ≥ 0. This is cosmetic on
+the frontend — server-side charge calculations (recurring billing job + credit
+purchase handler) must also apply the voucher's modifiers.
 
 #### 18.11 Charts
 
@@ -2098,8 +2100,8 @@ domain prefix (the `t()` function strips it). Required groups:
 - `vouchers.*` — title, create, edit, code, priceModifier, cents,
   priceModifierHint, expiresAt, permissions, entityLimitModifiers,
   entityLimitModifiersHint, apiRateLimitModifier, storageLimitModifier,
-  applicablePlanIds, applicablePlansHint, empty, expired, expires, apiRate,
-  storage
+  creditIncrement, applicablePlanIds, applicablePlansHint, empty, expired,
+  expires, apiRate, storage
 - `menus.*` — title, selectSystem, label, emoji, componentName, sortOrder,
   requiredRoles, hiddenInPlanIds, edit, delete, addChild, addRoot,
   incompleteConfig, empty
@@ -2134,13 +2136,13 @@ All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
   mode:"custom"` for benefits,
   `DynamicKeyValueField` for entityLimits.
 - **VoucherForm** — code, priceModifier, apiRateLimitModifier,
-  storageLimitModifier, expiresAt. `MultiBadgeField mode:"custom"` for
-  permissions; `DynamicKeyValueField` for entityLimitModifiers;
-  `SearchableSelectField(multiple={true})` for `applicablePlanIds` fetching
-  `/api/core/plans?search=` (empty selection = valid for all plans). Removing a
-  plan from `applicablePlanIds` on save triggers the auto-removal cascade
-  (§22.7) so subscriptions that no longer qualify are stripped of the voucher
-  atomically with the update.
+  storageLimitModifier, creditIncrement, expiresAt.
+  `MultiBadgeField mode:"custom"` for permissions; `DynamicKeyValueField` for
+  entityLimitModifiers; `SearchableSelectField(multiple={true})` for
+  `applicablePlanIds` fetching `/api/core/plans?search=` (empty selection =
+  valid for all plans). Removing a plan from `applicablePlanIds` on save
+  triggers the auto-removal cascade (§22.7) so subscriptions that no longer
+  qualify are stripped of the voucher atomically with the update.
 
 #### 20.3 `MenuTreeEditor` (`src/components/core/MenuTreeEditor.tsx`)
 
@@ -2432,8 +2434,9 @@ mask + holder name + "Default" badge when applicable.
   `billing.voucher.success` (green) or error (red). On success the input clears
   and the subscription reloads.
 - Displays the currently applied (non-expired) voucher — if any — as a single
-  badge showing code + price effect (e.g. `−$5.00` or `+$2.00`). Applying a new
-  voucher replaces the badge automatically.
+  badge showing code + price effect (e.g. `−$5.00` or `+$2.00`). If the voucher
+  has `creditIncrement > 0`, a secondary badge shows the credit bonus (e.g.
+  `+500 credits`). Applying a new voucher replaces the badge automatically.
 - Effective price display: `GET /api/billing` returns subscriptions with
   `voucherId` **FETCHed** (full voucher object, or `NONE`). See §18.10 for the
   price rendering rule.
@@ -2546,8 +2549,9 @@ Validates in order: voucher exists; not expired; the company is in
 current `planId` is in `applicablePlanIds` (or that array is empty = all plans).
 Sets `subscription.voucherId` — single-voucher invariant: if the subscription
 already has a voucher, it is replaced atomically in the same batched query
-(§22.7). Returns the applied voucher's details so the frontend can show the
-effect.
+(§22.7). If the voucher has `creditIncrement > 0`, adds that amount to
+`subscription.remainingPlanCredits` in the same batched query. Returns the
+applied voucher's details so the frontend can show the effect.
 
 #### 22.2 Spend limits
 
@@ -2560,7 +2564,8 @@ operation cost ≤ `monthlySpendLimit`.
 Credits consumed by system-specific operations identified by i18n resource keys.
 Each plan includes `planCredits` — temporary credits valid only during the
 plan's recurrence period. On subscribe or renew, `remainingPlanCredits` is set
-to `plan.planCredits`; these expire when the period ends.
+to `plan.planCredits + voucher.creditIncrement` (the voucher bonus is 0 when no
+voucher is active); these expire when the period ends.
 
 **Priority (handled by `consumeCredits` in `credit-tracker.ts`):**
 
@@ -2602,14 +2607,16 @@ replenishment, without spam:
 1. **Credit purchase** — `purchase_credits` success (§22.1) resets the flag on
    the active subscription.
 2. **Plan renewal** — the recurring-billing job resets it when renewing
-   (alongside `remainingPlanCredits = plan.planCredits`).
+   (alongside
+   `remainingPlanCredits = plan.planCredits + voucher.creditIncrement`).
 
 #### 22.4 Plan-credit lifecycle
 
 - **On subscribe:** `remainingPlanCredits = plan.planCredits`.
 - **On renewal** (recurring-billing job):
   `remainingPlanCredits =
-  plan.planCredits`; `creditAlertSent = false`.
+  plan.planCredits + voucher.creditIncrement` (0 when
+  no voucher); `creditAlertSent = false`.
 - **On cancel:** plan credits are forfeited (not refunded);
   `remainingPlanCredits` stays as-is on the cancelled row for audit.
 - **On plan change** (subscribe to a different plan): old subscription cancelled

@@ -10,7 +10,7 @@ export function withEntityLimit(
   tableName: string,
 ): Middleware {
   return async (_req, ctx, next) => {
-    if (!ctx.tenant.companyId || ctx.tenant.systemId) {
+    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
       return Response.json(
         {
           success: false,

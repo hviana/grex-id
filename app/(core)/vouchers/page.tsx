@@ -21,6 +21,7 @@ interface VoucherItem {
   entityLimitModifiers: Record<string, number> | null;
   apiRateLimitModifier: number;
   storageLimitModifier: number;
+  creditIncrement: number;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -32,8 +33,8 @@ interface EntityLimitEntry {
 }
 
 function formatModifier(value: number): string {
-  if (value > 0) return `- ${(value / 100).toFixed(2)}`;
-  if (value < 0) return `+ ${(Math.abs(value) / 100).toFixed(2)}`;
+  if (value < 0) return `- ${(Math.abs(value) / 100).toFixed(2)}`;
+  if (value > 0) return `+ ${(value / 100).toFixed(2)}`;
   return "0";
 }
 
@@ -78,6 +79,7 @@ export default function VouchersPage() {
   >([]);
   const [formApiRateLimitModifier, setFormApiRateLimitModifier] = useState("0");
   const [formStorageLimitModifier, setFormStorageLimitModifier] = useState("0");
+  const [formCreditIncrement, setFormCreditIncrement] = useState("0");
   const [formExpiresAt, setFormExpiresAt] = useState("");
 
   const load = useCallback(async (q?: string) => {
@@ -109,6 +111,7 @@ export default function VouchersPage() {
     setFormEntityLimitModifiers([]);
     setFormApiRateLimitModifier("0");
     setFormStorageLimitModifier("0");
+    setFormCreditIncrement("0");
     setFormExpiresAt("");
     setError(null);
     setShowCreate(true);
@@ -121,6 +124,7 @@ export default function VouchersPage() {
     setFormEntityLimitModifiers(modifiersToKV(item.entityLimitModifiers));
     setFormApiRateLimitModifier(String(item.apiRateLimitModifier));
     setFormStorageLimitModifier(String(item.storageLimitModifier / 1073741824));
+    setFormCreditIncrement(String(item.creditIncrement));
     setFormExpiresAt(item.expiresAt ? item.expiresAt.slice(0, 16) : "");
     setError(null);
     setEditItem(item);
@@ -142,6 +146,7 @@ export default function VouchersPage() {
         storageLimitModifier: Math.round(
           Number(formStorageLimitModifier) * 1073741824,
         ),
+        creditIncrement: Number(formCreditIncrement),
         expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
       };
 
@@ -183,7 +188,7 @@ export default function VouchersPage() {
   };
 
   const inputCls =
-    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
   return (
     <div className="space-y-6">
@@ -238,9 +243,9 @@ export default function VouchersPage() {
                         <span>
                           {t("core.vouchers.priceModifier")}:{" "}
                           <span
-                            className={voucher.priceModifier > 0
+                            className={voucher.priceModifier < 0
                               ? "text-[var(--color-primary-green)]"
-                              : voucher.priceModifier < 0
+                              : voucher.priceModifier > 0
                               ? "text-red-400"
                               : "text-white"}
                           >
@@ -260,6 +265,12 @@ export default function VouchersPage() {
                             {voucher.storageLimitModifier > 0 ? "+" : ""}
                             {(voucher.storageLimitModifier / 1073741824)
                               .toFixed(1)} GB
+                          </span>
+                        )}
+                        {voucher.creditIncrement > 0 && (
+                          <span>
+                            {t("core.vouchers.creditIncrement")}:{" "}
+                            +{voucher.creditIncrement}
                           </span>
                         )}
                         {voucher.expiresAt && !isExpired(voucher.expiresAt) && (
@@ -410,6 +421,21 @@ export default function VouchersPage() {
                 step="0.1"
                 placeholder={t("core.plans.placeholder.storageGB")}
                 className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {t("core.vouchers.creditIncrement")}
+              </label>
+              <input
+                type="number"
+                value={formCreditIncrement}
+                onChange={(e) => setFormCreditIncrement(e.target.value)}
+                placeholder="0"
+                className={inputCls}
               />
             </div>
           </div>

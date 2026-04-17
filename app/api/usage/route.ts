@@ -47,14 +47,49 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Resolve systemSlug from systemId (upload paths use slug, not ID)
-  const systemResult = await db.query<[{ slug: string }[]]>(
-    `SELECT slug FROM ONLY $systemId`,
-    { systemId: rid(systemId) },
+  // Batch: system slug + plan storage limit + voucher modifier + credit expenses (§7.2)
+  const configResult = await db.query<
+    [
+      { slug: string }[],
+      { storageLimitBytes: number; voucherId: string | null }[],
+      { storageLimitModifier: number }[],
+      { resourceKey: string; totalAmount: number }[],
+    ]
+  >(
+    `SELECT slug FROM ONLY $systemId;
+     SELECT plan.storageLimitBytes AS storageLimitBytes, voucherId
+       FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       LIMIT 1
+       FETCH plan;
+     LET $voucherId = (SELECT VALUE voucherId FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       LIMIT 1)[0];
+     IF $voucherId != NONE {
+       SELECT storageLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+     } ELSE {
+       SELECT NONE FROM NONE;
+     };
+     SELECT resourceKey, math::sum(amount) AS totalAmount FROM credit_expense
+       WHERE companyId = $companyId AND systemId = $systemId
+         AND day >= $startDate AND day <= $endDate
+       GROUP BY resourceKey
+       ORDER BY totalAmount DESC`,
+    {
+      systemId: rid(systemId),
+      companyId: rid(companyId),
+      startDate: start,
+      endDate: end,
+    },
   );
-  const systemSlug = (systemResult[0] as unknown as { slug?: string })?.slug;
 
-  // Calculate storage usage via SurrealFS readDir (path matches upload convention: [companyId, systemSlug, ...])
+  const systemSlug = (configResult[0] as unknown as { slug?: string }[])
+    ?.[0]?.slug;
+  const subRow = (configResult[1] as unknown[])?.[0] as {
+    storageLimitBytes?: number;
+  } | undefined;
+
+  // Calculate storage usage via SurrealFS readDir
   let usedBytes = 0;
   if (systemSlug) {
     const fs = await getFS();
@@ -73,58 +108,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
     } while (cursor);
   }
 
-  // Query: plan storage limit + single voucher modifier
-  const planResult = await db.query<
-    [{ storageLimitBytes: number; voucherId: string | null }[]]
-  >(
-    `SELECT plan.storageLimitBytes AS storageLimitBytes, voucherId
-       FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1
-       FETCH plan`,
-    {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-    },
-  );
-
-  let storageLimitBytes = 1073741824; // 1GB default
-  const subRow = (planResult[0] as unknown[])?.[0] as {
-    storageLimitBytes?: number;
-    voucherId?: string | null;
-  } | undefined;
-  if (subRow?.storageLimitBytes) {
-    storageLimitBytes = subRow.storageLimitBytes;
-  }
-  if (subRow?.voucherId) {
-    const voucherResult = await db.query<[{ storageLimitModifier: number }[]]>(
-      `SELECT storageLimitModifier FROM voucher WHERE id = $id LIMIT 1`,
-      { id: subRow.voucherId },
-    );
-    storageLimitBytes += ((voucherResult[0] as unknown[])?.[0] as
-      | { storageLimitModifier?: number }
-      | undefined)
+  let storageLimitBytes = subRow?.storageLimitBytes ?? 1073741824;
+  storageLimitBytes +=
+    (configResult[2]?.[0] as unknown as { storageLimitModifier?: number })
       ?.storageLimitModifier ?? 0;
-  }
 
-  // Query: credit expenses
-  const creditResult = await db.query<
-    [{ resourceKey: string; totalAmount: number }[]]
-  >(
-    `SELECT resourceKey, math::sum(amount) AS totalAmount FROM credit_expense
-       WHERE companyId = $companyId AND systemId = $systemId
-         AND day >= $startDate AND day <= $endDate
-       GROUP BY resourceKey
-       ORDER BY totalAmount DESC`,
-    {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      startDate: start,
-      endDate: end,
-    },
-  );
-
-  const creditExpenses = creditResult[0] ?? [];
+  const creditExpenses = configResult[3] ?? [];
 
   return Response.json({
     success: true,

@@ -61,6 +61,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
+    creditIncrement,
     expiresAt,
   } = body;
 
@@ -99,6 +100,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       }
         apiRateLimitModifier = $apiRateLimitModifier,
         storageLimitModifier = $storageLimitModifier,
+        creditIncrement = $creditIncrement,
         expiresAt = $expiresAt`,
       {
         code: standardizeField("name", sanitizeString(code)),
@@ -111,6 +113,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
           : undefined,
         apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
         storageLimitModifier: Number(storageLimitModifier ?? 0),
+        creditIncrement: Number(creditIncrement ?? 0),
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
     );
@@ -134,7 +137,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
  * PUT — updates a voucher with auto-removal cascade:
  * If applicablePlanIds is non-empty after the update, clears voucherId
  * on any subscription whose planId is NOT in the new list.
- * This runs in the same batched query as the voucher update (SS22.7).
+ * This runs in the same batched query as the voucher update (§22.7).
  */
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
@@ -148,6 +151,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
+    creditIncrement,
     expiresAt,
   } = body;
 
@@ -203,6 +207,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (storageLimitModifier !== undefined) {
       sets.push("storageLimitModifier = $storageLimitModifier");
       bindings.storageLimitModifier = Number(storageLimitModifier);
+    }
+    if (creditIncrement !== undefined) {
+      sets.push("creditIncrement = $creditIncrement");
+      bindings.creditIncrement = Number(creditIncrement);
     }
     if (expiresAt !== undefined) {
       sets.push("expiresAt = $expiresAt");

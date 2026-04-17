@@ -8,6 +8,7 @@ export interface Voucher {
   entityLimitModifiers?: Record<string, number>;
   apiRateLimitModifier: number;
   storageLimitModifier: number;
+  creditIncrement: number;
   expiresAt?: string;
   createdAt: string;
 }

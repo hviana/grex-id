@@ -11,7 +11,8 @@ import Modal from "@/src/components/shared/Modal";
 interface VoucherInfo {
   id: string;
   code: string;
-  priceModifier: number; // positive = discount (in cents), negative = surcharge
+  priceModifier: number; // positive = surcharge (in cents), negative = discount
+  creditIncrement: number;
   expiresAt?: string;
 }
 
@@ -143,10 +144,10 @@ export default function BillingPage() {
         new Date(activeSub.voucherId.expiresAt) > new Date())
     ? activeSub.voucherId
     : null;
-  const totalVoucherDiscount = activeVoucher?.priceModifier ?? 0;
+  const totalVoucherModifier = activeVoucher?.priceModifier ?? 0;
 
   const effectivePrice = (basePrice: number) =>
-    Math.max(0, basePrice - totalVoucherDiscount);
+    Math.max(0, basePrice + totalVoucherModifier);
 
   const formatPrice = (price: number, currency: string) => {
     if (price === 0) return t("billing.onboarding.plan.free");
@@ -385,7 +386,7 @@ export default function BillingPage() {
                     : activePlan.name}
                 </h3>
                 <div className="text-right">
-                  {totalVoucherDiscount > 0
+                  {totalVoucherModifier !== 0
                     ? (
                       <div>
                         <span className="line-through text-sm text-[var(--color-light-text)] mr-2">
@@ -420,22 +421,27 @@ export default function BillingPage() {
                     key={activeVoucher.id}
                     className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
                   >
-                    🏷️ {activeVoucher.code} {activeVoucher.priceModifier > 0
+                    🏷️ {activeVoucher.code} {activeVoucher.priceModifier < 0
                       ? `(-${
-                        formatPrice(
-                          activeVoucher.priceModifier,
-                          activePlan.currency,
-                        )
-                      })`
-                      : activeVoucher.priceModifier < 0
-                      ? `(+${
                         formatPrice(
                           Math.abs(activeVoucher.priceModifier),
                           activePlan.currency,
                         )
                       })`
+                      : activeVoucher.priceModifier > 0
+                      ? `(+${
+                        formatPrice(
+                          activeVoucher.priceModifier,
+                          activePlan.currency,
+                        )
+                      })`
                       : ""}
                   </span>
+                  {activeVoucher.creditIncrement > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full">
+                      💰 +{activeVoucher.creditIncrement}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -545,7 +551,7 @@ export default function BillingPage() {
                 const base = plan.price;
                 const effective = effectivePrice(base);
                 const hasDiscount = isCurrent &&
-                  totalVoucherDiscount > 0 &&
+                  totalVoucherModifier !== 0 &&
                   base > 0;
                 return (
                   <div
@@ -913,7 +919,7 @@ export default function BillingPage() {
                 🏷️ {activeVoucher.code}
                 {activeVoucher.priceModifier !== 0 && activePlan && (
                   <span className="ml-1 opacity-70">
-                    {activeVoucher.priceModifier > 0 ? "-" : "+"}
+                    {activeVoucher.priceModifier < 0 ? "-" : "+"}
                     {formatPrice(
                       Math.abs(activeVoucher.priceModifier),
                       activePlan.currency,
@@ -921,6 +927,12 @@ export default function BillingPage() {
                   </span>
                 )}
               </span>
+              {activeVoucher.creditIncrement > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  💰 +{activeVoucher.creditIncrement}{" "}
+                  {t("billing.credits.title")}
+                </span>
+              )}
             </div>
           </div>
         )}

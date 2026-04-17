@@ -22,6 +22,9 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
     const [storageLimitModifier, setStorageLimitModifier] = useState(
       (initialData?.storageLimitModifier as number) ?? 0,
     );
+    const [creditIncrement, setCreditIncrement] = useState(
+      (initialData?.creditIncrement as number) ?? 0,
+    );
     const [expiresAt, setExpiresAt] = useState(
       (initialData?.expiresAt as string) ?? "",
     );
@@ -35,6 +38,7 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
         priceModifier,
         apiRateLimitModifier,
         storageLimitModifier,
+        creditIncrement,
         expiresAt: expiresAt || undefined,
         permissions,
       }),
@@ -42,7 +46,7 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
     }));
 
     const inputCls =
-      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
     return (
       <div className="space-y-4">
@@ -60,7 +64,7 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
               {t("core.vouchers.priceModifier")} ({t("core.vouchers.cents")})
@@ -75,6 +79,20 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
               {t("core.vouchers.priceModifierHint")}
             </p>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.creditIncrement")}
+            </label>
+            <input
+              type="number"
+              value={creditIncrement}
+              onChange={(e) => setCreditIncrement(Number(e.target.value))}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
               {t("core.vouchers.apiRateLimitModifier")}

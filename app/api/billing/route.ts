@@ -4,6 +4,7 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
+import { publish } from "@/server/event-queue/publisher";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -327,7 +328,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const result = await db.query<[Record<string, unknown>[]]>(
+    const result = await db.query<
+      [Record<string, unknown>[], { id: string }[]]
+    >(
       `CREATE credit_purchase SET
         companyId = $companyId,
         systemId = $systemId,
@@ -335,7 +338,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
         paymentMethodId = $paymentMethodId,
         status = "pending";
        UPDATE subscription SET creditAlertSent = false
-        WHERE companyId = $companyId AND systemId = $systemId AND status = "active";`,
+        WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
+       SELECT id FROM subscription
+        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+        LIMIT 1;`,
       {
         companyId: rid(companyId),
         systemId: rid(systemId),
@@ -344,8 +350,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
       },
     );
 
+    const purchase = result[0]?.[0];
+    const activeSubId = result[1]?.[0]?.id;
+
+    await publish("PAYMENT_DUE", {
+      creditPurchaseId: String(purchase?.id ?? ""),
+      subscriptionId: String(activeSubId ?? ""),
+      companyId,
+      systemId,
+      amount: String(amount),
+      purpose: "credits",
+    });
+
     return Response.json(
-      { success: true, data: result[0]?.[0] },
+      { success: true, data: purchase },
       { status: 201 },
     );
   }
@@ -366,11 +384,30 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const vouchers = await db.query<[Record<string, unknown>[]]>(
-      `SELECT * FROM voucher WHERE code = $code LIMIT 1`,
-      { code: voucherCode },
+    // Batch: voucher + current subscription + old voucher creditIncrement (§7.2)
+    const batchResult = await db.query<
+      [
+        Record<string, unknown>[],
+        { planId: string; voucherId: string | null }[],
+        { creditIncrement: number }[],
+      ]
+    >(
+      `SELECT * FROM voucher WHERE code = $code LIMIT 1;
+       SELECT planId, voucherId FROM subscription
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+         LIMIT 1;
+       LET $oldVoucherId = (SELECT VALUE voucherId FROM subscription
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+         LIMIT 1)[0];
+       IF $oldVoucherId != NONE {
+         SELECT creditIncrement FROM voucher WHERE id = $oldVoucherId LIMIT 1;
+       } ELSE {
+         SELECT NONE FROM NONE;
+       };`,
+      { code: voucherCode, companyId: rid(companyId), systemId: rid(systemId) },
     );
-    const voucher = vouchers[0]?.[0];
+
+    const voucher = batchResult[0]?.[0];
 
     if (!voucher) {
       return Response.json(
@@ -418,14 +455,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Check applicablePlanIds (empty = valid for all plans)
     const applicablePlanIds = voucher.applicablePlanIds as string[];
+    const currentPlanId = String(batchResult[1]?.[0]?.planId ?? "");
     if (applicablePlanIds && applicablePlanIds.length > 0) {
-      const sub = await db.query<[{ planId: string }[]]>(
-        `SELECT planId FROM subscription
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-         LIMIT 1`,
-        { companyId: rid(companyId), systemId: rid(systemId) },
-      );
-      const currentPlanId = String(sub[0]?.[0]?.planId ?? "");
       if (
         !currentPlanId ||
         !applicablePlanIds.some((id) => String(id) === currentPlanId)
@@ -444,15 +475,23 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     // Single voucher invariant: replace (not append)
-    await db.query(
-      `UPDATE subscription SET voucherId = $voucherId
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
-      {
-        companyId: rid(companyId),
-        systemId: rid(systemId),
-        voucherId: rid(voucher.id as string),
-      },
-    );
+    // Subtract old voucher's creditIncrement, add new voucher's creditIncrement
+    const oldCreditInc = Number(batchResult[2]?.[0]?.creditIncrement ?? 0);
+    const newCreditInc = Number(voucher.creditIncrement ?? 0);
+    const creditDelta = newCreditInc - oldCreditInc;
+
+    const updateQuery = creditDelta !== 0
+      ? `UPDATE subscription SET voucherId = $voucherId, remainingPlanCredits = remainingPlanCredits + $creditDelta
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`
+      : `UPDATE subscription SET voucherId = $voucherId
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`;
+
+    await db.query(updateQuery, {
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+      voucherId: rid(voucher.id as string),
+      ...(creditDelta !== 0 ? { creditDelta } : {}),
+    });
 
     return Response.json({
       success: true,

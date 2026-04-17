@@ -55,6 +55,7 @@ export async function createVoucher(data: {
   entityLimitModifiers?: Record<string, number>;
   apiRateLimitModifier?: number;
   storageLimitModifier?: number;
+  creditIncrement?: number;
   expiresAt?: string;
 }): Promise<Voucher> {
   const db = await getDb();
@@ -73,6 +74,7 @@ export async function createVoucher(data: {
     }
       apiRateLimitModifier = $apiRateLimitModifier,
       storageLimitModifier = $storageLimitModifier,
+      creditIncrement = $creditIncrement,
       expiresAt = $expiresAt`,
     {
       ...data,
@@ -82,6 +84,7 @@ export async function createVoucher(data: {
         : undefined,
       apiRateLimitModifier: data.apiRateLimitModifier ?? 0,
       storageLimitModifier: data.storageLimitModifier ?? 0,
+      creditIncrement: data.creditIncrement ?? 0,
       expiresAt: data.expiresAt ?? undefined,
     },
   );
