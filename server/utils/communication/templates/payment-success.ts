@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function paymentSuccessTemplate(
+export async function paymentSuccessTemplate(
   locale: string,
   data: {
     name: string;
@@ -12,7 +12,7 @@ export function paymentSuccessTemplate(
     currency: string;
     billingUrl: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const kindSummaryKey = data.kind === "recurring"
     ? "templates.paymentSuccess.summaryRecurring"
     : data.kind === "credits"
@@ -182,7 +182,7 @@ export function paymentSuccessTemplate(
     title: t("templates.paymentSuccess.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.paymentSuccess.preheader", locale),

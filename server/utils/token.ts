@@ -1,5 +1,6 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
+import { registerCache, getCache } from "./cache.ts";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
 
 if (typeof window !== "undefined") {
@@ -8,10 +9,7 @@ if (typeof window !== "undefined") {
   );
 }
 
-let _cachedSecret: Uint8Array | null = null;
-
-async function getJwtSecret(): Promise<Uint8Array> {
-  if (_cachedSecret) return _cachedSecret;
+async function loadJwtSecret(): Promise<Uint8Array> {
   const core = Core.getInstance();
   const secret = await core.getSetting("auth.jwt.secret");
   if (!secret) {
@@ -19,8 +17,13 @@ async function getJwtSecret(): Promise<Uint8Array> {
       "[Auth] Missing core setting: auth.jwt.secret. Set it in the Core settings panel.",
     );
   }
-  _cachedSecret = new TextEncoder().encode(secret);
-  return _cachedSecret;
+  return new TextEncoder().encode(secret);
+}
+
+registerCache("core", "jwt-secret", loadJwtSecret);
+
+async function getJwtSecret(): Promise<Uint8Array> {
+  return getCache<Uint8Array>("core", "jwt-secret");
 }
 
 /**

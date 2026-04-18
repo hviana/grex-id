@@ -8,7 +8,7 @@ interface LeadChange {
   to: string;
 }
 
-export function leadUpdateVerificationTemplate(
+export async function leadUpdateVerificationTemplate(
   locale: string,
   data: {
     name: string;
@@ -17,7 +17,7 @@ export function leadUpdateVerificationTemplate(
     email?: string;
     expiryMinutes?: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const changesRows = data.changes
     .map(
       (change) => `
@@ -233,7 +233,7 @@ export function leadUpdateVerificationTemplate(
 
   return {
     title: t("templates.leadUpdate.subject", locale),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.leadUpdate.preheader", locale),

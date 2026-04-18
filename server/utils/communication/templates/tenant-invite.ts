@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function tenantInviteTemplate(
+export async function tenantInviteTemplate(
   locale: string,
   data: {
     name: string;
@@ -12,7 +12,7 @@ export function tenantInviteTemplate(
     roles: string;
     loginUrl: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const rolesList = data.roles
     .split(",")
     .map((r) => r.trim())
@@ -211,7 +211,7 @@ export function tenantInviteTemplate(
       inviterName: data.inviterName,
       companyName: data.companyName,
     }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.tenantInvite.preheader", locale),

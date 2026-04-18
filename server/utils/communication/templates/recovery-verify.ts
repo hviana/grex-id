@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function recoveryVerifyTemplate(
+export async function recoveryVerifyTemplate(
   locale: string,
   data: {
     name: string;
@@ -10,7 +10,7 @@ export function recoveryVerifyTemplate(
     channelValue?: string;
     expiryMinutes?: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const content = `
     <!-- Hero icon with glow -->
     <tr>
@@ -140,7 +140,7 @@ export function recoveryVerifyTemplate(
 
   return {
     title: t("templates.recoveryVerify.subject", locale),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.recoveryVerify.preheader", locale),

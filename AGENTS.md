@@ -271,7 +271,7 @@ permission errors, and status messages.
 │   │   │            locations, data-deletion, recovery-channels, systems/[slug]/)
 │   │   └── frontend-queries/ (messages, notifications, systems/[slug]/)
 │   ├── middleware/   (compose, withAuth, withRateLimit, withPlanAccess, withEntityLimit)
-│   ├── utils/        (Core, FrontCore, fs, token, token-revocation, cors,
+│   ├── utils/        (Core, FrontCore, cache, fs, token, token-revocation, cors,
 │   │                  rate-limiter, usage-tracker, credit-tracker,
 │   │                  entity-deduplicator, field-standardizer,
 │   │                  field-validator, guards, tenant,
@@ -576,8 +576,9 @@ export function assertScope(
 
 ### 10. Configuration Singletons
 
-Both singletons use the same optimization strategy: lazy load on first access,
-in-memory cache, reload on write, missing-key log, admin editor.
+Both singletons use the centralized cache registry (§12.11) for all data
+storage: lazy load on first access, in-memory cache, reload on write,
+missing-key log, admin editor.
 
 #### 10.1 Core (server-only)
 
@@ -591,14 +592,7 @@ class Core {
   static readonly DB_NAMESPACE: string;
   static readonly DB_DATABASE: string;
 
-  systems: System[];
-  roles: Role[];
-  plans: Plan[];
-  vouchers: Voucher[];
-  menus: MenuItem[];
-  settings: Map<string, CoreSetting>; // composite key: "${systemSlug}:${key}" (empty prefix for core)
-  // Active subscriptions cached per-tenant (lazily loaded)
-  // private subscriptions: Map<string, Subscription>;
+  // All data backed by cache registry (§12.11) under "core"::"data".
 
   // When systemSlug is provided, returns the system-specific value if it exists,
   // otherwise falls back to the core-level default (systemSlug = NONE).
@@ -611,19 +605,18 @@ class Core {
   async getMissingSettings(): Promise<
     { key: string; firstRequestedAt: string }[]
   >;
-  async load(): Promise<void>;
-  async reload(): Promise<void>;
+  async reload(): Promise<void>; // delegates to updateCache("core", "data")
   static getInstance(): Core;
 
-  // Plan / voucher lookup (sync, from cache)
-  getPlanById(planId: string): Plan | undefined;
-  getVoucherById(voucherId: string): Voucher | undefined;
+  // Plan / voucher lookup (async, from cache)
+  async getPlanById(planId: string): Promise<Plan | undefined>;
+  async getVoucherById(voucherId: string): Promise<Voucher | undefined>;
 
-  // Subscription cache (lazily loaded, per-tenant)
-  getActiveSubscriptionCached(
+  // Subscription cache (lazily loaded, per-tenant, backed by cache registry)
+  async getActiveSubscriptionCached(
     companyId: string,
     systemId: string,
-  ): Subscription | undefined;
+  ): Promise<Subscription | undefined>;
   async ensureSubscription(
     companyId: string,
     systemId: string,
@@ -670,23 +663,25 @@ without redeployment.
 
 **Reload trigger.** Whenever a core entity is written (systems, roles, plans,
 vouchers, menus, settings), the route handler calls
-`Core.getInstance().reload()`.
+`Core.getInstance().reload()`, which delegates to `updateCache("core", "data")`
+(§12.11). This also clears any derived caches (e.g. JWT secret).
 
-**Subscription cache.** Active subscriptions are cached per-tenant (keyed by
-`companyId:systemId`) and loaded lazily on first access. After any billing
+**Subscription cache.** Active subscriptions are cached per-tenant via the
+centralized cache registry (§12.11) under `"core"::"sub:<companyId>:<systemId>"`.
+Entries are registered on first access and loaded lazily. After any billing
 mutation (subscribe, cancel, apply_voucher, set_auto_recharge, purchase_credits)
 the route handler or event handler calls
-`Core.getInstance().reloadSubscription(companyId, systemId)`. The
-process-payment handler reloads subscriptions after renewal and after marking
-past_due. The `evictAllSubscriptions()` method clears the entire subscription
-cache; it is called after voucher mutations (which can cascade across multiple
-tenants).
+`Core.getInstance().reloadSubscription(companyId, systemId)`, which delegates to
+`updateCache`. The process-payment handler reloads subscriptions after renewal
+and after marking past_due. The `evictAllSubscriptions()` method iterates all
+tracked subscription cache keys and calls `clearCache` on each; it is called
+after voucher mutations (which can cascade across multiple tenants).
 
-**Index maps — no array iteration.** The Core singleton must never use
-`.find()`, `.filter()`, or any linear scan over cached arrays. Every lookup
-method uses pre-built `Map` indexes populated during `load()` / `reload()`:
-`systemsBySlug`, `rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`,
-`vouchersById`, and `settings`. This rule applies to all caching mechanisms in
+**Index maps — no array iteration.** The Core data loader (`loadCoreData`)
+builds pre-built `Map` indexes for O(1) lookups: `systemsBySlug`,
+`rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`,
+`vouchersById`, and `settings`. These are part of the `CoreData` object stored
+in the cache registry (§12.11). This rule applies to all caching mechanisms in
 the project — design for O(1) lookups, never iterate.
 
 **No hardcoded fallback constants.** Server-side config is read exclusively via
@@ -742,16 +737,17 @@ directly.
 - Reads exclusively from `front_setting` (never `setting`).
 - Reads DB directly through the shared connection.
 - Admin writes via `PUT /api/core/front-settings`: updates DB → calls
-  `FrontCore.getInstance().reload()` → broadcasts invalidation to open clients
-  (live SELECT on `front_setting`, when the user's SurrealDB token has
-  select permission).
+  `FrontCore.getInstance().reload()`, which delegates to
+  `updateCache("front-core", "data")` (§12.11) → broadcasts invalidation to
+  open clients (live SELECT on `front_setting`, when the user's SurrealDB token
+  has select permission).
 
 **Contract:**
 
 ```typescript
 class FrontCore {
-  settings: Map<string, FrontCoreSetting>; // composite key: "${systemSlug}:${key}"
   // Same fallback logic as Core: system-specific → core-level default.
+  // Data backed by cache registry (§12.11) under "front-core"::"data".
   async getSetting(key: string, systemSlug?: string): Promise<string | undefined>;
   async getMissingSettings(): Promise<
     { key: string; firstRequestedAt: string }[]
@@ -866,6 +862,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant              |
 | `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
 | `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
+| `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1074,6 +1071,13 @@ registerSystemI18n(systemSlug: string, locale: string, data: TranslationMap): vo
 // Communication templates — email/SMS templates resolved by name at send time
 registerTemplate(name: string, fn: TemplateFunction): void;
 
+// Cache — centralized cache registry (§12.11)
+registerCache<T>(slug: string, name: string, loader: () => Promise<T>): void;
+getCache<T>(slug: string, name: string): Promise<T>;
+updateCache<T>(slug: string, name: string): Promise<T>;
+clearCache(slug: string, name: string): void;
+clearAllCacheForSlug(slug: string): void;
+
 // Lifecycle hooks — subsystems react to core events without core importing them
 registerLifecycleHook(event: LifecycleEvent, hook: (payload) => Promise<void>): void;
 runLifecycleHooks(event: LifecycleEvent, payload: Record<string, unknown>): Promise<void>;
@@ -1085,12 +1089,14 @@ registerEventHandler, registerComponent, registerHomePage
 
 **Boot sequence** (in `server/jobs/index.ts`):
 
-1. `registerCore()` — `server/core-register.ts` registers core event handlers,
-   handler functions, and core jobs (recurring-billing, token-cleanup).
+1. `registerCore()` — `server/core-register.ts` registers core caches
+   (`"core"::"data"`, `"front-core"::"data"`, `"core"::"jwt-secret"`), core
+   event handlers, handler functions, and core jobs (recurring-billing,
+   token-cleanup).
 2. `registerAllSystems()` — `systems/index.ts` calls each subsystem's
-   `register()` function.
+   `register()` function, which may register system-specific caches.
 3. `registerAllFrameworks()` — `frameworks/index.ts` calls each framework's
-   `register()` function.
+   `register()` function, which may register framework-specific caches.
 4. `startEventQueue()` — resolves handler functions from the registry, starts
    workers.
 5. Iterate `getAllJobs()` — starts all registered recurring jobs.
@@ -1136,6 +1142,89 @@ async function resolveRateLimitConfig(params: {
   systemId: string;
 }): Promise<RateLimitConfigResult>;
 ```
+
+#### 12.11 Centralized Cache (`server/utils/cache.ts`)
+
+A unified cache registry that replaces ad-hoc singleton caching. Every
+server-side cache — Core data, FrontCore data, subscriptions, JWT secrets,
+system-specific lookups — MUST be registered through this module. No module
+shall maintain its own in-memory `Map` + `loaded` flag + `loadPromise` pattern.
+
+**Registration at boot.** Caches are registered during the boot sequence
+(§12.9) alongside handlers, jobs, and templates. Core caches are registered in
+`server/core-register.ts`; system and framework caches are registered in their
+respective `register()` functions. Registration must happen **before** any
+`getCache` call — calling `getCache` on an unregistered name throws.
+
+**API:**
+
+```typescript
+// Register a cache entry. Slug scopes the namespace; name identifies the cache.
+// The loader is an async function that fetches data from the DB (or composes
+// from other caches). Calling registerCache again for the same (slug, name)
+// replaces the loader but preserves the cached value until next getCache/updateCache.
+registerCache<T>(slug: string, name: string, loader: () => Promise<T>): void;
+
+// Returns the cached value. On first call, executes the loader (single-flight:
+// concurrent callers share the same in-flight promise). Subsequent calls return
+// the cached value instantly.
+getCache<T>(slug: string, name: string): Promise<T>;
+
+// Re-executes the loader and replaces the cached value. Used by route handlers
+// and event handlers after mutations (e.g. Core.reload() calls updateCache
+// internally).
+updateCache<T>(slug: string, name: string): Promise<T>;
+
+// Returns the cached value synchronously if loaded, or undefined otherwise.
+// Use sparingly — prefer the async getCache.
+getCacheIfLoaded<T>(slug: string, name: string): T | undefined;
+
+// Clears a single cache entry (value + loaded flag), forcing a fresh load on
+// next getCache.
+clearCache(slug: string, name: string): void;
+
+// Clears all cache entries whose names start with the given slug prefix.
+clearAllCacheForSlug(slug: string): void;
+```
+
+**Rules:**
+
+1. **Every cache must be registered.** No ad-hoc `Map` + `loaded` boolean +
+   `loadPromise` patterns. The cache module handles single-flight loading,
+   invalidation, and eviction.
+2. **Slug identifies the owner.** Core uses `"core"`, FrontCore uses
+   `"front-core"`, systems use their slug (e.g. `"grex-id"`), frameworks use
+   their namespace. This prevents name collisions.
+3. **Loaders are pure data fetchers.** They must not mutate state, dispatch
+   events, or depend on request context. They may compose from other caches
+   (e.g. the JWT secret cache reads from the Core data cache via
+   `Core.getSetting`).
+4. **Invalidation is explicit.** After any mutation that affects cached data,
+   the route handler or event handler calls `updateCache` (or the owning
+   singleton's `reload()` method which delegates to `updateCache` internally).
+   There is no TTL-based expiry — caches live until explicitly refreshed or
+   cleared.
+5. **Derived caches must be cleared when their source changes.** When
+   `Core.reload()` refreshes the core data cache, it also clears the
+   `"jwt-secret"` cache since that value is derived from settings. Any new
+   derived cache must follow the same pattern.
+6. **Dynamic caches (subscriptions).** Per-tenant caches like subscriptions are
+   registered on first access and tracked in a `Set`. Bulk eviction
+   (`evictAllSubscriptions`) iterates the tracked keys and calls `clearCache`
+   on each. This avoids needing to know all possible keys up front.
+7. **No `require()` or Node APIs.** The cache module uses standard JS only
+   (§1.1.1), since it may be imported by isomorphic code.
+
+**Core caches registered at boot:**
+
+| Slug         | Name          | Loader                          | Invalidated by                                  |
+| ------------ | ------------- | ------------------------------- | ----------------------------------------------- |
+| `"core"`     | `"data"`      | `loadCoreData()` (§10.1)        | `Core.reload()` after any core entity mutation  |
+| `"core"`     | `"jwt-secret"` | `loadJwtSecret()` (§token)     | `Core.reload()` (derived from settings)         |
+| `"core"`     | `"sub:<companyId>:<systemId>"` | `loadSubscription()` | `Core.reloadSubscription()` after billing mutations |
+| `"front-core"` | `"data"`    | `loadFrontCoreData()` (§10.2)   | `FrontCore.reload()` after front-setting writes |
+
+Systems and frameworks register their own caches following the same pattern.
 
 ### 13. File Storage
 
@@ -2841,7 +2930,7 @@ GET /api/usage?companyId&systemId&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
 
 All actions accept `action` in the body. Every billing mutation calls
 `Core.getInstance().reloadSubscription(companyId, systemId)` after the DB write
-to keep the subscription cache (§10.1) in sync.
+to keep the subscription cache (§10.1, backed by §12.11) in sync.
 
 **`subscribe`** — create a new subscription (or change plan):
 
@@ -3081,12 +3170,13 @@ user can re-enter at any time).
 
 Because steps 1–3 are one batched statement, subscriptions never sit in an
 inconsistent state where the voucher still points to them but no longer applies.
-After the batched query, the handler calls `Core.getInstance().reload()` (to
-refresh the voucher cache) followed by
-`Core.getInstance().evictAllSubscriptions()` (to clear potentially stale
-subscription cache entries). Open billing pages reflect the removal on their
-next reload (or instantly via live query on `subscription`). No email is sent
-for this removal — the billing-page reload communicates the change.
+After the batched query, the handler calls `Core.getInstance().reload()` (which
+delegates to `updateCache("core", "data")` per §12.11, refreshing the voucher
+cache) followed by `Core.getInstance().evictAllSubscriptions()` (which iterates
+all tracked subscription cache keys and calls `clearCache` on each). Open billing
+pages reflect the removal on their next reload (or instantly via live query on
+`subscription`). No email is sent for this removal — the billing-page reload
+communicates the change.
 
 **Plan-change & voucher.** When a user switches plan (`subscribe` with a
 different plan — §22.1), the old subscription is cancelled (voucher reference

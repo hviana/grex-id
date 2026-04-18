@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function insufficientCreditTemplate(
+export async function insufficientCreditTemplate(
   locale: string,
   data: {
     name: string;
@@ -10,7 +10,7 @@ export function insufficientCreditTemplate(
     resourceKey: string;
     purchaseLink: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const translatedResource = t(data.resourceKey, locale) !== data.resourceKey
     ? t(data.resourceKey, locale)
     : data.resourceKey.split(".").pop() ?? data.resourceKey;
@@ -159,7 +159,7 @@ export function insufficientCreditTemplate(
     title: t("templates.insufficientCredit.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.insufficientCredit.preheader", locale),

@@ -10,16 +10,15 @@ export function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function emailLayout(
+export async function emailLayout(
   content: string,
   locale: string,
   preheader?: string,
-): string {
-  // Read cached settings synchronously (Core/FrontCore are loaded at boot)
+): Promise<string> {
   const core = Core.getInstance();
   const frontCore = FrontCore.getInstance();
-  const appName = core.settings.get("app.name")?.value ?? "Core";
-  const supportEmail = frontCore.settings.get("front.support.email")?.value ??
+  const appName = (await core.getSetting("app.name")) ?? "Core";
+  const supportEmail = (await frontCore.getSetting("front.support.email")) ??
     "";
   const preheaderBlock = preheader
     ? `<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: #000000;">

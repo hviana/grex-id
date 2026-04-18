@@ -174,10 +174,10 @@ export default function SettingsEditor(
   });
 
   const inputCls =
-    "w-full rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+    "w-full rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
 
   const selectCls =
-    "rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+    "rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
 
   if (loading) {
     return (

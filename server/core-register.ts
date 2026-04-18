@@ -3,6 +3,7 @@ import {
   registerHandlerFunction,
   registerJob,
   registerTemplate,
+  registerCache,
 } from "./module-registry.ts";
 import { sendEmail } from "./event-queue/handlers/send-email.ts";
 import { sendSms } from "./event-queue/handlers/send-sms.ts";
@@ -20,9 +21,14 @@ import { insufficientCreditTemplate } from "./utils/communication/templates/insu
 import { tenantInviteTemplate } from "./utils/communication/templates/tenant-invite.ts";
 import { recoveryVerifyTemplate } from "./utils/communication/templates/recovery-verify.ts";
 import { recoveryChannelResetTemplate } from "./utils/communication/templates/recovery-channel-reset.ts";
-import type { TemplateFunction } from "../src/contracts/communication.ts";
+import { loadCoreData } from "./utils/Core.ts";
+import { loadFrontCoreData } from "./utils/FrontCore.ts";
 
 export function registerCore(): void {
+  // Caches
+  registerCache("core", "data", loadCoreData);
+  registerCache("front-core", "data", loadFrontCoreData);
+
   // Event handlers
   registerEventHandler("SEND_EMAIL", "send_email");
   registerHandlerFunction("send_email", sendEmail);
@@ -41,44 +47,14 @@ export function registerCore(): void {
   registerJob("token-cleanup", startTokenCleanup);
 
   // Communication templates
-  registerTemplate(
-    "verification",
-    verificationTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "password-reset",
-    passwordResetTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "lead-update-verification",
-    leadUpdateVerificationTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "payment-success",
-    paymentSuccessTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "payment-failure",
-    paymentFailureTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "auto-recharge",
-    autoRechargeTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "insufficient-credit",
-    insufficientCreditTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "tenant-invite",
-    tenantInviteTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "recovery-verify",
-    recoveryVerifyTemplate as unknown as TemplateFunction,
-  );
-  registerTemplate(
-    "recovery-channel-reset",
-    recoveryChannelResetTemplate as unknown as TemplateFunction,
-  );
+  registerTemplate("verification", verificationTemplate);
+  registerTemplate("password-reset", passwordResetTemplate);
+  registerTemplate("lead-update-verification", leadUpdateVerificationTemplate);
+  registerTemplate("payment-success", paymentSuccessTemplate);
+  registerTemplate("payment-failure", paymentFailureTemplate);
+  registerTemplate("auto-recharge", autoRechargeTemplate);
+  registerTemplate("insufficient-credit", insufficientCreditTemplate);
+  registerTemplate("tenant-invite", tenantInviteTemplate);
+  registerTemplate("recovery-verify", recoveryVerifyTemplate);
+  registerTemplate("recovery-channel-reset", recoveryChannelResetTemplate);
 }

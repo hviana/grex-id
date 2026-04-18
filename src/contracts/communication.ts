@@ -3,7 +3,7 @@ export interface TemplateResult {
   title?: string;
 }
 
-export type TemplateFunction = (
+export type TemplateFunction<T extends Record<string, unknown> = Record<string, unknown>> = (
   locale: string,
-  data: Record<string, string>,
-) => TemplateResult;
+  data: T,
+) => Promise<TemplateResult>;

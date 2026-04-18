@@ -10,21 +10,20 @@ import Core from "@/server/utils/Core";
 export async function GET() {
   try {
     const frontCore = FrontCore.getInstance();
-    if (frontCore.settings.size === 0) {
-      await frontCore.load();
-    }
-    const core = Core.getInstance();
-
     const settingsMap: Record<string, { value: string; description: string }> =
       {};
-    for (const [key, setting] of frontCore.settings) {
-      settingsMap[key] = {
+
+    const data = await frontCore.getSettingsMap();
+    for (const [, setting] of data) {
+      if (setting.systemSlug) continue;
+      settingsMap[setting.key] = {
         value: setting.value,
         description: setting.description ?? "",
       };
     }
 
     // Include frontend DB connection settings from setting
+    const core = Core.getInstance();
     const frontendDbKeys = [
       "db.frontend.url",
       "db.frontend.namespace",

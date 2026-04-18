@@ -23,7 +23,7 @@ export const sendSms: HandlerFn = async (payload) => {
   let body: string | undefined;
 
   if (templateFn) {
-    const result = templateFn(locale, templateData);
+    const result = await templateFn(locale, templateData);
     body = result.body;
   }
 

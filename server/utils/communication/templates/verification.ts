@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function verificationTemplate(
+export async function verificationTemplate(
   locale: string,
   data: {
     name: string;
@@ -10,7 +10,7 @@ export function verificationTemplate(
     email?: string;
     expiryMinutes?: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const content = `
     <!-- Hero icon with glow -->
     <tr>
@@ -138,7 +138,7 @@ export function verificationTemplate(
 
   return {
     title: t("templates.verification.subject", locale, { name: data.name }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.verification.preheader", locale),

@@ -16,6 +16,18 @@ export {
 
 export { registerSystemI18n } from "../src/i18n/index.ts";
 
+// ── Cache ─────────────────────────────────────────────────
+// Centralized cache registry (§12.11).
+
+export {
+  registerCache,
+  getCache,
+  getCacheIfLoaded,
+  updateCache,
+  clearCache,
+  clearAllCacheForSlug,
+} from "./utils/cache.ts";
+
 // ── Handler functions ─────────────────────────────────────
 // Maps handler name → executable HandlerFn.
 
@@ -50,11 +62,11 @@ export function getAllJobs(): Record<string, JobStarter> {
 
 const templateRegistry: Record<string, TemplateFunction> = {};
 
-export function registerTemplate(
+export function registerTemplate<T extends Record<string, unknown>>(
   name: string,
-  fn: TemplateFunction,
+  fn: TemplateFunction<T>,
 ): void {
-  templateRegistry[name] = fn;
+  templateRegistry[name] = fn as TemplateFunction;
 }
 
 export function getTemplate(name: string): TemplateFunction | undefined {

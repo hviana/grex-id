@@ -30,7 +30,7 @@ export const sendEmail: HandlerFn = async (payload) => {
   let body: string | undefined;
 
   if (templateFn) {
-    const result = templateFn(locale, templateData);
+    const result = await templateFn(locale, templateData);
     subject = result.title;
     body = result.body;
   }

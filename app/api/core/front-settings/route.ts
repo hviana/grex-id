@@ -2,41 +2,23 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listFrontSettings, upsertFrontSetting, deleteFrontSetting } from "@/server/db/queries/front-settings";
+import { listFrontSettings, batchUpsertFrontSettings, deleteFrontSetting } from "@/server/db/queries/front-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import FrontCore from "@/server/utils/FrontCore";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const systemSlug = url.searchParams.get("systemSlug") || undefined;
-  const frontCore = FrontCore.getInstance();
-  await frontCore.load();
 
-  let settings: { id: string; key: string; value: string; description: string; systemSlug?: string }[];
+  const settings = (await listFrontSettings(systemSlug)).map((s) => ({
+    id: s.id,
+    key: s.key,
+    value: s.value,
+    description: s.description ?? "",
+    systemSlug: s.systemSlug,
+  }));
 
-  if (systemSlug) {
-    settings = (await listFrontSettings(systemSlug)).map((s) => ({
-      id: s.id,
-      key: s.key,
-      value: s.value,
-      description: s.description ?? "",
-      systemSlug: s.systemSlug,
-    }));
-  } else {
-    settings = [];
-    for (const [, setting] of frontCore.settings) {
-      if (!setting.systemSlug) {
-        settings.push({
-          id: setting.id,
-          key: setting.key,
-          value: setting.value,
-          description: setting.description ?? "",
-        });
-      }
-    }
-  }
-
-  const missing = await frontCore.getMissingSettings();
+  const missing = await FrontCore.getInstance().getMissingSettings();
 
   return Response.json({
     success: true,
@@ -64,16 +46,16 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  for (const s of settings) {
-    if (!s.key) continue;
-    await upsertFrontSetting({
+  const items = settings
+    .filter((s) => s.key)
+    .map((s) => ({
       key: standardizeField("name", s.key),
       value: s.value ?? "",
       description: s.description ?? "",
       systemSlug: systemSlug || undefined,
-    });
-  }
+    }));
 
+  await batchUpsertFrontSettings(items);
   await FrontCore.getInstance().reload();
 
   return Response.json({ success: true });

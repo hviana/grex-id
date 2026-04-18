@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function autoRechargeTemplate(
+export async function autoRechargeTemplate(
   locale: string,
   data: {
     name: string;
@@ -12,7 +12,7 @@ export function autoRechargeTemplate(
     triggerResource: string;
     billingUrl: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const translatedResource =
     t(data.triggerResource, locale) !== data.triggerResource
       ? t(data.triggerResource, locale)
@@ -186,7 +186,7 @@ export function autoRechargeTemplate(
     title: t("templates.autoRecharge.subject", locale, {
       systemName: data.systemName,
     }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.autoRecharge.preheader", locale),

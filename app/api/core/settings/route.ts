@@ -2,8 +2,7 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listSettings, upsertSetting, deleteSetting } from "@/server/db/queries/core-settings";
-import type { CoreSetting } from "@/src/contracts/core-settings";
+import { listSettings, batchUpsertSettings, deleteSetting } from "@/server/db/queries/core-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import Core from "@/server/utils/Core";
 
@@ -34,25 +33,19 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const results: CoreSetting[] = [];
-
-  for (const setting of settings) {
-    const { key, value, description } = setting;
-
-    if (!key) continue;
-
-    const result = await upsertSetting({
-      key: standardizeField("name", key),
-      value: standardizeField("name", value ?? ""),
-      description: standardizeField("name", description ?? ""),
+  const items = settings
+    .filter((s: Record<string, unknown>) => s.key)
+    .map((s: Record<string, unknown>) => ({
+      key: standardizeField("name", String(s.key ?? "")),
+      value: standardizeField("name", String(s.value ?? "")),
+      description: standardizeField("name", String(s.description ?? "")),
       systemSlug: systemSlug || undefined,
-    });
-    if (result) results.push(result);
-  }
+    }));
 
+  await batchUpsertSettings(items);
   await Core.getInstance().reload();
 
-  return Response.json({ success: true, data: results });
+  return Response.json({ success: true });
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {

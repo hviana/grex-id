@@ -1,4 +1,11 @@
 import { getDb, rid } from "../db/connection.ts";
+import {
+  registerCache,
+  getCache,
+  updateCache,
+  clearCache,
+  clearAllCacheForSlug,
+} from "./cache.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
@@ -17,6 +24,132 @@ export interface MissingSetting {
   firstRequestedAt: string;
 }
 
+export interface CoreData {
+  systems: System[];
+  roles: Role[];
+  plans: Plan[];
+  vouchers: Voucher[];
+  menus: MenuItem[];
+  settings: Map<string, CoreSetting>;
+  systemsBySlug: Map<string, System>;
+  rolesBySystem: Map<string, Role[]>;
+  plansBySystem: Map<string, Plan[]>;
+  menusBySystem: Map<string, MenuItem[]>;
+  plansById: Map<string, Plan>;
+  vouchersById: Map<string, Voucher>;
+}
+
+const CORE_SLUG = "core";
+
+export async function loadCoreData(): Promise<CoreData> {
+  const db = await getDb();
+
+  const results = await db.query<
+    [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
+  >(
+    `SELECT * FROM system;
+    SELECT * FROM role;
+    SELECT * FROM plan;
+    SELECT * FROM menu_item ORDER BY sortOrder ASC;
+    SELECT * FROM setting;
+    SELECT * FROM voucher;`,
+  );
+
+  const systems = results[0] ?? [];
+  const roles = results[1] ?? [];
+  const plans = results[2] ?? [];
+  const menus = results[3] ?? [];
+  const settings = results[4] ?? [];
+  const vouchers = results[5] ?? [];
+
+  const systemsBySlug = new Map<string, System>();
+  for (const s of systems) {
+    systemsBySlug.set(s.slug, s);
+  }
+
+  const rolesBySystem = new Map<string, Role[]>();
+  for (const r of roles) {
+    const key = String(r.systemId);
+    let list = rolesBySystem.get(key);
+    if (!list) {
+      list = [];
+      rolesBySystem.set(key, list);
+    }
+    list.push(r);
+  }
+
+  const plansBySystem = new Map<string, Plan[]>();
+  const plansById = new Map<string, Plan>();
+  for (const p of plans) {
+    const sysKey = String(p.systemId);
+    let list = plansBySystem.get(sysKey);
+    if (!list) {
+      list = [];
+      plansBySystem.set(sysKey, list);
+    }
+    list.push(p);
+    plansById.set(String(p.id), p);
+  }
+
+  const menusBySystem = new Map<string, MenuItem[]>();
+  for (const m of menus) {
+    const key = String(m.systemId);
+    let list = menusBySystem.get(key);
+    if (!list) {
+      list = [];
+      menusBySystem.set(key, list);
+    }
+    list.push(m);
+  }
+
+  const vouchersById = new Map<string, Voucher>();
+  for (const v of vouchers) {
+    vouchersById.set(String(v.id), v);
+  }
+
+  const settingsMap = new Map<string, CoreSetting>();
+  for (const setting of settings) {
+    const mapKey = (setting.systemSlug ?? "") + ":" + setting.key;
+    settingsMap.set(mapKey, setting);
+  }
+
+  console.log(
+    `[Core] loaded: ${systems.length} systems, ${roles.length} roles, ${plans.length} plans, ${vouchers.length} vouchers, ${menus.length} menus, ${settingsMap.size} settings`,
+  );
+
+  return {
+    systems,
+    roles,
+    plans,
+    vouchers,
+    menus,
+    settings: settingsMap,
+    systemsBySlug,
+    rolesBySystem,
+    plansBySystem,
+    menusBySystem,
+    plansById,
+    vouchersById,
+  };
+}
+
+async function loadSubscription(
+  companyId: string,
+  systemId: string,
+): Promise<Subscription | null> {
+  const db = await getDb();
+  const result = await db.query<[Subscription[]]>(
+    `SELECT * FROM subscription
+     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     LIMIT 1`,
+    { companyId: rid(companyId), systemId: rid(systemId) },
+  );
+  return result[0]?.[0] ?? null;
+}
+
+// Tracked subscription cache keys for bulk eviction
+const subscriptionKeys: Set<string> = new Set();
+
 class Core {
   static readonly DB_URL = dbConfig.url;
   static readonly DB_USER = dbConfig.user;
@@ -25,25 +158,7 @@ class Core {
   static readonly DB_DATABASE = dbConfig.database;
 
   private static instance: Core | null = null;
-  private loaded = false;
-  private loadPromise: Promise<void> | null = null;
-
-  systems: System[] = [];
-  roles: Role[] = [];
-  plans: Plan[] = [];
-  vouchers: Voucher[] = [];
-  menus: MenuItem[] = [];
-  settings: Map<string, CoreSetting> = new Map();
   private missingSettings: Map<string, MissingSetting> = new Map();
-  private subscriptions: Map<string, Subscription> = new Map();
-
-  // Index maps — populated during load(), O(1) lookup
-  private systemsBySlug: Map<string, System> = new Map();
-  private rolesBySystem: Map<string, Role[]> = new Map();
-  private plansBySystem: Map<string, Plan[]> = new Map();
-  private menusBySystem: Map<string, MenuItem[]> = new Map();
-  private plansById: Map<string, Plan> = new Map();
-  private vouchersById: Map<string, Voucher> = new Map();
 
   private constructor() {}
 
@@ -54,117 +169,15 @@ class Core {
     return Core.instance;
   }
 
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
-    if (!this.loadPromise) {
-      this.loadPromise = this.load().then(() => {
-        this.loaded = true;
-        this.loadPromise = null;
-      });
-    }
-    await this.loadPromise;
-  }
-
-  async load(): Promise<void> {
-    const db = await getDb();
-
-    const results = await db.query<
-      [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
-    >(
-      `SELECT * FROM system;
-      SELECT * FROM role;
-      SELECT * FROM plan;
-      SELECT * FROM menu_item ORDER BY sortOrder ASC;
-      SELECT * FROM setting;
-      SELECT * FROM voucher;`,
-    );
-
-    const systems = results[0] ?? [];
-    const roles = results[1] ?? [];
-    const plans = results[2] ?? [];
-    const menus = results[3] ?? [];
-    const settings = results[4] ?? [];
-    const vouchers = results[5] ?? [];
-
-    this.systems = systems;
-    this.roles = roles;
-    this.plans = plans;
-    this.menus = menus;
-    this.vouchers = vouchers;
-
-    // Rebuild index maps
-    this.systemsBySlug.clear();
-    for (const s of systems) {
-      this.systemsBySlug.set(s.slug, s);
-    }
-
-    this.rolesBySystem.clear();
-    for (const r of roles) {
-      const key = String(r.systemId);
-      let list = this.rolesBySystem.get(key);
-      if (!list) {
-        list = [];
-        this.rolesBySystem.set(key, list);
-      }
-      list.push(r);
-    }
-
-    this.plansBySystem.clear();
-    this.plansById.clear();
-    for (const p of plans) {
-      const sysKey = String(p.systemId);
-      let list = this.plansBySystem.get(sysKey);
-      if (!list) {
-        list = [];
-        this.plansBySystem.set(sysKey, list);
-      }
-      list.push(p);
-      this.plansById.set(String(p.id), p);
-    }
-
-    this.menusBySystem.clear();
-    for (const m of menus) {
-      const key = String(m.systemId);
-      let list = this.menusBySystem.get(key);
-      if (!list) {
-        list = [];
-        this.menusBySystem.set(key, list);
-      }
-      list.push(m);
-    }
-
-    this.vouchersById.clear();
-    for (const v of vouchers) {
-      this.vouchersById.set(String(v.id), v);
-    }
-
-    this.settings.clear();
-    for (const setting of settings) {
-      const mapKey = (setting.systemSlug ?? "") + ":" + setting.key;
-      this.settings.set(mapKey, setting);
-      if (!setting.systemSlug) {
-        this.missingSettings.delete(setting.key);
-      }
-    }
-
-    console.log(
-      `[Core] loaded: ${systems.length} systems, ${roles.length} roles, ${plans.length} plans, ${vouchers.length} vouchers, ${menus.length} menus, ${this.settings.size} settings`,
-    );
-  }
-
-  async reload(): Promise<void> {
-    await this.load();
-  }
-
   async getSetting(key: string, systemSlug?: string): Promise<string | undefined> {
-    await this.ensureLoaded();
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
 
     if (systemSlug) {
-      const specific = this.settings.get(`${systemSlug}:${key}`);
+      const specific = data.settings.get(`${systemSlug}:${key}`);
       if (specific) return specific.value;
     }
 
-    const core = this.settings.get(`:${key}`);
+    const core = data.settings.get(`:${key}`);
     if (core) return core.value;
 
     if (!this.missingSettings.has(key)) {
@@ -179,44 +192,51 @@ class Core {
   }
 
   async getMissingSettings(): Promise<MissingSetting[]> {
-    await this.ensureLoaded();
     return Array.from(this.missingSettings.values());
   }
 
   async getSystemBySlug(slug: string): Promise<System | undefined> {
-    await this.ensureLoaded();
-    return this.systemsBySlug.get(slug);
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.systemsBySlug.get(slug);
   }
 
   async getRolesForSystem(systemId: string): Promise<Role[]> {
-    await this.ensureLoaded();
-    return this.rolesBySystem.get(String(systemId)) ?? [];
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.rolesBySystem.get(String(systemId)) ?? [];
   }
 
   async getPlansForSystem(systemId: string): Promise<Plan[]> {
-    await this.ensureLoaded();
-    return this.plansBySystem.get(String(systemId)) ?? [];
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.plansBySystem.get(String(systemId)) ?? [];
   }
 
   async getMenusForSystem(systemId: string): Promise<MenuItem[]> {
-    await this.ensureLoaded();
-    const systemMenus = this.menusBySystem.get(String(systemId)) ?? [];
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    const systemMenus = data.menusBySystem.get(String(systemId)) ?? [];
     return buildMenuTree(systemMenus);
   }
 
-  getPlanById(planId: string): Plan | undefined {
-    return this.plansById.get(String(planId));
+  async getPlanById(planId: string): Promise<Plan | undefined> {
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.plansById.get(String(planId));
   }
 
-  getVoucherById(voucherId: string): Voucher | undefined {
-    return this.vouchersById.get(String(voucherId));
+  async getVoucherById(voucherId: string): Promise<Voucher | undefined> {
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.vouchersById.get(String(voucherId));
   }
 
-  getActiveSubscriptionCached(
+  async getActiveSubscriptionCached(
     companyId: string,
     systemId: string,
-  ): Subscription | undefined {
-    return this.subscriptions.get(`${companyId}:${systemId}`);
+  ): Promise<Subscription | undefined> {
+    const key = `${companyId}:${systemId}`;
+    const cacheName = `sub:${key}`;
+    try {
+      return await getCache<Subscription>(CORE_SLUG, cacheName);
+    } catch {
+      return undefined;
+    }
   }
 
   async ensureSubscription(
@@ -224,41 +244,45 @@ class Core {
     systemId: string,
   ): Promise<Subscription | null> {
     const key = `${companyId}:${systemId}`;
-    if (this.subscriptions.has(key)) {
-      return this.subscriptions.get(key)!;
+    const cacheName = `sub:${key}`;
+
+    if (!subscriptionKeys.has(cacheName)) {
+      registerCache(CORE_SLUG, cacheName, () =>
+        loadSubscription(companyId, systemId));
+      subscriptionKeys.add(cacheName);
     }
-    return this.reloadSubscription(companyId, systemId);
+
+    const cached = await getCache<Subscription | null>(CORE_SLUG, cacheName);
+    return cached ?? null;
   }
 
   async reloadSubscription(
     companyId: string,
     systemId: string,
   ): Promise<Subscription | null> {
-    const db = await getDb();
     const key = `${companyId}:${systemId}`;
+    const cacheName = `sub:${key}`;
 
-    const result = await db.query<[Subscription[]]>(
-      `SELECT * FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1`,
-      { companyId: rid(companyId), systemId: rid(systemId) },
-    );
-
-    const sub = result[0]?.[0] ?? null;
-    if (sub) {
-      this.subscriptions.set(key, sub);
-    } else {
-      this.subscriptions.delete(key);
+    if (!subscriptionKeys.has(cacheName)) {
+      registerCache(CORE_SLUG, cacheName, () =>
+        loadSubscription(companyId, systemId));
+      subscriptionKeys.add(cacheName);
     }
-    return sub;
+
+    return updateCache<Subscription | null>(CORE_SLUG, cacheName);
   }
 
-  evictSubscription(companyId: string, systemId: string): void {
-    this.subscriptions.delete(`${companyId}:${systemId}`);
+  async reload(): Promise<void> {
+    await updateCache<CoreData>(CORE_SLUG, "data");
+    // JWT secret is derived from settings — clear so it re-reads from updated data
+    clearCache(CORE_SLUG, "jwt-secret");
   }
 
   evictAllSubscriptions(): void {
-    this.subscriptions.clear();
+    for (const cacheName of subscriptionKeys) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    subscriptionKeys.clear();
   }
 }
 

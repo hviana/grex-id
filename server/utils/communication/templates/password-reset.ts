@@ -2,7 +2,7 @@ import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { emailLayout } from "./layout.ts";
 
-export function passwordResetTemplate(
+export async function passwordResetTemplate(
   locale: string,
   data: {
     name: string;
@@ -10,7 +10,7 @@ export function passwordResetTemplate(
     email?: string;
     expiryMinutes?: string;
   },
-): TemplateResult {
+): Promise<TemplateResult> {
   const content = `
     <!-- Hero icon with glow -->
     <tr>
@@ -153,7 +153,7 @@ export function passwordResetTemplate(
 
   return {
     title: t("templates.passwordReset.subject", locale, { name: data.name }),
-    body: emailLayout(
+    body: await emailLayout(
       content,
       locale,
       t("templates.passwordReset.preheader", locale),

@@ -33,11 +33,11 @@ async function resolveSubscription(
   return core.ensureSubscription(companyId, systemId);
 }
 
-function resolvePlan(planId: string): Plan | undefined {
+async function resolvePlan(planId: string): Promise<Plan | undefined> {
   return Core.getInstance().getPlanById(planId);
 }
 
-function resolveVoucher(voucherId: string | undefined): Voucher | undefined {
+async function resolveVoucher(voucherId: string | undefined): Promise<Voucher | undefined> {
   if (!voucherId) return undefined;
   return Core.getInstance().getVoucherById(voucherId);
 }
@@ -52,7 +52,7 @@ export async function resolveEntityLimit(params: {
     return { limit: null, planLimit: null, voucherModifier: 0 };
   }
 
-  const plan = resolvePlan(sub.planId);
+  const plan = await resolvePlan(sub.planId);
   if (!plan?.entityLimits?.[params.entityName]) {
     return { limit: null, planLimit: null, voucherModifier: 0 };
   }
@@ -61,7 +61,7 @@ export async function resolveEntityLimit(params: {
   let voucherModifier = 0;
 
   if (sub.voucherId) {
-    const voucher = resolveVoucher(sub.voucherId);
+    const voucher = await resolveVoucher(sub.voucherId);
     if (voucher?.entityLimitModifiers?.[params.entityName]) {
       voucherModifier = voucher.entityLimitModifiers[params.entityName];
     }
@@ -87,7 +87,7 @@ export async function checkPlanAccess(
     return { granted: false, denyCode: "SUBSCRIPTION_EXPIRED" };
   }
 
-  const plan = resolvePlan(sub.planId);
+  const plan = await resolvePlan(sub.planId);
   if (!plan) {
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
@@ -113,12 +113,12 @@ export async function resolveRateLimitConfig(params: {
     return { globalLimit: 0, planRateLimit: 0, voucherModifier: 0 };
   }
 
-  const plan = resolvePlan(sub.planId);
+  const plan = await resolvePlan(sub.planId);
   const planRateLimit = plan?.apiRateLimit ?? 0;
 
   let voucherModifier = 0;
   if (sub.voucherId) {
-    const voucher = resolveVoucher(sub.voucherId);
+    const voucher = await resolveVoucher(sub.voucherId);
     voucherModifier = voucher?.apiRateLimitModifier ?? 0;
   }
 

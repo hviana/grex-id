@@ -89,7 +89,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     // Use Core cache for plan lookup (no db.query) — §7.2 single-call rule
-    const plan = core.getPlanById(planId);
+    const plan = await core.getPlanById(planId);
     if (!plan || String(plan.systemId) !== String(systemId)) {
       return Response.json(
         {
