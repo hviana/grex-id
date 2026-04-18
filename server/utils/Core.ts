@@ -1,10 +1,5 @@
 import { getDb, rid } from "../db/connection.ts";
-import {
-  registerCache,
-  getCache,
-  updateCache,
-  clearCache,
-} from "./cache.ts";
+import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
@@ -168,7 +163,10 @@ class Core {
     return Core.instance;
   }
 
-  async getSetting(key: string, systemSlug?: string): Promise<string | undefined> {
+  async getSetting(
+    key: string,
+    systemSlug?: string,
+  ): Promise<string | undefined> {
     const data = await getCache<CoreData>(CORE_SLUG, "data");
 
     if (systemSlug) {
@@ -246,8 +244,11 @@ class Core {
     const cacheName = `sub:${key}`;
 
     if (!subscriptionKeys.has(cacheName)) {
-      registerCache(CORE_SLUG, cacheName, () =>
-        loadSubscription(companyId, systemId));
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => loadSubscription(companyId, systemId),
+      );
       subscriptionKeys.add(cacheName);
     }
 
@@ -263,8 +264,11 @@ class Core {
     const cacheName = `sub:${key}`;
 
     if (!subscriptionKeys.has(cacheName)) {
-      registerCache(CORE_SLUG, cacheName, () =>
-        loadSubscription(companyId, systemId));
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => loadSubscription(companyId, systemId),
+      );
       subscriptionKeys.add(cacheName);
     }
 

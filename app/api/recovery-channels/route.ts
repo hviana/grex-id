@@ -29,7 +29,10 @@ async function sendChannelVerification(
 ): Promise<void> {
   const core = Core.getInstance();
   const verificationExpiryMinutes = Number(
-    await core.getSetting("auth.recoveryChannel.verification.expiry.minutes", systemSlug),
+    await core.getSetting(
+      "auth.recoveryChannel.verification.expiry.minutes",
+      systemSlug,
+    ),
   );
   const token = generateSecureToken();
   await createVerificationRequest({
@@ -111,7 +114,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Cooldown check
     const core = Core.getInstance();
     const cooldownSeconds = Number(
-      await core.getSetting("auth.verification.cooldown.seconds", ctx.tenant.systemSlug),
+      await core.getSetting(
+        "auth.verification.cooldown.seconds",
+        ctx.tenant.systemSlug,
+      ),
     );
     const lastRequest = await getLastVerificationRequest(
       userId,
@@ -210,7 +216,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const core = Core.getInstance();
   const maxPerUser = Number(
-    (await core.getSetting("auth.recoveryChannel.maxPerUser", ctx.tenant.systemSlug)) || 10,
+    (await core.getSetting(
+      "auth.recoveryChannel.maxPerUser",
+      ctx.tenant.systemSlug,
+    )) || 10,
   );
 
   const channel = await createRecoveryChannel({

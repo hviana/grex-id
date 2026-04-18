@@ -49,7 +49,9 @@ export default function SettingsEditor(
   const load = async () => {
     setLoading(true);
     try {
-      const params = selectedSystem ? `?systemSlug=${encodeURIComponent(selectedSystem)}` : "";
+      const params = selectedSystem
+        ? `?systemSlug=${encodeURIComponent(selectedSystem)}`
+        : "";
       const res = await fetch(`${apiPath}${params}`);
       const json = await res.json();
       if (json.success) setSettings(json.data?.settings ?? json.data ?? []);

@@ -408,9 +408,8 @@ export async function getDb(): Promise<Surreal> {
 WebSocket using SurrealDB user/password authentication. Exclusively for
 `LIVE
 SELECT`. Connection parameters (URL, namespace, database, user, password)
-are read from `setting` rows via the public API
-(`GET /api/public/front-core` resolves `db.frontend.*` keys).
-`connectFrontendDb()`.
+are read from `setting` rows via the public API (`GET /api/public/front-core`
+resolves `db.frontend.*` keys). `connectFrontendDb()`.
 
 | `setting` key           | Seed value                  | Used by             |
 | ----------------------- | --------------------------- | ------------------- |
@@ -476,7 +475,7 @@ this table.
 | `0017_create_usage_record.surql`             | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                   |
 | `0018_create_queue_event.surql`              | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                        |
 | `0019_create_delivery.surql`                 | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                   |
-| `0020_create_core_setting.surql`             | `setting`                | Renamed from `core_setting`. Unique `(key, systemSlug)`. `systemSlug option<string>` — `NONE` = core-level default; non-null = per-system override.                                                                                                                |
+| `0020_create_core_setting.surql`             | `setting`                | Renamed from `core_setting`. Unique `(key, systemSlug)`. `systemSlug option<string>` — `NONE` = core-level default; non-null = per-system override.                                                                                                                 |
 | `0021_create_verification_request.surql`     | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                                |
 | `0022_create_live_query_permissions.surql`   | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                  |
 | `0023_create_lead.surql`                     | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                             |
@@ -597,7 +596,10 @@ class Core {
   // When systemSlug is provided, returns the system-specific value if it exists,
   // otherwise falls back to the core-level default (systemSlug = NONE).
   // When omitted, returns the core-level default directly.
-  async getSetting(key: string, systemSlug?: string): Promise<string | undefined>;
+  async getSetting(
+    key: string,
+    systemSlug?: string,
+  ): Promise<string | undefined>;
   async getSystemBySlug(slug: string): Promise<System | undefined>;
   async getRolesForSystem(systemId: string): Promise<Role[]>;
   async getPlansForSystem(systemId: string): Promise<Plan[]>;
@@ -625,7 +627,6 @@ class Core {
     companyId: string,
     systemId: string,
   ): Promise<Subscription | null>;
-  evictSubscription(companyId: string, systemId: string): void;
   evictAllSubscriptions(): void;
 }
 ```
@@ -667,10 +668,10 @@ vouchers, menus, settings), the route handler calls
 (§12.11). This also clears any derived caches (e.g. JWT secret).
 
 **Subscription cache.** Active subscriptions are cached per-tenant via the
-centralized cache registry (§12.11) under `"core"::"sub:<companyId>:<systemId>"`.
-Entries are registered on first access and loaded lazily. After any billing
-mutation (subscribe, cancel, apply_voucher, set_auto_recharge, purchase_credits)
-the route handler or event handler calls
+centralized cache registry (§12.11) under
+`"core"::"sub:<companyId>:<systemId>"`. Entries are registered on first access
+and loaded lazily. After any billing mutation (subscribe, cancel, apply_voucher,
+set_auto_recharge, purchase_credits) the route handler or event handler calls
 `Core.getInstance().reloadSubscription(companyId, systemId)`, which delegates to
 `updateCache`. The process-payment handler reloads subscriptions after renewal
 and after marking past_due. The `evictAllSubscriptions()` method iterates all
@@ -679,15 +680,16 @@ after voucher mutations (which can cascade across multiple tenants).
 
 **Index maps — no array iteration.** The Core data loader (`loadCoreData`)
 builds pre-built `Map` indexes for O(1) lookups: `systemsBySlug`,
-`rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`,
-`vouchersById`, and `settings`. These are part of the `CoreData` object stored
-in the cache registry (§12.11). This rule applies to all caching mechanisms in
-the project — design for O(1) lookups, never iterate.
+`rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`, `vouchersById`,
+and `settings`. These are part of the `CoreData` object stored in the cache
+registry (§12.11). This rule applies to all caching mechanisms in the project —
+design for O(1) lookups, never iterate.
 
 **No hardcoded fallback constants.** Server-side config is read exclusively via
-`Core.getInstance().getSetting(key)` or `Core.getInstance().getSetting(key,
-systemSlug)`. If a key is missing, `getSetting` returns `undefined` and the key
-is logged.
+`Core.getInstance().getSetting(key)` or
+`Core.getInstance().getSetting(key,
+systemSlug)`. If a key is missing,
+`getSetting` returns `undefined` and the key is logged.
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
@@ -738,22 +740,24 @@ directly.
 - Reads DB directly through the shared connection.
 - Admin writes via `PUT /api/core/front-settings`: updates DB → calls
   `FrontCore.getInstance().reload()`, which delegates to
-  `updateCache("front-core", "data")` (§12.11) → broadcasts invalidation to
-  open clients (live SELECT on `front_setting`, when the user's SurrealDB token
-  has select permission).
+  `updateCache("core", "front-data")` (§12.11) → broadcasts invalidation to open
+  clients (live SELECT on `front_setting`, when the user's SurrealDB token has
+  select permission).
 
 **Contract:**
 
 ```typescript
 class FrontCore {
   // Same fallback logic as Core: system-specific → core-level default.
-  // Data backed by cache registry (§12.11) under "front-core"::"data".
-  async getSetting(key: string, systemSlug?: string): Promise<string | undefined>;
+  // Data backed by cache registry (§12.11) under "core"::"front-data".
+  async getSetting(
+    key: string,
+    systemSlug?: string,
+  ): Promise<string | undefined>;
   async getMissingSettings(): Promise<
     { key: string; firstRequestedAt: string }[]
   >;
-  async load(): Promise<void>;
-  async reload(): Promise<void>;
+  async reload(): Promise<void>; // delegates to updateCache("core", "front-data")
   static getInstance(): FrontCore;
 }
 ```
@@ -787,10 +791,9 @@ header names which table is being edited (`t("core.settings.title")` vs
 ##### 10.2.8 Why separate tables
 
 Physical separation guarantees the frontend bundle cannot accidentally leak a
-server-only secret: a read permission granting
-`SELECT * FROM
-front_setting` never touches `setting`. Keys must never
-overlap.
+server-only secret: a read permission granting `SELECT * FROM
+front_setting`
+never touches `setting`. Keys must never overlap.
 
 ### 11. Middleware Pipeline
 
@@ -1090,7 +1093,7 @@ registerEventHandler, registerComponent, registerHomePage
 **Boot sequence** (in `server/jobs/index.ts`):
 
 1. `registerCore()` — `server/core-register.ts` registers core caches
-   (`"core"::"data"`, `"front-core"::"data"`, `"core"::"jwt-secret"`), core
+   (`"core"::"data"`, `"core"::"front-data"`, `"core"::"jwt-secret"`), core
    event handlers, handler functions, and core jobs (recurring-billing,
    token-cleanup).
 2. `registerAllSystems()` — `systems/index.ts` calls each subsystem's
@@ -1150,8 +1153,8 @@ server-side cache — Core data, FrontCore data, subscriptions, JWT secrets,
 system-specific lookups — MUST be registered through this module. No module
 shall maintain its own in-memory `Map` + `loaded` flag + `loadPromise` pattern.
 
-**Registration at boot.** Caches are registered during the boot sequence
-(§12.9) alongside handlers, jobs, and templates. Core caches are registered in
+**Registration at boot.** Caches are registered during the boot sequence (§12.9)
+alongside handlers, jobs, and templates. Core caches are registered in
 `server/core-register.ts`; system and framework caches are registered in their
 respective `register()` functions. Registration must happen **before** any
 `getCache` call — calling `getCache` on an unregistered name throws.
@@ -1183,7 +1186,7 @@ getCacheIfLoaded<T>(slug: string, name: string): T | undefined;
 // next getCache.
 clearCache(slug: string, name: string): void;
 
-// Clears all cache entries whose names start with the given slug prefix.
+// Clears all cache entries for the given slug namespace.
 clearAllCacheForSlug(slug: string): void;
 ```
 
@@ -1192,9 +1195,11 @@ clearAllCacheForSlug(slug: string): void;
 1. **Every cache must be registered.** No ad-hoc `Map` + `loaded` boolean +
    `loadPromise` patterns. The cache module handles single-flight loading,
    invalidation, and eviction.
-2. **Slug identifies the owner.** Core uses `"core"`, FrontCore uses
-   `"front-core"`, systems use their slug (e.g. `"grex-id"`), frameworks use
-   their namespace. This prevents name collisions.
+2. **Slug identifies the namespace.** The core platform (Core settings,
+   FrontCore settings, JWT secrets, subscriptions) uses `"core"`. Systems use
+   their slug (e.g. `"grex-id"`). Frameworks use their namespace. This prevents
+   name collisions — the cache name distinguishes entries within the same
+   namespace (e.g. `"data"`, `"front-data"`, `"jwt-secret"`).
 3. **Loaders are pure data fetchers.** They must not mutate state, dispatch
    events, or depend on request context. They may compose from other caches
    (e.g. the JWT secret cache reads from the Core data cache via
@@ -1210,19 +1215,19 @@ clearAllCacheForSlug(slug: string): void;
    derived cache must follow the same pattern.
 6. **Dynamic caches (subscriptions).** Per-tenant caches like subscriptions are
    registered on first access and tracked in a `Set`. Bulk eviction
-   (`evictAllSubscriptions`) iterates the tracked keys and calls `clearCache`
-   on each. This avoids needing to know all possible keys up front.
+   (`evictAllSubscriptions`) iterates the tracked keys and calls `clearCache` on
+   each. This avoids needing to know all possible keys up front.
 7. **No `require()` or Node APIs.** The cache module uses standard JS only
    (§1.1.1), since it may be imported by isomorphic code.
 
 **Core caches registered at boot:**
 
-| Slug         | Name          | Loader                          | Invalidated by                                  |
-| ------------ | ------------- | ------------------------------- | ----------------------------------------------- |
-| `"core"`     | `"data"`      | `loadCoreData()` (§10.1)        | `Core.reload()` after any core entity mutation  |
-| `"core"`     | `"jwt-secret"` | `loadJwtSecret()` (§token)     | `Core.reload()` (derived from settings)         |
-| `"core"`     | `"sub:<companyId>:<systemId>"` | `loadSubscription()` | `Core.reloadSubscription()` after billing mutations |
-| `"front-core"` | `"data"`    | `loadFrontCoreData()` (§10.2)   | `FrontCore.reload()` after front-setting writes |
+| Slug     | Name                           | Loader                        | Invalidated by                                      |
+| -------- | ------------------------------ | ----------------------------- | --------------------------------------------------- |
+| `"core"` | `"data"`                       | `loadCoreData()` (§10.1)      | `Core.reload()` after any core entity mutation      |
+| `"core"` | `"front-data"`                 | `loadFrontCoreData()` (§10.2) | `FrontCore.reload()` after front-setting writes     |
+| `"core"` | `"jwt-secret"`                 | `loadJwtSecret()` (§token)    | `Core.reload()` (derived from settings)             |
+| `"core"` | `"sub:<companyId>:<systemId>"` | `loadSubscription()`          | `Core.reloadSubscription()` after billing mutations |
 
 Systems and frameworks register their own caches following the same pattern.
 
@@ -1308,8 +1313,8 @@ non-sensitive, read-only data.
   (resolves from `app.defaultSystem`). Response:
   `{ success: true, data: { name, slug, logoUri, defaultLocale?, termsOfService? } | null }`.
   No rate limiting by default (static-like).
-- **`GET /api/public/front-core`** — returns the full `front_setting` table
-  as a key/value map. Used by FrontCore in the browser (§10.2).
+- **`GET /api/public/front-core`** — returns the full `front_setting` table as a
+  key/value map. Used by FrontCore in the browser (§10.2).
 - **`POST /api/leads/public`** — see §23.2.
 
 #### 13.5 File metadata
@@ -1594,8 +1599,7 @@ channel event.
 
 WebSocket via SurrealDB user/password authentication. Exclusively for
 `LIVE
-SELECT`. Credentials read from `setting` via
-`/api/public/front-core`.
+SELECT`. Credentials read from `setting` via `/api/public/front-core`.
 
 ```typescript
 export async function connectFrontendDb(): Promise<Surreal>;
@@ -2143,8 +2147,8 @@ system-specific API routes.
 | System API Token | API requests to backend routes | Backend via `@panva/jose` | `Authorization: Bearer <token>` |
 
 Frontend live queries authenticate via SurrealDB user/password credentials
-stored in `setting` (`db.frontend.user`, `db.frontend.pass` — §7.5), not
-via a separate token. The system token refreshes via `/api/auth/refresh`.
+stored in `setting` (`db.frontend.user`, `db.frontend.pass` — §7.5), not via a
+separate token. The system token refreshes via `/api/auth/refresh`.
 
 #### 19.2 System branding on public pages
 
@@ -2432,9 +2436,9 @@ domain prefix (the `t()` function strips it). Required groups:
   awareness, passwordLabel, passwordPlaceholder, confirmDelete, success,
   error.passwordInvalid, error.notFound
 - `companies.*` — title, empty, dateRange, systemFilter, planFilter,
-  statusFilter, access, accessHint, systems, subscription, plan, status,
-  active, cancelled, pastDue, noSubscription, chart, chartCanceled,
-  chartPaid, chartProjected, chartErrors, revenueOverview
+  statusFilter, access, accessHint, systems, subscription, plan, status, active,
+  cancelled, pastDue, noSubscription, chart, chartCanceled, chartPaid,
+  chartProjected, chartErrors, revenueOverview
 
 Every key must have full `en` + `pt-BR` translations.
 
@@ -2611,8 +2615,8 @@ Each company card (`renderItem`) shows:
 4. **Payment-status filter** — `MultiBadgeField mode:"search"` with
    `staticOptions` containing three values: `active` ("Payments up-to-date"),
    `cancelled` ("Cancelled payments"), `past_due` ("Payments with errors").
-   Passed as `statuses` query param to both the company list and the chart.
-   When empty, all companies are shown.
+   Passed as `statuses` query param to both the company list and the chart. When
+   empty, all companies are shown.
 
 **Company list search.** `GenericList` provides debounced search via
 `searchEnabled`. The `search` param performs FULLTEXT lookup on company `name`
@@ -3173,10 +3177,10 @@ inconsistent state where the voucher still points to them but no longer applies.
 After the batched query, the handler calls `Core.getInstance().reload()` (which
 delegates to `updateCache("core", "data")` per §12.11, refreshing the voucher
 cache) followed by `Core.getInstance().evictAllSubscriptions()` (which iterates
-all tracked subscription cache keys and calls `clearCache` on each). Open billing
-pages reflect the removal on their next reload (or instantly via live query on
-`subscription`). No email is sent for this removal — the billing-page reload
-communicates the change.
+all tracked subscription cache keys and calls `clearCache` on each). Open
+billing pages reflect the removal on their next reload (or instantly via live
+query on `subscription`). No email is sent for this removal — the billing-page
+reload communicates the change.
 
 **Plan-change & voucher.** When a user switches plan (`subscribe` with a
 different plan — §22.1), the old subscription is cancelled (voucher reference

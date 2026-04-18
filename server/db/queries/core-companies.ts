@@ -56,9 +56,7 @@ export async function listCoreCompanies(
 
   if (params.statuses?.length) {
     bindings.statuses = params.statuses;
-    const planClause = params.planIds?.length
-      ? " AND planId IN $planIds"
-      : "";
+    const planClause = params.planIds?.length ? " AND planId IN $planIds" : "";
     if (params.planIds?.length) {
       bindings.planIds = params.planIds.map((id) => rid(id));
     }
@@ -201,7 +199,9 @@ export async function getRevenueChart(params: {
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
   if (params.systemIds?.length) {
-    extraFilters.push("companyId IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)");
+    extraFilters.push(
+      "companyId IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)",
+    );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }
   const extra = extraFilters.length ? `AND ${extraFilters.join(" AND ")}` : "";

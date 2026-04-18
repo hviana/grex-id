@@ -71,7 +71,12 @@ export async function deleteFrontSetting(
 }
 
 export async function batchUpsertFrontSettings(
-  items: { key: string; value: string; description?: string; systemSlug?: string }[],
+  items: {
+    key: string;
+    value: string;
+    description?: string;
+    systemSlug?: string;
+  }[],
 ): Promise<void> {
   if (items.length === 0) return;
   const db = await getDb();

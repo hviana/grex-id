@@ -2,7 +2,11 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listFrontSettings, batchUpsertFrontSettings, deleteFrontSetting } from "@/server/db/queries/front-settings";
+import {
+  batchUpsertFrontSettings,
+  deleteFrontSetting,
+  listFrontSettings,
+} from "@/server/db/queries/front-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import FrontCore from "@/server/utils/FrontCore";
 

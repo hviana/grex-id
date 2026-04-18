@@ -2,7 +2,11 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listSettings, batchUpsertSettings, deleteSetting } from "@/server/db/queries/core-settings";
+import {
+  batchUpsertSettings,
+  deleteSetting,
+  listSettings,
+} from "@/server/db/queries/core-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import Core from "@/server/utils/Core";
 

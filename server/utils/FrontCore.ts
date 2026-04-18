@@ -1,7 +1,4 @@
-import {
-  getCache,
-  updateCache,
-} from "./cache.ts";
+import { getCache, updateCache } from "./cache.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
 
 if (typeof window !== "undefined") {
@@ -17,7 +14,8 @@ export interface FrontCoreData {
   settings: Map<string, FrontCoreSetting>;
 }
 
-const FRONT_SLUG = "front-core";
+const CACHE_SLUG = "core";
+const CACHE_NAME = "front-data";
 
 export async function loadFrontCoreData(): Promise<FrontCoreData> {
   const { getDb } = await import("../db/connection.ts");
@@ -52,8 +50,11 @@ class FrontCore {
     return FrontCore.instance;
   }
 
-  async getSetting(key: string, systemSlug?: string): Promise<string | undefined> {
-    const data = await getCache<FrontCoreData>(FRONT_SLUG, "data");
+  async getSetting(
+    key: string,
+    systemSlug?: string,
+  ): Promise<string | undefined> {
+    const data = await getCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
 
     if (systemSlug) {
       const specific = data.settings.get(`${systemSlug}:${key}`);
@@ -75,12 +76,13 @@ class FrontCore {
   }
 
   async getMissingSettings(): Promise<MissingFrontSetting[]> {
-    await getCache<FrontCoreData>(FRONT_SLUG, "data");
+    await getCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
     return Array.from(this.missingSettings.values());
   }
 
   async reload(): Promise<void> {
-    await updateCache<FrontCoreData>(FRONT_SLUG, "data");
+    await updateCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
+    this.missingSettings.clear();
   }
 }
 

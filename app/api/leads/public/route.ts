@@ -144,7 +144,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       // Cooldown check: prevent repeated verification requests
       const core = Core.getInstance();
       const cooldownSeconds = parseInt(
-        (await core.getSetting("auth.verification.cooldown.seconds", systemSlug)) ?? "120",
+        (await core.getSetting(
+          "auth.verification.cooldown.seconds",
+          systemSlug,
+        )) ?? "120",
         10,
       );
       const lastRequest = await getLastVerificationRequest(
@@ -171,7 +174,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       // Create verification request
       const verificationToken = crypto.randomUUID();
       const expiryMinutes = parseInt(
-        (await core.getSetting("auth.verification.expiry.minutes", systemSlug)) ?? "15",
+        (await core.getSetting(
+          "auth.verification.expiry.minutes",
+          systemSlug,
+        )) ?? "15",
         10,
       );
       await createVerificationRequest({

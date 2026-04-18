@@ -1,9 +1,9 @@
 import {
+  registerCache,
   registerEventHandler,
   registerHandlerFunction,
   registerJob,
   registerTemplate,
-  registerCache,
 } from "./module-registry.ts";
 import { sendEmail } from "./event-queue/handlers/send-email.ts";
 import { sendSms } from "./event-queue/handlers/send-sms.ts";
@@ -28,7 +28,7 @@ import { loadJwtSecret } from "./utils/token.ts";
 export function registerCore(): void {
   // Caches
   registerCache("core", "data", loadCoreData);
-  registerCache("front-core", "data", loadFrontCoreData);
+  registerCache("core", "front-data", loadFrontCoreData);
   registerCache("core", "jwt-secret", loadJwtSecret);
 
   // Event handlers

@@ -118,7 +118,9 @@ function AccessButton({ item }: { item: Company }) {
         {t("core.companies.access")}
       </button>
       {error && (
-        <span className="text-xs text-red-400">{t("common.error.generic")}</span>
+        <span className="text-xs text-red-400">
+          {t("common.error.generic")}
+        </span>
       )}
     </div>
   );
@@ -206,7 +208,9 @@ export default function CompaniesPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [chart, setChart] = useState<RevenueChart | null>(null);
 
-  const systemIds = useMemo(() => systemFilter.map((s) => s.id), [systemFilter]);
+  const systemIds = useMemo(() => systemFilter.map((s) => s.id), [
+    systemFilter,
+  ]);
   const planIds = useMemo(() => planFilter.map((p) => p.id), [planFilter]);
 
   const fetchCompanies = useCallback(
@@ -358,12 +362,12 @@ export default function CompaniesPage() {
             onChange={(v) =>
               setSystemFilter(
                 v.map((x) => {
-                  if (typeof x === "object" && "id" in x)
+                  if (typeof x === "object" && "id" in x) {
                     return { id: String(x.id), name: x.name ?? "" };
+                  }
                   return { id: String(x), name: String(x) };
                 }),
-              )
-            }
+              )}
             fetchFn={fetchSystems}
           />
         </div>
@@ -378,12 +382,12 @@ export default function CompaniesPage() {
             onChange={(v) =>
               setPlanFilter(
                 v.map((x) => {
-                  if (typeof x === "object" && "id" in x)
+                  if (typeof x === "object" && "id" in x) {
                     return { id: String(x.id), name: x.name ?? "" };
+                  }
                   return { id: String(x), name: String(x) };
                 }),
-              )
-            }
+              )}
             fetchFn={fetchPlans}
           />
         </div>
@@ -403,8 +407,7 @@ export default function CompaniesPage() {
                   const label = typeof x === "string" ? x : x.name;
                   return reverseStatusLabels[label] ?? label;
                 }),
-              )
-            }
+              )}
             staticOptions={Object.values(statusLabels)}
           />
         </div>

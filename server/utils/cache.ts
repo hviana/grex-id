@@ -38,7 +38,7 @@ export function registerCache<T>(
 
 export async function getCache<T>(slug: string, name: string): Promise<T> {
   const key = cacheKey(slug, name);
-  let entry = cacheRegistry.get(key) as CacheEntry<T> | undefined;
+  const entry = cacheRegistry.get(key) as CacheEntry<T> | undefined;
 
   if (!entry) {
     throw new Error(

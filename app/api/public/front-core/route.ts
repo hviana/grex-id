@@ -10,7 +10,7 @@ import Core from "@/server/utils/Core";
  */
 export async function GET() {
   try {
-    const data = await getCache<FrontCoreData>("front-core", "data");
+    const data = await getCache<FrontCoreData>("core", "front-data");
     const settingsMap: Record<string, { value: string; description: string }> =
       {};
 

@@ -20,12 +20,12 @@ export { registerSystemI18n } from "../src/i18n/index.ts";
 // Centralized cache registry (§12.11).
 
 export {
-  registerCache,
+  clearAllCacheForSlug,
+  clearCache,
   getCache,
   getCacheIfLoaded,
+  registerCache,
   updateCache,
-  clearCache,
-  clearAllCacheForSlug,
 } from "./utils/cache.ts";
 
 // ── Handler functions ─────────────────────────────────────

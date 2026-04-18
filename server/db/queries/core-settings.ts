@@ -89,7 +89,12 @@ export async function deleteSetting(
 }
 
 export async function batchUpsertSettings(
-  items: { key: string; value: string; description: string; systemSlug?: string }[],
+  items: {
+    key: string;
+    value: string;
+    description: string;
+    systemSlug?: string;
+  }[],
 ): Promise<void> {
   if (items.length === 0) return;
   const db = await getDb();

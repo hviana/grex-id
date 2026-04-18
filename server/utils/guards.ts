@@ -37,7 +37,9 @@ async function resolvePlan(planId: string): Promise<Plan | undefined> {
   return Core.getInstance().getPlanById(planId);
 }
 
-async function resolveVoucher(voucherId: string | undefined): Promise<Voucher | undefined> {
+async function resolveVoucher(
+  voucherId: string | undefined,
+): Promise<Voucher | undefined> {
   if (!voucherId) return undefined;
   return Core.getInstance().getVoucherById(voucherId);
 }
