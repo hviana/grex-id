@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/src/hooks/useLocale";
 
 interface DateRangeFilterProps {
   maxRangeDays: number;
@@ -10,6 +11,7 @@ interface DateRangeFilterProps {
 export default function DateRangeFilter(
   { maxRangeDays, onChange }: DateRangeFilterProps,
 ) {
+  const { t } = useLocale();
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,11 +24,13 @@ export default function DateRangeFilter(
       const diffDays = (e.getTime() - s.getTime()) / 86400000;
 
       if (diffDays < 0) {
-        setError("End date must be after start date");
+        setError(t("common.dateRange.endBeforeStart"));
         return;
       }
       if (diffDays > maxRangeDays) {
-        setError(`Max range is ${maxRangeDays} days`);
+        setError(
+          t("common.dateRange.maxDays", { max: String(maxRangeDays) }),
+        );
         return;
       }
       onChange(s, e);

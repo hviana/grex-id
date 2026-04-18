@@ -6,6 +6,7 @@ import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -62,12 +63,10 @@ export default function UsagePage() {
   const [data, setData] = useState<UsageData | null>(null);
 
   // Date range: last 31 days
-  const today = new Date().toISOString().slice(0, 10);
-  const thirtyOneDaysAgo = new Date(Date.now() - 31 * 86400000)
-    .toISOString()
-    .slice(0, 10);
-  const [startDate, setStartDate] = useState(thirtyOneDaysAgo);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(() =>
+    new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() =>
+    new Date().toISOString().slice(0, 10));
 
   const loadData = useCallback(async () => {
     if (!companyId || !systemId || !systemToken) return;
@@ -152,9 +151,6 @@ export default function UsagePage() {
     }
     : null;
 
-  const inputCls =
-    "rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-[var(--color-primary-green)] transition-colors";
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
@@ -229,18 +225,12 @@ export default function UsagePage() {
                   <label className="text-xs text-[var(--color-light-text)]">
                     {t("billing.usage.dateRange")}:
                   </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className={inputCls}
-                  />
-                  <span className="text-[var(--color-light-text)]">—</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className={inputCls}
+                  <DateRangeFilter
+                    maxRangeDays={31}
+                    onChange={(s, e) => {
+                      setStartDate(s.toISOString().slice(0, 10));
+                      setEndDate(e.toISOString().slice(0, 10));
+                    }}
                   />
                 </div>
               </div>
