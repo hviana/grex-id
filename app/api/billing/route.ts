@@ -76,7 +76,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
       queryParams.cursorDate = new Date(atob(paymentCursor)).toISOString();
     }
     const whereStr = whereClauses.join(" AND ");
-    paymentQuery = `SELECT * FROM payment WHERE ${whereStr} ORDER BY createdAt DESC LIMIT 21;`;
+    paymentQuery =
+      `SELECT * FROM payment WHERE ${whereStr} ORDER BY createdAt DESC LIMIT 21;`;
   }
 
   const result = await db.query<
@@ -228,7 +229,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
          autoRechargeEnabled = false,
          autoRechargeAmount = 0,
          autoRechargeInProgress = false,
-       retryPaymentInProgress = false;
+         retryPaymentInProgress = false;
        ${ucsClause}`,
       params,
     );

@@ -99,7 +99,9 @@ function PaymentHistoryList({
     try {
       const params = new URLSearchParams();
       params.set("include", "payments");
-      if (startDate) params.set("startDate", startDate.toISOString().slice(0, 10));
+      if (startDate) {
+        params.set("startDate", startDate.toISOString().slice(0, 10));
+      }
       if (endDate) params.set("endDate", endDate.toISOString().slice(0, 10));
       if (!reset && cursor) params.set("cursor", cursor);
       const res = await fetch(`/api/billing?${params}`, {
@@ -114,7 +116,7 @@ function PaymentHistoryList({
     } finally {
       setLoading(false);
     }
-      }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
+  }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
 
   useEffect(() => {
     setCursor(undefined);
@@ -155,13 +157,15 @@ function PaymentHistoryList({
             <span className="text-white font-medium">
               {formatPrice(p.amount, p.currency)}
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              p.status === "completed"
-                ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
-                : p.status === "failed"
-                ? "bg-red-500/20 text-red-400"
-                : "bg-yellow-500/20 text-yellow-400"
-            }`}>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs ${
+                p.status === "completed"
+                  ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
+                  : p.status === "failed"
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-yellow-500/20 text-yellow-400"
+              }`}
+            >
               {t("billing.paymentHistory.status." + p.status)}
             </span>
             <span className="text-xs text-[var(--color-light-text)]">
@@ -248,8 +252,12 @@ export default function BillingPage() {
   const [retrying, setRetrying] = useState(false);
 
   // Payment history
-  const [paymentHistoryStart, setPaymentHistoryStart] = useState<Date | undefined>();
-  const [paymentHistoryEnd, setPaymentHistoryEnd] = useState<Date | undefined>();
+  const [paymentHistoryStart, setPaymentHistoryStart] = useState<
+    Date | undefined
+  >();
+  const [paymentHistoryEnd, setPaymentHistoryEnd] = useState<
+    Date | undefined
+  >();
 
   const loadData = useCallback(async () => {
     if (!companyId || !systemId || !systemToken) return;
@@ -622,11 +630,13 @@ export default function BillingPage() {
                 <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 p-4">
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${
-                        pastDueSub.retryPaymentInProgress
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-red-500/20 text-red-400"
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs ${
+                          pastDueSub.retryPaymentInProgress
+                            ? "bg-yellow-500/20 text-yellow-400"
+                            : "bg-red-500/20 text-red-400"
+                        }`}
+                      >
                         {pastDueSub.retryPaymentInProgress
                           ? t("billing.paymentStatus.processing")
                           : t("billing.paymentStatus.pastDue")}
@@ -1276,10 +1286,13 @@ export default function BillingPage() {
           {t("billing.paymentHistory.title")}
         </h2>
         <div className="mb-4">
-          <DateRangeFilter maxRangeDays={365} onChange={(start, end) => {
-            setPaymentHistoryStart(start);
-            setPaymentHistoryEnd(end);
-          }} />
+          <DateRangeFilter
+            maxRangeDays={365}
+            onChange={(start, end) => {
+              setPaymentHistoryStart(start);
+              setPaymentHistoryEnd(end);
+            }}
+          />
         </div>
         {companyId && systemId && (
           <PaymentHistoryList

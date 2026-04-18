@@ -163,7 +163,9 @@ export async function paymentSuccessTemplate(
   }">
                     ${
     data.invoiceUrl
-      ? `<a href="${data.invoiceUrl}" target="_blank" style="color: #02d07d; text-decoration: underline;">${t("templates.paymentSuccess.viewInvoice", locale)}</a>`
+      ? `<a href="${data.invoiceUrl}" target="_blank" style="color: #02d07d; text-decoration: underline;">${
+        t("templates.paymentSuccess.viewInvoice", locale)
+      }</a>`
       : t("templates.paymentSuccess.invoiceNotAvailable", locale)
   }
                   </td>

@@ -64,9 +64,11 @@ export default function UsagePage() {
 
   // Date range: last 31 days
   const [startDate, setStartDate] = useState(() =>
-    new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10));
+    new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10)
+  );
   const [endDate, setEndDate] = useState(() =>
-    new Date().toISOString().slice(0, 10));
+    new Date().toISOString().slice(0, 10)
+  );
 
   const loadData = useCallback(async () => {
     if (!companyId || !systemId || !systemToken) return;

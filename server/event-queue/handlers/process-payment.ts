@@ -19,6 +19,10 @@ export const processPayment: HandlerFn = async (payload) => {
   const db = await getDb();
 
   // Batch: subscription + plan + voucher + owner info + system info (§7.2)
+  const creditPurchaseQuery = creditPurchaseId
+    ? `SELECT status FROM credit_purchase WHERE id = $purchaseId LIMIT 1;`
+    : `SELECT NONE FROM NONE;`;
+
   const result = await db.query<
     [
       {
@@ -27,6 +31,7 @@ export const processPayment: HandlerFn = async (payload) => {
         paymentMethodId: string;
         companyId: string;
         systemId: string;
+        status: string;
         currentPeriodEnd: string;
         voucherId: string | null;
       }[],
@@ -39,6 +44,7 @@ export const processPayment: HandlerFn = async (payload) => {
       { priceModifier: number; creditIncrement: number }[],
       { email: string; name: string }[],
       { name: string; slug: string }[],
+      { status?: string }[],
     ]
   >(
     `SELECT * FROM subscription WHERE id = $id LIMIT 1;
@@ -54,14 +60,38 @@ export const processPayment: HandlerFn = async (payload) => {
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
      LET $systemId = (SELECT VALUE systemId FROM subscription WHERE id = $id LIMIT 1)[0];
-     SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
-    { id: rid(subscriptionId) },
+     SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
+     ${creditPurchaseQuery}`,
+    {
+      id: rid(subscriptionId),
+      purchaseId: creditPurchaseId ? rid(creditPurchaseId) : undefined,
+    },
   );
 
   const sub = result[0]?.[0];
   if (!sub) {
     console.log(
       `[payment] Subscription ${subscriptionId} not found, skipping.`,
+    );
+    return;
+  }
+
+  // Idempotency: if recurring already processed, skip (§14.5)
+  if (
+    isRecurring && sub.status === "active" &&
+    new Date(sub.currentPeriodEnd) > new Date()
+  ) {
+    console.log(
+      `[payment] Subscription ${subscriptionId} already renewed, skipping.`,
+    );
+    return;
+  }
+
+  // Idempotency: if credit purchase already processed, skip (§14.5)
+  const purchaseStatus = result[5]?.[0]?.status;
+  if (creditPurchaseId && purchaseStatus && purchaseStatus !== "pending") {
+    console.log(
+      `[payment] Credit purchase ${creditPurchaseId} already processed (${purchaseStatus}), skipping.`,
     );
     return;
   }
@@ -88,28 +118,31 @@ export const processPayment: HandlerFn = async (payload) => {
     ? "credits"
     : "recurring";
 
-  // Create payment record (§22.8)
-  const paymentResult = await db.query<[{ id: string }[]]>(
-    `CREATE payment SET
-      companyId = $companyId,
-      systemId = $systemId,
-      subscriptionId = $subId,
-      amount = $amount,
-      currency = $currency,
-      kind = $kind,
-      status = "pending",
-      paymentMethodId = $pmId`,
-    {
-      companyId: rid(String(sub.companyId)),
-      systemId: rid(String(sub.systemId)),
-      subId: rid(sub.id),
-      amount: chargeAmount,
-      currency,
-      kind,
-      pmId: rid(sub.paymentMethodId),
-    },
-  );
-  const paymentId = paymentResult[0]?.[0]?.id;
+  // Create payment record (§22.8) — only if payment method exists
+  let paymentId: string | undefined;
+  if (sub.paymentMethodId) {
+    const paymentResult = await db.query<[{ id: string }[]]>(
+      `CREATE payment SET
+        companyId = $companyId,
+        systemId = $systemId,
+        subscriptionId = $subId,
+        amount = $amount,
+        currency = $currency,
+        kind = $kind,
+        status = "pending",
+        paymentMethodId = $pmId`,
+      {
+        companyId: rid(String(sub.companyId)),
+        systemId: rid(String(sub.systemId)),
+        subId: rid(sub.id),
+        amount: chargeAmount,
+        currency,
+        kind,
+        pmId: rid(sub.paymentMethodId),
+      },
+    );
+    paymentId = paymentResult[0]?.[0]?.id;
+  }
 
   // TODO: Call actual payment provider with chargeAmount (Phase 6)
   // const providerResult = await provider.charge(chargeAmount, { ... });
@@ -232,21 +265,21 @@ export const processPayment: HandlerFn = async (payload) => {
     const stmts: string[] = [];
     const params: Record<string, unknown> = { subId: rid(sub.id) };
 
-    if (isRecurring) {
-      stmts.push(`UPDATE $subId SET status = "past_due";`);
-    }
-    // Clear retry guard on failure
-    if (isRetry || isRecurring) {
-      stmts.push(`UPDATE $subId SET retryPaymentInProgress = false;`);
-    }
+    // Merge all subscription updates into one statement
+    const subSets: string[] = [];
+    if (isRecurring) subSets.push(`status = "past_due"`);
+    if (isRetry || isRecurring) subSets.push(`retryPaymentInProgress = false`);
     if (purpose === "auto-recharge") {
-      stmts.push(`UPDATE $subId SET autoRechargeInProgress = false;`);
+      subSets.push(`autoRechargeInProgress = false`);
     }
+    if (subSets.length > 0) {
+      stmts.push(`UPDATE $subId SET ${subSets.join(", ")};`);
+    }
+
     if (creditPurchaseId) {
       stmts.push(`UPDATE $purchaseId SET status = "failed";`);
       params.purchaseId = rid(creditPurchaseId);
     }
-    // Update payment record to failed
     if (paymentId) {
       stmts.push(
         `UPDATE $paymentId SET status = "failed", failureReason = $reason;`,
