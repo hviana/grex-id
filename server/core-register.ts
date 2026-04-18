@@ -23,11 +23,13 @@ import { recoveryVerifyTemplate } from "./utils/communication/templates/recovery
 import { recoveryChannelResetTemplate } from "./utils/communication/templates/recovery-channel-reset.ts";
 import { loadCoreData } from "./utils/Core.ts";
 import { loadFrontCoreData } from "./utils/FrontCore.ts";
+import { loadJwtSecret } from "./utils/token.ts";
 
 export function registerCore(): void {
   // Caches
   registerCache("core", "data", loadCoreData);
   registerCache("front-core", "data", loadFrontCoreData);
+  registerCache("core", "jwt-secret", loadJwtSecret);
 
   // Event handlers
   registerEventHandler("SEND_EMAIL", "send_email");

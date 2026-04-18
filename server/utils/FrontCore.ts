@@ -1,7 +1,5 @@
 import {
-  registerCache,
   getCache,
-  getCacheIfLoaded,
   updateCache,
 } from "./cache.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
@@ -83,11 +81,6 @@ class FrontCore {
 
   async reload(): Promise<void> {
     await updateCache<FrontCoreData>(FRONT_SLUG, "data");
-  }
-
-  getSettingsMap(): Map<string, FrontCoreSetting> {
-    const data = getCacheIfLoaded<FrontCoreData>(FRONT_SLUG, "data");
-    return data?.settings ?? new Map();
   }
 }
 

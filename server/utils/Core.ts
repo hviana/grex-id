@@ -4,7 +4,6 @@ import {
   getCache,
   updateCache,
   clearCache,
-  clearAllCacheForSlug,
 } from "./cache.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
@@ -274,6 +273,7 @@ class Core {
 
   async reload(): Promise<void> {
     await updateCache<CoreData>(CORE_SLUG, "data");
+    this.missingSettings.clear();
     // JWT secret is derived from settings — clear so it re-reads from updated data
     clearCache(CORE_SLUG, "jwt-secret");
   }

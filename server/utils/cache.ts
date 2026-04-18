@@ -51,11 +51,16 @@ export async function getCache<T>(slug: string, name: string): Promise<T> {
   }
 
   if (!entry.loadPromise) {
-    entry.loadPromise = entry.loader().then((result) => {
-      entry!.value = result;
-      entry!.loaded = true;
-      entry!.loadPromise = null;
-    });
+    entry.loadPromise = entry.loader()
+      .then((result) => {
+        entry!.value = result;
+        entry!.loaded = true;
+        entry!.loadPromise = null;
+      })
+      .catch((err) => {
+        entry!.loadPromise = null;
+        throw err;
+      });
   }
 
   await entry.loadPromise;

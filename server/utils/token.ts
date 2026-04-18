@@ -1,6 +1,6 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
-import { registerCache, getCache } from "./cache.ts";
+import { getCache } from "./cache.ts";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
 
 if (typeof window !== "undefined") {
@@ -9,7 +9,7 @@ if (typeof window !== "undefined") {
   );
 }
 
-async function loadJwtSecret(): Promise<Uint8Array> {
+export async function loadJwtSecret(): Promise<Uint8Array> {
   const core = Core.getInstance();
   const secret = await core.getSetting("auth.jwt.secret");
   if (!secret) {
@@ -19,8 +19,6 @@ async function loadJwtSecret(): Promise<Uint8Array> {
   }
   return new TextEncoder().encode(secret);
 }
-
-registerCache("core", "jwt-secret", loadJwtSecret);
 
 async function getJwtSecret(): Promise<Uint8Array> {
   return getCache<Uint8Array>("core", "jwt-secret");

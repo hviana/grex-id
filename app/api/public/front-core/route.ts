@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import FrontCore from "@/server/utils/FrontCore";
+import { getCache } from "@/server/utils/cache";
+import type { FrontCoreData } from "@/server/utils/FrontCore";
 import Core from "@/server/utils/Core";
 
 /**
@@ -9,12 +10,11 @@ import Core from "@/server/utils/Core";
  */
 export async function GET() {
   try {
-    const frontCore = FrontCore.getInstance();
+    const data = await getCache<FrontCoreData>("front-core", "data");
     const settingsMap: Record<string, { value: string; description: string }> =
       {};
 
-    const data = await frontCore.getSettingsMap();
-    for (const [, setting] of data) {
+    for (const [, setting] of data.settings) {
       if (setting.systemSlug) continue;
       settingsMap[setting.key] = {
         value: setting.value,
@@ -22,7 +22,6 @@ export async function GET() {
       };
     }
 
-    // Include frontend DB connection settings from setting
     const core = Core.getInstance();
     const frontendDbKeys = [
       "db.frontend.url",
