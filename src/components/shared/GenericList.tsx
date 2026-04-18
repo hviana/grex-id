@@ -44,6 +44,10 @@ interface GenericListProps<T extends Record<string, unknown>> {
   renderItem?: (item: T, controls: React.ReactNode) => React.ReactNode;
   fieldMap?: Record<string, FieldType>;
   controlButtons?: ("edit" | "delete")[];
+  actionComponents?: {
+    key: string;
+    component: React.ComponentType<{ item: T }>;
+  }[];
   debounceMs?: number;
   formSubforms?: SubformConfig[];
   createRoute?: string;
@@ -63,6 +67,7 @@ export default function GenericList<T extends Record<string, unknown>>({
   renderItem,
   fieldMap,
   controlButtons = ["edit", "delete"],
+  actionComponents = [],
   debounceMs = 300,
   formSubforms = [],
   createRoute,
@@ -152,6 +157,9 @@ export default function GenericList<T extends Record<string, unknown>>({
       {controlButtons.includes("delete") && deleteRoute && (
         <DeleteButton onConfirm={() => handleDelete(item.id as string)} />
       )}
+      {actionComponents.map(({ key, component: ActionComp }) => (
+        <ActionComp key={key} item={item} />
+      ))}
     </>
   );
 

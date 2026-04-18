@@ -227,12 +227,12 @@ permission errors, and status messages.
 │   │   └── [...slug]/page.tsx        # Resolved by menu componentName
 │   ├── (core)/                       # Superuser-only admin panel
 │   │   ├── layout.tsx
-│   │   ├── systems/ roles/ plans/ vouchers/ menus/ terms/
+│   │   ├── companies/ systems/ roles/ plans/ vouchers/ menus/ terms/
 │   │   ├── data-deletion/ front-settings/ settings/
 │   └── api/
 │       ├── public/{system,front-core}/route.ts
 │       ├── auth/{login,register,verify,forgot-password,reset-password,refresh,exchange,oauth/[provider],oauth/authorize,recovery-channel-reset}/route.ts
-│       ├── core/{systems,roles,plans,vouchers,menus,terms,data-deletion,settings,settings/missing,front-settings}/route.ts
+│       ├── core/{systems,roles,plans,vouchers,menus,terms,companies,data-deletion,settings,settings/missing,front-settings}/route.ts
 │       ├── users/route.ts
 │       ├── companies/route.ts + [companyId]/systems/route.ts
 │       ├── billing/route.ts
@@ -1624,6 +1624,10 @@ Props: {
   renderItem?: (item: T, controls: ReactNode) => ReactNode;
   fieldMap?: Record<string, FieldType>;   // default renderer
   controlButtons?: ("edit" | "delete")[]; // default both
+  actionComponents?: {                    // custom action components per row
+    key: string;
+    component: React.ComponentType<{ item: T }>;
+  }[];
   debounceMs?: number;                    // default 300
   formSubforms?: SubformConfig[];
   createRoute?: string;
@@ -2200,6 +2204,30 @@ read from `useAuth().token` only — no scattered companyId/systemId.
 `/api/auth/exchange`. They are scoped for life. The Tokens form and the OAuth
 authorize page both state this explicitly.
 
+##### 19.11.1 Superuser company-access bypass
+
+When `claims.actorType = "user"` AND `claims.roles` contains `"superuser"`, the
+exchange endpoint skips the normal company-user membership check (step 3) and
+instead constructs the Tenant directly from the target `companyId` and
+`systemId`. The resulting token carries `roles: ["admin"]` and
+`permissions: ["*"]` for that (company, system) — granting full tenant access
+without requiring a `company_user` or `user_company_system` row for the
+superuser.
+
+Backend steps (inserted between steps 2 and 3 when superuser):
+
+1. Resolve `systemSlug` from the target `systemId` via Core cache.
+2. Verify the target `companyId` and `systemId` exist and are associated (a
+   `company_system` row exists).
+3. Issue the new JWT with `roles: ["admin"]`, `permissions: ["*"]` — no
+   `company_user` / `user_company_system` rows created.
+4. The superuser can later switch between the company's systems via the normal
+   ProfileMenu system selector (which reads available systems from
+   `company_system`, not `user_company_system`).
+
+This is the **sole mechanism** for a superuser to enter a tenant context. The
+Companies page "Access" button (§20.7) is the UI entry point.
+
 #### 19.12 Token revocation lifecycle
 
 Revocation uses `jti` (not token hash), so it works for freshly minted user
@@ -2268,17 +2296,18 @@ Links from the forgot-password page via
 ### 20. Superuser Core Admin Panel `(core)`
 
 The `(core)` route group is superuser-only. Layout renders a sidebar with
-hardcoded core menus: **Systems, Roles, Plans, Vouchers, Menus, Terms, Data
-Deletion, Settings, Front Settings.** All sidebar labels use i18n keys (never
-hardcoded English). Header text uses `t("core.layout.superuserPanel")`.
+hardcoded core menus: **Companies, Systems, Roles, Plans, Vouchers, Menus,
+Terms, Data Deletion, Settings, Front Settings.** All sidebar labels use i18n
+keys (never hardcoded English). Header text uses
+`t("core.layout.superuserPanel")`.
 
 #### 20.1 i18n keys
 
 Core keys live in `src/i18n/{locale}/core.json`. The JSON omits the `core.`
 domain prefix (the `t()` function strips it). Required groups:
 
-- `nav.*` — sidebar labels (systems, roles, plans, vouchers, menus, terms,
-  dataDeletion, settings, frontSettings)
+- `nav.*` — sidebar labels (companies, systems, roles, plans, vouchers, menus,
+  terms, dataDeletion, settings, frontSettings)
 - `layout.*` — layout chrome (e.g. `layout.superuserPanel`)
 - `systems.*` — CRUD keys: title, create, edit, name, slug, logo,
   termsOfService, empty
@@ -2303,6 +2332,10 @@ domain prefix (the `t()` function strips it). Required groups:
 - `dataDeletion.*` — title, selectCompany, selectSystem, deleteButton, warning,
   awareness, passwordLabel, passwordPlaceholder, confirmDelete, success,
   error.passwordInvalid, error.notFound
+- `companies.*` — title, empty, dateRange, systemFilter, planFilter, access,
+  accessHint, systems, subscription, plan, status, active, cancelled, pastDue,
+  noSubscription, chart, chartCanceled, chartPaid, chartProjected,
+  revenueOverview
 
 Every key must have full `en` + `pt-BR` translations.
 
@@ -2440,6 +2473,111 @@ Removes, for the given (`companyId`, `systemId`) pair:
 
 **Does NOT delete** the `company` or `system` records themselves — only the
 association and all scoped data. The entities can be re-associated later.
+
+#### 20.7 `CompaniesPage` (`app/(core)/companies/page.tsx` + `src/components/core/CompaniesPage.tsx`)
+
+Sidebar entry: 🏢 `core.nav.companies`. Read-only overview of all registered
+companies with their subscribed systems, subscription plans, and an **Access**
+button for superuser impersonation.
+
+**Company list.** Uses `GenericList` with `renderItem` for the company card,
+`controlButtons: []`, and a single `actionComponent` for the Access button that
+receives the full `Company` item data. Cursor-based pagination (§7.1) via
+`fetchFn` calling `GET /api/core/companies`. Search-enabled (debounced).
+
+Each company card (`renderItem`) shows:
+
+- Company name and document.
+- **Subscribed systems** list — each system row shows the system name, the
+  subscription's plan name, and a status badge (`active` / `past_due` /
+  `cancelled` / `core.companies.noSubscription`).
+- **Access** `actionComponent` — calls `POST /api/auth/exchange` with superuser
+  bypass (§19.11.1) targeting the company's first subscribed system with
+  `roles: ["admin"]` and `permissions: ["*"]`. On success, the frontend stores
+  the new token and redirects to `/entry` so the `(app)` layout loads the tenant
+  context. The superuser can then switch between the company's systems via the
+  normal ProfileMenu system selector.
+
+**Filters** (outside GenericList, in the page header):
+
+1. **Date range** — `DateRangeFilter` with `maxRangeDays = 31`. Constrains the
+   chart to the selected period.
+2. **System filter** — `MultiBadgeField mode:"search"` with `fetchFn` calling
+   `GET /api/core/systems?search=`. Passed as `systemIds` query param to filter
+   the company list.
+3. **Plan filter** — `MultiBadgeField mode:"search"` with `fetchFn` calling
+   `GET /api/core/plans?search=`. Passed as `planIds` query param.
+
+**Revenue chart.** `react-chartjs-2` `Bar` chart with three grouped columns
+within the selected date range. Data fetched from
+`GET /api/core/companies?action=chart&startDate=…&endDate=…&planIds=…`:
+
+1. **Canceled revenue** — sum of `subscription` amounts where
+   `status =
+   "cancelled"` and the cancellation timestamp falls within the
+   interval. Color: red tones.
+2. **Paid revenue** — sum of subscription amounts where `status = "active"` and
+   `currentPeriodStart` falls within the interval (successfully renewed or newly
+   subscribed). Color: `--color-primary-green`.
+3. **Projected revenue** — sum of subscription amounts where
+   `status =
+   "active"` and `currentPeriodEnd` falls within the interval
+   (expected renewal). Color: `--color-secondary-blue`.
+
+Gradient header: `core.companies.revenueOverview`. Values formatted as currency.
+Chart renders inside a glassmorphism card following the visual standard.
+
+**API:**
+
+```
+GET /api/core/companies
+  ?search=…&cursor=…&limit=20
+  &startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+  &systemIds=id1,id2&planIds=id1,id2
+
+GET /api/core/companies?action=chart
+  &startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&planIds=id1,id2
+```
+
+Paginated list response (standard `PaginatedResult` shape):
+
+```typescript
+// GET without action=chart
+{
+  success: true,
+  data: Array<{
+    id: string;
+    name: string;
+    document: string;
+    createdAt: string;
+    systems: Array<{
+      systemId: string;
+      systemName: string;
+      systemSlug: string;
+      subscriptionId: string | null;
+      planName: string | null;
+      planPrice: number;
+      status: "active" | "past_due" | "cancelled" | null;
+    }>;
+  }>;
+  nextCursor: string | null;
+}
+
+// GET with action=chart
+{
+  success: true,
+  data: {
+    canceled: number;   // cents
+    paid: number;       // cents
+    projected: number;  // cents
+  };
+}
+```
+
+`withAuth({ roles: ["superuser"] })`. The list query uses `paginatedQuery`
+(§7.1) on the `company` table; company_systems + subscriptions are resolved in a
+single batched `db.query()` (§7.2) using lookup maps. Chart aggregates computed
+in a separate dedicated query.
 
 ### 21. Subsystem Panel `(app)`
 

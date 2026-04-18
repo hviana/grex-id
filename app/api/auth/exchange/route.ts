@@ -77,6 +77,74 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const newJti = crypto.randomUUID();
   const db = await getDb();
 
+  // Superuser company-access bypass (§19.11.1)
+  const isSuperuser = claims.roles.includes("superuser");
+
+  if (isSuperuser) {
+    // Verify company_system association exists and resolve slug
+    const suResult = await db.query<
+      [{ id: string }[], { slug: string }[], unknown[]]
+    >(
+      `SELECT id FROM company_system
+         WHERE companyId = $companyId AND systemId = $systemId LIMIT 1;
+       SELECT slug FROM system WHERE id = $systemId LIMIT 1;
+       INSERT INTO token_revocation (jti, reason, expiresAt) VALUES ($oldJti, "exchanged", $exp)
+         ON DUPLICATE KEY UPDATE reason = "exchanged";`,
+      {
+        companyId: rid(companyId),
+        systemId: rid(systemId),
+        oldJti: claims.jti,
+        exp: claims.exp
+          ? new Date(claims.exp * 1000)
+          : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      },
+    );
+
+    if (!suResult[0] || suResult[0].length === 0) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "FORBIDDEN", message: "auth.error.notMemberOfTenant" },
+        },
+        { status: 403 },
+      );
+    }
+
+    const systemSlug = suResult[1]?.[0]?.slug ?? "core";
+
+    const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
+
+    const newToken = await createTenantToken(
+      {
+        systemId,
+        companyId,
+        systemSlug,
+        roles: ["admin"],
+        permissions: ["*"],
+        actorType: "user",
+        actorId: claims.actorId,
+        jti: newJti,
+        exchangeable: true,
+      },
+      false,
+      oldExp,
+    );
+
+    return Response.json({
+      success: true,
+      data: {
+        systemToken: newToken,
+        tenant: {
+          systemId,
+          companyId,
+          systemSlug,
+          roles: ["admin"],
+          permissions: ["*"],
+        },
+      },
+    });
+  }
+
   // Batch: verify membership + resolve slug/permissions + revoke old token — single query (§7.2, §19.11)
   const result = await db.query<
     [
