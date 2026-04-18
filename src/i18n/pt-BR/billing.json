@@ -76,5 +76,20 @@
   "voucher.planNotApplicable": "Este voucher não é válido para seu plano atual.",
   "credits.status.pending": "Pendente",
   "credits.status.completed": "Concluído",
-  "credits.status.failed": "Falhou"
+  "credits.status.failed": "Falhou",
+  "paymentStatus.pastDue": "Erro no Pagamento",
+  "paymentStatus.pastDueDescription": "Seu último pagamento não pôde ser processado. Por favor, tente novamente ou atualize seu método de pagamento.",
+  "paymentStatus.processing": "Processando pagamento...",
+  "paymentStatus.retry": "Processar novamente",
+  "paymentHistory.title": "Histórico de Pagamentos",
+  "paymentHistory.viewInvoice": "Ver Fatura",
+  "paymentHistory.invoiceNotAvailable": "Fatura não disponível por este meio",
+  "paymentHistory.kind.recurring": "Renovação de Plano",
+  "paymentHistory.kind.credits": "Compra de Créditos",
+  "paymentHistory.kind.auto-recharge": "Recarga Automática",
+  "paymentHistory.status.pending": "Pendente",
+  "paymentHistory.status.completed": "Concluído",
+  "paymentHistory.status.failed": "Falhou",
+  "retry.noPastDue": "Nenhuma assinatura em atraso encontrada.",
+  "retry.inProgress": "Uma nova tentativa de pagamento já está em andamento."
 }

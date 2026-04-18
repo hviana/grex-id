@@ -11,6 +11,7 @@ export async function paymentSuccessTemplate(
     amount: string;
     currency: string;
     billingUrl: string;
+    invoiceUrl?: string;
   },
 ): Promise<TemplateResult> {
   const kindSummaryKey = data.kind === "recurring"
@@ -135,6 +136,36 @@ export async function paymentSuccessTemplate(
                         </td>
                       </tr>
                     </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Invoice section -->
+    <tr>
+      <td style="padding: 0 0 32px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: rgba(2, 208, 125, 0.05); border: 1px solid rgba(2, 208, 125, 0.12); border-radius: 12px;">
+          <tr>
+            <td style="padding: 16px 24px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #888888; padding: 0 0 4px 0;">
+                    ${t("templates.paymentSuccess.invoiceLabel", locale)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 15px; font-weight: 600; ${
+    data.invoiceUrl ? "color: #02d07d;" : "color: #888888;"
+  }">
+                    ${
+    data.invoiceUrl
+      ? `<a href="${data.invoiceUrl}" target="_blank" style="color: #02d07d; text-decoration: underline;">${t("templates.paymentSuccess.viewInvoice", locale)}</a>`
+      : t("templates.paymentSuccess.invoiceNotAvailable", locale)
+  }
                   </td>
                 </tr>
               </table>

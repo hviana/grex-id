@@ -15,6 +15,7 @@ export interface Subscription {
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
   autoRechargeInProgress: boolean; // re-entrancy guard
+  retryPaymentInProgress: boolean; // re-entrancy guard for retry_payment
   createdAt: string;
 }
 
@@ -38,5 +39,21 @@ export interface CreditPurchase {
   amount: number;
   paymentMethodId: string;
   status: "pending" | "completed" | "failed";
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  companyId: string;
+  systemId: string;
+  subscriptionId: string;
+  amount: number;
+  currency: string;
+  kind: "recurring" | "credits" | "auto-recharge";
+  status: "pending" | "completed" | "failed";
+  paymentMethodId: string;
+  transactionId?: string;
+  invoiceUrl?: string;
+  failureReason?: string;
   createdAt: string;
 }

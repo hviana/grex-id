@@ -15,6 +15,7 @@ export const processPayment: HandlerFn = async (payload) => {
   const purpose = payload.purpose as string | undefined;
   const creditPurchaseId = payload.creditPurchaseId as string | undefined;
   const isRecurring = !explicitAmount;
+  const isRetry = purpose === "retry";
   const db = await getDb();
 
   // Batch: subscription + plan + voucher + owner info + system info (§7.2)
@@ -79,16 +80,45 @@ export const processPayment: HandlerFn = async (payload) => {
     ? Number(explicitAmount)
     : Math.max(0, plan.price + (voucher?.priceModifier ?? 0));
 
-  // TODO: Call actual payment provider with chargeAmount (Phase 6)
-  // For now, simulate success
-  const success = true;
-  const failureReason = "";
-
-  const kind = purpose === "auto-recharge"
+  const kind = isRetry
+    ? "recurring"
+    : purpose === "auto-recharge"
     ? "auto-recharge"
     : !isRecurring
     ? "credits"
     : "recurring";
+
+  // Create payment record (§22.8)
+  const paymentResult = await db.query<[{ id: string }[]]>(
+    `CREATE payment SET
+      companyId = $companyId,
+      systemId = $systemId,
+      subscriptionId = $subId,
+      amount = $amount,
+      currency = $currency,
+      kind = $kind,
+      status = "pending",
+      paymentMethodId = $pmId`,
+    {
+      companyId: rid(String(sub.companyId)),
+      systemId: rid(String(sub.systemId)),
+      subId: rid(sub.id),
+      amount: chargeAmount,
+      currency,
+      kind,
+      pmId: rid(sub.paymentMethodId),
+    },
+  );
+  const paymentId = paymentResult[0]?.[0]?.id;
+
+  // TODO: Call actual payment provider with chargeAmount (Phase 6)
+  // const providerResult = await provider.charge(chargeAmount, { ... });
+  // const success = providerResult.success;
+  // const failureReason = providerResult.error ?? "";
+  // const invoiceUrl = providerResult.invoiceUrl ?? "";
+  const success = true;
+  const failureReason = "";
+  const invoiceUrl = "";
 
   const billingUrl = `/billing?system=${systemSlug}`;
   const ownerName = owner?.name ?? "";
@@ -104,8 +134,14 @@ export const processPayment: HandlerFn = async (payload) => {
       const creditIncrement = voucher?.creditIncrement ?? 0;
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditIncrement;
 
+      // For retry: restore status to active + clear retry guard
+      const statusClause = isRetry
+        ? `status = "active", retryPaymentInProgress = false,`
+        : `retryPaymentInProgress = false,`;
+
       await db.query(
         `UPDATE $id SET
+          ${statusClause}
           currentPeriodStart = $newStart,
           currentPeriodEnd = $newEnd,
           remainingPlanCredits = $remainingPlanCredits,
@@ -117,6 +153,18 @@ export const processPayment: HandlerFn = async (payload) => {
           remainingPlanCredits,
         },
       );
+
+      // Update payment record to completed
+      if (paymentId) {
+        await db.query(
+          `UPDATE $paymentId SET status = "completed", transactionId = $txId, invoiceUrl = $invoiceUrl`,
+          {
+            paymentId: rid(String(paymentId)),
+            txId: undefined,
+            invoiceUrl: invoiceUrl || undefined,
+          },
+        );
+      }
 
       await Core.getInstance().reloadSubscription(
         String(sub.companyId),
@@ -149,6 +197,16 @@ export const processPayment: HandlerFn = async (payload) => {
         stmts.push(`UPDATE $subId SET autoRechargeInProgress = false;`);
       }
 
+      // Update payment record to completed
+      if (paymentId) {
+        stmts.push(
+          `UPDATE $paymentId SET status = "completed", transactionId = $txId, invoiceUrl = $invoiceUrl;`,
+        );
+        params.paymentId = rid(String(paymentId));
+        params.txId = undefined;
+        params.invoiceUrl = invoiceUrl || undefined;
+      }
+
       await db.query(stmts.join("\n"), params);
 
       await Core.getInstance().reloadSubscription(
@@ -169,6 +227,7 @@ export const processPayment: HandlerFn = async (payload) => {
           amount: String(chargeAmount),
           currency,
           billingUrl,
+          invoiceUrl,
         },
         systemSlug,
       });
@@ -181,12 +240,24 @@ export const processPayment: HandlerFn = async (payload) => {
     if (isRecurring) {
       stmts.push(`UPDATE $subId SET status = "past_due";`);
     }
+    // Clear retry guard on failure
+    if (isRetry || isRecurring) {
+      stmts.push(`UPDATE $subId SET retryPaymentInProgress = false;`);
+    }
     if (purpose === "auto-recharge") {
       stmts.push(`UPDATE $subId SET autoRechargeInProgress = false;`);
     }
     if (creditPurchaseId) {
       stmts.push(`UPDATE $purchaseId SET status = "failed";`);
       params.purchaseId = rid(creditPurchaseId);
+    }
+    // Update payment record to failed
+    if (paymentId) {
+      stmts.push(
+        `UPDATE $paymentId SET status = "failed", failureReason = $reason;`,
+      );
+      params.paymentId = rid(String(paymentId));
+      params.reason = failureReason || "billing.payment.genericFailure";
     }
 
     if (stmts.length > 0) {

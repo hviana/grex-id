@@ -133,5 +133,8 @@
   "recoveryChannelReset.expiryLabel": "Link Expira Em",
   "recoveryChannelReset.expiryValue": "{minutes} minutos",
   "recoveryChannelReset.expiry": "Este link expira em 30 minutos.",
-  "recoveryChannelReset.ignore": "Se você não solicitou isso, pode ignorar este e-mail com segurança. Sua senha não será alterada."
+  "recoveryChannelReset.ignore": "Se você não solicitou isso, pode ignorar este e-mail com segurança. Sua senha não será alterada.",
+  "paymentSuccess.invoiceLabel": "Fatura",
+  "paymentSuccess.viewInvoice": "Ver Fatura",
+  "paymentSuccess.invoiceNotAvailable": "Não disponível por este meio"
 }

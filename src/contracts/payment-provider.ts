@@ -11,6 +11,7 @@ export interface PaymentResult {
   success: boolean;
   transactionId?: string;
   error?: string;
+  invoiceUrl?: string;
 }
 
 export interface IClientPaymentProvider {

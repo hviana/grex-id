@@ -7,6 +7,8 @@ import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
+import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
+import type { PaginatedResult } from "@/src/contracts/common";
 
 interface VoucherInfo {
   id: string;
@@ -25,6 +27,7 @@ interface Subscription {
   voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
+  retryPaymentInProgress: boolean;
 }
 
 interface PlanInfo {
@@ -56,6 +59,154 @@ interface CreditPurchaseInfo {
   amount: number;
   status: string;
   createdAt: string;
+}
+
+interface PaymentRecord {
+  id: string;
+  amount: number;
+  currency: string;
+  kind: string;
+  status: string;
+  invoiceUrl?: string;
+  createdAt: string;
+}
+
+function PaymentHistoryList({
+  systemToken,
+  companyId,
+  systemId,
+  startDate,
+  endDate,
+  formatPrice,
+  formatDate,
+}: {
+  systemToken: string | null;
+  companyId: string;
+  systemId: string;
+  startDate?: Date;
+  endDate?: Date;
+  formatPrice: (price: number, currency: string) => string;
+  formatDate: (dateStr: string) => string;
+}) {
+  const { t } = useLocale();
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | undefined>();
+
+  const loadPayments = useCallback(async (reset: boolean = false) => {
+    if (!companyId || !systemId || !systemToken) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("include", "payments");
+      if (startDate) params.set("startDate", startDate.toISOString().slice(0, 10));
+      if (endDate) params.set("endDate", endDate.toISOString().slice(0, 10));
+      if (!reset && cursor) params.set("cursor", cursor);
+      const res = await fetch(`/api/billing?${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
+      const json = await res.json();
+      if (json.success) {
+        const newPayments = (json.data?.payments ?? []) as PaymentRecord[];
+        setPayments(reset ? newPayments : [...payments, ...newPayments]);
+        setNextCursor(json.data?.paymentsNextCursor ?? null);
+      }
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
+
+  useEffect(() => {
+    setCursor(undefined);
+    loadPayments(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, systemToken]);
+
+  useEffect(() => {
+    if (!cursor) return;
+    loadPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor]);
+
+  if (loading && payments.length === 0) {
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner size="md" />
+      </div>
+    );
+  }
+
+  if (payments.length === 0) {
+    return (
+      <div className="text-center py-8 text-[var(--color-light-text)]">
+        {t("common.noResults")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {payments.map((p) => (
+        <div
+          key={p.id}
+          className="flex items-center justify-between backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-4 flex-wrap gap-2"
+        >
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-white font-medium">
+              {formatPrice(p.amount, p.currency)}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-xs ${
+              p.status === "completed"
+                ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
+                : p.status === "failed"
+                ? "bg-red-500/20 text-red-400"
+                : "bg-yellow-500/20 text-yellow-400"
+            }`}>
+              {t("billing.paymentHistory.status." + p.status)}
+            </span>
+            <span className="text-xs text-[var(--color-light-text)]">
+              {t("billing.paymentHistory.kind." + p.kind)}
+            </span>
+            <span className="text-sm text-[var(--color-light-text)]">
+              {formatDate(p.createdAt)}
+            </span>
+          </div>
+          <div>
+            {p.invoiceUrl
+              ? (
+                <a
+                  href={p.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[var(--color-primary-green)] hover:underline"
+                >
+                  {t("billing.paymentHistory.viewInvoice")}
+                </a>
+              )
+              : (
+                <span className="text-xs text-[var(--color-light-text)]">
+                  {t("billing.paymentHistory.invoiceNotAvailable")}
+                </span>
+              )}
+          </div>
+        </div>
+      ))}
+      {nextCursor && (
+        <div className="flex justify-center pt-4">
+          <button
+            onClick={() => setCursor(nextCursor)}
+            disabled={loading}
+            className="rounded-lg border border-[var(--color-dark-gray)] px-6 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors flex items-center gap-2"
+          >
+            {loading ? <Spinner size="sm" /> : null}
+            {t("common.loadMore")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BillingPage() {
@@ -94,6 +245,13 @@ export default function BillingPage() {
   const [autoRechargeEnabled, setAutoRechargeEnabled] = useState(false);
   const [autoRechargeAmount, setAutoRechargeAmount] = useState("");
   const [savingAutoRecharge, setSavingAutoRecharge] = useState(false);
+
+  // Retry payment
+  const [retrying, setRetrying] = useState(false);
+
+  // Payment history
+  const [paymentHistoryStart, setPaymentHistoryStart] = useState<Date | undefined>();
+  const [paymentHistoryEnd, setPaymentHistoryEnd] = useState<Date | undefined>();
 
   const loadData = useCallback(async () => {
     if (!companyId || !systemId || !systemToken) return;
@@ -155,7 +313,9 @@ export default function BillingPage() {
   }, [subscriptions]);
 
   const activeSub = subscriptions.find((s) => s.status === "active");
-  const activePlan = activeSub ? planMap[activeSub.planId] : null;
+  const pastDueSub = subscriptions.find((s) => s.status === "past_due");
+  const displaySub = activeSub ?? pastDueSub;
+  const activePlan = displaySub ? planMap[displaySub.planId] : null;
 
   // Compute effective discount from active voucher (single voucher invariant §22.7)
   const activeVoucher: VoucherInfo | null = activeSub?.voucherId &&
@@ -406,6 +566,32 @@ export default function BillingPage() {
     }
   };
 
+  const handleRetryPayment = async () => {
+    if (!companyId || !systemId || !systemToken) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
+        body: JSON.stringify({ action: "retry_payment" }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error?.message ?? "common.error.generic");
+      } else {
+        await loadData();
+      }
+    } catch {
+      setError("common.error.network");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const inputCls =
     "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
@@ -430,9 +616,39 @@ export default function BillingPage() {
         <h2 className="text-lg font-semibold text-white mb-4">
           {t("billing.plans.current")}
         </h2>
-        {activeSub && activePlan
+        {displaySub && activePlan
           ? (
             <div>
+              {/* Payment error badge + retry for past_due */}
+              {pastDueSub && (
+                <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${
+                        pastDueSub.retryPaymentInProgress
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-red-500/20 text-red-400"
+                      }`}>
+                        {pastDueSub.retryPaymentInProgress
+                          ? t("billing.paymentStatus.processing")
+                          : t("billing.paymentStatus.pastDue")}
+                      </span>
+                      <span className="text-sm text-red-400">
+                        {t("billing.paymentStatus.pastDueDescription")}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleRetryPayment}
+                      disabled={retrying || pastDueSub.retryPaymentInProgress}
+                      className="rounded-lg border border-red-500/50 px-4 py-2 text-red-400 hover:bg-red-500/10 transition-colors text-sm flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {retrying && <Spinner size="sm" />}
+                      {t("billing.paymentStatus.retry")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xl font-bold text-[var(--color-primary-green)]">
                   {t(activePlan.name) !== activePlan.name
@@ -508,7 +724,7 @@ export default function BillingPage() {
               )}
               <p className="text-sm text-[var(--color-light-text)] mb-4">
                 {t("billing.plans.nextBilling")}:{" "}
-                {formatDate(activeSub.currentPeriodEnd)}
+                {formatDate(displaySub.currentPeriodEnd)}
               </p>
 
               {/* Benefits */}
@@ -1053,6 +1269,30 @@ export default function BillingPage() {
               )}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* ── Payment History ── */}
+      <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">
+          {t("billing.paymentHistory.title")}
+        </h2>
+        <div className="mb-4">
+          <DateRangeFilter maxRangeDays={365} onChange={(start, end) => {
+            setPaymentHistoryStart(start);
+            setPaymentHistoryEnd(end);
+          }} />
+        </div>
+        {companyId && systemId && (
+          <PaymentHistoryList
+            systemToken={systemToken}
+            companyId={companyId}
+            systemId={systemId}
+            startDate={paymentHistoryStart}
+            endDate={paymentHistoryEnd}
+            formatPrice={formatPrice}
+            formatDate={formatDate}
+          />
         )}
       </div>
 

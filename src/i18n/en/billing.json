@@ -76,5 +76,20 @@
   "voucher.planNotApplicable": "This voucher is not valid for your current plan.",
   "credits.status.pending": "Pending",
   "credits.status.completed": "Completed",
-  "credits.status.failed": "Failed"
+  "credits.status.failed": "Failed",
+  "paymentStatus.pastDue": "Payment Error",
+  "paymentStatus.pastDueDescription": "Your last payment could not be processed. Please retry or update your payment method.",
+  "paymentStatus.processing": "Processing payment...",
+  "paymentStatus.retry": "Process again",
+  "paymentHistory.title": "Payment History",
+  "paymentHistory.viewInvoice": "View Invoice",
+  "paymentHistory.invoiceNotAvailable": "Invoice not available through this means",
+  "paymentHistory.kind.recurring": "Plan Renewal",
+  "paymentHistory.kind.credits": "Credit Purchase",
+  "paymentHistory.kind.auto-recharge": "Auto-Recharge",
+  "paymentHistory.status.pending": "Pending",
+  "paymentHistory.status.completed": "Completed",
+  "paymentHistory.status.failed": "Failed",
+  "retry.noPastDue": "No past-due subscription found.",
+  "retry.inProgress": "A payment retry is already being processed."
 }

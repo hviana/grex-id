@@ -489,6 +489,7 @@ this table.
 | `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                             |
 | `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                  |
 | `0036_alter_verification_request_type.surql` | `verification_request`   | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                     |
+| `0038_create_payment.surql`                    | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"`), paymentMethodId, transactionId, invoiceUrl, failureReason, createdAt. Indexes on (companyId, systemId), createdAt, kind. Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`. |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -1507,7 +1508,7 @@ produces a mobile-first, email-client-safe skeleton:
 | -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `verification`             | `verification.ts`             | Registration / email change                                                                            | `name`, `verificationLink`                                                                                   |
 | `password-reset`           | `password-reset.ts`           | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                                                          |
-| `payment-success`          | `payment-success.ts`          | Recurring charge OK; credit purchase OK; auto-recharge OK                                              | `name`, `systemName`, `kind` (`"recurring"\|"credits"\|"auto-recharge"`), `amount`, `currency`, `billingUrl` |
+| `payment-success`          | `payment-success.ts`          | Recurring charge OK; credit purchase OK; auto-recharge OK                                              | `name`, `systemName`, `kind` (`"recurring"\|"credits"\|"auto-recharge"`), `amount`, `currency`, `billingUrl`, `invoiceUrl` |
 | `payment-failure`          | `payment-failure.ts`          | Recurring charge failed; credit purchase failed; auto-recharge failed                                  | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`                                   |
 | `auto-recharge`            | `auto-recharge.ts`            | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl`                                  |
 | `insufficient-credit`      | `insufficient-credit.ts`      | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                                                          |
@@ -1581,10 +1582,14 @@ channel event.
   - **Success:** advance `currentPeriodStart`/`currentPeriodEnd`, reset
     `remainingPlanCredits = plan.planCredits + voucher.creditIncrement` (0 when
     no voucher), reset `creditAlertSent =
-    false`, publish `SEND_EMAIL` with
+    false`, clear `retryPaymentInProgress = false`,
+    create `payment` record with `status = "completed"` and `invoiceUrl`,
+    publish `SEND_EMAIL` with
     `payment-success` (`kind =
     "recurring"`).
-  - **Failure:** set `status = "past_due"` and publish `SEND_EMAIL` with
+  - **Failure:** set `status = "past_due"`, clear `retryPaymentInProgress = false`,
+    create `payment` record with `status = "failed"` and `failureReason`,
+    publish `SEND_EMAIL` with
     `payment-failure` (`kind = "recurring"`, with gateway `reason`).
 - **`server/jobs/token-cleanup.ts`** — daily under the system Tenant.
   Hard-deletes `api_token` rows where `revokedAt` is older than 90 days. Cleans
@@ -1647,6 +1652,7 @@ export interface PaymentResult {
   success: boolean;
   transactionId?: string;
   error?: string;
+  invoiceUrl?: string;
 }
 ```
 
@@ -2892,6 +2898,29 @@ mask + holder name + "Default" badge when applicable.
   `voucherId` **FETCHed** (full voucher object, or `NONE`). See §18.10 for the
   price rendering rule.
 
+**6. Payment Error & Retry.** When the active subscription has `status =
+"past_due"`, display an error badge (`billing.paymentStatus.pastDue`) with a
+description (`billing.paymentStatus.pastDueDescription`) and a **Process again**
+button (`billing.paymentStatus.retry`) that calls
+`POST /api/billing { action: "retry_payment" }`. The subscription's
+`retryPaymentInProgress` field is the re-entrancy guard:
+- `true` → show a "Processing" badge (`billing.paymentStatus.processing`),
+  disable the retry button, show `<Spinner />`.
+- `false` → enable the retry button.
+The Current Plan section renders for both `active` and `past_due` subscriptions
+(using `displaySub = activeSub ?? pastDueSub`).
+
+**7. Payment History.** `GenericList` with `searchEnabled={false}`,
+`createEnabled={false}`, `controlButtons={[]}`. Each row shows:
+date (`createdAt`), amount (formatted currency), kind badge (recurring /
+credits / auto-recharge — i18n keys `billing.paymentHistory.kind.*`), status
+badge (`billing.paymentHistory.status.*`), and invoice URL. When `invoiceUrl`
+is non-empty, render as a link (`billing.paymentHistory.viewInvoice`). When
+empty or undefined, render `billing.paymentHistory.invoiceNotAvailable` in
+secondary text. A `DateRangeFilter` with `maxRangeDays = 365` sits above the
+list; date values are passed to the `fetchFn` as `startDate`/`endDate` query
+params on `GET /api/billing?include=payments&startDate=…&endDate=…`.
+
 #### 21.5 `UsagePage` (`src/components/shared/UsagePage.tsx`)
 
 Fetches `GET /api/usage`. Two sections.
@@ -3008,6 +3037,22 @@ already has a voucher, it is replaced atomically in the same batched query
 (§22.7). If the voucher has `creditIncrement > 0`, adds that amount to
 `subscription.remainingPlanCredits` in the same batched query. Returns the
 applied voucher's details so the frontend can show the effect.
+
+**`retry_payment`** — body: `{ action }`. Finds the `past_due` subscription for
+the tenant. Returns 404 (`billing.retry.noPastDue`) if none. Returns 409
+(`billing.retry.inProgress`) if `retryPaymentInProgress = true`. Sets
+`retryPaymentInProgress = true` in a batched query, publishes `PAYMENT_DUE`
+with `purpose = "retry"`. The `process_payment` handler charges the subscription's
+payment method. On success: restores `status = "active"`, advances period,
+resets credits, clears `retryPaymentInProgress`. On failure: keeps
+`status = "past_due"`, clears `retryPaymentInProgress`. The re-entrancy guard
+prevents the user from requesting payment processing twice.
+
+**Payment record creation.** Every invocation of `process_payment` creates a
+`payment` record (§8, migration `0038`) with `status = "pending"` before
+charging. On success: updates to `status = "completed"` with `transactionId`
+and `invoiceUrl` from the provider result. On failure: updates to
+`status = "failed"` with `failureReason`.
 
 #### 22.2 Spend limits
 
@@ -3143,6 +3188,7 @@ export interface Subscription {
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
   autoRechargeInProgress: boolean; // re-entrancy guard
+  retryPaymentInProgress: boolean; // re-entrancy guard for retry_payment
   createdAt: string;
 }
 ```
@@ -3198,6 +3244,42 @@ A hint under the field (`core.vouchers.applicablePlansHint`) reminds the
 superuser that leaving the field empty makes the voucher valid for every plan,
 and that removing a plan from a non-empty list strips the voucher from any
 currently-subscribed company whose plan is removed.
+
+#### 22.8 Payment ledger & history
+
+The `payment` table (migration `0038`) is the unified ledger for all chargeable
+transactions — recurring billing, credit purchases, and auto-recharge. Every
+invocation of `process_payment` creates a `payment` record with `status =
+"pending"` before attempting the charge, and updates it to `"completed"` or
+`"failed"` based on the outcome. The `invoiceUrl` field stores the gateway
+invoice link returned by `PaymentResult.invoiceUrl`; when empty or undefined,
+the frontend and email templates display
+`billing.paymentHistory.invoiceNotAvailable`.
+
+**Payment contract:**
+
+```typescript
+export interface Payment {
+  id: string;
+  companyId: string;
+  systemId: string;
+  subscriptionId: string;
+  amount: number;
+  currency: string;
+  kind: "recurring" | "credits" | "auto-recharge";
+  status: "pending" | "completed" | "failed";
+  paymentMethodId: string;
+  transactionId?: string;
+  invoiceUrl?: string;
+  failureReason?: string;
+  createdAt: string;
+}
+```
+
+**Payment history API.** `GET /api/billing?include=payments&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&cursor=…&limit=20`.
+Returns `{ payments: Payment[], paymentsCursor: string | null }` in the response
+data alongside existing billing data. Date range filter capped at 365 days.
+Cursor-based pagination. Used by BillingPage section 7 (§21.4).
 
 ### 23. Public / Anonymous API
 

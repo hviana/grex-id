@@ -133,5 +133,8 @@
   "recoveryChannelReset.expiryLabel": "Link Expires In",
   "recoveryChannelReset.expiryValue": "{minutes} minutes",
   "recoveryChannelReset.expiry": "This link will expire in 30 minutes.",
-  "recoveryChannelReset.ignore": "If you didn't request this, you can safely ignore this email. Your password will not be changed."
+  "recoveryChannelReset.ignore": "If you didn't request this, you can safely ignore this email. Your password will not be changed.",
+  "paymentSuccess.invoiceLabel": "Invoice",
+  "paymentSuccess.viewInvoice": "View Invoice",
+  "paymentSuccess.invoiceNotAvailable": "Not available through this means"
 }

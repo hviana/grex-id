@@ -28,6 +28,28 @@ async function getHandler(req: Request, ctx: RequestContext) {
   if (guard) return guard;
 
   const { companyId, systemId } = ctx.tenant;
+  const url = new URL(req.url);
+  const includePayments = url.searchParams.get("include")?.includes("payments");
+  const startDate = url.searchParams.get("startDate");
+  const endDate = url.searchParams.get("endDate");
+  const paymentCursor = url.searchParams.get("cursor");
+
+  // Validate date range (max 365 days) when requesting payments
+  if (includePayments && startDate && endDate) {
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+    if (diffMs > 365 * 86400000) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "validation.dateRange.maxDays",
+          },
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   const db = await getDb();
 
@@ -46,14 +68,58 @@ async function getHandler(req: Request, ctx: RequestContext) {
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
 
+  const responseData: Record<string, unknown> = {
+    subscriptions: result[0] ?? [],
+    paymentMethods: result[1] ?? [],
+    creditPurchases: result[2] ?? [],
+    creditsBalance: result[3]?.[0]?.balance ?? 0,
+  };
+
+  if (includePayments) {
+    const dateClauses: string[] = [];
+    const queryParams: Record<string, unknown> = {
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+    };
+    if (startDate) {
+      dateClauses.push("AND createdAt >= $startDate");
+      queryParams.startDate = new Date(startDate).toISOString();
+    }
+    if (endDate) {
+      dateClauses.push("AND createdAt <= $endDate");
+      queryParams.endDate = new Date(endDate).toISOString();
+    }
+    const dateFilter = dateClauses.join(" ");
+
+    const cursorOffset = paymentCursor
+      ? Number(atob(paymentCursor))
+      : 0;
+
+    const payments = await db.query<
+      [Record<string, unknown>[], { count: number }[]]
+    >(
+      `SELECT * FROM payment
+       WHERE companyId = $companyId AND systemId = $systemId ${dateFilter}
+       ORDER BY createdAt DESC
+       LIMIT 20
+       START $offset;
+       SELECT count() AS count FROM payment
+       WHERE companyId = $companyId AND systemId = $systemId ${dateFilter}
+       GROUP ALL;`,
+      { ...queryParams, offset: cursorOffset },
+    );
+
+    const paymentData = payments[0] ?? [];
+    const totalCount = payments[1]?.[0]?.count ?? 0;
+    responseData.payments = paymentData;
+    responseData.paymentsNextCursor = cursorOffset + paymentData.length < totalCount
+      ? btoa(String(cursorOffset + 20))
+      : null;
+  }
+
   return Response.json({
     success: true,
-    data: {
-      subscriptions: result[0] ?? [],
-      paymentMethods: result[1] ?? [],
-      creditPurchases: result[2] ?? [],
-      creditsBalance: result[3]?.[0]?.balance ?? 0,
-    },
+    data: responseData,
   });
 }
 
@@ -610,6 +676,58 @@ async function postHandler(req: Request, ctx: RequestContext) {
         },
       );
     }
+
+    await Core.getInstance().reloadSubscription(companyId, systemId);
+
+    return Response.json({ success: true });
+  }
+
+  if (action === "retry_payment") {
+    const guard = tenantGuard(ctx);
+    if (guard) return guard;
+
+    const subResult = await db.query<
+      [{ id: string; status: string; retryPaymentInProgress: boolean }[]]
+    >(
+      `SELECT id, status, retryPaymentInProgress
+       FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "past_due"
+       LIMIT 1`,
+      { companyId: rid(companyId), systemId: rid(systemId) },
+    );
+
+    const pastDueSub = subResult[0]?.[0];
+    if (!pastDueSub) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "NOT_FOUND", message: "billing.retry.noPastDue" },
+        },
+        { status: 404 },
+      );
+    }
+
+    if (pastDueSub.retryPaymentInProgress) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "CONFLICT", message: "billing.retry.inProgress" },
+        },
+        { status: 409 },
+      );
+    }
+
+    await db.query(
+      `UPDATE $subId SET retryPaymentInProgress = true`,
+      { subId: rid(pastDueSub.id) },
+    );
+
+    await publish("PAYMENT_DUE", {
+      subscriptionId: String(pastDueSub.id),
+      companyId,
+      systemId,
+      purpose: "retry",
+    });
 
     await Core.getInstance().reloadSubscription(companyId, systemId);
 
