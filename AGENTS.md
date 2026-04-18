@@ -484,7 +484,7 @@ this table.
 | `0029_create_tag.surql`                      | `tag`                    | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                 |
 | `0030_create_profile.surql`                  | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                            |
 | `0031_create_address.surql`                  | `address`                | Composable.                                                                                                                                                                                                                                                         |
-| `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                  |
+| `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`. Fields: `amount` (total cents consumed), `count` (number of individual consumptions). Both increment atomically via UPSERT.                                                                      |
 | `0033_create_front_core_setting.surql`       | `front_setting`          | Renamed from `front_core_setting`. Unique `(key, systemSlug)`. Same `systemSlug` override pattern as `setting`. Physically separated from `setting` (§10.2.8).                                                                                                      |
 | `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                             |
 | `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                  |
@@ -895,7 +895,7 @@ successful chargeable operations.
 #### 12.3 Credit tracker
 
 ```typescript
-// Records one expense (daily container, UPSERT increments amount)
+// Records one expense (daily container, UPSERT increments amount and count)
 async function trackCreditExpense(params: {
   resourceKey: string; // i18n key, e.g. "billing.credits.resource.faceDetection"
   amount: number; // cents
@@ -910,7 +910,8 @@ export interface CreditDeductionResult {
   remainingPurchasedCredits?: number;
 }
 
-// Consumes credits atomically (plan first, then purchased)
+// Consumes credits atomically (plan first, then purchased).
+// Also increments the credit_expense count for the resource key.
 async function consumeCredits(params: {
   resourceKey: string;
   amount: number;
@@ -2906,8 +2907,11 @@ human-readable format (e.g. `"245 MB /
 
 **2. Credit Expenses.** `react-chartjs-2` `Bar` column chart: one column per
 **resource key** (translated via `t()`), value = sum of daily `credit_expense`
-records over the selected range. **`DateRangeFilter` with `maxRangeDays = 31`.**
-Default range: last 31 days. Distinct color per resource. Summary table below.
+records over the selected range. Each expense tracks both `totalAmount` (cents
+consumed) and `totalCount` (number of individual operations).
+**`DateRangeFilter` with `maxRangeDays = 31`.** Default range: last 31 days.
+Distinct color per resource. Summary table below showing amount, count, and
+average cost per operation.
 
 **No "API Calls" metric.** Rate limiting is enforced by middleware (not tracked
 as usage).
@@ -2923,7 +2927,7 @@ GET /api/usage?companyId&systemId&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
   success: true,
   data: {
     storage: { usedBytes: number; limitBytes: number /* plan + vouchers */ };
-    creditExpenses: { resourceKey: string; totalAmount: number }[];
+    creditExpenses: { resourceKey: string; totalAmount: number; totalCount: number }[];
   }
 }
 ```
@@ -3046,11 +3050,11 @@ voucher is active); these expire when the period ends.
        insufficient-credit` and set `creditAlertSent = true`.
      - Return `{ success: false, source: "insufficient" }`.
 5. If `remainingPlanCredits >= amount`: decrement it; record the expense in
-   `credit_expense` (daily container, UPSERT). Return
-   `{ success: true, source: "plan" }`.
+   `credit_expense` (daily container, UPSERT increments both `amount` and
+   `count`). Return `{ success: true, source: "plan" }`.
 6. Else `total >= amount`: use all plan credits, decrement remainder from
-   purchased; record the expense. Return
-   `{ success: true, source: "purchased" }`.
+   purchased; record the expense in `credit_expense` (UPSERT increments both
+   `amount` and `count`). Return `{ success: true, source: "purchased" }`.
 
 **One-shot alert mechanism.** `creditAlertSent` resets to `false` in two
 scenarios — ensuring the user is notified each time credits run out after a

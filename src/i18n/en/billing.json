@@ -50,6 +50,8 @@
   "usage.noExpenses": "No credit expenses in this period.",
   "usage.resourceKey": "Resource",
   "usage.amount": "Amount",
+  "usage.count": "Times used",
+  "usage.avgCost": "Average cost per use",
   "onboarding.company.title": "Create Your Company",
   "onboarding.company.subtitle": "Set up your organization to get started",
   "onboarding.company.name": "Company Name",

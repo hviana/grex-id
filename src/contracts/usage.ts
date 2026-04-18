@@ -22,6 +22,7 @@ export interface CreditExpense {
   systemId: string;
   resourceKey: string;
   amount: number;
+  count: number;
   day: string; // "YYYY-MM-DD"
   createdAt: string;
 }

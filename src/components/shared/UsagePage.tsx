@@ -48,6 +48,7 @@ interface UsageData {
   creditExpenses: {
     resourceKey: string;
     totalAmount: number;
+    totalCount: number;
   }[];
 }
 
@@ -288,26 +289,43 @@ export default function UsagePage() {
                           const label = t(e.resourceKey) !== e.resourceKey
                             ? t(e.resourceKey)
                             : e.resourceKey.split(".").pop() ?? e.resourceKey;
+                          const avgCost = e.totalCount > 0
+                            ? ((e.totalAmount / e.totalCount) / 100).toFixed(2)
+                            : "0.00";
                           return (
                             <div
                               key={e.resourceKey}
-                              className="flex items-center justify-between text-sm"
+                              className="flex items-center justify-between text-sm gap-4"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <span
-                                  className="w-3 h-3 rounded-full inline-block"
+                                  className="w-3 h-3 rounded-full inline-block shrink-0"
                                   style={{
                                     backgroundColor:
                                       EXPENSE_COLORS[i % EXPENSE_COLORS.length],
                                   }}
                                 />
-                                <span className="text-[var(--color-light-text)]">
+                                <span className="text-[var(--color-light-text)] truncate">
                                   {label}
                                 </span>
                               </div>
-                              <span className="text-white font-medium">
-                                {(e.totalAmount / 100).toFixed(2)}
-                              </span>
+                              <div className="flex items-center gap-3 shrink-0 text-right">
+                                <span
+                                  className="text-[var(--color-light-text)] text-xs"
+                                  title={t("billing.usage.count")}
+                                >
+                                  {e.totalCount}x
+                                </span>
+                                <span
+                                  className="text-[var(--color-light-text)] text-xs"
+                                  title={t("billing.usage.avgCost")}
+                                >
+                                  ~{avgCost}
+                                </span>
+                                <span className="text-white font-medium">
+                                  {(e.totalAmount / 100).toFixed(2)}
+                                </span>
+                              </div>
                             </div>
                           );
                         })}

@@ -163,7 +163,7 @@ export async function consumeCredits(params: {
       `UPDATE $subId SET remainingPlanCredits -= $amount;
        UPSERT credit_expense SET
          companyId = $companyId, systemId = $systemId,
-         resourceKey = $resourceKey, amount += $amount, day = $day
+         resourceKey = $resourceKey, amount += $amount, count += 1, day = $day
        WHERE companyId = $companyId AND systemId = $systemId
          AND resourceKey = $resourceKey AND day = $day;`,
       {
@@ -197,7 +197,7 @@ export async function consumeCredits(params: {
        AND resource = "credits";
      UPSERT credit_expense SET
        companyId = $companyId, systemId = $systemId,
-       resourceKey = $resourceKey, amount += $totalAmount, day = $day
+       resourceKey = $resourceKey, amount += $totalAmount, count += 1, day = $day
      WHERE companyId = $companyId AND systemId = $systemId
        AND resourceKey = $resourceKey AND day = $day;`,
     {
@@ -240,6 +240,7 @@ export async function trackCreditExpense(params: {
       systemId = $systemId,
       resourceKey = $resourceKey,
       amount += $amount,
+      count += 1,
       day = $day
     WHERE companyId = $companyId
       AND systemId = $systemId
@@ -263,13 +264,15 @@ export async function getCreditExpenses(params: {
   systemId: string;
   startDate: string;
   endDate: string;
-}): Promise<{ resourceKey: string; totalAmount: number }[]> {
+}): Promise<
+  { resourceKey: string; totalAmount: number; totalCount: number }[]
+> {
   const db = await getDb();
 
   const result = await db.query<
-    [{ resourceKey: string; totalAmount: number }[]]
+    [{ resourceKey: string; totalAmount: number; totalCount: number }[]]
   >(
-    `SELECT resourceKey, math::sum(amount) AS totalAmount
+    `SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount
      FROM credit_expense
      WHERE companyId = $companyId
        AND systemId = $systemId

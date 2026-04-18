@@ -53,7 +53,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       { slug: string }[],
       { storageLimitBytes: number; voucherId: string | null }[],
       { storageLimitModifier: number }[],
-      { resourceKey: string; totalAmount: number }[],
+      { resourceKey: string; totalAmount: number; totalCount: number }[],
     ]
   >(
     `SELECT slug FROM ONLY $systemId;
@@ -70,7 +70,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
      } ELSE {
        SELECT NONE FROM NONE;
      };
-     SELECT resourceKey, math::sum(amount) AS totalAmount FROM credit_expense
+     SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount FROM credit_expense
        WHERE companyId = $companyId AND systemId = $systemId
          AND day >= $startDate AND day <= $endDate
        GROUP BY resourceKey

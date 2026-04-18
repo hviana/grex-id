@@ -50,6 +50,8 @@
   "usage.noExpenses": "Nenhuma despesa de crédito neste período.",
   "usage.resourceKey": "Recurso",
   "usage.amount": "Valor",
+  "usage.count": "Vezes usado",
+  "usage.avgCost": "Custo médio por uso",
   "onboarding.company.title": "Crie Sua Empresa",
   "onboarding.company.subtitle": "Configure sua organização para começar",
   "onboarding.company.name": "Nome da Empresa",

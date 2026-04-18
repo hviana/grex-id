@@ -3,6 +3,7 @@ DEFINE FIELD companyId    ON credit_expense TYPE record<company>;
 DEFINE FIELD systemId     ON credit_expense TYPE record<system>;
 DEFINE FIELD resourceKey  ON credit_expense TYPE string;
 DEFINE FIELD amount       ON credit_expense TYPE number;
+DEFINE FIELD count        ON credit_expense TYPE number DEFAULT 0;
 DEFINE FIELD day          ON credit_expense TYPE string;
 DEFINE FIELD createdAt    ON credit_expense TYPE datetime DEFAULT time::now();
 
