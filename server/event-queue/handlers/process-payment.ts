@@ -134,10 +134,13 @@ export const processPayment: HandlerFn = async (payload) => {
       const creditIncrement = voucher?.creditIncrement ?? 0;
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditIncrement;
 
-      // For retry: restore status to active + clear retry guard
+      // Batch: update subscription + update payment record (§7.2)
       const statusClause = isRetry
         ? `status = "active", retryPaymentInProgress = false,`
         : `retryPaymentInProgress = false,`;
+      const paymentStmt = paymentId
+        ? `UPDATE $paymentId SET status = "completed", transactionId = $txId, invoiceUrl = $invoiceUrl;`
+        : "";
 
       await db.query(
         `UPDATE $id SET
@@ -145,26 +148,18 @@ export const processPayment: HandlerFn = async (payload) => {
           currentPeriodStart = $newStart,
           currentPeriodEnd = $newEnd,
           remainingPlanCredits = $remainingPlanCredits,
-          creditAlertSent = false`,
+          creditAlertSent = false;
+         ${paymentStmt}`,
         {
           id: rid(sub.id),
           newStart,
           newEnd,
           remainingPlanCredits,
+          paymentId: paymentId ? rid(String(paymentId)) : undefined,
+          txId: undefined,
+          invoiceUrl: invoiceUrl || undefined,
         },
       );
-
-      // Update payment record to completed
-      if (paymentId) {
-        await db.query(
-          `UPDATE $paymentId SET status = "completed", transactionId = $txId, invoiceUrl = $invoiceUrl`,
-          {
-            paymentId: rid(String(paymentId)),
-            txId: undefined,
-            invoiceUrl: invoiceUrl || undefined,
-          },
-        );
-      }
 
       await Core.getInstance().reloadSubscription(
         String(sub.companyId),

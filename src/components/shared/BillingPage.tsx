@@ -8,7 +8,6 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
-import type { PaginatedResult } from "@/src/contracts/common";
 
 interface VoucherInfo {
   id: string;
@@ -109,14 +108,13 @@ function PaymentHistoryList({
       const json = await res.json();
       if (json.success) {
         const newPayments = (json.data?.payments ?? []) as PaymentRecord[];
-        setPayments(reset ? newPayments : [...payments, ...newPayments]);
+        setPayments(reset ? newPayments : (prev) => [...prev, ...newPayments]);
         setNextCursor(json.data?.paymentsNextCursor ?? null);
       }
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
+      }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
 
   useEffect(() => {
     setCursor(undefined);

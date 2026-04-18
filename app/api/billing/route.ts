@@ -53,19 +53,47 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
+  // Build payment history query if requested (§7.1 cursor-based, §7.2 single call)
+  let paymentQuery = "";
+  const queryParams: Record<string, unknown> = {
+    companyId: rid(companyId),
+    systemId: rid(systemId),
+  };
+
+  if (includePayments) {
+    const whereClauses = ["companyId = $companyId", "systemId = $systemId"];
+    if (startDate) {
+      whereClauses.push("createdAt >= $startDate");
+      queryParams.startDate = new Date(startDate).toISOString();
+    }
+    if (endDate) {
+      whereClauses.push("createdAt <= $endDate");
+      queryParams.endDate = new Date(endDate).toISOString();
+    }
+    // Cursor-based pagination on createdAt (§7.1) — cursor is the ISO date of the last row
+    if (paymentCursor) {
+      whereClauses.push("createdAt < $cursorDate");
+      queryParams.cursorDate = new Date(atob(paymentCursor)).toISOString();
+    }
+    const whereStr = whereClauses.join(" AND ");
+    paymentQuery = `SELECT * FROM payment WHERE ${whereStr} ORDER BY createdAt DESC LIMIT 21;`;
+  }
+
   const result = await db.query<
     [
       Record<string, unknown>[],
       Record<string, unknown>[],
       Record<string, unknown>[],
       Record<string, unknown>[],
+      Record<string, unknown>[]?,
     ]
   >(
     `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
      SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddress;
      SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
-     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";`,
-    { companyId: rid(companyId), systemId: rid(systemId) },
+     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";
+     ${paymentQuery}`,
+    queryParams,
   );
 
   const responseData: Record<string, unknown> = {
@@ -76,44 +104,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
   };
 
   if (includePayments) {
-    const dateClauses: string[] = [];
-    const queryParams: Record<string, unknown> = {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-    };
-    if (startDate) {
-      dateClauses.push("AND createdAt >= $startDate");
-      queryParams.startDate = new Date(startDate).toISOString();
-    }
-    if (endDate) {
-      dateClauses.push("AND createdAt <= $endDate");
-      queryParams.endDate = new Date(endDate).toISOString();
-    }
-    const dateFilter = dateClauses.join(" ");
-
-    const cursorOffset = paymentCursor
-      ? Number(atob(paymentCursor))
-      : 0;
-
-    const payments = await db.query<
-      [Record<string, unknown>[], { count: number }[]]
-    >(
-      `SELECT * FROM payment
-       WHERE companyId = $companyId AND systemId = $systemId ${dateFilter}
-       ORDER BY createdAt DESC
-       LIMIT 20
-       START $offset;
-       SELECT count() AS count FROM payment
-       WHERE companyId = $companyId AND systemId = $systemId ${dateFilter}
-       GROUP ALL;`,
-      { ...queryParams, offset: cursorOffset },
-    );
-
-    const paymentData = payments[0] ?? [];
-    const totalCount = payments[1]?.[0]?.count ?? 0;
+    const paymentRows: Record<string, unknown>[] = result[4] ?? [];
+    const hasMore = paymentRows.length > 20;
+    const paymentData = hasMore ? paymentRows.slice(0, 20) : paymentRows;
+    const lastRow = paymentData[paymentData.length - 1];
     responseData.payments = paymentData;
-    responseData.paymentsNextCursor = cursorOffset + paymentData.length < totalCount
-      ? btoa(String(cursorOffset + 20))
+    responseData.paymentsNextCursor = hasMore && lastRow
+      ? btoa(String(lastRow.createdAt))
       : null;
   }
 
@@ -230,7 +227,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
          creditAlertSent = false,
          autoRechargeEnabled = false,
          autoRechargeAmount = 0,
-         autoRechargeInProgress = false;
+         autoRechargeInProgress = false,
+       retryPaymentInProgress = false;
        ${ucsClause}`,
       params,
     );
@@ -686,18 +684,26 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    const subResult = await db.query<
-      [{ id: string; status: string; retryPaymentInProgress: boolean }[]]
+    // Batch: lookup + guard update in one query (§7.2)
+    const retryResult = await db.query<
+      [{ result: string; id?: string }[]]
     >(
-      `SELECT id, status, retryPaymentInProgress
-       FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "past_due"
-       LIMIT 1`,
+      `LET $sub = (SELECT id, retryPaymentInProgress FROM subscription
+         WHERE companyId = $companyId AND systemId = $systemId AND status = "past_due"
+         LIMIT 1);
+       IF array::len($sub) = 0 {
+         RETURN [{ result: "not_found" }];
+       } ELSE IF $sub[0].retryPaymentInProgress = true {
+         RETURN [{ result: "conflict" }];
+       } ELSE {
+         UPDATE $sub[0].id SET retryPaymentInProgress = true;
+         RETURN [{ result: "ok", id: $sub[0].id }];
+       };`,
       { companyId: rid(companyId), systemId: rid(systemId) },
     );
 
-    const pastDueSub = subResult[0]?.[0];
-    if (!pastDueSub) {
+    const retryRow = retryResult[0]?.[0];
+    if (!retryRow || retryRow.result === "not_found") {
       return Response.json(
         {
           success: false,
@@ -707,7 +713,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (pastDueSub.retryPaymentInProgress) {
+    if (retryRow.result === "conflict") {
       return Response.json(
         {
           success: false,
@@ -717,13 +723,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await db.query(
-      `UPDATE $subId SET retryPaymentInProgress = true`,
-      { subId: rid(pastDueSub.id) },
-    );
-
     await publish("PAYMENT_DUE", {
-      subscriptionId: String(pastDueSub.id),
+      subscriptionId: String(retryRow.id),
       companyId,
       systemId,
       purpose: "retry",
