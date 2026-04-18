@@ -210,7 +210,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       returnData?.inviter?.[0]?.email ?? "";
 
     const core = Core.getInstance();
-    const baseUrl = (await core.getSetting("app.baseUrl")) ??
+    const baseUrl = (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
       "http://localhost:3000";
 
     await publish("SEND_EMAIL", {
@@ -238,10 +238,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const verifyToken = generateSecureToken();
   const core = Core.getInstance();
   const expiryMinutes = Number(
-    (await core.getSetting("auth.verification.expiry.minutes")) ?? "15",
+    (await core.getSetting("auth.verification.expiry.minutes", ctx.tenant.systemSlug)) ?? "15",
   );
   const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
-  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
     "http://localhost:3000";
 
   const result = await db.query<

@@ -29,7 +29,7 @@ async function sendChannelVerification(
 ): Promise<void> {
   const core = Core.getInstance();
   const verificationExpiryMinutes = Number(
-    await core.getSetting("auth.recoveryChannel.verification.expiry.minutes"),
+    await core.getSetting("auth.recoveryChannel.verification.expiry.minutes", systemSlug),
   );
   const token = generateSecureToken();
   await createVerificationRequest({
@@ -40,7 +40,7 @@ async function sendChannelVerification(
     payload: { channelId },
   });
 
-  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
   const verificationLink = `${baseUrl}/verify?token=${token}`;
   const eventData = {
@@ -111,7 +111,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Cooldown check
     const core = Core.getInstance();
     const cooldownSeconds = Number(
-      await core.getSetting("auth.verification.cooldown.seconds"),
+      await core.getSetting("auth.verification.cooldown.seconds", ctx.tenant.systemSlug),
     );
     const lastRequest = await getLastVerificationRequest(
       userId,
@@ -210,7 +210,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const core = Core.getInstance();
   const maxPerUser = Number(
-    (await core.getSetting("auth.recoveryChannel.maxPerUser")) || 10,
+    (await core.getSetting("auth.recoveryChannel.maxPerUser", ctx.tenant.systemSlug)) || 10,
   );
 
   const channel = await createRecoveryChannel({

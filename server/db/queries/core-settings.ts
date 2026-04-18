@@ -1,19 +1,32 @@
-import { getDb, rid } from "../connection.ts";
+import { getDb } from "../connection.ts";
 import type { CoreSetting } from "@/src/contracts/core-settings";
 
-export async function listSettings(): Promise<CoreSetting[]> {
+export async function listSettings(
+  systemSlug?: string,
+): Promise<CoreSetting[]> {
   const db = await getDb();
+  if (systemSlug) {
+    const result = await db.query<[CoreSetting[]]>(
+      "SELECT * FROM setting WHERE systemSlug = $systemSlug ORDER BY key ASC",
+      { systemSlug },
+    );
+    return result[0] ?? [];
+  }
   const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM core_setting ORDER BY key ASC",
+    "SELECT * FROM setting WHERE systemSlug IS NONE ORDER BY key ASC",
   );
   return result[0] ?? [];
 }
 
-export async function getSetting(key: string): Promise<CoreSetting | null> {
+export async function getSetting(
+  key: string,
+  systemSlug?: string,
+): Promise<CoreSetting | null> {
   const db = await getDb();
+  const slug = systemSlug ?? null;
   const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM core_setting WHERE key = $key LIMIT 1",
-    { key },
+    "SELECT * FROM setting WHERE key = $key AND systemSlug = $systemSlug LIMIT 1",
+    { key, systemSlug: slug },
   );
   return result[0]?.[0] ?? null;
 }
@@ -22,21 +35,31 @@ export async function upsertSetting(data: {
   key: string;
   value: string;
   description: string;
+  systemSlug?: string;
 }): Promise<CoreSetting> {
   const db = await getDb();
+  const slug = data.systemSlug ?? null;
   const result = await db.query<[CoreSetting[]]>(
-    `UPSERT core_setting SET
+    `UPSERT setting SET
       key = $key,
       value = $value,
       description = $description,
+      systemSlug = $systemSlug,
       updatedAt = time::now()
-    WHERE key = $key`,
-    data,
+    WHERE key = $key AND systemSlug = $systemSlug`,
+    { ...data, systemSlug: slug },
   );
   return result[0][0];
 }
 
-export async function deleteSetting(key: string): Promise<void> {
+export async function deleteSetting(
+  key: string,
+  systemSlug?: string,
+): Promise<void> {
   const db = await getDb();
-  await db.query("DELETE core_setting WHERE key = $key", { key });
+  const slug = systemSlug ?? null;
+  await db.query("DELETE setting WHERE key = $key AND systemSlug = $systemSlug", {
+    key,
+    systemSlug: slug,
+  });
 }

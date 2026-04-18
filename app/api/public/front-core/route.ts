@@ -5,7 +5,7 @@ import Core from "@/server/utils/Core";
 /**
  * GET /api/public/front-core
  * Returns all front-safe settings. No authentication required.
- * Also includes db.frontend.* settings from core_setting for the frontend DB connection.
+ * Also includes db.frontend.* settings from setting for the frontend DB connection.
  */
 export async function GET() {
   try {
@@ -24,7 +24,7 @@ export async function GET() {
       };
     }
 
-    // Include frontend DB connection settings from core_setting
+    // Include frontend DB connection settings from setting
     const frontendDbKeys = [
       "db.frontend.url",
       "db.frontend.namespace",

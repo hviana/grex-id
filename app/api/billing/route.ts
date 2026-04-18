@@ -524,10 +524,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     if (enabled) {
       const minAmount = Number(
-        (await core.getSetting("billing.autoRecharge.minAmount")) ?? "500",
+        (await core.getSetting("billing.autoRecharge.minAmount", ctx.tenant.systemSlug)) ?? "500",
       );
       const maxAmount = Number(
-        (await core.getSetting("billing.autoRecharge.maxAmount")) ?? "50000",
+        (await core.getSetting("billing.autoRecharge.maxAmount", ctx.tenant.systemSlug)) ?? "50000",
       );
 
       if (!amount || amount < minAmount) {

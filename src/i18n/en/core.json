@@ -122,6 +122,8 @@
   "settings.addMissing": "Add all missing",
   "settings.descriptionPlaceholder": "What this setting controls...",
   "settings.placeholder.key": "e.g. setting.key",
+  "settings.scope.core": "Core (default)",
+  "settings.systemSelector.label": "System scope",
   "nav.terms": "Terms",
   "terms.title": "Terms of Service",
   "terms.generic": "Generic Terms (Fallback)",
@@ -180,5 +182,7 @@
   "companies.chartCanceled": "Canceled",
   "companies.chartPaid": "Paid",
   "companies.chartProjected": "Projected",
-  "companies.revenueOverview": "Revenue Overview"
+  "companies.chartErrors": "Errors",
+  "companies.revenueOverview": "Revenue Overview",
+  "companies.statusFilter": "Payment Status"
 }

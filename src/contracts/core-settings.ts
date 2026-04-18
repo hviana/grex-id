@@ -3,6 +3,7 @@ export interface CoreSetting {
   key: string;
   value: string;
   description: string;
+  systemSlug?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -12,6 +13,7 @@ export interface FrontCoreSetting {
   key: string;
   value: string;
   description: string;
+  systemSlug?: string;
   createdAt: string;
   updatedAt: string;
 }

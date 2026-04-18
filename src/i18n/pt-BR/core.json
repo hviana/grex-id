@@ -122,6 +122,8 @@
   "settings.addMissing": "Adicionar todas ausentes",
   "settings.descriptionPlaceholder": "O que esta configuração controla...",
   "settings.placeholder.key": "ex. configuracao.chave",
+  "settings.scope.core": "Core (padrão)",
+  "settings.systemSelector.label": "Escopo do sistema",
   "nav.terms": "Termos",
   "terms.title": "Termos de Serviço",
   "terms.generic": "Termos Genéricos (Fallback)",
@@ -180,5 +182,7 @@
   "companies.chartCanceled": "Cancelada",
   "companies.chartPaid": "Paga",
   "companies.chartProjected": "Projetada",
-  "companies.revenueOverview": "Visão Geral de Receita"
+  "companies.chartErrors": "Erros",
+  "companies.revenueOverview": "Visão Geral de Receita",
+  "companies.statusFilter": "Status do Pagamento"
 }

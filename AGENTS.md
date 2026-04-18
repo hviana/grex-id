@@ -408,11 +408,11 @@ export async function getDb(): Promise<Surreal> {
 WebSocket using SurrealDB user/password authentication. Exclusively for
 `LIVE
 SELECT`. Connection parameters (URL, namespace, database, user, password)
-are read from `core_setting` rows via the public API
+are read from `setting` rows via the public API
 (`GET /api/public/front-core` resolves `db.frontend.*` keys).
 `connectFrontendDb()`.
 
-| `core_setting` key      | Seed value                  | Used by             |
+| `setting` key           | Seed value                  | Used by             |
 | ----------------------- | --------------------------- | ------------------- |
 | `db.frontend.url`       | `"ws://127.0.0.1:8000/rpc"` | WebSocket endpoint  |
 | `db.frontend.namespace` | `"main"`                    | SurrealDB namespace |
@@ -427,7 +427,7 @@ are read from `core_setting` rows via the public API
   `PERMISSIONS FOR select WHERE <ownership>` (e.g. `WHERE userId = $auth.id`).
 - Always include cursor pagination with a reasonable limit.
 - The frontend WebSocket authenticates via SurrealDB user/password credentials
-  from `core_setting` (§7.5), not the system API token.
+  from `setting` (§7.5), not the system API token.
 
 Example:
 
@@ -476,7 +476,7 @@ this table.
 | `0017_create_usage_record.surql`             | `usage_record`           | `actorType ∈ user                                                                                                                                                                                                                                                   |
 | `0018_create_queue_event.surql`              | `queue_event`            | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                        |
 | `0019_create_delivery.surql`                 | `delivery`               | Status ∈ `pending                                                                                                                                                                                                                                                   |
-| `0020_create_core_setting.surql`             | `core_setting`           | Unique `key`.                                                                                                                                                                                                                                                       |
+| `0020_create_core_setting.surql`             | `setting`                | Renamed from `core_setting`. Unique `(key, systemSlug)`. `systemSlug option<string>` — `NONE` = core-level default; non-null = per-system override.                                                                                                                |
 | `0021_create_verification_request.surql`     | `verification_request`   | type ∈ `email_verify                                                                                                                                                                                                                                                |
 | `0022_create_live_query_permissions.surql`   | various                  | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                  |
 | `0023_create_lead.surql`                     | `lead`                   | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                             |
@@ -486,7 +486,7 @@ this table.
 | `0030_create_profile.surql`                  | `profile`                | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                            |
 | `0031_create_address.surql`                  | `address`                | Composable.                                                                                                                                                                                                                                                         |
 | `0032_create_credit_expense.surql`           | `credit_expense`         | Daily container. Unique `(companyId, systemId, resourceKey, day)`.                                                                                                                                                                                                  |
-| `0033_create_front_core_setting.surql`       | `front_core_setting`     | Unique `key`. Physically separated from `core_setting` (§10.2.8).                                                                                                                                                                                                   |
+| `0033_create_front_core_setting.surql`       | `front_setting`          | Renamed from `front_core_setting`. Unique `(key, systemSlug)`. Same `systemSlug` override pattern as `setting`. Physically separated from `setting` (§10.2.8).                                                                                                      |
 | `0034_create_token_revocation.surql`         | `token_revocation`       | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                             |
 | `0035_create_recovery_channel.surql`         | `recovery_channel`       | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                  |
 | `0036_alter_verification_request_type.surql` | `verification_request`   | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                     |
@@ -596,11 +596,14 @@ class Core {
   plans: Plan[];
   vouchers: Voucher[];
   menus: MenuItem[];
-  settings: Map<string, CoreSetting>;
+  settings: Map<string, CoreSetting>; // composite key: "${systemSlug}:${key}" (empty prefix for core)
   // Active subscriptions cached per-tenant (lazily loaded)
   // private subscriptions: Map<string, Subscription>;
 
-  async getSetting(key: string): Promise<string | undefined>;
+  // When systemSlug is provided, returns the system-specific value if it exists,
+  // otherwise falls back to the core-level default (systemSlug = NONE).
+  // When omitted, returns the core-level default directly.
+  async getSetting(key: string, systemSlug?: string): Promise<string | undefined>;
   async getSystemBySlug(slug: string): Promise<System | undefined>;
   async getRolesForSystem(systemId: string): Promise<Role[]>;
   async getPlansForSystem(systemId: string): Promise<Plan[]>;
@@ -659,7 +662,7 @@ This file is server-only (never imported by frontend code) and should be
 excluded from version control (`.gitignore`).
 
 **Frontend database credentials.** The frontend WebSocket connection reads its
-parameters from `core_setting` rows (`db.frontend.url`, `db.frontend.namespace`,
+parameters from `setting` rows (`db.frontend.url`, `db.frontend.namespace`,
 `db.frontend.database`, `db.frontend.user`, `db.frontend.pass` — see §7.5).
 These are resolved at runtime via `GET /api/public/front-core`, keeping all
 connection configuration in the database where the superuser can update it
@@ -687,10 +690,11 @@ method uses pre-built `Map` indexes populated during `load()` / `reload()`:
 the project — design for O(1) lookups, never iterate.
 
 **No hardcoded fallback constants.** Server-side config is read exclusively via
-`Core.getInstance().getSetting(key)`. If a key is missing, `getSetting` returns
-`undefined` and the key is logged.
+`Core.getInstance().getSetting(key)` or `Core.getInstance().getSetting(key,
+systemSlug)`. If a key is missing, `getSetting` returns `undefined` and the key
+is logged.
 
-##### 10.1.4 Core settings (seeded by `002_default_settings.ts`)
+##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
 | Key                                                | Seed value                                 | Used by                                         |
 | -------------------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
@@ -735,19 +739,20 @@ Mirrors Core for frontend-safe settings. **Server-only** — includes the same
 Frontend consumers use `useFrontCore` (§17.3) which calls the public API route
 directly.
 
-- Reads exclusively from `front_core_setting` (never `core_setting`).
+- Reads exclusively from `front_setting` (never `setting`).
 - Reads DB directly through the shared connection.
 - Admin writes via `PUT /api/core/front-settings`: updates DB → calls
   `FrontCore.getInstance().reload()` → broadcasts invalidation to open clients
-  (live SELECT on `front_core_setting`, when the user's SurrealDB token has
+  (live SELECT on `front_setting`, when the user's SurrealDB token has
   select permission).
 
 **Contract:**
 
 ```typescript
 class FrontCore {
-  settings: Map<string, FrontCoreSetting>;
-  async getSetting(key: string): Promise<string | undefined>;
+  settings: Map<string, FrontCoreSetting>; // composite key: "${systemSlug}:${key}"
+  // Same fallback logic as Core: system-specific → core-level default.
+  async getSetting(key: string, systemSlug?: string): Promise<string | undefined>;
   async getMissingSettings(): Promise<
     { key: string; firstRequestedAt: string }[]
   >;
@@ -757,7 +762,7 @@ class FrontCore {
 }
 ```
 
-##### 10.2.6 FrontCore settings (seeded by `003_default_front_settings.ts`)
+##### 10.2.6 FrontCore settings (seeded by `003_default_front_settings.ts` into `front_setting` table)
 
 | Key                           | Seed value           | Used by                             |
 | ----------------------------- | -------------------- | ----------------------------------- |
@@ -772,19 +777,23 @@ class FrontCore {
 
 The superuser panel has **two separate pages**:
 
-- `(core)/settings` → server-only `core_setting` editor.
-- `(core)/front-settings` → `front_core_setting` editor.
+- `(core)/settings` → server-only `setting` editor.
+- `(core)/front-settings` → `front_setting` editor.
 
-Both use `DynamicKeyValueField` + missing-keys banner + "Add all missing" button
-(identical UX). A badge in each header names which table is being edited
-(`t("core.settings.title")` vs `t("core.frontSettings.title")`).
+Both include a **system selector dropdown** at the top. Selecting "Core
+(default)" shows core-level settings (`systemSlug = NONE`). Selecting a specific
+system shows only that system's overrides. Adding a setting while a system is
+selected scopes it to that system. Both use `DynamicKeyValueField` +
+missing-keys banner + "Add all missing" button (identical UX). A badge in each
+header names which table is being edited (`t("core.settings.title")` vs
+`t("core.frontSettings.title")`).
 
 ##### 10.2.8 Why separate tables
 
 Physical separation guarantees the frontend bundle cannot accidentally leak a
 server-only secret: a read permission granting
 `SELECT * FROM
-front_core_setting` never touches `core_setting`. Keys must never
+front_setting` never touches `setting`. Keys must never
 overlap.
 
 ### 11. Middleware Pipeline
@@ -1210,7 +1219,7 @@ non-sensitive, read-only data.
   (resolves from `app.defaultSystem`). Response:
   `{ success: true, data: { name, slug, logoUri, defaultLocale?, termsOfService? } | null }`.
   No rate limiting by default (static-like).
-- **`GET /api/public/front-core`** — returns the full `front_core_setting` table
+- **`GET /api/public/front-core`** — returns the full `front_setting` table
   as a key/value map. Used by FrontCore in the browser (§10.2).
 - **`POST /api/leads/public`** — see §23.2.
 
@@ -1496,7 +1505,7 @@ channel event.
 
 WebSocket via SurrealDB user/password authentication. Exclusively for
 `LIVE
-SELECT`. Credentials read from `core_setting` via
+SELECT`. Credentials read from `setting` via
 `/api/public/front-core`.
 
 ```typescript
@@ -2045,7 +2054,7 @@ system-specific API routes.
 | System API Token | API requests to backend routes | Backend via `@panva/jose` | `Authorization: Bearer <token>` |
 
 Frontend live queries authenticate via SurrealDB user/password credentials
-stored in `core_setting` (`db.frontend.user`, `db.frontend.pass` — §7.5), not
+stored in `setting` (`db.frontend.user`, `db.frontend.pass` — §7.5), not
 via a separate token. The system token refreshes via `/api/auth/refresh`.
 
 #### 19.2 System branding on public pages
@@ -2326,16 +2335,17 @@ domain prefix (the `t()` function strips it). Required groups:
   requiredRoles, hiddenInPlanIds, edit, delete, addChild, addRoot,
   incompleteConfig, empty
 - `settings.*` / `frontSettings.*` — title, key, value, description, save,
-  missingTitle, addMissing, empty, add, saved, descriptionPlaceholder
+  missingTitle, addMissing, empty, add, saved, descriptionPlaceholder,
+  scope.core, systemSelector.label
 - `terms.*` — title, selectSystem, generic, genericHint, content, contentHint,
   save, saved, empty, noTerms, hasTerms, usingGeneric, editTerms, viewPublic
 - `dataDeletion.*` — title, selectCompany, selectSystem, deleteButton, warning,
   awareness, passwordLabel, passwordPlaceholder, confirmDelete, success,
   error.passwordInvalid, error.notFound
-- `companies.*` — title, empty, dateRange, systemFilter, planFilter, access,
-  accessHint, systems, subscription, plan, status, active, cancelled, pastDue,
-  noSubscription, chart, chartCanceled, chartPaid, chartProjected,
-  revenueOverview
+- `companies.*` — title, empty, dateRange, systemFilter, planFilter,
+  statusFilter, access, accessHint, systems, subscription, plan, status,
+  active, cancelled, pastDue, noSubscription, chart, chartCanceled,
+  chartPaid, chartProjected, chartErrors, revenueOverview
 
 Every key must have full `en` + `pt-BR` translations.
 
@@ -2501,16 +2511,29 @@ Each company card (`renderItem`) shows:
 **Filters** (outside GenericList, in the page header):
 
 1. **Date range** — `DateRangeFilter` with `maxRangeDays = 31`. Constrains the
-   chart to the selected period.
+   chart to the selected period only (does **not** filter the company list).
+   Passed as `startDate`/`endDate` query params to the chart endpoint only.
 2. **System filter** — `MultiBadgeField mode:"search"` with `fetchFn` calling
-   `GET /api/core/systems?search=`. Passed as `systemIds` query param to filter
-   the company list.
+   `GET /api/core/systems?search=`. Passed as `systemIds` query param to both
+   the company list and the chart.
 3. **Plan filter** — `MultiBadgeField mode:"search"` with `fetchFn` calling
-   `GET /api/core/plans?search=`. Passed as `planIds` query param.
+   `GET /api/core/plans?search=`. Passed as `planIds` query param to both the
+   company list and the chart.
+4. **Payment-status filter** — `MultiBadgeField mode:"search"` with
+   `staticOptions` containing three values: `active` ("Payments up-to-date"),
+   `cancelled` ("Cancelled payments"), `past_due` ("Payments with errors").
+   Passed as `statuses` query param to both the company list and the chart.
+   When empty, all companies are shown.
 
-**Revenue chart.** `react-chartjs-2` `Bar` chart with three grouped columns
-within the selected date range. Data fetched from
-`GET /api/core/companies?action=chart&startDate=…&endDate=…&planIds=…`:
+**Company list search.** `GenericList` provides debounced search via
+`searchEnabled`. The `search` param performs FULLTEXT lookup on company `name`
+(`name @@ $search`). All filters except date range (system, plan, status) apply
+to the list.
+
+**Revenue chart.** `react-chartjs-2` `Bar` chart with four grouped columns
+within the selected date range. Subject to **all** filters (date range, system,
+plan, status). Data fetched from
+`GET /api/core/companies?action=chart&startDate=…&endDate=…&planIds=…&systemIds=…&statuses=…`:
 
 1. **Canceled revenue** — sum of `subscription` amounts where
    `status =
@@ -2523,6 +2546,10 @@ within the selected date range. Data fetched from
    `status =
    "active"` and `currentPeriodEnd` falls within the interval
    (expected renewal). Color: `--color-secondary-blue`.
+4. **Errors revenue** — sum of `subscription` amounts where
+   `status =
+   "past_due"` and the `updatedAt` timestamp falls within the
+   interval (failed payment attempts). Color: yellow/amber tones.
 
 Gradient header: `core.companies.revenueOverview`. Values formatted as currency.
 Chart renders inside a glassmorphism card following the visual standard.
@@ -2532,11 +2559,11 @@ Chart renders inside a glassmorphism card following the visual standard.
 ```
 GET /api/core/companies
   ?search=…&cursor=…&limit=20
-  &startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
-  &systemIds=id1,id2&planIds=id1,id2
+  &systemIds=id1,id2&planIds=id1,id2&statuses=active,cancelled,past_due
 
 GET /api/core/companies?action=chart
-  &startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&planIds=id1,id2
+  &startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+  &systemIds=id1,id2&planIds=id1,id2&statuses=active,cancelled,past_due
 ```
 
 Paginated list response (standard `PaginatedResult` shape):
@@ -2570,6 +2597,7 @@ Paginated list response (standard `PaginatedResult` shape):
     canceled: number;   // cents
     paid: number;       // cents
     projected: number;  // cents
+    errors: number;     // cents
   };
 }
 ```

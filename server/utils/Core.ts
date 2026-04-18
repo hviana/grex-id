@@ -75,7 +75,7 @@ class Core {
       SELECT * FROM role;
       SELECT * FROM plan;
       SELECT * FROM menu_item ORDER BY sortOrder ASC;
-      SELECT * FROM core_setting;
+      SELECT * FROM setting;
       SELECT * FROM voucher;`,
     );
 
@@ -140,8 +140,11 @@ class Core {
 
     this.settings.clear();
     for (const setting of settings) {
-      this.settings.set(setting.key, setting);
-      this.missingSettings.delete(setting.key);
+      const mapKey = (setting.systemSlug ?? "") + ":" + setting.key;
+      this.settings.set(mapKey, setting);
+      if (!setting.systemSlug) {
+        this.missingSettings.delete(setting.key);
+      }
     }
 
     console.log(
@@ -153,10 +156,16 @@ class Core {
     await this.load();
   }
 
-  async getSetting(key: string): Promise<string | undefined> {
+  async getSetting(key: string, systemSlug?: string): Promise<string | undefined> {
     await this.ensureLoaded();
-    const existing = this.settings.get(key);
-    if (existing) return existing.value;
+
+    if (systemSlug) {
+      const specific = this.settings.get(`${systemSlug}:${key}`);
+      if (specific) return specific.value;
+    }
+
+    const core = this.settings.get(`:${key}`);
+    if (core) return core.value;
 
     if (!this.missingSettings.has(key)) {
       this.missingSettings.set(key, {

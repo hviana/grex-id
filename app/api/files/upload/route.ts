@@ -147,7 +147,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   if (isAuthenticated) {
     const core = Core.getInstance();
     try {
-      const sizeSetting = await core.getSetting("files.maxUploadSizeBytes");
+      const sizeSetting = await core.getSetting("files.maxUploadSizeBytes", systemSlug ?? undefined);
       if (sizeSetting) authMaxSizeBytes = Number(sizeSetting);
     } catch { /* use defaults */ }
   }

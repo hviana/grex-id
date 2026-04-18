@@ -28,7 +28,7 @@ export const sendSms: HandlerFn = async (payload) => {
   }
 
   // TODO: Call external SMS API (Twilio, etc.)
-  // configured via core_setting "communication.sms.provider"
+  // configured via setting "communication.sms.provider"
   console.log(
     `[sms] Sending "${template}" to ${
       recipients.join(", ")

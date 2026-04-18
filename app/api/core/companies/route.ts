@@ -14,20 +14,28 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   if (action === "chart") {
     const startDate = url.searchParams.get("startDate") || "";
     const endDate = url.searchParams.get("endDate") || "";
+    const systemIdsParam = url.searchParams.get("systemIds");
     const planIdsParam = url.searchParams.get("planIds");
+    const statusesParam = url.searchParams.get("statuses");
 
     if (!startDate || !endDate) {
       return Response.json({
         success: true,
-        data: { canceled: 0, paid: 0, projected: 0 },
+        data: { canceled: 0, paid: 0, projected: 0, errors: 0 },
       });
     }
 
     const chart = await getRevenueChart({
       startDate,
       endDate,
+      systemIds: systemIdsParam
+        ? systemIdsParam.split(",").filter(Boolean)
+        : undefined,
       planIds: planIdsParam
         ? planIdsParam.split(",").filter(Boolean)
+        : undefined,
+      statuses: statusesParam
+        ? statusesParam.split(",").filter(Boolean)
         : undefined,
     });
 
@@ -36,22 +44,22 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
-  const limit = Number(url.searchParams.get("limit") ?? "20");
-  const startDate = url.searchParams.get("startDate") ?? undefined;
-  const endDate = url.searchParams.get("endDate") ?? undefined;
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 200);
   const systemIdsParam = url.searchParams.get("systemIds");
   const planIdsParam = url.searchParams.get("planIds");
+  const statusesParam = url.searchParams.get("statuses");
 
   const result = await listCoreCompanies({
     search,
     cursor,
     limit,
-    startDate,
-    endDate,
     systemIds: systemIdsParam
       ? systemIdsParam.split(",").filter(Boolean)
       : undefined,
     planIds: planIdsParam ? planIdsParam.split(",").filter(Boolean) : undefined,
+    statuses: statusesParam
+      ? statusesParam.split(",").filter(Boolean)
+      : undefined,
   });
 
   return Response.json({

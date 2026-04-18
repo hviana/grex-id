@@ -144,7 +144,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       // Cooldown check: prevent repeated verification requests
       const core = Core.getInstance();
       const cooldownSeconds = parseInt(
-        (await core.getSetting("auth.verification.cooldown.seconds")) ?? "120",
+        (await core.getSetting("auth.verification.cooldown.seconds", systemSlug)) ?? "120",
         10,
       );
       const lastRequest = await getLastVerificationRequest(
@@ -171,7 +171,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       // Create verification request
       const verificationToken = crypto.randomUUID();
       const expiryMinutes = parseInt(
-        (await core.getSetting("auth.verification.expiry.minutes")) ?? "15",
+        (await core.getSetting("auth.verification.expiry.minutes", systemSlug)) ?? "15",
         10,
       );
       await createVerificationRequest({
@@ -217,7 +217,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       }
 
       // Publish lead update verification email
-      const baseUrl = (await core.getSetting("app.baseUrl")) ??
+      const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
         "http://localhost:3000";
       const verificationLink =
         `${baseUrl}/verify?token=${verificationToken}&system=${

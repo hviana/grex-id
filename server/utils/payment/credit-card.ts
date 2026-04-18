@@ -4,7 +4,7 @@ import type { IPaymentProvider, PaymentResult } from "./interface.ts";
  * Stub payment provider.
  *
  * Replace with a real gateway integration (e.g. Stripe, PagSeguro, MercadoPago).
- * The gateway credentials should be stored as core_settings and read via Core.getInstance().
+ * The gateway credentials should be stored as settings and read via Core.getInstance().
  *
  * ⚠ This stub returns fake successful charges — do NOT use in production.
  */

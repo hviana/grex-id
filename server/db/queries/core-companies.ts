@@ -1,7 +1,6 @@
-import { rid } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { paginatedQuery } from "./pagination.ts";
-import { getDb } from "../connection.ts";
+import { clampPageLimit } from "@/src/lib/validators";
 
 export interface CoreCompanySystem {
   systemId: string;
@@ -25,26 +24,29 @@ export interface RevenueChart {
   canceled: number;
   paid: number;
   projected: number;
+  errors: number;
 }
 
 export async function listCoreCompanies(
   params: CursorParams & {
     search?: string;
-    startDate?: string;
-    endDate?: string;
     systemIds?: string[];
     planIds?: string[];
+    statuses?: string[];
   },
 ): Promise<PaginatedResult<CoreCompany>> {
+  const db = await getDb();
+  const limit = clampPageLimit(params.limit);
   const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
+  const bindings: Record<string, unknown> = {
+    limitPlusOne: limit + 1,
+  };
 
   if (params.search) {
     conditions.push("name @@ $search");
     bindings.search = params.search;
   }
 
-  // Filter to companies that have a company_system matching the given systems
   if (params.systemIds?.length) {
     conditions.push(
       "id IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)",
@@ -52,36 +54,38 @@ export async function listCoreCompanies(
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }
 
-  // Filter to companies that have a subscription matching the given plans
-  if (params.planIds?.length) {
+  if (params.statuses?.length) {
+    bindings.statuses = params.statuses;
+    const planClause = params.planIds?.length
+      ? " AND planId IN $planIds"
+      : "";
+    if (params.planIds?.length) {
+      bindings.planIds = params.planIds.map((id) => rid(id));
+    }
+    conditions.push(
+      `id IN (SELECT VALUE companyId FROM subscription WHERE status IN $statuses${planClause})`,
+    );
+  } else if (params.planIds?.length) {
     conditions.push(
       "id IN (SELECT VALUE companyId FROM subscription WHERE planId IN $planIds)",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
 
-  const paginated = await paginatedQuery<{
-    id: string;
-    name: string;
-    document: string;
-    createdAt: string;
-  }>({
-    table: "company",
-    conditions,
-    bindings,
-    params,
-  });
-
-  if (paginated.data.length === 0) {
-    return { data: [], nextCursor: null, prevCursor: null };
+  if (params.cursor) {
+    conditions.push(
+      params.direction === "prev" ? "id < $cursor" : "id > $cursor",
+    );
+    bindings.cursor = params.cursor;
   }
 
-  const companyIds = paginated.data.map((c) => rid(c.id));
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Single batched query: company_systems + subscriptions for all companies (§7.2)
-  const db = await getDb();
-  const [companySystems, subs] = await db.query<
+  // Single batched query: pagination + enrichment (§7.2)
+  const result = await db.query<
     [
+      unknown,
+      unknown,
       {
         companyId: string;
         systemId: string;
@@ -98,40 +102,58 @@ export async function listCoreCompanies(
       }[],
     ]
   >(
-    `SELECT
-      companyId,
-      systemId,
-      (SELECT VALUE name FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemName,
-      (SELECT VALUE slug FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemSlug
-    FROM company_system
-    WHERE companyId IN $companyIds
-    ORDER BY systemId;
-    SELECT
-      id,
-      companyId,
-      systemId,
-      status,
-      (SELECT VALUE name FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planName,
-      (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
-    FROM subscription
-    WHERE companyId IN $companyIds;`,
-    { companyIds },
+    `LET $paginated = (SELECT id, name, document, createdAt FROM company ${where} ORDER BY createdAt DESC LIMIT $limitPlusOne);
+     LET $companyIds = $paginated[*].id;
+     SELECT
+       companyId,
+       systemId,
+       (SELECT VALUE name FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemName,
+       (SELECT VALUE slug FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemSlug
+     FROM company_system
+     WHERE companyId IN $companyIds
+     ORDER BY systemId;
+     SELECT
+       id,
+       companyId,
+       systemId,
+       status,
+       (SELECT VALUE name FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planName,
+       (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+     FROM subscription
+     WHERE companyId IN $companyIds;`,
+    bindings,
   );
+
+  const companiesRaw = result[0] as
+    | { id: string; name: string; document: string; createdAt: string }[]
+    | undefined;
+  const companySystems = result[2] ?? [];
+  const subs = result[3] ?? [];
+
+  if (!companiesRaw || companiesRaw.length === 0) {
+    return { data: [], nextCursor: null, prevCursor: null };
+  }
+
+  const hasMore = companiesRaw.length > limit;
+  const page = hasMore ? companiesRaw.slice(0, limit) : companiesRaw;
+  const lastItem = page[page.length - 1] as
+    | Record<string, unknown>
+    | undefined;
 
   // Build lookup maps
   const subMap = new Map<string, (typeof subs)[0]>();
-  for (const sub of subs ?? []) {
+  for (const sub of subs) {
     subMap.set(`${sub.companyId}|${sub.systemId}`, sub);
   }
 
   const csMap = new Map<string, typeof companySystems>();
-  for (const cs of companySystems ?? []) {
+  for (const cs of companySystems) {
     const list = csMap.get(String(cs.companyId)) ?? [];
     list.push(cs);
     csMap.set(String(cs.companyId), list);
   }
 
-  const companies: CoreCompany[] = paginated.data.map((c) => {
+  const companies: CoreCompany[] = page.map((c) => {
     const systems = (csMap.get(String(c.id)) ?? []).map((cs) => {
       const sub = subMap.get(`${cs.companyId}|${cs.systemId}`);
       return {
@@ -156,57 +178,90 @@ export async function listCoreCompanies(
 
   return {
     data: companies,
-    nextCursor: paginated.nextCursor,
-    prevCursor: paginated.prevCursor,
+    nextCursor: hasMore ? String(lastItem?.id ?? "") : null,
+    prevCursor: params.cursor ?? null,
   };
 }
 
 export async function getRevenueChart(params: {
   startDate: string;
   endDate: string;
+  systemIds?: string[];
   planIds?: string[];
+  statuses?: string[];
 }): Promise<RevenueChart> {
   const db = await getDb();
-  const planFilter = params.planIds?.length ? `AND planId IN $planIds` : "";
+  const extraFilters: string[] = [];
   const bindings: Record<string, unknown> = {
     startDate: params.startDate,
     endDate: params.endDate,
   };
   if (params.planIds?.length) {
+    extraFilters.push("planId IN $planIds");
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
+  if (params.systemIds?.length) {
+    extraFilters.push("companyId IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)");
+    bindings.systemIds = params.systemIds.map((id) => rid(id));
+  }
+  const extra = extraFilters.length ? `AND ${extraFilters.join(" AND ")}` : "";
+
+  // Status filter: when provided, only aggregate subscriptions matching the given statuses
+  const statusFilterActive = params.statuses?.length;
+  if (statusFilterActive) {
+    bindings.statuses = params.statuses;
+  }
+
+  const canceledCond = statusFilterActive
+    ? `status IN $statuses AND status = "cancelled"`
+    : `status = "cancelled"`;
+  const paidCond = statusFilterActive
+    ? `status IN $statuses AND status = "active"`
+    : `status = "active"`;
+  const projectedCond = paidCond;
+  const errorsCond = statusFilterActive
+    ? `status IN $statuses AND status = "past_due"`
+    : `status = "past_due"`;
 
   const result = await db.query<
-    [{ canceled: number; paid: number; projected: number }[]]
+    [{ canceled: number; paid: number; projected: number; errors: number }[]]
   >(
     `SELECT VALUE {
       canceled: (SELECT VALUE math::sum(planPrice) FROM (
         SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
         FROM subscription
-        WHERE status = "cancelled"
+        WHERE ${canceledCond}
           AND updatedAt >= type::datetime($startDate)
           AND updatedAt <= type::datetime($endDate)
-          ${planFilter}
+          ${extra}
       ))[0] ?? 0,
       paid: (SELECT VALUE math::sum(planPrice) FROM (
         SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
         FROM subscription
-        WHERE status = "active"
+        WHERE ${paidCond}
           AND currentPeriodStart >= type::datetime($startDate)
           AND currentPeriodStart <= type::datetime($endDate)
-          ${planFilter}
+          ${extra}
       ))[0] ?? 0,
       projected: (SELECT VALUE math::sum(planPrice) FROM (
         SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
         FROM subscription
-        WHERE status = "active"
+        WHERE ${projectedCond}
           AND currentPeriodEnd >= type::datetime($startDate)
           AND currentPeriodEnd <= type::datetime($endDate)
-          ${planFilter}
+          ${extra}
+      ))[0] ?? 0,
+      errors: (SELECT VALUE math::sum(planPrice) FROM (
+        SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+        FROM subscription
+        WHERE ${errorsCond}
+          AND updatedAt >= type::datetime($startDate)
+          AND updatedAt <= type::datetime($endDate)
+          ${extra}
       ))[0] ?? 0
     } FROM ONLY [];`,
     bindings,
   );
 
-  return result[0]?.[0] ?? { canceled: 0, paid: 0, projected: 0 };
+  return result[0]?.[0] ?? { canceled: 0, paid: 0, projected: 0, errors: 0 };
 }

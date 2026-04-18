@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
@@ -52,6 +52,7 @@ interface RevenueChart {
   canceled: number;
   paid: number;
   projected: number;
+  errors: number;
 }
 
 function formatCurrency(cents: number): string {
@@ -87,31 +88,39 @@ function AccessButton({ item }: { item: Company }) {
   const { t } = useLocale();
   const { exchangeTenant } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   const handleClick = async () => {
     const firstSystem = item.systems[0];
     if (!firstSystem) return;
     setLoading(true);
+    setError(false);
     try {
       await exchangeTenant(item.id, firstSystem.systemId);
       window.location.href = "/entry";
     } catch {
       setLoading(false);
+      setError(true);
     }
   };
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={loading || item.systems.length === 0}
-      title={t("core.companies.accessHint")}
-      className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-    >
-      {loading
-        ? <Spinner size="sm" className="border-black border-t-transparent" />
-        : null}
-      {t("core.companies.access")}
-    </button>
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={loading || item.systems.length === 0}
+        title={t("core.companies.accessHint")}
+        className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+      >
+        {loading
+          ? <Spinner size="sm" className="border-black border-t-transparent" />
+          : null}
+        {t("core.companies.access")}
+      </button>
+      {error && (
+        <span className="text-xs text-red-400">{t("common.error.generic")}</span>
+      )}
+    </div>
   );
 }
 
@@ -173,15 +182,32 @@ export default function CompaniesPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
 
+  const statusLabels: Record<string, string> = {
+    active: t("core.companies.active"),
+    cancelled: t("core.companies.cancelled"),
+    past_due: t("core.companies.pastDue"),
+  };
+  const reverseStatusLabels: Record<string, string> = Object.fromEntries(
+    Object.entries(statusLabels).map(([k, v]) => [v, k]),
+  );
+
   const today = new Date().toISOString().slice(0, 10);
   const thirtyOneDaysAgo = new Date(Date.now() - 31 * 86400000)
     .toISOString()
     .slice(0, 10);
   const [startDate, setStartDate] = useState(thirtyOneDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [systemFilter, setSystemFilter] = useState<string[]>([]);
-  const [planFilter, setPlanFilter] = useState<string[]>([]);
+  const [systemFilter, setSystemFilter] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [planFilter, setPlanFilter] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [chart, setChart] = useState<RevenueChart | null>(null);
+
+  const systemIds = useMemo(() => systemFilter.map((s) => s.id), [systemFilter]);
+  const planIds = useMemo(() => planFilter.map((p) => p.id), [planFilter]);
 
   const fetchCompanies = useCallback(
     async (
@@ -191,10 +217,9 @@ export default function CompaniesPage() {
       if (params.search) sp.set("search", String(params.search));
       if (params.cursor) sp.set("cursor", String(params.cursor));
       sp.set("limit", String(params.limit));
-      if (startDate) sp.set("startDate", startDate);
-      if (endDate) sp.set("endDate", endDate);
-      if (systemFilter.length > 0) sp.set("systemIds", systemFilter.join(","));
-      if (planFilter.length > 0) sp.set("planIds", planFilter.join(","));
+      if (systemIds.length > 0) sp.set("systemIds", systemIds.join(","));
+      if (planIds.length > 0) sp.set("planIds", planIds.join(","));
+      if (statusFilter.length > 0) sp.set("statuses", statusFilter.join(","));
 
       const res = await fetch(`/api/core/companies?${sp}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
@@ -206,7 +231,7 @@ export default function CompaniesPage() {
         prevCursor: null,
       };
     },
-    [systemToken, startDate, endDate, systemFilter, planFilter],
+    [systemToken, systemIds, planIds, statusFilter],
   );
 
   const loadChart = useCallback(async () => {
@@ -216,22 +241,19 @@ export default function CompaniesPage() {
       startDate,
       endDate,
     });
-    if (planFilter.length > 0) sp.set("planIds", planFilter.join(","));
+    if (systemIds.length > 0) sp.set("systemIds", systemIds.join(","));
+    if (planIds.length > 0) sp.set("planIds", planIds.join(","));
+    if (statusFilter.length > 0) sp.set("statuses", statusFilter.join(","));
     const res = await fetch(`/api/core/companies?${sp}`, {
       headers: { Authorization: `Bearer ${systemToken}` },
     });
     const json = await res.json();
     if (json.success) setChart(json.data);
-  }, [systemToken, startDate, endDate, planFilter]);
+  }, [systemToken, startDate, endDate, systemIds, planIds, statusFilter]);
 
-  // Load chart when date range or plan filter changes
-  // (can't use useEffect since loadChart is a dep that changes)
-  const [prevChartKey, setPrevChartKey] = useState("");
-  const chartKey = `${startDate}|${endDate}|${planFilter.join(",")}`;
-  if (chartKey !== prevChartKey) {
-    setPrevChartKey(chartKey);
+  useEffect(() => {
     loadChart();
-  }
+  }, [loadChart]);
 
   const fetchSystems = useCallback(
     async (search: string) => {
@@ -242,6 +264,7 @@ export default function CompaniesPage() {
       });
       const json = await res.json();
       return (json.data ?? []).map((s: { id: string; name: string }) => ({
+        id: s.id,
         name: s.name,
       }));
     },
@@ -257,6 +280,7 @@ export default function CompaniesPage() {
       });
       const json = await res.json();
       return (json.data ?? []).map((p: { id: string; name: string }) => ({
+        id: p.id,
         name: p.name,
       }));
     },
@@ -291,6 +315,14 @@ export default function CompaniesPage() {
           borderWidth: 1,
           borderRadius: 6,
         },
+        {
+          label: t("core.companies.chartErrors"),
+          data: [chart.errors],
+          backgroundColor: "rgba(234, 179, 8, 0.7)",
+          borderColor: "#eab308",
+          borderWidth: 1,
+          borderRadius: 6,
+        },
       ],
     }
     : null;
@@ -322,8 +354,16 @@ export default function CompaniesPage() {
           <MultiBadgeField
             name="systemFilter"
             mode="search"
-            value={systemFilter}
-            onChange={(v) => setSystemFilter(v.map((x) => String(x)))}
+            value={systemFilter.map((s) => ({ name: s.name }))}
+            onChange={(v) =>
+              setSystemFilter(
+                v.map((x) => {
+                  if (typeof x === "object" && "id" in x)
+                    return { id: String(x.id), name: x.name ?? "" };
+                  return { id: String(x), name: String(x) };
+                }),
+              )
+            }
             fetchFn={fetchSystems}
           />
         </div>
@@ -334,9 +374,38 @@ export default function CompaniesPage() {
           <MultiBadgeField
             name="planFilter"
             mode="search"
-            value={planFilter}
-            onChange={(v) => setPlanFilter(v.map((x) => String(x)))}
+            value={planFilter.map((p) => ({ name: p.name }))}
+            onChange={(v) =>
+              setPlanFilter(
+                v.map((x) => {
+                  if (typeof x === "object" && "id" in x)
+                    return { id: String(x.id), name: x.name ?? "" };
+                  return { id: String(x), name: String(x) };
+                }),
+              )
+            }
             fetchFn={fetchPlans}
+          />
+        </div>
+        <div className="min-w-48">
+          <label className="block text-sm text-[var(--color-light-text)] mb-1">
+            {t("core.companies.statusFilter")}
+          </label>
+          <MultiBadgeField
+            name="statusFilter"
+            mode="search"
+            value={statusFilter.map(
+              (s) => statusLabels[s] ?? s,
+            )}
+            onChange={(v) =>
+              setStatusFilter(
+                v.map((x) => {
+                  const label = typeof x === "string" ? x : x.name;
+                  return reverseStatusLabels[label] ?? label;
+                }),
+              )
+            }
+            staticOptions={Object.values(statusLabels)}
           />
         </div>
       </div>

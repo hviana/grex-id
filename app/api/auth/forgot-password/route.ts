@@ -35,6 +35,7 @@ async function handler(
 ): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json();
+  const systemSlug = body.systemSlug as string | undefined;
   const email = body.email
     ? standardizeField("email", body.email, "user")
     : undefined;
@@ -56,7 +57,7 @@ async function handler(
   if (!user) return successResponse;
 
   const cooldownSeconds = Number(
-    await core.getSetting("auth.verification.cooldown.seconds"),
+    await core.getSetting("auth.verification.cooldown.seconds", systemSlug),
   );
 
   // Check cooldown
@@ -72,7 +73,7 @@ async function handler(
   }
 
   const resetExpiryMinutes = Number(
-    await core.getSetting("auth.passwordReset.expiry.minutes"),
+    await core.getSetting("auth.passwordReset.expiry.minutes", systemSlug),
   );
 
   const resetToken = generateSecureToken();
@@ -83,10 +84,9 @@ async function handler(
     expiresAt: new Date(Date.now() + resetExpiryMinutes * 60_000),
   });
 
-  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
-  const systemSlug = body.systemSlug as string | undefined;
 
   await publish("SEND_EMAIL", {
     recipients: [email!],

@@ -15,6 +15,11 @@ interface SettingItem {
   updatedAt?: string;
 }
 
+interface SystemOption {
+  slug: string;
+  name: string;
+}
+
 interface SettingsEditorProps {
   mode?: "core" | "front";
 }
@@ -28,6 +33,8 @@ export default function SettingsEditor(
   const titleKey = isFront ? "core.frontSettings.title" : "core.settings.title";
 
   const [settings, setSettings] = useState<SettingItem[]>([]);
+  const [systems, setSystems] = useState<SystemOption[]>([]);
+  const [selectedSystem, setSelectedSystem] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
@@ -42,7 +49,8 @@ export default function SettingsEditor(
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiPath);
+      const params = selectedSystem ? `?systemSlug=${encodeURIComponent(selectedSystem)}` : "";
+      const res = await fetch(`${apiPath}${params}`);
       const json = await res.json();
       if (json.success) setSettings(json.data?.settings ?? json.data ?? []);
     } finally {
@@ -51,8 +59,24 @@ export default function SettingsEditor(
   };
 
   useEffect(() => {
+    fetch("/api/core/systems")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setSystems(
+            (json.data ?? []).map((s: Record<string, unknown>) => ({
+              slug: String(s.slug ?? ""),
+              name: String(s.name ?? ""),
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     load();
-  }, [apiPath]);
+  }, [apiPath, selectedSystem]);
 
   const getEdit = (setting: SettingItem) => {
     return edits.get(setting.key) ??
@@ -81,16 +105,18 @@ export default function SettingsEditor(
     setSavingKey(setting.key);
     setError(null);
     try {
+      const body: Record<string, unknown> = {
+        settings: [{
+          key: setting.key,
+          value: edit.value,
+          description: edit.description,
+        }],
+      };
+      if (selectedSystem) body.systemSlug = selectedSystem;
       const res = await fetch(apiPath, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          settings: [{
-            key: setting.key,
-            value: edit.value,
-            description: edit.description,
-          }],
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!json.success) {
@@ -109,10 +135,12 @@ export default function SettingsEditor(
     setError(null);
     setDeletingKey(key);
     try {
+      const body: Record<string, unknown> = { key };
+      if (selectedSystem) body.systemSlug = selectedSystem;
       await fetch(apiPath, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify(body),
       });
       load();
     } finally {
@@ -148,6 +176,9 @@ export default function SettingsEditor(
   const inputCls =
     "w-full rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
+  const selectCls =
+    "rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -163,13 +194,32 @@ export default function SettingsEditor(
           {t(titleKey)}
         </h2>
         <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-[var(--color-light-text)]">
-          {isFront ? "front_core_setting" : "core_setting"}
+          {isFront ? "front_setting" : "setting"}
+          {selectedSystem ? ` (${selectedSystem})` : ""}
         </span>
       </div>
 
       <ErrorDisplay message={error} />
 
       <div className="flex flex-wrap items-center gap-3">
+        <select
+          value={selectedSystem}
+          onChange={(e) => {
+            setSelectedSystem(e.target.value);
+            setEdits(new Map());
+          }}
+          className={selectCls}
+        >
+          <option value="">
+            {t("core.settings.scope.core")}
+          </option>
+          {systems.map((sys) => (
+            <option key={sys.slug} value={sys.slug}>
+              {sys.name}
+            </option>
+          ))}
+        </select>
+
         <div className="flex-1 min-w-48">
           <SearchField onSearch={setSearch} />
         </div>
