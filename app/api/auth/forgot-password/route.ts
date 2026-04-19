@@ -1,16 +1,12 @@
 import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import {
-  createVerificationRequest,
-  findUserByEmail,
-  getLastVerificationRequest,
-} from "@/server/db/queries/auth";
-import { generateSecureToken } from "@/server/utils/token";
+import { findUserByEmail } from "@/server/db/queries/auth";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
+import { communicationGuard } from "@/server/utils/verification-guard";
 
 function withAuthRateLimit() {
   return async (
@@ -56,37 +52,21 @@ async function handler(
   const user = await findUserByEmail(email!);
   if (!user) return successResponse;
 
-  const cooldownSeconds = Number(
-    await core.getSetting("auth.verification.cooldown.seconds", systemSlug),
-  );
-
-  // Check cooldown
-  const lastRequest = await getLastVerificationRequest(
-    user.id,
-    "password_reset",
-  );
-  if (lastRequest) {
-    const elapsed = Date.now() - new Date(lastRequest.createdAt).getTime();
-    if (elapsed < cooldownSeconds * 1000) {
-      return successResponse;
-    }
-  }
-
-  const resetExpiryMinutes = Number(
-    await core.getSetting("auth.passwordReset.expiry.minutes", systemSlug),
-  );
-
-  const resetToken = generateSecureToken();
-  await createVerificationRequest({
+  const guardResult = await communicationGuard({
     userId: user.id,
     type: "password_reset",
-    token: resetToken,
-    expiresAt: new Date(Date.now() + resetExpiryMinutes * 60_000),
+    systemSlug,
   });
 
+  if (!guardResult.allowed) return successResponse;
+
+  const expiryMinutes = Number(
+    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+      15,
+  );
   const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
-  const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+  const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 
   await publish("SEND_EMAIL", {
     recipients: [email!],
@@ -95,7 +75,7 @@ async function handler(
       name: user.profile?.name ?? email!,
       resetLink,
       email: email!,
-      expiryMinutes: String(resetExpiryMinutes),
+      expiryMinutes: String(expiryMinutes),
     },
     locale: user.profile?.locale || undefined,
     systemSlug,

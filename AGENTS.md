@@ -274,7 +274,7 @@ permission errors, and status messages.
 │   ├── utils/        (Core, FrontCore, cache, fs, token, token-revocation, cors,
 │   │                  rate-limiter, usage-tracker, credit-tracker,
 │   │                  entity-deduplicator, field-standardizer,
-│   │                  field-validator, guards, tenant,
+│   │                  field-validator, guards, tenant, verification-guard,
 │   │                  communication/templates/*, payment/{interface,credit-card})
 │   ├── event-queue/  (publisher, worker, registry, handlers/*)
 │   ├── module-registry.ts            # §11.1 — central registration API
@@ -694,36 +694,35 @@ systemSlug)`. If a key is missing,
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
-| Key                                                | Seed value                  | Used by                                             |
-| -------------------------------------------------- | --------------------------- | --------------------------------------------------- |
-| `app.name`                                         | `"Core"`                    | Email templates (`appName`)                         |
-| `app.baseUrl`                                      | `"http://localhost:3000"`   | Verification/reset links                            |
-| `app.defaultSystem`                                | `""`                        | Homepage fallback system slug                       |
-| `auth.token.expiry.minutes`                        | `"15"`                      | System API token lifetime                           |
-| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                     | Stay-logged-in lifetime (7 days)                    |
-| `auth.rateLimit.perMinute`                         | `"5"`                       | Auth route rate limit                               |
-| `auth.verification.expiry.minutes`                 | `"15"`                      | Email verification link                             |
-| `auth.passwordReset.expiry.minutes`                | `"30"`                      | Password reset link                                 |
-| `auth.verification.cooldown.seconds`               | `"120"`                     | Min interval between verification/reset emails      |
-| `auth.twoFactor.enabled`                           | `"true"`                    | Global 2FA toggle                                   |
-| `auth.oauth.enabled`                               | `"false"`                   | Global OAuth (login) toggle                         |
-| `auth.oauth.providers`                             | `"[]"`                      | JSON array of enabled providers                     |
-| `terms.generic`                                    | `""`                        | Generic LGPD fallback HTML                          |
-| `billing.autoRecharge.minAmount`                   | `"500"`                     | Min auto-recharge (cents)                           |
-| `billing.autoRecharge.maxAmount`                   | `"50000"`                   | Max auto-recharge per subscription (cents)          |
-| `auth.recoveryChannel.maxPerUser`                  | `"10"`                      | Max recovery channels per user                      |
-| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                      | Recovery channel verification link expiry (min)     |
-| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)                  |
-| `db.frontend.namespace`                            | `"main"`                    | Frontend SurrealDB namespace (§7.5)                 |
-| `db.frontend.database`                             | `"grex-id"`                 | Frontend SurrealDB database (§7.5)                  |
-| `db.frontend.user`                                 | `""`                        | SurrealDB auth user for frontend WebSocket          |
-| `db.frontend.pass`                                 | `""`                        | SurrealDB auth pass for frontend WebSocket          |
-| `cache.core.size`                                  | `"20"`                      | Core file cache size (MB)                           |
-| `cache.file.hitWindowHours`                        | `"1"`                       | Sliding window for cache hit counting (hours)       |
-| `transfer.default.maxConcurrentDownloads`          | `"0"`                       | Default max concurrent downloads (0 = unlimited)    |
-| `transfer.default.maxConcurrentUploads`            | `"0"`                       | Default max concurrent uploads (0 = unlimited)      |
-| `transfer.default.maxDownloadBandwidthMB`          | `"0"`                       | Default max download bandwidth MB/s (0 = unlimited) |
-| `transfer.default.maxUploadBandwidthMB`            | `"0"`                       | Default max upload bandwidth MB/s (0 = unlimited)   |
+| Key                                       | Seed value                  | Used by                                               |
+| ----------------------------------------- | --------------------------- | ----------------------------------------------------- |
+| `app.name`                                | `"Core"`                    | Email templates (`appName`)                           |
+| `app.baseUrl`                             | `"http://localhost:3000"`   | Verification/reset links                              |
+| `app.defaultSystem`                       | `""`                        | Homepage fallback system slug                         |
+| `auth.token.expiry.minutes`               | `"15"`                      | System API token lifetime                             |
+| `auth.token.expiry.stayLoggedIn.hours`    | `"168"`                     | Stay-logged-in lifetime (7 days)                      |
+| `auth.rateLimit.perMinute`                | `"5"`                       | Auth route rate limit                                 |
+| `auth.communication.expiry.minutes`       | `"15"`                      | Unified verification/communication token expiry (min) |
+| `auth.communication.maxCount`             | `"5"`                       | Max sends per (user, type) in rolling window          |
+| `auth.communication.windowHours`          | `"1"`                       | Rolling window for communication rate limit (hours)   |
+| `auth.twoFactor.enabled`                  | `"true"`                    | Global 2FA toggle                                     |
+| `auth.oauth.enabled`                      | `"false"`                   | Global OAuth (login) toggle                           |
+| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled providers                       |
+| `terms.generic`                           | `""`                        | Generic LGPD fallback HTML                            |
+| `billing.autoRecharge.minAmount`          | `"500"`                     | Min auto-recharge (cents)                             |
+| `billing.autoRecharge.maxAmount`          | `"50000"`                   | Max auto-recharge per subscription (cents)            |
+| `auth.recoveryChannel.maxPerUser`         | `"10"`                      | Max recovery channels per user                        |
+| `db.frontend.url`                         | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)                    |
+| `db.frontend.namespace`                   | `"main"`                    | Frontend SurrealDB namespace (§7.5)                   |
+| `db.frontend.database`                    | `"grex-id"`                 | Frontend SurrealDB database (§7.5)                    |
+| `db.frontend.user`                        | `""`                        | SurrealDB auth user for frontend WebSocket            |
+| `db.frontend.pass`                        | `""`                        | SurrealDB auth pass for frontend WebSocket            |
+| `cache.core.size`                         | `"20"`                      | Core file cache size (MB)                             |
+| `cache.file.hitWindowHours`               | `"1"`                       | Sliding window for cache hit counting (hours)         |
+| `transfer.default.maxConcurrentDownloads` | `"0"`                       | Default max concurrent downloads (0 = unlimited)      |
+| `transfer.default.maxConcurrentUploads`   | `"0"`                       | Default max concurrent uploads (0 = unlimited)        |
+| `transfer.default.maxDownloadBandwidthMB` | `"0"`                       | Default max download bandwidth MB/s (0 = unlimited)   |
+| `transfer.default.maxUploadBandwidthMB`   | `"0"`                       | Default max upload bandwidth MB/s (0 = unlimited)     |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -869,6 +868,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
 | `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
 | `server/utils/file-cache.ts`          | §12.12 — Sliding-Window Size-Aware LFU file cache               |
+| `server/utils/verification-guard.ts`  | §12.13 — unified communication guard (cooldown + rate limit)    |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1399,6 +1399,56 @@ export interface FileCacheStats {
   fileCount: number;
 }
 ```
+
+#### 12.13 Communication guard (`server/utils/verification-guard.ts`)
+
+Unified helper that replaces all per-route cooldown/expiry logic. Every route
+that sends a verification email/SMS MUST call `communicationGuard()` instead of
+manually checking cooldowns or creating `verification_request` rows.
+
+**Settings** (dynamic, seeded via `002_default_settings.ts`):
+
+| Key                                 | Default | Purpose                                                   |
+| ----------------------------------- | ------- | --------------------------------------------------------- |
+| `auth.communication.expiry.minutes` | `"15"`  | Unified expiry for all verification/communication tokens  |
+| `auth.communication.maxCount`       | `"5"`   | Max verification sends per (user, type) in rolling window |
+| `auth.communication.windowHours`    | `"1"`   | Rolling window in hours for the rate limit                |
+
+**Rules enforced in a single batched `db.query()` (§7.2):**
+
+1. **Previous-not-expired:** If an unused, non-expired `verification_request`
+   exists for the same `(userId, type)`, the new request is blocked with reason
+   `previousNotExpired`.
+2. **Rate limit:** If the user has >= `maxCount` requests of this type within
+   the rolling window (`windowHours`), the request is blocked with reason
+   `rateLimited`.
+3. If both checks pass, the `verification_request` row is created atomically in
+   the same batched query.
+
+**Contract:**
+
+```typescript
+export interface CommunicationGuardResult {
+  allowed: boolean;
+  reason?: "previousNotExpired" | "rateLimited";
+  token?: string;
+  expiresAt?: Date;
+}
+
+export async function communicationGuard(params: {
+  userId: string;
+  type: VerificationRequestType;
+  payload?: Record<string, unknown>;
+  systemSlug?: string;
+}): Promise<CommunicationGuardResult>;
+```
+
+**Route integration.** Routes that protect against user enumeration
+(forgot-password, recovery-channel-reset) return generic success when
+`!allowed`. Public routes (leads) and authenticated routes (recovery-channels
+resend) return 429 with the appropriate i18n key
+(`validation.verification.previousNotExpired` or
+`validation.verification.rateLimited`).
 
 ### 13. File Storage
 
@@ -2511,8 +2561,8 @@ Without `?system=`, pages show the core app name (`app.name`) with no logo.
    `validation.terms.required` if missing.
 3. Auth rate limit check (aggressive).
 4. Password hashed via `crypto::argon2::generate(password)` inside SurrealDB.
-5. `verification_request` row created (secure random token, expiry from
-   `auth.verification.expiry.minutes`).
+5. `verification_request` row created via `communicationGuard()` (§12.13) with
+   `auth.communication.expiry.minutes` expiry.
 6. Publish `SEND_EMAIL` (or `SEND_SMS` if phone-only) with the `verification`
    template.
 7. Login blocked until `emailVerified = true` (or `phoneVerified` for
@@ -2559,10 +2609,10 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 #### 19.7 Password recovery
 
 1. Submit email/phone. Bot protection + auth rate limit.
-2. Cooldown check (`auth.verification.cooldown.seconds`) — no new request within
-   the safe window.
+2. `communicationGuard()` (§12.13) enforces previous-not-expired + rate-limit
+   rules. Generic success returned on block (anti-enumeration).
 3. Create `verification_request` of type `password_reset` (expiry
-   `auth.passwordReset.expiry.minutes`).
+   `auth.communication.expiry.minutes`).
 4. Publish `SEND_EMAIL`/`SEND_SMS` with `password-reset` template.
 5. User clicks link → `reset-password` page validates token → submit new
    password → backend updates `passwordHash` and marks the request `usedAt`.
@@ -2581,14 +2631,14 @@ verification-request type with the `recovery-channel-reset` template.
 
 #### 19.9 Security measures
 
-| Measure               | Setting / implementation                                                                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Rate limiting         | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP).                                      |
-| Bot protection        | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token.                                 |
-| Verification cooldown | `auth.verification.cooldown.seconds` (default 120). Enforced via latest `verification_request.createdAt`.                    |
-| Token expiration      | Reset tokens (`auth.passwordReset.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime. |
-| 2FA                   | Per user. `auth.twoFactor.enabled` global toggle. TOTP after password on login.                                              |
-| OAuth                 | `auth.oauth.enabled` global toggle; shows provider buttons on login.                                                         |
+| Measure               | Setting / implementation                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Rate limiting         | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP).                                             |
+| Bot protection        | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token.                                        |
+| Verification cooldown | `communicationGuard()` (§12.13): previous-not-expired + `auth.communication.maxCount` within `auth.communication.windowHours`.      |
+| Token expiration      | Verification tokens (`auth.communication.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime. |
+| 2FA                   | Per user. `auth.twoFactor.enabled` global toggle. TOTP after password on login.                                                     |
+| OAuth                 | `auth.oauth.enabled` global toggle; shows provider buttons on login.                                                                |
 
 #### 19.10 Tenant embedding in JWT
 
@@ -2714,8 +2764,8 @@ channels** to regain access when they lose their primary credentials.
    unchanged. Always returns generic success to prevent enumeration.
 4. **Resend verification.**
    `POST /api/recovery-channels?action=resend-verification` re-sends the
-   verification email/SMS for an existing unverified channel, subject to the
-   cooldown in `auth.verification.cooldown.seconds`.
+   verification email/SMS for an existing unverified channel, subject to
+   `communicationGuard()` (§12.13).
 5. **Remove.** Authenticated user removes a channel via
    `DELETE /api/recovery-channels`. Removes from profile's `recoveryChannels`
    array and deletes the record in one batched query.
@@ -2723,9 +2773,8 @@ channels** to regain access when they lose their primary credentials.
 **Limits:**
 
 - Maximum 10 channels per user (`auth.recoveryChannel.maxPerUser`, default 10).
-- Verification link expiry: `auth.recoveryChannel.verification.expiry.minutes`
-  (default 15).
-- Cooldown for resend: `auth.verification.cooldown.seconds` (default 120).
+- Verification link expiry: `auth.communication.expiry.minutes` (default 15).
+- Cooldown for resend: `communicationGuard()` (§12.13).
 
 **Management UI.** The ProfilePage (`src/components/shared/ProfilePage.tsx`)
 renders a "Recovery Channels" card using `RecoveryChannelsSubform` (§18.5),
@@ -3694,8 +3743,8 @@ See §13.4.
   a `verification_request` of type `email_verify`; publish `SEND_EMAIL` with
   `verification` template. Return `{ requiresVerification: true }`. Lead data is
   updated only after the user clicks the verification link.
-- **Cooldown:** `auth.verification.cooldown.seconds`. Returns 429 if elapsed.
-- **Expiry:** `auth.verification.expiry.minutes` for the verification token.
+- **Cooldown:** `communicationGuard()` (§12.13). Returns 429 if blocked.
+- **Expiry:** `auth.communication.expiry.minutes` for the verification token.
 - System-specific routes (e.g. `/api/systems/grex-id/leads/public`) can delegate
   here and add their own logic (e.g. face biometrics).
 
@@ -4050,9 +4099,9 @@ Core loads.
 **Phase 2 — Authentication.** `@panva/jose` token utilities; rate limiter; all
 `/api/auth/*` routes; `BotProtection`; auth pages (login, register w/ LGPD
 checkbox §25, verify, forgot-password, reset-password); verification-request
-system w/ cooldowns; terms-acceptance validation on register + public leads;
-`useAuth`; minimal event-queue foundation (`send_email` handler +
-verification/password-reset templates).
+system w/ `communicationGuard()` (§12.13); terms-acceptance validation on
+register + public leads; `useAuth`; minimal event-queue foundation (`send_email`
+handler + verification/password-reset templates).
 
 **Phase 3 — Event Queue.** `publisher.ts`, `registry.ts`, `worker.ts` (claim,
 lease, backoff, dead-letter); `send_email` + `send_sms` handlers; templates

@@ -3,14 +3,10 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { publish } from "@/server/event-queue/publisher";
-import { generateSecureToken } from "@/server/utils/token";
-import {
-  createVerificationRequest,
-  getLastVerificationRequest,
-} from "@/server/db/queries/auth";
 import { findVerifiedRecoveryChannel } from "@/server/db/queries/recovery-channels";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
+import { communicationGuard } from "@/server/utils/verification-guard";
 
 function withAuthRateLimit() {
   return async (
@@ -35,7 +31,7 @@ async function handler(
 ): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json();
-  const { channelValue, botToken, systemSlug } = body;
+  const { channelValue, systemSlug } = body;
 
   // Always return success to avoid enumeration
   const successResponse = Response.json({
@@ -67,38 +63,21 @@ async function handler(
 
   const userId = String(channel.userId);
 
-  // Cooldown check
-  const cooldownSeconds = Number(
-    await core.getSetting("auth.verification.cooldown.seconds"),
-  );
-  const lastRequest = await getLastVerificationRequest(
-    userId,
-    "password_reset",
-  );
-  if (lastRequest) {
-    const elapsed = Date.now() - new Date(lastRequest.createdAt).getTime();
-    if (elapsed < cooldownSeconds * 1000) {
-      return successResponse;
-    }
-  }
-
-  // Create password reset verification request (reuses existing type)
-  const resetExpiryMinutes = Number(
-    await core.getSetting("auth.passwordReset.expiry.minutes"),
-  );
-  const resetToken = generateSecureToken();
-  await createVerificationRequest({
+  const guardResult = await communicationGuard({
     userId,
     type: "password_reset",
-    token: resetToken,
-    expiresAt: new Date(Date.now() + resetExpiryMinutes * 60_000),
+    systemSlug,
   });
 
+  if (!guardResult.allowed) return successResponse;
+
+  const expiryMinutes = Number(
+    (await core.getSetting("auth.communication.expiry.minutes")) || 15,
+  );
   const baseUrl = (await core.getSetting("app.baseUrl")) ??
     "http://localhost:3000";
-  const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+  const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 
-  // Get user profile name in the same call style as forgot-password route
   const db = await getDb();
   const userResult = await db.query<[{ profile: { name: string } }[]]>(
     "SELECT profile FROM $userId FETCH profile",
@@ -113,7 +92,7 @@ async function handler(
       name,
       resetLink,
       channelValue: stdValue,
-      expiryMinutes: String(resetExpiryMinutes),
+      expiryMinutes: String(expiryMinutes),
     },
     systemSlug,
   };

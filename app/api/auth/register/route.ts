@@ -1,16 +1,13 @@
 import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import {
-  createUser,
-  createVerificationRequest,
-} from "@/server/db/queries/auth";
-import { generateSecureToken } from "@/server/utils/token";
+import { createUser } from "@/server/db/queries/auth";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
+import { communicationGuard } from "@/server/utils/verification-guard";
 
 function withAuthRateLimit() {
   return async (
@@ -120,35 +117,33 @@ async function handler(
     locale: locale || undefined,
   });
 
-  const verificationExpiryMinutes = Number(
-    await core.getSetting("auth.verification.expiry.minutes"),
-  );
-
-  const verificationToken = generateSecureToken();
-  await createVerificationRequest({
+  const guardResult = await communicationGuard({
     userId: user.id,
     type: "email_verify",
-    token: verificationToken,
-    expiresAt: new Date(Date.now() + verificationExpiryMinutes * 60_000),
   });
 
-  const baseUrl = (await core.getSetting("app.baseUrl")) ??
-    "http://localhost:3000";
-  const verificationLink = `${baseUrl}/verify?token=${verificationToken}`;
-  const systemSlug = body.systemSlug as string | undefined;
+  if (guardResult.allowed) {
+    const expiryMinutes = Number(
+      (await core.getSetting("auth.communication.expiry.minutes")) || 15,
+    );
+    const baseUrl = (await core.getSetting("app.baseUrl")) ??
+      "http://localhost:3000";
+    const verificationLink = `${baseUrl}/verify?token=${guardResult.token}`;
+    const systemSlug = body.systemSlug as string | undefined;
 
-  await publish("SEND_EMAIL", {
-    recipients: [email!],
-    template: "verification",
-    templateData: {
-      name: name!,
-      verificationLink,
-      email: email!,
-      expiryMinutes: String(verificationExpiryMinutes),
-    },
-    locale,
-    systemSlug,
-  });
+    await publish("SEND_EMAIL", {
+      recipients: [email!],
+      template: "verification",
+      templateData: {
+        name: name!,
+        verificationLink,
+        email: email!,
+        expiryMinutes: String(expiryMinutes),
+      },
+      locale,
+      systemSlug,
+    });
+  }
 
   return Response.json(
     {

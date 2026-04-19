@@ -8,16 +8,13 @@ import {
   findLeadByEmailOrPhone,
   isLeadAssociated,
 } from "@/server/db/queries/leads";
-import {
-  createVerificationRequest,
-  getLastVerificationRequest,
-} from "@/server/db/queries/auth";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { publish } from "@/server/event-queue/publisher";
 import { getDb } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { communicationGuard } from "@/server/utils/verification-guard";
 
 async function postHandler(req: Request, _ctx: RequestContext) {
   let body: Record<string, unknown> | null = null;
@@ -141,50 +138,9 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const existing = await findLeadByEmailOrPhone(email!, phone);
 
     if (existing) {
-      // Cooldown check: prevent repeated verification requests
-      const core = Core.getInstance();
-      const cooldownSeconds = parseInt(
-        (await core.getSetting(
-          "auth.verification.cooldown.seconds",
-          systemSlug,
-        )) ?? "120",
-        10,
-      );
-      const lastRequest = await getLastVerificationRequest(
-        existing.id,
-        "lead_update",
-      );
-      if (lastRequest) {
-        const elapsed =
-          (Date.now() - new Date(lastRequest.createdAt).getTime()) / 1000;
-        if (elapsed < cooldownSeconds) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "COOLDOWN",
-                message: "validation.verification.cooldown",
-              },
-            },
-            { status: 429 },
-          );
-        }
-      }
-
-      // Create verification request
-      const verificationToken = crypto.randomUUID();
-      const expiryMinutes = parseInt(
-        (await core.getSetting(
-          "auth.verification.expiry.minutes",
-          systemSlug,
-        )) ?? "15",
-        10,
-      );
-      await createVerificationRequest({
+      const guardResult = await communicationGuard({
         userId: existing.id,
         type: "lead_update",
-        token: verificationToken,
-        expiresAt: new Date(Date.now() + expiryMinutes * 60_000),
         payload: {
           name: name ?? undefined,
           email: email ?? undefined,
@@ -198,7 +154,25 @@ async function postHandler(req: Request, _ctx: RequestContext) {
             ? faceDescriptor
             : undefined,
         },
+        systemSlug,
       });
+
+      if (!guardResult.allowed) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: guardResult.reason === "previousNotExpired"
+                ? "COOLDOWN"
+                : "RATE_LIMITED",
+              message: guardResult.reason === "previousNotExpired"
+                ? "validation.verification.previousNotExpired"
+                : "validation.verification.rateLimited",
+            },
+          },
+          { status: 429 },
+        );
+      }
 
       // Compute changes between existing and submitted data
       const changes: { field: string; from: string; to: string }[] = [];
@@ -222,11 +196,17 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         });
       }
 
-      // Publish lead update verification email
+      const core = Core.getInstance();
+      const expiryMinutes = Number(
+        (await core.getSetting(
+          "auth.communication.expiry.minutes",
+          systemSlug,
+        )) || 15,
+      );
       const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
         "http://localhost:3000";
       const verificationLink =
-        `${baseUrl}/verify?token=${verificationToken}&system=${
+        `${baseUrl}/verify?token=${guardResult.token}&system=${
           encodeURIComponent(systemSlug)
         }`;
 

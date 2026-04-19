@@ -39,19 +39,21 @@ const defaults: DefaultSetting[] = [
     description: "Max auth requests per minute per IP",
   },
   {
-    key: "auth.verification.expiry.minutes",
+    key: "auth.communication.expiry.minutes",
     value: "15",
-    description: "Email verification link expiry in minutes",
+    description:
+      "Unified expiry in minutes for all verification/communication tokens",
   },
   {
-    key: "auth.passwordReset.expiry.minutes",
-    value: "30",
-    description: "Password reset link expiry in minutes",
+    key: "auth.communication.maxCount",
+    value: "5",
+    description:
+      "Max verification sends per user per type within the rolling window",
   },
   {
-    key: "auth.verification.cooldown.seconds",
-    value: "120",
-    description: "Minimum interval between verification emails",
+    key: "auth.communication.windowHours",
+    value: "1",
+    description: "Rolling window in hours for the communication rate limit",
   },
   {
     key: "auth.twoFactor.enabled",
@@ -121,11 +123,6 @@ const defaults: DefaultSetting[] = [
     key: "auth.recoveryChannel.maxPerUser",
     value: "10",
     description: "Maximum recovery channels per user",
-  },
-  {
-    key: "auth.recoveryChannel.verification.expiry.minutes",
-    value: "15",
-    description: "Recovery channel verification link expiry in minutes",
   },
   {
     key: "db.frontend.url",

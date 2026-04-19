@@ -20,5 +20,7 @@
   "phone.duplicate": "J\u00e1 existe uma conta com este n\u00famero de telefone",
   "recoveryChannel.type.required": "Tipo de canal \u00e9 obrigat\u00f3rio",
   "recoveryChannel.value.required": "Valor do canal \u00e9 obrigat\u00f3rio",
-  "recoveryChannel.value.invalid": "Formato de e-mail ou telefone inv\u00e1lido"
+  "recoveryChannel.value.invalid": "Formato de e-mail ou telefone inv\u00e1lido",
+  "verification.previousNotExpired": "Uma solicita\u00e7\u00e3o de verifica\u00e7\u00e3o anterior ainda est\u00e1 ativa. Verifique seu e-mail ou aguarde a expira\u00e7\u00e3o.",
+  "verification.rateLimited": "Muitas solicita\u00e7\u00f5es de verifica\u00e7\u00e3o. Por favor, tente novamente mais tarde."
 }

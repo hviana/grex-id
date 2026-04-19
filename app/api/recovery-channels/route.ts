@@ -5,11 +5,6 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
-import { generateSecureToken } from "@/server/utils/token";
-import {
-  createVerificationRequest,
-  getLastVerificationRequest,
-} from "@/server/db/queries/auth";
 import {
   createRecoveryChannel,
   deleteRecoveryChannel,
@@ -18,6 +13,10 @@ import {
   listRecoveryChannels,
 } from "@/server/db/queries/recovery-channels";
 import Core from "@/server/utils/Core";
+import {
+  communicationGuard,
+  type CommunicationGuardResult,
+} from "@/server/utils/verification-guard";
 
 async function sendChannelVerification(
   userId: string,
@@ -26,39 +25,41 @@ async function sendChannelVerification(
   channelValue: string,
   userName: string,
   systemSlug: string,
-): Promise<void> {
-  const core = Core.getInstance();
-  const verificationExpiryMinutes = Number(
-    await core.getSetting(
-      "auth.recoveryChannel.verification.expiry.minutes",
-      systemSlug,
-    ),
-  );
-  const token = generateSecureToken();
-  await createVerificationRequest({
+): Promise<CommunicationGuardResult> {
+  const guardResult = await communicationGuard({
     userId,
     type: "recovery_verify",
-    token,
-    expiresAt: new Date(Date.now() + verificationExpiryMinutes * 60_000),
     payload: { channelId },
+    systemSlug,
   });
 
+  if (!guardResult.allowed) return guardResult;
+
+  const core = Core.getInstance();
+  const expiryMinutes = Number(
+    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+      15,
+  );
   const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
-  const verificationLink = `${baseUrl}/verify?token=${token}`;
-  const eventData = {
-    recipients: [channelValue],
-    template: "recovery-verify",
-    templateData: {
-      name: userName,
-      verificationLink,
-      channelValue,
-      expiryMinutes: String(verificationExpiryMinutes),
-    },
-    systemSlug,
-  };
+  const verificationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 
-  await publish(channelType === "email" ? "SEND_EMAIL" : "SEND_SMS", eventData);
+  await publish(
+    channelType === "email" ? "SEND_EMAIL" : "SEND_SMS",
+    {
+      recipients: [channelValue],
+      template: "recovery-verify",
+      templateData: {
+        name: userName,
+        verificationLink,
+        channelValue,
+        expiryMinutes: String(expiryMinutes),
+      },
+      systemSlug,
+    },
+  );
+
+  return guardResult;
 }
 
 async function getHandler(req: Request, ctx: RequestContext) {
@@ -111,35 +112,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    // Cooldown check
-    const core = Core.getInstance();
-    const cooldownSeconds = Number(
-      await core.getSetting(
-        "auth.verification.cooldown.seconds",
-        ctx.tenant.systemSlug,
-      ),
-    );
-    const lastRequest = await getLastVerificationRequest(
-      userId,
-      "recovery_verify",
-    );
-    if (lastRequest) {
-      const elapsed = Date.now() - new Date(lastRequest.createdAt).getTime();
-      if (elapsed < cooldownSeconds * 1000) {
-        return Response.json(
-          {
-            success: false,
-            error: { code: "ERROR", message: "common.error.rateLimited" },
-          },
-          { status: 429 },
-        );
-      }
-    }
-
-    // Get user name from claims profile
     const name = (ctx.claims as any)?.profile?.name ?? "";
 
-    await sendChannelVerification(
+    const result = await sendChannelVerification(
       userId,
       String(channel.id),
       channel.type as "email" | "phone",
@@ -147,6 +122,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
       name,
       ctx.tenant.systemSlug,
     );
+
+    if (!result.allowed) {
+      const message = result.reason === "previousNotExpired"
+        ? "validation.verification.previousNotExpired"
+        : "validation.verification.rateLimited";
+      return Response.json(
+        { success: false, error: { code: "ERROR", message } },
+        { status: 429 },
+      );
+    }
 
     return Response.json({ success: true });
   }
@@ -242,7 +227,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Get user name from claims profile
   const name = (ctx.claims as any)?.profile?.name ?? "";
 
   await sendChannelVerification(
