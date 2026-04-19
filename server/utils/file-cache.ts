@@ -6,6 +6,7 @@ export interface FileCacheResult {
   hit: boolean;
   noCache: boolean;
   data?: Uint8Array;
+  mimeType?: string;
 }
 
 export interface FileCacheStats {
@@ -17,14 +18,14 @@ export interface FileCacheStats {
 interface CachedFile {
   data: Uint8Array;
   size: number;
-  hits: number;
-  lastAccess: number;
+  mimeType: string;
+  accesses: number[]; // Date.now() timestamps per hit
+  lastAccess: number; // accessCounter value for LRU tiebreaking
 }
 
 interface TenantFileCache {
   files: Map<string, CachedFile>;
   usedSize: number;
-  churnSize: number;
 }
 
 class FileCacheManager {
@@ -41,14 +42,34 @@ class FileCacheManager {
     return FileCacheManager.instance;
   }
 
+  private pruneAccesses(
+    file: CachedFile,
+    now: number,
+    hitWindowMs: number,
+  ): number {
+    const cutoff = now - hitWindowMs;
+    while (file.accesses.length > 0 && file.accesses[0] < cutoff) {
+      file.accesses.shift();
+    }
+    return file.accesses.length;
+  }
+
+  private score(file: CachedFile, now: number, hitWindowMs: number): number {
+    const hits = this.pruneAccesses(file, now, hitWindowMs);
+    return hits / file.size;
+  }
+
   access(
     tenantKey: string,
     fileId: string,
     fileSize: number,
     maxSize: number,
     data?: Uint8Array,
+    hitWindowMs: number = 3600000,
+    mimeType: string = "application/octet-stream",
   ): FileCacheResult {
     this.accessCounter += 1;
+    const now = Date.now();
 
     if (maxSize <= 0) {
       return { hit: false, noCache: true };
@@ -56,15 +77,21 @@ class FileCacheManager {
 
     let tenant = this.tenants.get(tenantKey);
     if (!tenant) {
-      tenant = { files: new Map(), usedSize: 0, churnSize: 0 };
+      tenant = { files: new Map(), usedSize: 0 };
       this.tenants.set(tenantKey, tenant);
     }
 
     const existing = tenant.files.get(fileId);
     if (existing) {
-      existing.hits += 1;
+      existing.accesses.push(now);
+      this.pruneAccesses(existing, now, hitWindowMs);
       existing.lastAccess = this.accessCounter;
-      return { hit: true, noCache: false, data: existing.data };
+      return {
+        hit: true,
+        noCache: false,
+        data: existing.data,
+        mimeType: existing.mimeType,
+      };
     }
 
     if (fileSize > maxSize) {
@@ -76,7 +103,7 @@ class FileCacheManager {
     }
 
     while (tenant.usedSize + fileSize > maxSize && tenant.files.size > 0) {
-      const victim = this.findVictim(tenant);
+      const victim = this.findVictim(tenant, now, hitWindowMs);
       if (!victim) break;
       tenant.files.delete(victim.key);
       tenant.usedSize -= victim.size;
@@ -85,29 +112,11 @@ class FileCacheManager {
     tenant.files.set(fileId, {
       data,
       size: fileSize,
-      hits: 1,
+      mimeType,
+      accesses: [now],
       lastAccess: this.accessCounter,
     });
     tenant.usedSize += fileSize;
-    tenant.churnSize += fileSize;
-
-    while (tenant.churnSize >= maxSize) {
-      const toDelete: string[] = [];
-      for (const [key, file] of tenant.files) {
-        file.hits = Math.floor(file.hits / 2);
-        if (file.hits === 0) {
-          toDelete.push(key);
-        }
-      }
-      for (const key of toDelete) {
-        const removed = tenant.files.get(key);
-        if (removed) {
-          tenant.usedSize -= removed.size;
-          tenant.files.delete(key);
-        }
-      }
-      tenant.churnSize -= maxSize;
-    }
 
     return { hit: false, noCache: false };
   }
@@ -124,17 +133,14 @@ class FileCacheManager {
     };
   }
 
-  shouldCache(tenantKey: string, fileSize: number, maxSize: number): boolean {
-    if (maxSize <= 0 || fileSize > maxSize) return false;
-
+  evict(tenantKey: string, fileId: string): void {
     const tenant = this.tenants.get(tenantKey);
-    if (!tenant || tenant.usedSize + fileSize <= maxSize) return true;
-
-    const newScore = 1 / fileSize;
-    for (const file of tenant.files.values()) {
-      if (file.hits / file.size < newScore) return true;
+    if (!tenant) return;
+    const removed = tenant.files.get(fileId);
+    if (removed) {
+      tenant.usedSize -= removed.size;
+      tenant.files.delete(fileId);
     }
-    return false;
   }
 
   clearTenant(tenantKey: string): void {
@@ -147,19 +153,21 @@ class FileCacheManager {
 
   private findVictim(
     tenant: TenantFileCache,
+    now: number,
+    hitWindowMs: number,
   ): { key: string; size: number } | null {
     let worst:
       | { key: string; score: number; lastAccess: number; size: number }
       | null = null;
 
     for (const [key, file] of tenant.files) {
-      const score = file.hits / file.size;
+      const s = this.score(file, now, hitWindowMs);
       if (
         !worst ||
-        score < worst.score ||
-        (score === worst.score && file.lastAccess < worst.lastAccess)
+        s < worst.score ||
+        (s === worst.score && file.lastAccess < worst.lastAccess)
       ) {
-        worst = { key, score, lastAccess: file.lastAccess, size: file.size };
+        worst = { key, score: s, lastAccess: file.lastAccess, size: file.size };
       }
     }
 

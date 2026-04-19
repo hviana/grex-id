@@ -86,11 +86,6 @@ const defaults: DefaultSetting[] = [
       "Mailgun sender address (e.g. App Name <noreply@yourdomain.com>)",
   },
   {
-    key: "files.maxUploadSizeBytes",
-    value: "52428800",
-    description: "Maximum file upload size in bytes (50MB)",
-  },
-  {
     key: "app.defaultSystem",
     value: "",
     description:
@@ -106,28 +101,6 @@ const defaults: DefaultSetting[] = [
     value: "",
     description:
       "Generic LGPD/terms of service HTML content (fallback when system has no specific terms)",
-  },
-  {
-    key: "files.publicUpload.rateLimit.perMinute",
-    value: "3",
-    description: "Strict per-IP rate limit for unauthenticated file uploads",
-  },
-  {
-    key: "files.publicUpload.maxSizeBytes",
-    value: "2097152",
-    description: "Max size for unauthenticated uploads (2 MB)",
-  },
-  {
-    key: "files.publicUpload.allowedExtensions",
-    value: '[".svg",".png",".jpg",".jpeg",".webp"]',
-    description:
-      "JSON array of allowed file extensions for unauthenticated uploads",
-  },
-  {
-    key: "files.publicUpload.allowedPathPatterns",
-    value: '["*/*/*/logos/*"]',
-    description:
-      "JSON array of glob patterns for allowed unauthenticated upload paths",
   },
   {
     key: "billing.autoRecharge.minAmount",
@@ -180,10 +153,14 @@ const defaults: DefaultSetting[] = [
     description: "SurrealDB auth pass for frontend WebSocket connection",
   },
   {
-    key: "cache.file.maxSize",
-    value: "20971520",
-    description:
-      "Maximum in-memory file cache size in bytes for core/superuser (20 MB default)",
+    key: "cache.core.size",
+    value: "20",
+    description: "Core file cache size in megabytes",
+  },
+  {
+    key: "cache.file.hitWindowHours",
+    value: "1",
+    description: "Sliding window duration for file cache hit counting (hours)",
   },
 ];
 

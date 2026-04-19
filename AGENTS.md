@@ -694,36 +694,32 @@ systemSlug)`. If a key is missing,
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
-| Key                                                | Seed value                                 | Used by                                             |
-| -------------------------------------------------- | ------------------------------------------ | --------------------------------------------------- |
-| `app.name`                                         | `"Core"`                                   | Email templates (`appName`)                         |
-| `app.baseUrl`                                      | `"http://localhost:3000"`                  | Verification/reset links                            |
-| `app.defaultSystem`                                | `""`                                       | Homepage fallback system slug                       |
-| `auth.token.expiry.minutes`                        | `"15"`                                     | System API token lifetime                           |
-| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                                    | Stay-logged-in lifetime (7 days)                    |
-| `auth.rateLimit.perMinute`                         | `"5"`                                      | Auth route rate limit                               |
-| `auth.verification.expiry.minutes`                 | `"15"`                                     | Email verification link                             |
-| `auth.passwordReset.expiry.minutes`                | `"30"`                                     | Password reset link                                 |
-| `auth.verification.cooldown.seconds`               | `"120"`                                    | Min interval between verification/reset emails      |
-| `auth.twoFactor.enabled`                           | `"true"`                                   | Global 2FA toggle                                   |
-| `auth.oauth.enabled`                               | `"false"`                                  | Global OAuth (login) toggle                         |
-| `auth.oauth.providers`                             | `"[]"`                                     | JSON array of enabled providers                     |
-| `files.maxUploadSizeBytes`                         | `"52428800"`                               | 50 MB                                               |
-| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Per-IP limit for unauthenticated uploads            |
-| `files.publicUpload.maxSizeBytes`                  | `"2097152"`                                | 2 MB                                                |
-| `files.publicUpload.allowedExtensions`             | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist                   |
-| `files.publicUpload.allowedPathPatterns`           | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist                   |
-| `terms.generic`                                    | `""`                                       | Generic LGPD fallback HTML                          |
-| `billing.autoRecharge.minAmount`                   | `"500"`                                    | Min auto-recharge (cents)                           |
-| `billing.autoRecharge.maxAmount`                   | `"50000"`                                  | Max auto-recharge per subscription (cents)          |
-| `auth.recoveryChannel.maxPerUser`                  | `"10"`                                     | Max recovery channels per user                      |
-| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                                     | Recovery channel verification link expiry (min)     |
-| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"`                | Frontend WebSocket endpoint (§7.5)                  |
-| `db.frontend.namespace`                            | `"main"`                                   | Frontend SurrealDB namespace (§7.5)                 |
-| `db.frontend.database`                             | `"grex-id"`                                | Frontend SurrealDB database (§7.5)                  |
-| `db.frontend.user`                                 | `""`                                       | SurrealDB auth user for frontend WebSocket          |
-| `db.frontend.pass`                                 | `""`                                       | SurrealDB auth pass for frontend WebSocket          |
-| `cache.file.maxSize`                               | `"20971520"`                               | Max in-memory file cache for core/superuser (20 MB) |
+| Key                                                | Seed value                  | Used by                                         |
+| -------------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| `app.name`                                         | `"Core"`                    | Email templates (`appName`)                     |
+| `app.baseUrl`                                      | `"http://localhost:3000"`   | Verification/reset links                        |
+| `app.defaultSystem`                                | `""`                        | Homepage fallback system slug                   |
+| `auth.token.expiry.minutes`                        | `"15"`                      | System API token lifetime                       |
+| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                     | Stay-logged-in lifetime (7 days)                |
+| `auth.rateLimit.perMinute`                         | `"5"`                       | Auth route rate limit                           |
+| `auth.verification.expiry.minutes`                 | `"15"`                      | Email verification link                         |
+| `auth.passwordReset.expiry.minutes`                | `"30"`                      | Password reset link                             |
+| `auth.verification.cooldown.seconds`               | `"120"`                     | Min interval between verification/reset emails  |
+| `auth.twoFactor.enabled`                           | `"true"`                    | Global 2FA toggle                               |
+| `auth.oauth.enabled`                               | `"false"`                   | Global OAuth (login) toggle                     |
+| `auth.oauth.providers`                             | `"[]"`                      | JSON array of enabled providers                 |
+| `terms.generic`                                    | `""`                        | Generic LGPD fallback HTML                      |
+| `billing.autoRecharge.minAmount`                   | `"500"`                     | Min auto-recharge (cents)                       |
+| `billing.autoRecharge.maxAmount`                   | `"50000"`                   | Max auto-recharge per subscription (cents)      |
+| `auth.recoveryChannel.maxPerUser`                  | `"10"`                      | Max recovery channels per user                  |
+| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                      | Recovery channel verification link expiry (min) |
+| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)              |
+| `db.frontend.namespace`                            | `"main"`                    | Frontend SurrealDB namespace (§7.5)             |
+| `db.frontend.database`                             | `"grex-id"`                 | Frontend SurrealDB database (§7.5)              |
+| `db.frontend.user`                                 | `""`                        | SurrealDB auth user for frontend WebSocket      |
+| `db.frontend.pass`                                 | `""`                        | SurrealDB auth pass for frontend WebSocket      |
+| `cache.core.size`                                  | `"20"`                      | Core file cache size (MB)                       |
+| `cache.file.hitWindowHours`                        | `"1"`                       | Sliding window for cache hit counting (hours)   |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -868,7 +864,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
 | `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
 | `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
-| `server/utils/file-cache.ts`          | §12.12 — Churn-Decayed Size-Aware LFU file cache                |
+| `server/utils/file-cache.ts`          | §12.12 — Sliding-Window Size-Aware LFU file cache               |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1244,67 +1240,85 @@ clearAllCacheForSlug(slug: string): void;
 
 Systems and frameworks register their own caches following the same pattern.
 
-#### 12.12 File Cache — Churn-Decayed Size-Aware LFU (`server/utils/file-cache.ts`)
+#### 12.12 File Cache — Sliding-Window Size-Aware LFU (`server/utils/file-cache.ts`)
 
 A per-tenant in-memory file cache that stores file content as `Uint8Array` and
 avoids SurrealFS reads on cache hits. **Separate from the config cache
 registry** (§12.11) — the file cache is a standalone singleton
 (`FileCacheManager`) because it stores binary content, not configuration data.
 
-**Algorithm: Churn-Decayed Size-Aware LFU.** A self-adaptive, single-parameter
-cache. The only tuning knob is `maxSize` (total cache capacity in bytes). No
-time windows, no tunable decay constants.
+**Algorithm: Sliding-Window Size-Aware LFU.** Each file's priority is determined
+by its hit count within a configurable time window — not by cumulative or
+churn-decayed counters. This makes the cache **adaptive**: files that were
+popular an hour ago but haven't been accessed recently naturally decay, while
+newly popular files rise immediately.
+
+**Two parameters:**
+
+1. `maxSize` — total cache capacity in bytes (per tenant).
+2. `hitWindowMs` — sliding window duration in milliseconds. Read from
+   `Core.getSetting("cache.file.hitWindowHours")` (default 1 hour). The download
+   route resolves this alongside `maxSize` and passes it to `access()`.
 
 **State per tenant** (keyed by `"companyId:systemSlug"`):
 
-- `files: Map<string, { data: Uint8Array; size: number; hits: number; lastAccess: number }>`
+- `files: Map<string, { data: Uint8Array; size: number; mimeType: string; accesses: number[]; lastAccess: number }>`
 - `usedSize: number`
-- `churnSize: number`
+
+`accesses` is an array of `Date.now()` timestamps — one per hit. Old timestamps
+are pruned on each access and on eviction scoring.
 
 **Global state:**
 
 - `accessCounter: number` — monotonic counter for LRU tiebreaking
 
-**Priority score:** `score = hits / size`. More accessed files go up; larger
-files need more hits to justify their space.
+**Priority score:** `score = hitsInWindow / size`. Only accesses within
+`hitWindowMs` count toward `hitsInWindow`. Larger files need more recent hits to
+justify their space.
 
-**Churn aging:** every time the system inserts a total of `maxSize` bytes of new
-data into the cache, divide all `hits` by 2. This makes the cache self-adaptive:
-if the workload changes fast, aging happens fast; if the workload is stable,
-aging happens slowly.
-
-**On access(`tenantKey`, `fileId`, `fileSize`, `maxSize`, `data?`):**
+**On access(`tenantKey`, `fileId`, `fileSize`, `maxSize`, `data?`,
+`hitWindowMs?`, `mimeType?`):**
 
 1. `accessCounter += 1`
-2. If file is already cached: `hits += 1`, `lastAccess = accessCounter` → return
-   `{ hit: true, data: entry.data }`
+2. If file is already cached: push `Date.now()` into `accesses`, prune
+   timestamps older than `now - hitWindowMs`, `lastAccess = accessCounter` →
+   return `{ hit: true, data: entry.data, mimeType: entry.mimeType }`
 3. If `fileSize > maxSize`: return `{ hit: false, noCache: true }` — file too
    large to ever cache
 4. While `usedSize + fileSize > maxSize`: evict the cached file with the lowest
-   `score` (ties broken by oldest `lastAccess`)
+   `score` (ties broken by oldest `lastAccess`). Scoring prunes each candidate's
+   `accesses` array before computing `hitsInWindow`. Files with zero hits in
+   window are evicted first.
 5. If `data` is provided: insert new entry
-   `{ data, size: fileSize, hits: 1,
-   lastAccess: accessCounter }`
-6. `usedSize += fileSize`, `churnSize += fileSize`
-7. While `churnSize >= maxSize`: for every cached file:
-   `hits = floor(hits /
-   2)`, remove files whose `hits` became 0 (subtract
-   their size from `usedSize`), `churnSize -= maxSize`
-8. Return `{ hit: false, noCache: false }`
+   `{ data, size: fileSize, mimeType, accesses: [Date.now()], lastAccess: accessCounter }`
+6. `usedSize += fileSize`
+7. Return `{ hit: false, noCache: false }`
+
+**Adaptive behavior.** Because scoring only counts hits within the window, the
+cache automatically forgets old popularity. A file accessed 100 times yesterday
+but zero times in the last hour scores 0 — it becomes the first eviction
+candidate. No explicit aging step is needed.
 
 **Max-size resolution:**
 
-- Tenant (company + system):
-  `plan.fileCacheLimitBytes + voucher.fileCacheLimitModifier`
-- Core / superuser: `Core.getSetting("cache.file.maxSize")` (seeded at 20 MB)
+- Tenant (company + system): `resolveFileCacheLimit()` (plan's
+  `fileCacheLimitBytes` + voucher's `fileCacheLimitModifier`)
+- Core / anonymous: `Core.getSetting("cache.core.size")` (seeded at `"20"`,
+  interpreted as megabytes → multiplied by 1048576)
+
+**Hit-window resolution:**
+
+- `Core.getSetting("cache.file.hitWindowHours")` (seeded at `"1"`)
+- Converted to milliseconds by the caller before passing to `access()`
 
 **Integration point:** the download route (`GET /api/files/download`) checks the
 cache before reading from SurrealFS. On cache miss, it reads from SurrealFS and
-stores the content in the cache. Anonymous requests bypass the cache entirely.
+stores the content in the cache. The upload route calls `evict()` on replacement
+(§13.2 step 7). Anonymous requests use the core cache (tenant key `"core"`, same
+as superuser without a matching system).
 
-**No upload invalidation:** new files are not yet cached; existing files are
-unchanged by uploads. File deletions should call `clearTenant()` for the
-affected tenant to prevent stale data.
+**File deletions** should call `clearTenant()` for the affected tenant to
+prevent stale data.
 
 **Usage reporting:** `FileCacheManager.getStats(tenantKey, maxSize)` returns
 `{ usedBytes, maxBytes, fileCount }` for the Usage API and UsagePage.
@@ -1316,6 +1330,7 @@ export interface FileCacheResult {
   hit: boolean;
   noCache: boolean; // true when file exceeds maxSize
   data?: Uint8Array;
+  mimeType?: string; // stored on insert, returned on hit — avoids DB metadata lookup
 }
 
 export interface FileCacheStats {
@@ -1333,80 +1348,147 @@ within surreal-fs — no separate SQL tables.
 #### 13.1 Path pattern
 
 ```
-{companyId}/{systemSlug}/{userId}/{...category}/{crypto.randomUUID()}/{fileName}
+path = [companyId, systemSlug, userId, ...category, fileUuid, fileName]
 ```
 
-`category` is a `string[]` spread into the path (e.g.
+All elements are **deterministic** — the download route splits the path array to
+extract `companyId` (index 0), `systemSlug` (index 1), and `userId` (index 2)
+for control mechanisms (cache context, access checks, rate limiting).
+
+`category` is a `string[]` spread between `userId` and `fileUuid` (e.g.
 `["documents","invoices"]`), enabling directory-like browsing via
 `fs.readDir()`.
 
-#### 13.2 Upload route (`POST /api/files/upload`) — two-tier
+**`fileUuid` is frontend-generated.** The frontend creates a new
+`crypto.randomUUID()` for new files and reuses the existing UUID when replacing
+a file. This allows atomic replacement via surreal-fs — sending the same path
+overwrites the file contents while keeping the same URI. The route never
+generates UUIDs.
 
-FormData: `file`, `companyId`, `systemSlug`, `userId`, `category` (JSON string
-array), optional `description`. `companyId`, `systemSlug`, and `category` are
-always required. `userId` defaults to `"superuser"` for authenticated superusers
-without a tenant, or `"anonymous"` for unauthenticated requests.
+#### 13.2 Upload route (`POST /api/files/upload`)
 
-All uploads use the same path pattern (§13.1). No special paths exist.
+FormData: `file` (stream), `systemSlug`, `category` (JSON string array),
+`fileUuid`, optional `description`. The `fileUuid` is generated by the frontend
+— new file → new UUID; replace existing → same UUID (see §13.1).
 
-**Mode is determined by the `Authorization` header.** If a valid token exists →
-authenticated mode; otherwise → unauthenticated mode.
+**Single route, single flow.** Authentication state determines the tenant
+context (§9), which in turn determines the path elements `companyId` and
+`userId`. There is no separate "authenticated mode" vs "unauthenticated mode" —
+the `control` callback enforces all policy differences.
 
-**Authenticated mode.**
+**Path construction follows tenant conventions (§9):**
 
-1. `withAuth` verifies the token and populates `ctx.claims`.
-2. Validate FormData. Parse `category`. `companyId`, `systemSlug`, and
-   `category` are required.
-3. Regular users: `companyId` and `userId` come from the token's tenant;
-   `systemSlug` comes from the FormData (the frontend knows the slug).
-   Superusers without a tenant (`systemId = "0"`): `companyId` defaults to
-   `"core"`, `userId` defaults to `"superuser"`, `systemSlug` comes from the
-   FormData (the form must have a slug filled before the upload is enabled).
-4. Enforce `files.maxUploadSizeBytes`.
-5. `fileUuid = crypto.randomUUID()`.
-6. Path = `[companyId, systemSlug, userId, ...category, fileUuid, fileName]`.
-7. `fs.save({ path, content, metadata })` — metadata includes `companyId`,
-   `systemSlug`, `userId`, `category`, `fileName`, `fileUuid`, `mimeType`,
-   optional `description`.
-8. Return `{ uri, fileUuid, fileName, sizeBytes, mimeType }`.
+`companyId` is `ctx.tenant.companyId` and `userId` is `ctx.claims.actorId` —
+directly from the tenant/claims, no defaults, no special cases. Per §9.2:
+unauthenticated requests receive `companyId = "0"` and `actorId = "0"`;
+superusers without a tenant receive `companyId = "0"` and their real `actorId`.
+These values flow into the path as-is.
 
-**Unauthenticated mode** — for public-facing forms:
+`systemSlug` comes from FormData in all cases — the frontend always knows the
+slug.
 
-1. Strict per-IP rate limit from `files.publicUpload.rateLimit.perMinute`
-   (default 3).
-2. Validate FormData. Parse `category`. `companyId`, `systemSlug`, and
-   `category` are required. `userId` defaults to `"anonymous"`.
-3. **Path whitelist:** constructed path must match one of
-   `files.publicUpload.allowedPathPatterns` (JSON glob array).
-4. **Size limit:** ≤ `files.publicUpload.maxSizeBytes` (default 2 MB).
-5. **Extension whitelist:** extension must be in
-   `files.publicUpload.allowedExtensions`.
-6. Additional storage-layer safety net via `fs.save({ control })`:
+**Route steps:**
+
+1. `withAuth` populates `ctx.tenant` + `ctx.claims`. Unauthenticated requests
+   receive the synthesized anonymous Tenant (§9.2).
+2. Validate FormData: `file`, `systemSlug`, `category`, `fileUuid` required.
+3. Resolve `companyId` and `userId` from the tenant context —
+   `companyId = ctx.tenant.companyId`, `userId = ctx.claims?.actorId ?? "0"`.
+   Per §11, `ctx.claims` is `undefined` for unauthenticated requests; the
+   `?? "0"` fallback ensures `userId` is always a string.
+4. Construct path per §13.1:
+   `path = [companyId, systemSlug, userId, ...category, fileUuid, fileName]`.
+5. Stream the file directly from FormData (`file.stream()`) — never buffer into
+   memory.
+6. Call `fs.save({ path, content: stream, metadata, control })` where metadata
+   includes `companyId`, `systemSlug`, `userId`, `category`, `fileName`,
+   `fileUuid`, `mimeType`, optional `description`.
+
+**`control` callback** — all validation, rate limiting, size limits, and
+extension checks are enforced inside `control` (not in the route handler). This
+leverages surreal-fs's built-in concurrency maps and throttling. The callback
+receives `(path, concurrencyMap)` and returns a `SaveControlResult`. Currently
+implemented as a scaffold with sensible defaults — the specific limits will be
+specified in the future:
 
 ```typescript
-await fs.save({
-  path,
-  content: bytes,
-  metadata,
-  control: (savePath, concurrencyMap) =>
-    isPathAllowed(savePath, allowedPatterns),
-});
+control: ((_path, _concurrencyMap): SaveControlResult => ({
+  accessAllowed: true,
+  kbytesPerSecond: 16384,
+  concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+  maxFileSizeBytes: 52428800, // 50 MB scaffold
+  allowedExtensions: [],
+}));
 ```
 
-The `control(path, concurrencyMap)` callback is invoked before the write;
-returning `false` rejects it. This enforces path restrictions even if
-application-level checks are bypassed.
+`companyId` and `systemSlug` are closure variables from the tenant context and
+FormData — not re-extracted from the `path` argument.
 
-7. Generate UUID, save, return (same shape as authenticated mode).
+7. **Cache invalidation on replacement.** If the file already existed (same path
+   = replacement), clear the cached entry for that URI so subsequent downloads
+   fetch the fresh content. Uses the same cache context resolution as the
+   download route (§13.3, §13.6).
+8. Return `{ uri, fileUuid, fileName, sizeBytes, mimeType }`.
 
 #### 13.3 Download route (`GET /api/files/download?uri=...`)
 
-1. Split `uri` into the path array.
-2. `fs.read({ path })` → content stream + metadata.
-3. Resolve `fileName` + `mimeType` from metadata (fallback: last path segment +
-   `application/octet-stream`).
-4. Stream response with `Content-Type`, `Content-Disposition`, `Content-Length`
-   headers.
+**Stream-first, cache-aware.** The route always streams to the client. Cache
+hits bypass SurrealFS; cache misses stream from SurrealFS with optional
+background caching (§13.6).
+
+**No invented helpers.** This route uses only the surreal-fs API (`fs.read`,
+`fs.URIComponentToPath`, `SurrealFS.readStream`) and the file cache
+(`FileCacheManager.access`, `evict`). Never create MIME-type maps, manual chunk
+iterators, or metadata lookup helpers — mimeType comes from upload metadata or
+the cached entry.
+
+**Path extraction for control (not JWT).** The URI encodes the full path per
+§13.1: `uri = "{companyId}/{systemSlug}/..."`. The route decodes the URI into a
+path array and extracts `companyId` (index 0) and `systemSlug` (index 1) for
+cache context resolution and access control — independently of authentication
+state.
+
+**Route steps:**
+
+1. Decode `uri` into `path` array via `fs.URIComponentToPath(uri)`.
+2. Extract `companyId = path[0]`, `systemSlug = path[1]` for cache context
+   (§13.6).
+3. **Cache HIT:** return `Response` from cached `Uint8Array` — skip SurrealFS
+   entirely.
+4. **Cache MISS:** call `fs.read({ path, control })` — returns a `File` with a
+   lazy `ReadableStream` for the content.
+
+**`control` callback** — rate limiting and concurrency via surreal-fs:
+
+```typescript
+control: ((_path, _concurrencyMap): ReadControlResult => ({
+  accessAllowed: true,
+  kbytesPerSecond: isAnonymous ? 1024 : 16384,
+  concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+}));
+```
+
+`isAnonymous` is `!ctx.claims` (§11 — unauthenticated requests have
+`ctx.claims = undefined`). `companyId` and `systemSlug` are extracted from the
+path array, not from the JWT. Anonymous requests get bandwidth-throttled reads
+(slower `kbytesPerSecond`) and use the core cache (tenant key `"core"`).
+
+5. Resolve `fileName` from `file.metadata.fileName` and `mimeType` from
+   `file.metadata.mimeType` (stored during upload, §13.2 step 6). Fallback: last
+   path segment + `application/octet-stream`. **Never invent MIME-type maps or
+   helper functions** — the mimeType is always available from metadata or from
+   the cache hit's stored `mimeType` field (§12.12).
+6. Stream response with `Content-Type`, `Content-Disposition`, `Content-Length`
+   headers — the client receives bytes as soon as SurrealFS provides them.
+7. **Background cache insertion** (non-blocking, deduplicated): tee the stream —
+   one branch serves the client, the other is consumed via
+   `SurrealFS.readStream(cacheStream)` into a `Uint8Array` and inserted into the
+   file cache. Client never waits. **Never manually iterate chunks** — always
+   use `SurrealFS.readStream()` for stream-to-buffer conversion.
+   **Deduplication:** a set of URIs with in-flight insertions is tracked. If a
+   second request arrives for the same URI while an insertion is already in
+   progress, it streams directly without tee — no double buffering. The set
+   entry is removed when the insertion completes (success or failure).
 
 #### 13.4 Public API routes (no middleware pipeline)
 
@@ -1445,47 +1527,35 @@ export interface FileMetadata {
 
 #### 13.6 File cache integration
 
-The download route (`GET /api/files/download`) integrates with the file cache
-(§12.12). **The route always streams to the client** — caching is a background
-side-effect that never blocks the response.
+The download route (§13.3) integrates with the file cache (§12.12). Cache logic
+is described in §13.3 steps 3, 7 — this section defines the cache context
+resolution only.
 
-**Tenant resolution from URI path (not JWT).** The cache key is derived from the
-download URI structure: `uri = "{companyId}/{systemSlug}/..."`. The route splits
-the URI and uses `path[0]` as `companyId` and `path[1]` as `systemSlug` to
-resolve the cache context — independently of authentication state.
-
-**Cache context resolution (`resolveCacheContext`):**
+**Cache context resolution** — called by both the download route (§13.3) and the
+upload route (§13.2 step 7) after extracting `companyId` and `systemSlug` from
+the URI path. **This resolution is identical for all requests — authenticated,
+anonymous, and superuser alike.** There is no auth-gated branch in cache context
+resolution.
 
 1. Look up `systemSlug` in the Core cache. If a matching system exists, resolve
    the effective `maxSize` via `resolveFileCacheLimit()` (plan's
    `fileCacheLimitBytes` + voucher's `fileCacheLimitModifier`). Tenant key:
    `"{companyId}:{systemSlug}"`.
-2. **Core quota fallback:** if `systemSlug` does not match any system, the file
-   counts towards the core's quota. `maxSize` comes from the
-   `cache.file.maxSize` core setting (default 20 MB). Tenant key: `"core"`.
+2. **Core quota fallback:** if `systemSlug` does not match any system, or the
+   resolved `maxBytes` from `resolveFileCacheLimit()` is 0, the file counts
+   towards the core's quota. `maxSize` comes from
+   `Core.getSetting("cache.core.size")` (megabytes, seeded at `"20"`) converted
+   to bytes. Tenant key: `"core"`.
 3. If the resolved `maxSize` is 0, caching is disabled for that context.
 
-**Flow:**
+**Rules:**
 
-1. **Cache HIT:** call `access()` with `fileSize=0` (probe-only). On HIT →
-   return `Response` from cached `Uint8Array` (skip SurrealFS entirely).
-2. **Cache MISS:** read from SurrealFS. The response always streams to the
-   client:
-   - `ReadableStream` content: **tee** — one branch streams to the client, the
-     other buffers into a `Uint8Array` in the background and inserts into the
-     cache when fully consumed. Client never waits.
-   - Already-buffered content (`Uint8Array`/`ArrayBuffer`): insert into cache
-     synchronously, then stream to client.
-   - File exceeds `maxSize`: stream directly without caching.
-3. **Anonymous requests** receive bandwidth-throttled SurrealFS reads (existing
-   `control` callback) and bypass the cache entirely.
-
-**Streaming guarantee:** the client receives bytes as soon as SurrealFS provides
-them. Cache insertion is fire-and-forget.
-
-The cache stores file content keyed by URI. No explicit invalidation on upload
-(new files are not yet cached). File deletions via DataDeletion (§20.6) call
-`clearTenant()` for the affected tenant.
+- All requests use the cache — anonymous requests use the core cache (tenant key
+  `"core"`), same as any unmatched system.
+- Upload replacements call `evict()` on the resolved cache context (§13.2 step
+  7) — always, regardless of authentication.
+- File deletions via DataDeletion (§20.6) call `clearTenant()` for the affected
+  tenant.
 
 ### 14. Event Queue
 
@@ -2010,24 +2080,22 @@ and `showAllOnEmpty`; `fetchFn` filters the local array.
 ```
 Props: {
   fieldName: string;
-  allowedExtensions: string[];
-  maxSizeBytes: number;
-  companyId: string;             // "core" for superuser without tenant; required for all others
   systemSlug: string;            // always required — form must enforce it before upload is enabled
-  userId: string;                // "superuser" for superuser without tenant; "anonymous" for unauthenticated
   category: string[];            // e.g. ["logos"] or ["documents","invoices"]
+  fileUuid?: string;             // existing UUID for replacement; omitted for new file (frontend generates one)
   previewEnabled?: boolean;      // rounded avatar preview
   descriptionEnabled?: boolean;
   onComplete: (uri: string) => void;
 }
 ```
 
-Sends **all** required fields to `/api/files/upload` as FormData (`file`,
-`companyId`, `systemSlug`, `userId`, `category` as JSON, optional
-`description`). Always sends the `Authorization` header when a token is
-available. Server validates in authenticated or unauthenticated mode (§13.2).
-Shows progress bar, cancel, delete. Preview (if enabled) shows a rounded image
-suitable for avatars. Emits the file URI on completion.
+Sends FormData to `/api/files/upload` with `file` (stream), `systemSlug`,
+`category` (JSON string), `fileUuid`, optional `description`. The component
+generates a new `crypto.randomUUID()` for new files and reuses the existing UUID
+when replacing. Always sends the `Authorization` header when a token is
+available. The server resolves `companyId` and `userId` from the tenant context
+(§13.2). Shows progress bar, cancel, delete. Preview (if enabled) shows a
+rounded image suitable for avatars. Emits the file URI on completion.
 
 **`SearchableSelectField`**
 
@@ -2605,9 +2673,8 @@ All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
 - **SystemForm** — name, slug, `FileUploadField` with `previewEnabled` for the
   system logo, `termsOfService` textarea (HTML). The `FileUploadField` uses
   `category={["logos"]}` and `systemSlug` from form state (slug must be filled
-  before the upload is enabled). For superusers without a tenant, `companyId`
-  defaults to `"core"` and `userId` defaults to `"superuser"`. The upload route
-  applies `files.maxUploadSizeBytes` (§13.2). System i18n key:
+  before the upload is enabled). The upload route resolves `companyId` and
+  `userId` from the tenant context (§13.2). System i18n key:
   `core.systems.termsOfService`.
 - **RoleForm** — name, systemId (select), isBuiltIn (checkbox),
   `MultiBadgeField` for permissions (`mode:"custom"`, format hint
