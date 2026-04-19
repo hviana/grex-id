@@ -35,6 +35,21 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
     const [planCredits, setPlanCredits] = useState(
       (initialData?.planCredits as number) ?? 0,
     );
+    const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(
+      (initialData?.maxConcurrentDownloads as number) ?? 0,
+    );
+    const [maxConcurrentUploads, setMaxConcurrentUploads] = useState(
+      (initialData?.maxConcurrentUploads as number) ?? 0,
+    );
+    const [maxDownloadBandwidthMB, setMaxDownloadBandwidthMB] = useState(
+      (initialData?.maxDownloadBandwidthMB as number) ?? 0,
+    );
+    const [maxUploadBandwidthMB, setMaxUploadBandwidthMB] = useState(
+      (initialData?.maxUploadBandwidthMB as number) ?? 0,
+    );
+    const [maxOperationCount, setMaxOperationCount] = useState(
+      (initialData?.maxOperationCount as number) ?? 0,
+    );
     const [isActive, setIsActive] = useState(
       (initialData?.isActive as boolean) ?? true,
     );
@@ -56,6 +71,11 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
         apiRateLimit,
         storageLimitBytes,
         planCredits,
+        maxConcurrentDownloads,
+        maxConcurrentUploads,
+        maxDownloadBandwidthMB,
+        maxUploadBandwidthMB,
+        maxOperationCount,
         isActive,
         benefits,
         permissions,
@@ -185,6 +205,81 @@ const PlanForm = forwardRef<SubformRef, PlanFormProps>(
               onChange={(e) => setPlanCredits(Number(e.target.value))}
               min={0}
               className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.plans.maxConcurrentDownloads")}
+            </label>
+            <input
+              type="number"
+              value={maxConcurrentDownloads}
+              onChange={(e) =>
+                setMaxConcurrentDownloads(Number(e.target.value))}
+              min={0}
+              className={inputCls}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.plans.maxConcurrentUploads")}
+            </label>
+            <input
+              type="number"
+              value={maxConcurrentUploads}
+              onChange={(e) => setMaxConcurrentUploads(Number(e.target.value))}
+              min={0}
+              className={inputCls}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.plans.maxOperationCount")}
+            </label>
+            <input
+              type="number"
+              value={maxOperationCount}
+              onChange={(e) => setMaxOperationCount(Number(e.target.value))}
+              min={0}
+              className={inputCls}
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.plans.maxDownloadBandwidthMB")}
+            </label>
+            <input
+              type="number"
+              value={maxDownloadBandwidthMB}
+              onChange={(e) =>
+                setMaxDownloadBandwidthMB(Number(e.target.value))}
+              min={0}
+              step="0.1"
+              className={inputCls}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.plans.maxUploadBandwidthMB")}
+            </label>
+            <input
+              type="number"
+              value={maxUploadBandwidthMB}
+              onChange={(e) => setMaxUploadBandwidthMB(Number(e.target.value))}
+              min={0}
+              step="0.1"
+              className={inputCls}
+              placeholder="0"
             />
           </div>
         </div>

@@ -31,6 +31,12 @@ export interface FileCacheLimitResult {
   voucherModifier: number;
 }
 
+export interface TransferLimitResult {
+  max: number;
+  planLimit: number;
+  voucherModifier: number;
+}
+
 async function resolveSubscription(
   companyId: string,
   systemId: string,
@@ -156,4 +162,119 @@ export async function resolveFileCacheLimit(params: {
   }
 
   return { maxBytes: planLimit + voucherModifier, planLimit, voucherModifier };
+}
+
+export async function resolveMaxConcurrentDownloads(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<TransferLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.maxConcurrentDownloads ?? 0;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.maxConcurrentDownloadsModifier ?? 0;
+  }
+
+  return {
+    max: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
+}
+
+export async function resolveMaxConcurrentUploads(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<TransferLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.maxConcurrentUploads ?? 0;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.maxConcurrentUploadsModifier ?? 0;
+  }
+
+  return {
+    max: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
+}
+
+export async function resolveMaxDownloadBandwidth(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<TransferLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.maxDownloadBandwidthMB ?? 0;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.maxDownloadBandwidthModifier ?? 0;
+  }
+
+  return {
+    max: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
+}
+
+export async function resolveMaxUploadBandwidth(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<TransferLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.maxUploadBandwidthMB ?? 0;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.maxUploadBandwidthModifier ?? 0;
+  }
+
+  return {
+    max: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
+}
+
+export async function resolveMaxOperationCount(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<TransferLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.maxOperationCount ?? 0;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.maxOperationCountModifier ?? 0;
+  }
+
+  return {
+    max: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
 }

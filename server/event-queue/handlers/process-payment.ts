@@ -2,6 +2,7 @@ import type { HandlerFn } from "../worker.ts";
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
+import { resolveMaxOperationCount } from "../../utils/guards.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -167,6 +168,12 @@ export const processPayment: HandlerFn = async (payload) => {
       const creditIncrement = voucher?.creditIncrement ?? 0;
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditIncrement;
 
+      const operationCountCap = await resolveMaxOperationCount({
+        companyId: String(sub.companyId),
+        systemId: String(sub.systemId),
+      });
+      const remainingOperationCount = operationCountCap.max || 0;
+
       // Batch: update subscription + update payment record (§7.2)
       const statusClause = isRetry
         ? `status = "active", retryPaymentInProgress = false,`
@@ -181,13 +188,16 @@ export const processPayment: HandlerFn = async (payload) => {
           currentPeriodStart = $newStart,
           currentPeriodEnd = $newEnd,
           remainingPlanCredits = $remainingPlanCredits,
-          creditAlertSent = false;
+          remainingOperationCount = $remainingOperationCount,
+          creditAlertSent = false,
+          operationCountAlertSent = false;
          ${paymentStmt}`,
         {
           id: rid(sub.id),
           newStart,
           newEnd,
           remainingPlanCredits,
+          remainingOperationCount,
           paymentId: paymentId ? rid(String(paymentId)) : undefined,
           txId: undefined,
           invoiceUrl: invoiceUrl || undefined,

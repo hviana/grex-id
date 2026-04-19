@@ -6,6 +6,7 @@ import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { resolveFileCacheLimit } from "@/server/utils/guards";
+import { getOperationCount } from "@/server/db/queries/usage";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -132,6 +133,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const creditExpenses = configResult[3] ?? [];
 
+  const operationCount = await getOperationCount(companyId, systemId);
+
   return Response.json({
     success: true,
     data: {
@@ -141,6 +144,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       },
       cache: cacheStats,
       creditExpenses,
+      operationCount,
     },
   });
 }

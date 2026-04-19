@@ -5,7 +5,11 @@ import { getFS } from "@/server/utils/fs";
 import type { SaveControlResult } from "@hviana/surreal-fs";
 import Core from "@/server/utils/Core";
 import FileCacheManager from "@/server/utils/file-cache";
-import { resolveFileCacheLimit } from "@/server/utils/guards";
+import {
+  resolveFileCacheLimit,
+  resolveMaxConcurrentUploads,
+  resolveMaxUploadBandwidth,
+} from "@/server/utils/guards";
 
 const MB = 1048576;
 
@@ -84,18 +88,55 @@ export const POST = compose(
     };
     if (description) metadata.description = description;
 
+    // Resolve transfer limits from plan + voucher + Core settings (§13.2)
+    const core = Core.getInstance();
+    const system = await core.getSystemBySlug(systemSlug);
+    const systemId = system?.id ?? "";
+    const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] = systemId
+      ? await Promise.all([
+        resolveMaxConcurrentUploads({ companyId, systemId }),
+        resolveMaxUploadBandwidth({ companyId, systemId }),
+        core.getSetting("transfer.default.maxConcurrentUploads"),
+        core.getSetting("transfer.default.maxUploadBandwidthMB"),
+      ])
+      : [
+        { max: 0, planLimit: 0, voucherModifier: 0 },
+        { max: 0, planLimit: 0, voucherModifier: 0 },
+        undefined,
+        undefined,
+      ];
+
+    const resolvedMaxConcurrent = uploadLimits.max ||
+      Number(defaultConcurrent) || 0;
+    const resolvedMaxBWMB = bwLimits.max || Number(defaultBW) || 0;
+
     const fs = await getFS();
     const result = await fs.save({
       path,
       content: file.stream(),
       metadata,
-      control: (_path, _concurrencyMap): SaveControlResult => ({
-        accessAllowed: true,
-        kbytesPerSecond: 16384,
-        concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
-        maxFileSizeBytes: 50 * MB,
-        allowedExtensions: [],
-      }),
+      control: (_path, concurrencyMap): SaveControlResult => {
+        const userUploads = concurrencyMap[userId] ?? 0;
+        if (resolvedMaxConcurrent > 0 && userUploads >= resolvedMaxConcurrent) {
+          return {
+            accessAllowed: false,
+            concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+          };
+        }
+
+        const tenantUploads = concurrencyMap[`${companyId}/${systemSlug}`] ?? 1;
+        const kbytesPerSecond = resolvedMaxBWMB > 0
+          ? Math.floor((resolvedMaxBWMB * 1024) / tenantUploads)
+          : 16384;
+
+        return {
+          accessAllowed: true,
+          kbytesPerSecond,
+          concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+          maxFileSizeBytes: 50 * MB,
+          allowedExtensions: [],
+        };
+      },
     });
 
     if ("status" in result && result.status === "error") {
@@ -111,8 +152,6 @@ export const POST = compose(
     // Cache invalidation on replacement (§13.2 step 7)
     const uri = fs.pathToURIComponent(path);
     let cacheTenantKey = "core";
-    const core = Core.getInstance();
-    const system = await core.getSystemBySlug(systemSlug);
     if (system) {
       const limit = await resolveFileCacheLimit({
         companyId,

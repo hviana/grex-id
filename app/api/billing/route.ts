@@ -5,6 +5,7 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
+import { resolveMaxOperationCount } from "@/server/utils/guards";
 
 function tenantGuard(ctx: RequestContext): Response | null {
   if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
@@ -183,6 +184,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
+    const operationCountCap = await resolveMaxOperationCount({
+      companyId,
+      systemId,
+    });
+
     const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
     const periodEnd = new Date(
@@ -194,6 +200,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       planId: rid(planId),
       planCredits: plan.planCredits ?? 0,
+      operationCountCap: operationCountCap.max || 0,
       start: now,
       end: periodEnd,
     };
@@ -225,7 +232,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
          currentPeriodEnd = $end,
          voucherId = NONE,
          remainingPlanCredits = $planCredits,
+         remainingOperationCount = $operationCountCap,
          creditAlertSent = false,
+         operationCountAlertSent = false,
          autoRechargeEnabled = false,
          autoRechargeAmount = 0,
          autoRechargeInProgress = false,
@@ -467,12 +476,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    // Batch: voucher + current subscription + old voucher creditIncrement (§7.2)
+    // Batch: voucher + current subscription + old voucher creditIncrement & maxOperationCountModifier (§7.2)
     const batchResult = await db.query<
       [
         Record<string, unknown>[],
         { planId: string; voucherId: string | null }[],
-        { creditIncrement: number }[],
+        { creditIncrement: number; maxOperationCountModifier: number }[],
       ]
     >(
       `SELECT * FROM voucher WHERE code = $code LIMIT 1;
@@ -483,7 +492,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
          LIMIT 1)[0];
        IF $oldVoucherId != NONE {
-         SELECT creditIncrement FROM voucher WHERE id = $oldVoucherId LIMIT 1;
+         SELECT creditIncrement, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
        } ELSE {
          SELECT NONE FROM NONE;
        };`,
@@ -559,8 +568,21 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const newCreditInc = Number(voucher.creditIncrement ?? 0);
     const creditDelta = newCreditInc - oldCreditInc;
 
-    const updateQuery = creditDelta !== 0
-      ? `UPDATE subscription SET voucherId = $voucherId, remainingPlanCredits = remainingPlanCredits + $creditDelta
+    const oldOpCountMod = Number(
+      batchResult[2]?.[0]?.maxOperationCountModifier ?? 0,
+    );
+    const newOpCountMod = Number(voucher.maxOperationCountModifier ?? 0);
+    const opCountDelta = newOpCountMod - oldOpCountMod;
+
+    const creditClause = creditDelta !== 0
+      ? ", remainingPlanCredits = remainingPlanCredits + $creditDelta"
+      : "";
+    const opCountClause = opCountDelta !== 0
+      ? ", remainingOperationCount = math::max(0, remainingOperationCount + $opCountDelta), operationCountAlertSent = false"
+      : "";
+
+    const updateQuery = creditClause || opCountClause
+      ? `UPDATE subscription SET voucherId = $voucherId${creditClause}${opCountClause}
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`
       : `UPDATE subscription SET voucherId = $voucherId
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`;
@@ -570,6 +592,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       voucherId: rid(voucher.id as string),
       ...(creditDelta !== 0 ? { creditDelta } : {}),
+      ...(opCountDelta !== 0 ? { opCountDelta } : {}),
     });
 
     await Core.getInstance().reloadSubscription(companyId, systemId);

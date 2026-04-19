@@ -98,5 +98,11 @@
   "paymentHistory.status.completed": "Concluído",
   "paymentHistory.status.failed": "Falhou",
   "retry.noPastDue": "Nenhuma assinatura em atraso encontrada.",
-  "retry.inProgress": "Uma nova tentativa de pagamento já está em andamento."
+  "retry.inProgress": "Uma nova tentativa de pagamento já está em andamento.",
+  "limits.unlimited": "Ilimitado",
+  "limits.maxConcurrentDownloads": "Máx. Downloads Simultâneos",
+  "limits.maxConcurrentUploads": "Máx. Uploads Simultâneos",
+  "limits.maxDownloadBandwidthMB": "Banda Máx. de Download",
+  "limits.maxUploadBandwidthMB": "Banda Máx. de Upload",
+  "limits.maxOperationCount": "Limite de Contagem de Operações"
 }

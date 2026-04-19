@@ -136,5 +136,14 @@
   "recoveryChannelReset.ignore": "If you didn't request this, you can safely ignore this email. Your password will not be changed.",
   "paymentSuccess.invoiceLabel": "Invoice",
   "paymentSuccess.viewInvoice": "View Invoice",
-  "paymentSuccess.invoiceNotAvailable": "Not available through this means"
+  "paymentSuccess.invoiceNotAvailable": "Not available through this means",
+  "operationCountAlert.preheader": "Operation count limit reached",
+  "operationCountAlert.subject": "Operation limit reached on {systemName}",
+  "operationCountAlert.title": "Operation Limit Reached",
+  "operationCountAlert.greeting": "Hello, {name}!",
+  "operationCountAlert.systemLabel": "System",
+  "operationCountAlert.countLabel": "Remaining Operations",
+  "operationCountAlert.body": "Your operation count for this billing period has been exhausted. No further resource-consuming operations can be performed until your plan renews or a voucher increasing the limit is applied.",
+  "operationCountAlert.action": "Go to Billing",
+  "operationCountAlert.renewalNote": "The operation count resets automatically when your plan renews or when a voucher with an operation count bonus is applied."
 }

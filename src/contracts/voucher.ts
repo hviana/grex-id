@@ -9,6 +9,11 @@ export interface Voucher {
   apiRateLimitModifier: number;
   storageLimitModifier: number;
   fileCacheLimitModifier: number;
+  maxConcurrentDownloadsModifier: number;
+  maxConcurrentUploadsModifier: number;
+  maxDownloadBandwidthModifier: number;
+  maxUploadBandwidthModifier: number;
+  maxOperationCountModifier: number;
   creditIncrement: number;
   expiresAt?: string;
   createdAt: string;

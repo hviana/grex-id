@@ -14,6 +14,11 @@ interface VoucherInfo {
   code: string;
   priceModifier: number; // positive = surcharge (in cents), negative = discount
   creditIncrement: number;
+  maxConcurrentDownloadsModifier?: number;
+  maxConcurrentUploadsModifier?: number;
+  maxDownloadBandwidthModifier?: number;
+  maxUploadBandwidthModifier?: number;
+  maxOperationCountModifier?: number;
   expiresAt?: string;
 }
 
@@ -24,6 +29,7 @@ interface Subscription {
   currentPeriodStart: string;
   currentPeriodEnd: string;
   voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
+  remainingOperationCount: number; // operation count; 0 = unlimited
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
   retryPaymentInProgress: boolean;
@@ -43,6 +49,11 @@ interface PlanInfo {
   storageLimitBytes: number;
   fileCacheLimitBytes?: number;
   planCredits?: number;
+  maxConcurrentDownloads?: number;
+  maxConcurrentUploads?: number;
+  maxDownloadBandwidthMB?: number;
+  maxUploadBandwidthMB?: number;
+  maxOperationCount?: number;
   isActive: boolean;
 }
 
@@ -801,6 +812,46 @@ export default function BillingPage() {
                           : key}: {val.toLocaleString()}
                       </span>
                     ))}
+                  {activePlan.maxConcurrentDownloads
+                    ? (
+                      <span>
+                        ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
+                        {activePlan.maxConcurrentDownloads}
+                      </span>
+                    )
+                    : null}
+                  {activePlan.maxConcurrentUploads
+                    ? (
+                      <span>
+                        ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
+                        {activePlan.maxConcurrentUploads}
+                      </span>
+                    )
+                    : null}
+                  {activePlan.maxDownloadBandwidthMB
+                    ? (
+                      <span>
+                        📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
+                        {activePlan.maxDownloadBandwidthMB} MB/s
+                      </span>
+                    )
+                    : null}
+                  {activePlan.maxUploadBandwidthMB
+                    ? (
+                      <span>
+                        📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
+                        {activePlan.maxUploadBandwidthMB} MB/s
+                      </span>
+                    )
+                    : null}
+                  {activePlan.maxOperationCount
+                    ? (
+                      <span>
+                        🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                        {activePlan.maxOperationCount!.toLocaleString()}
+                      </span>
+                    )
+                    : null}
                 </div>
               </div>
 
@@ -967,6 +1018,50 @@ export default function BillingPage() {
                                 : key}: {val.toLocaleString()}
                             </p>
                           ))}
+                        {plan.maxConcurrentDownloads
+                          ? (
+                            <p>
+                              ⬇️ {t("billing.limits.maxConcurrentDownloads")}:
+                              {" "}
+                              {plan.maxConcurrentDownloads}
+                            </p>
+                          )
+                          : null}
+                        {plan.maxConcurrentUploads
+                          ? (
+                            <p>
+                              ⬆️ {t("billing.limits.maxConcurrentUploads")}:
+                              {" "}
+                              {plan.maxConcurrentUploads}
+                            </p>
+                          )
+                          : null}
+                        {plan.maxDownloadBandwidthMB
+                          ? (
+                            <p>
+                              📶 {t("billing.limits.maxDownloadBandwidthMB")}:
+                              {" "}
+                              {plan.maxDownloadBandwidthMB} MB/s
+                            </p>
+                          )
+                          : null}
+                        {plan.maxUploadBandwidthMB
+                          ? (
+                            <p>
+                              📶 {t("billing.limits.maxUploadBandwidthMB")}:
+                              {" "}
+                              {plan.maxUploadBandwidthMB} MB/s
+                            </p>
+                          )
+                          : null}
+                        {plan.maxOperationCount
+                          ? (
+                            <p>
+                              🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                              {plan.maxOperationCount!.toLocaleString()}
+                            </p>
+                          )
+                          : null}
                       </div>
                     </div>
 
@@ -1067,6 +1162,16 @@ export default function BillingPage() {
               {creditsBalance.toLocaleString()}
             </p>
           </div>
+          {displaySub && displaySub.remainingOperationCount > 0 && (
+            <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6">
+              <p className="text-sm text-[var(--color-light-text)]">
+                {t("billing.limits.maxOperationCount")}
+              </p>
+              <p className="text-2xl font-bold text-[var(--color-secondary-blue)]">
+                {displaySub.remainingOperationCount.toLocaleString()}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Purchase */}
@@ -1290,6 +1395,29 @@ export default function BillingPage() {
                 <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
                   💰 +{activeVoucher.creditIncrement}{" "}
                   {t("billing.credits.title")}
+                </span>
+              )}
+              {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) !== 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  ⬇️{" "}
+                  {activeVoucher.maxConcurrentDownloadsModifier! > 0 ? "+" : ""}
+                  {activeVoucher.maxConcurrentDownloadsModifier}{" "}
+                  {t("billing.limits.maxConcurrentDownloads")}
+                </span>
+              )}
+              {(activeVoucher.maxConcurrentUploadsModifier ?? 0) !== 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  ⬆️{" "}
+                  {activeVoucher.maxConcurrentUploadsModifier! > 0 ? "+" : ""}
+                  {activeVoucher.maxConcurrentUploadsModifier}{" "}
+                  {t("billing.limits.maxConcurrentUploads")}
+                </span>
+              )}
+              {(activeVoucher.maxOperationCountModifier ?? 0) !== 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  🔢 {activeVoucher.maxOperationCountModifier! > 0 ? "+" : ""}
+                  {activeVoucher.maxOperationCountModifier}{" "}
+                  {t("billing.limits.maxOperationCount")}
                 </span>
               )}
             </div>

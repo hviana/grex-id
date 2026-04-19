@@ -18,7 +18,7 @@ function getCurrentDay(): string {
 
 export interface CreditDeductionResult {
   success: boolean;
-  source: "plan" | "purchased" | "insufficient";
+  source: "plan" | "purchased" | "insufficient" | "operationLimit";
   remainingPlanCredits?: number;
   remainingPurchasedCredits?: number;
 }
@@ -29,6 +29,11 @@ export interface CreditDeductionResult {
  * Deduction priority:
  * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
  * 2. Purchased credits (usage_record with resource="credits") — persistent
+ *
+ * Operation-count cap (§22.3 step 4):
+ * If remainingOperationCount is 0 and the cap is active (> 0 on the plan),
+ * the operation is rejected regardless of available credits.
+ * On successful deduction, remainingOperationCount is decremented by 1.
  *
  * All DB lookups batched into single queries per logical step (§7.2).
  */
@@ -49,7 +54,9 @@ export async function consumeCredits(params: {
       {
         id: string;
         remainingPlanCredits: number;
+        remainingOperationCount: number;
         creditAlertSent: boolean;
+        operationCountAlertSent: boolean;
         autoRechargeEnabled: boolean;
         autoRechargeAmount: number;
         autoRechargeInProgress: boolean;
@@ -60,7 +67,7 @@ export async function consumeCredits(params: {
       { balance: number }[],
     ]
   >(
-    `LET $sub = (SELECT id, remainingPlanCredits, creditAlertSent,
+    `LET $sub = (SELECT id, remainingPlanCredits, remainingOperationCount, creditAlertSent, operationCountAlertSent,
             autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
             companyId, systemId
      FROM subscription
@@ -69,7 +76,7 @@ export async function consumeCredits(params: {
      IF $sub != NONE AND $sub.autoRechargeEnabled = true AND $sub.autoRechargeInProgress = false {
        UPDATE $sub.id SET autoRechargeInProgress = true;
      };
-     SELECT id, remainingPlanCredits, creditAlertSent,
+     SELECT id, remainingPlanCredits, remainingOperationCount, creditAlertSent, operationCountAlertSent,
             autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
             companyId, systemId,
             (IF autoRechargeEnabled = true AND autoRechargeInProgress = false THEN true ELSE false END) AS autoRechargeGuardSet
@@ -93,6 +100,16 @@ export async function consumeCredits(params: {
   const planCredits = sub.remainingPlanCredits ?? 0;
   const purchasedCredits = result[1]?.[0]?.balance ?? 0;
   const totalAvailable = planCredits + purchasedCredits;
+
+  // Operation-count cap check (§12.3)
+  const operationCount = sub.remainingOperationCount ?? 0;
+  if (operationCount === 0) {
+    // Operation count exhausted — send one-shot alert if not already sent
+    if (!sub.operationCountAlertSent) {
+      await sendOperationCountAlert(sub, params);
+    }
+    return { success: false, source: "operationLimit" };
+  }
 
   // Insufficient credits
   if (totalAvailable < params.amount) {
@@ -157,10 +174,14 @@ export async function consumeCredits(params: {
     return { success: false, source: "insufficient" };
   }
 
+  // Decrement operation count by 1 on successful credit deduction
+  const opCountClause =
+    ", remainingOperationCount = remainingOperationCount - 1";
+
   // Deduct: plan credits first, then purchased
   if (planCredits >= params.amount) {
     await db.query(
-      `UPDATE $subId SET remainingPlanCredits -= $amount;
+      `UPDATE $subId SET remainingPlanCredits -= $amount${opCountClause};
        UPSERT credit_expense SET
          companyId = $companyId, systemId = $systemId,
          resourceKey = $resourceKey, amount += $amount, count += 1, day = $day
@@ -188,7 +209,7 @@ export async function consumeCredits(params: {
   const fromPurchased = params.amount - planCredits;
 
   await db.query(
-    `UPDATE $subId SET remainingPlanCredits = 0;
+    `UPDATE $subId SET remainingPlanCredits = 0${opCountClause};
      UPSERT usage_record SET
        actorType = "user", actorId = "system",
        companyId = $companyId, systemId = $systemId,
@@ -220,6 +241,63 @@ export async function consumeCredits(params: {
     remainingPlanCredits: 0,
     remainingPurchasedCredits: purchasedCredits - fromPurchased,
   };
+}
+
+/**
+ * Sends the one-shot operation-count exhaustion alert email.
+ */
+async function sendOperationCountAlert(
+  sub: {
+    id: string;
+    companyId: string;
+    systemId: string;
+  },
+  _params: { resourceKey: string; companyId: string; systemId: string },
+): Promise<void> {
+  const db = await getDb();
+
+  const alertResult = await db.query<
+    [
+      unknown[],
+      { email: string; name: string; locale: string }[],
+      { name: string; slug: string }[],
+      { remainingOperationCount: number }[],
+    ]
+  >(
+    `UPDATE $subId SET operationCountAlertSent = true;
+     LET $companyId = $cId;
+     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
+     SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
+     SELECT VALUE remainingOperationCount FROM subscription WHERE id = $subId LIMIT 1;`,
+    {
+      subId: rid(sub.id),
+      cId: rid(sub.companyId),
+      systemId: rid(sub.systemId),
+    },
+  );
+
+  const user = alertResult[1]?.[0];
+  const ownerEmail = user?.email;
+  const ownerName = user?.name ?? "";
+  const ownerLocale = user?.locale;
+  const systemName = alertResult[2]?.[0]?.name ?? "";
+  const systemSlug = alertResult[2]?.[0]?.slug ?? "";
+
+  if (ownerEmail) {
+    await publish("SEND_EMAIL", {
+      recipients: [ownerEmail],
+      template: "operation-count-alert",
+      templateData: {
+        name: ownerName,
+        systemName,
+        operationCount: String(alertResult[3]?.[0] ?? 0),
+        billingUrl: `/billing?system=${systemSlug}`,
+      },
+      locale: ownerLocale || undefined,
+      systemSlug,
+    });
+  }
 }
 
 /**

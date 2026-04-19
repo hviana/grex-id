@@ -136,5 +136,14 @@
   "recoveryChannelReset.ignore": "Se você não solicitou isso, pode ignorar este e-mail com segurança. Sua senha não será alterada.",
   "paymentSuccess.invoiceLabel": "Fatura",
   "paymentSuccess.viewInvoice": "Ver Fatura",
-  "paymentSuccess.invoiceNotAvailable": "Não disponível por este meio"
+  "paymentSuccess.invoiceNotAvailable": "Não disponível por este meio",
+  "operationCountAlert.preheader": "Limite de operações atingido",
+  "operationCountAlert.subject": "Limite de operações atingido no {systemName}",
+  "operationCountAlert.title": "Limite de Operações Atingido",
+  "operationCountAlert.greeting": "Olá, {name}!",
+  "operationCountAlert.systemLabel": "Sistema",
+  "operationCountAlert.countLabel": "Operações Restantes",
+  "operationCountAlert.body": "Sua contagem de operações para este período de cobrança foi esgotada. Nenhuma operação de consumo de recursos pode ser realizada até que seu plano seja renovado ou um voucher aumentando o limite seja aplicado.",
+  "operationCountAlert.action": "Ir para Faturamento",
+  "operationCountAlert.renewalNote": "A contagem de operações é redefinida automaticamente quando seu plano é renovado ou quando um voucher com bônus de operações é aplicado."
 }

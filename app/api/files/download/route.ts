@@ -4,7 +4,11 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getFS } from "@/server/utils/fs";
 import { type ReadControlResult, SurrealFS } from "@hviana/surreal-fs";
 import FileCacheManager from "@/server/utils/file-cache";
-import { resolveFileCacheLimit } from "@/server/utils/guards";
+import {
+  resolveFileCacheLimit,
+  resolveMaxConcurrentDownloads,
+  resolveMaxDownloadBandwidth,
+} from "@/server/utils/guards";
 import Core from "@/server/utils/Core";
 
 const DEFAULT_MIME = "application/octet-stream";
@@ -84,15 +88,53 @@ export const GET = compose(
       }
     }
 
+    // Resolve transfer limits from plan + voucher + Core settings (§13.3)
+    const systemId = system?.id ?? "";
+    const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = systemId
+      ? await Promise.all([
+        resolveMaxConcurrentDownloads({ companyId, systemId }),
+        resolveMaxDownloadBandwidth({ companyId, systemId }),
+        core.getSetting("transfer.default.maxConcurrentDownloads"),
+        core.getSetting("transfer.default.maxDownloadBandwidthMB"),
+      ])
+      : [
+        { max: 0, planLimit: 0, voucherModifier: 0 },
+        { max: 0, planLimit: 0, voucherModifier: 0 },
+        undefined,
+        undefined,
+      ];
+
+    const resolvedMaxConcurrent = dlLimits.max || Number(defaultConcurrent) ||
+      0;
+    const resolvedMaxBWMB = bwLimits.max || Number(defaultBW) || 0;
+
     // Read from SurrealFS with control callback
-    const isAnonymous = !ctx.claims;
+    const userId = path[2] ?? "0";
     const file = await fs.read({
       path,
-      control: (_path, _concurrencyMap): ReadControlResult => ({
-        accessAllowed: true,
-        kbytesPerSecond: isAnonymous ? 1024 : 16384,
-        concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
-      }),
+      control: (_path, concurrencyMap): ReadControlResult => {
+        const userDownloads = concurrencyMap[userId] ?? 0;
+        if (
+          resolvedMaxConcurrent > 0 && userDownloads >= resolvedMaxConcurrent
+        ) {
+          return {
+            accessAllowed: false,
+            concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+          };
+        }
+
+        const tenantDownloads = concurrencyMap[`${companyId}/${systemSlug}`] ??
+          1;
+        const kbytesPerSecond = resolvedMaxBWMB > 0
+          ? Math.floor((resolvedMaxBWMB * 1024) / tenantDownloads)
+          : 16384;
+
+        return {
+          accessAllowed: true,
+          kbytesPerSecond,
+          concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
+        };
+      },
     });
 
     if (

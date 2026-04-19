@@ -18,6 +18,7 @@ import { paymentSuccessTemplate } from "./utils/communication/templates/payment-
 import { paymentFailureTemplate } from "./utils/communication/templates/payment-failure.ts";
 import { autoRechargeTemplate } from "./utils/communication/templates/auto-recharge.ts";
 import { insufficientCreditTemplate } from "./utils/communication/templates/insufficient-credit.ts";
+import { operationCountAlertTemplate } from "./utils/communication/templates/operation-count-alert.ts";
 import { tenantInviteTemplate } from "./utils/communication/templates/tenant-invite.ts";
 import { recoveryVerifyTemplate } from "./utils/communication/templates/recovery-verify.ts";
 import { recoveryChannelResetTemplate } from "./utils/communication/templates/recovery-channel-reset.ts";
@@ -57,6 +58,7 @@ export function registerCore(): void {
   registerTemplate("payment-failure", paymentFailureTemplate);
   registerTemplate("auto-recharge", autoRechargeTemplate);
   registerTemplate("insufficient-credit", insufficientCreditTemplate);
+  registerTemplate("operation-count-alert", operationCountAlertTemplate);
   registerTemplate("tenant-invite", tenantInviteTemplate);
   registerTemplate("recovery-verify", recoveryVerifyTemplate);
   registerTemplate("recovery-channel-reset", recoveryChannelResetTemplate);

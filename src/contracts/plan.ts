@@ -13,6 +13,11 @@ export interface Plan {
   storageLimitBytes: number;
   fileCacheLimitBytes: number;
   planCredits: number;
+  maxConcurrentDownloads: number;
+  maxConcurrentUploads: number;
+  maxDownloadBandwidthMB: number;
+  maxUploadBandwidthMB: number;
+  maxOperationCount: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

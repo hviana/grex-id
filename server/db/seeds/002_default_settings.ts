@@ -162,6 +162,26 @@ const defaults: DefaultSetting[] = [
     value: "1",
     description: "Sliding window duration for file cache hit counting (hours)",
   },
+  {
+    key: "transfer.default.maxConcurrentDownloads",
+    value: "0",
+    description: "Default max concurrent downloads per user (0 = unlimited)",
+  },
+  {
+    key: "transfer.default.maxConcurrentUploads",
+    value: "0",
+    description: "Default max concurrent uploads per user (0 = unlimited)",
+  },
+  {
+    key: "transfer.default.maxDownloadBandwidthMB",
+    value: "0",
+    description: "Default max download bandwidth in MB/s (0 = unlimited)",
+  },
+  {
+    key: "transfer.default.maxUploadBandwidthMB",
+    value: "0",
+    description: "Default max upload bandwidth in MB/s (0 = unlimited)",
+  },
 ];
 
 export async function seedDefaultSettings(db: Surreal): Promise<void> {

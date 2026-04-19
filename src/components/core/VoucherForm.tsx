@@ -22,6 +22,25 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
     const [storageLimitModifier, setStorageLimitModifier] = useState(
       (initialData?.storageLimitModifier as number) ?? 0,
     );
+    const [maxConcurrentDownloadsModifier, setMaxConcurrentDownloadsModifier] =
+      useState(
+        (initialData?.maxConcurrentDownloadsModifier as number) ?? 0,
+      );
+    const [maxConcurrentUploadsModifier, setMaxConcurrentUploadsModifier] =
+      useState(
+        (initialData?.maxConcurrentUploadsModifier as number) ?? 0,
+      );
+    const [maxDownloadBandwidthModifier, setMaxDownloadBandwidthModifier] =
+      useState(
+        (initialData?.maxDownloadBandwidthModifier as number) ?? 0,
+      );
+    const [maxUploadBandwidthModifier, setMaxUploadBandwidthModifier] =
+      useState(
+        (initialData?.maxUploadBandwidthModifier as number) ?? 0,
+      );
+    const [maxOperationCountModifier, setMaxOperationCountModifier] = useState(
+      (initialData?.maxOperationCountModifier as number) ?? 0,
+    );
     const [creditIncrement, setCreditIncrement] = useState(
       (initialData?.creditIncrement as number) ?? 0,
     );
@@ -38,6 +57,11 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
         priceModifier,
         apiRateLimitModifier,
         storageLimitModifier,
+        maxConcurrentDownloadsModifier,
+        maxConcurrentUploadsModifier,
+        maxDownloadBandwidthModifier,
+        maxUploadBandwidthModifier,
+        maxOperationCountModifier,
         creditIncrement,
         expiresAt: expiresAt || undefined,
         permissions,
@@ -112,6 +136,74 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
               type="number"
               value={storageLimitModifier}
               onChange={(e) => setStorageLimitModifier(Number(e.target.value))}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.maxConcurrentDownloadsModifier")}
+            </label>
+            <input
+              type="number"
+              value={maxConcurrentDownloadsModifier}
+              onChange={(e) =>
+                setMaxConcurrentDownloadsModifier(Number(e.target.value))}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.maxConcurrentUploadsModifier")}
+            </label>
+            <input
+              type="number"
+              value={maxConcurrentUploadsModifier}
+              onChange={(e) =>
+                setMaxConcurrentUploadsModifier(Number(e.target.value))}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.maxOperationCountModifier")}
+            </label>
+            <input
+              type="number"
+              value={maxOperationCountModifier}
+              onChange={(e) =>
+                setMaxOperationCountModifier(Number(e.target.value))}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.maxDownloadBandwidthModifier")}
+            </label>
+            <input
+              type="number"
+              value={maxDownloadBandwidthModifier}
+              onChange={(e) =>
+                setMaxDownloadBandwidthModifier(Number(e.target.value))}
+              step="0.1"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.vouchers.maxUploadBandwidthModifier")}
+            </label>
+            <input
+              type="number"
+              value={maxUploadBandwidthModifier}
+              onChange={(e) =>
+                setMaxUploadBandwidthModifier(Number(e.target.value))}
+              step="0.1"
               className={inputCls}
             />
           </div>
