@@ -44,7 +44,7 @@ const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
     }));
 
     const inputCls =
-      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
     const labelCls =
       "block text-sm font-medium text-[var(--color-light-text)] mb-1";
 
@@ -57,7 +57,7 @@ const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
             value={number}
             onChange={(e) => setNumber(e.target.value)}
             maxLength={19}
-            placeholder="0000 0000 0000 0000"
+            placeholder={t("billing.card.numberPlaceholder")}
             required
             className={inputCls}
           />
@@ -71,7 +71,7 @@ const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
                 value={expiryMonth}
                 onChange={(e) => setExpiryMonth(e.target.value)}
                 maxLength={2}
-                placeholder="MM"
+                placeholder={t("billing.card.monthPlaceholder")}
                 className={inputCls}
               />
               <input
@@ -79,7 +79,7 @@ const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
                 value={expiryYear}
                 onChange={(e) => setExpiryYear(e.target.value)}
                 maxLength={4}
-                placeholder="YY"
+                placeholder={t("billing.card.yearPlaceholder")}
                 className={inputCls}
               />
             </div>
@@ -91,7 +91,7 @@ const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
               value={cvv}
               onChange={(e) => setCvv(e.target.value)}
               maxLength={4}
-              placeholder="000"
+              placeholder={t("billing.card.cvvPlaceholder")}
               className={inputCls}
             />
           </div>

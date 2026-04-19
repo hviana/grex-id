@@ -8,8 +8,8 @@ import type { Tenant } from "@/src/contracts/tenant";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
 
   const db = await getDb();
   const bindings: Record<string, unknown> = {};

@@ -37,6 +37,8 @@
   "confirm.delete.message": "Are you sure you want to delete this item? This action cannot be undone.",
   "locale.en": "English",
   "locale.pt-BR": "Portugu\u00eas (Brasil)",
+  "locale.selector": "Select language",
+  "user": "User",
   "roles.superuser.name": "Superuser",
   "roles.admin.name": "Admin",
   "roles.editor.name": "Editor",
@@ -169,5 +171,13 @@
   "users.error.lastAdminRole": "Cannot remove admin role from the last administrator. Assign another admin first.",
   "users.error.lastAdminDelete": "Cannot remove the last administrator. Assign another admin first.",
   "dateRange.endBeforeStart": "End date must be after start date",
-  "dateRange.maxDays": "Maximum range is {max} days"
+  "dateRange.maxDays": "Maximum range is {max} days",
+  "company.name": "Company Name",
+  "company.documentType": "Document Type",
+  "company.documentCnpj": "CNPJ",
+  "company.documentEin": "EIN",
+  "company.documentOther": "Other",
+  "company.documentNumber": "Document Number",
+  "placeholder.companyName": "Acme Inc.",
+  "placeholder.documentNumber": "00.000.000/0001-00"
 }

@@ -29,7 +29,7 @@ export default function DeleteButton({ onConfirm }: DeleteButtonProps) {
       <button
         onClick={() => setOpen(true)}
         className="rounded-lg border border-[var(--color-dark-gray)] px-3 py-1.5 text-sm text-red-400 hover:border-red-400 transition-colors"
-        title="Delete"
+        title={t("common.delete")}
       >
         🗑️
       </button>

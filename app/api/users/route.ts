@@ -14,8 +14,8 @@ import { generateSecureToken } from "@/server/utils/token";
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
-  const companyId = url.searchParams.get("companyId");
-  const systemId = url.searchParams.get("systemId");
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
 
   // Return the authenticated user's roles for a specific company+system
   if (action === "context") {
@@ -130,7 +130,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { email, phone, password, name, companyId, systemId, roles } = body;
+  const { email, phone, password, name, roles } = body;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
 
   // Standardize
   const stdEmail = standardizeField("email", email ?? "", "user");
@@ -144,8 +146,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ...validateField("name", stdName, "user"),
   ];
   if (stdPhone) errors.push(...validateField("phone", stdPhone, "user"));
-  if (!companyId) errors.push("validation.companyId.required");
-  if (!systemId) errors.push("validation.systemId.required");
+  if (!companyId || companyId === "0") {
+    errors.push("validation.companyId.required");
+  }
+  if (!systemId || systemId === "0") {
+    errors.push("validation.systemId.required");
+  }
 
   if (errors.length > 0) {
     return Response.json(

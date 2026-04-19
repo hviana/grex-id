@@ -69,7 +69,7 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
           <div className="flex items-center gap-3">
             <img
               src={`/api/files/download?uri=${encodeURIComponent(avatarUri)}`}
-              alt="Avatar"
+              alt={t("common.profile.avatar")}
               className="w-12 h-12 rounded-full border border-[var(--color-dark-gray)] object-cover"
             />
             <button

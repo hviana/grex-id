@@ -26,8 +26,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const action = url.searchParams.get("action");
 
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
 
   if (action === "search-owners") {
     const q = url.searchParams.get("q") ?? "";
@@ -58,9 +58,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const companyId = body.companyId || ctx.tenant.companyId;
-  const systemId = body.systemId || ctx.tenant.systemId;
-  const inferredCompanyIds = companyId ? [companyId] : [];
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
+  const inferredCompanyIds = companyId && companyId !== "0" ? [companyId] : [];
   const { profile, ownerId } = body;
   const email = body.email
     ? standardizeField("email", body.email, "lead")
@@ -175,8 +175,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
 async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const companyId = body.companyId || ctx.tenant.companyId;
-  const systemId = body.systemId || ctx.tenant.systemId;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
   const { id, profile, ownerId } = body;
   const email = body.email
     ? standardizeField("email", body.email, "lead")
@@ -241,8 +241,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
   await removeLeadFromCompanySystem(id, companyId, systemId);
   return Response.json({ success: true });
 }

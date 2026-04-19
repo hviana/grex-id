@@ -2,6 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useLocale } from "@/src/hooks/useLocale";
 
 interface CompanyIdentificationSubformProps {
   initialData?: Record<string, unknown>;
@@ -12,6 +13,7 @@ const CompanyIdentificationSubform = forwardRef<
   CompanyIdentificationSubformProps
 >(
   ({ initialData }, ref) => {
+    const { t } = useLocale();
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [document, setDocument] = useState(
       (initialData?.document as string) ?? "",
@@ -26,25 +28,26 @@ const CompanyIdentificationSubform = forwardRef<
     }));
 
     const inputCls =
-      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
 
     return (
       <div className="space-y-3">
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            Company Name *
+            {t("common.company.name")} *
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder={t("common.placeholder.companyName")}
             required
             className={inputCls}
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            Document Type *
+            {t("common.company.documentType")} *
           </label>
           <select
             value={documentType}
@@ -52,22 +55,25 @@ const CompanyIdentificationSubform = forwardRef<
             className={inputCls}
           >
             <option value="cnpj" className="bg-[var(--color-black)]">
-              CNPJ
+              {t("common.company.documentCnpj")}
             </option>
-            <option value="ein" className="bg-[var(--color-black)]">EIN</option>
+            <option value="ein" className="bg-[var(--color-black)]">
+              {t("common.company.documentEin")}
+            </option>
             <option value="other" className="bg-[var(--color-black)]">
-              Other
+              {t("common.company.documentOther")}
             </option>
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            Document Number *
+            {t("common.company.documentNumber")} *
           </label>
           <input
             type="text"
             value={document}
             onChange={(e) => setDocument(e.target.value)}
+            placeholder={t("common.placeholder.documentNumber")}
             required
             className={inputCls}
           />

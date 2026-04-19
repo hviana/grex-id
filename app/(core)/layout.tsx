@@ -151,7 +151,7 @@ function CoreProfileMenu() {
           {user?.profile?.name?.[0]?.toUpperCase() ?? "?"}
         </div>
         <span className="hidden sm:block text-sm text-white truncate max-w-32">
-          {user?.profile?.name ?? "User"}
+          {user?.profile?.name ?? t("common.user")}
         </span>
       </button>
 

@@ -92,7 +92,7 @@ export default function ProfileMenu() {
         </div>
         <div className="hidden sm:flex flex-col items-start">
           <span className="text-sm text-white truncate max-w-32">
-            {user?.profile?.name ?? "User"}
+            {user?.profile?.name ?? t("common.user")}
           </span>
           {activeCompany && (
             <span className="text-xs text-[var(--color-light-text)] truncate max-w-32">
