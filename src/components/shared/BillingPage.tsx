@@ -812,46 +812,36 @@ export default function BillingPage() {
                           : key}: {val.toLocaleString()}
                       </span>
                     ))}
-                  {activePlan.maxConcurrentDownloads
-                    ? (
-                      <span>
-                        ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-                        {activePlan.maxConcurrentDownloads}
-                      </span>
-                    )
-                    : null}
-                  {activePlan.maxConcurrentUploads
-                    ? (
-                      <span>
-                        ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-                        {activePlan.maxConcurrentUploads}
-                      </span>
-                    )
-                    : null}
-                  {activePlan.maxDownloadBandwidthMB
-                    ? (
-                      <span>
-                        📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-                        {activePlan.maxDownloadBandwidthMB} MB/s
-                      </span>
-                    )
-                    : null}
-                  {activePlan.maxUploadBandwidthMB
-                    ? (
-                      <span>
-                        📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-                        {activePlan.maxUploadBandwidthMB} MB/s
-                      </span>
-                    )
-                    : null}
-                  {activePlan.maxOperationCount
-                    ? (
-                      <span>
-                        🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                        {activePlan.maxOperationCount!.toLocaleString()}
-                      </span>
-                    )
-                    : null}
+                  <span>
+                    ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
+                    {activePlan.maxConcurrentDownloads
+                      ? activePlan.maxConcurrentDownloads
+                      : t("billing.limits.unlimited")}
+                  </span>
+                  <span>
+                    ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
+                    {activePlan.maxConcurrentUploads
+                      ? activePlan.maxConcurrentUploads
+                      : t("billing.limits.unlimited")}
+                  </span>
+                  <span>
+                    📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
+                    {activePlan.maxDownloadBandwidthMB
+                      ? `${activePlan.maxDownloadBandwidthMB} MB/s`
+                      : t("billing.limits.unlimited")}
+                  </span>
+                  <span>
+                    📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
+                    {activePlan.maxUploadBandwidthMB
+                      ? `${activePlan.maxUploadBandwidthMB} MB/s`
+                      : t("billing.limits.unlimited")}
+                  </span>
+                  <span>
+                    🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                    {activePlan.maxOperationCount
+                      ? activePlan.maxOperationCount.toLocaleString()
+                      : t("billing.limits.unlimited")}
+                  </span>
                 </div>
               </div>
 
@@ -1018,50 +1008,36 @@ export default function BillingPage() {
                                 : key}: {val.toLocaleString()}
                             </p>
                           ))}
-                        {plan.maxConcurrentDownloads
-                          ? (
-                            <p>
-                              ⬇️ {t("billing.limits.maxConcurrentDownloads")}:
-                              {" "}
-                              {plan.maxConcurrentDownloads}
-                            </p>
-                          )
-                          : null}
-                        {plan.maxConcurrentUploads
-                          ? (
-                            <p>
-                              ⬆️ {t("billing.limits.maxConcurrentUploads")}:
-                              {" "}
-                              {plan.maxConcurrentUploads}
-                            </p>
-                          )
-                          : null}
-                        {plan.maxDownloadBandwidthMB
-                          ? (
-                            <p>
-                              📶 {t("billing.limits.maxDownloadBandwidthMB")}:
-                              {" "}
-                              {plan.maxDownloadBandwidthMB} MB/s
-                            </p>
-                          )
-                          : null}
-                        {plan.maxUploadBandwidthMB
-                          ? (
-                            <p>
-                              📶 {t("billing.limits.maxUploadBandwidthMB")}:
-                              {" "}
-                              {plan.maxUploadBandwidthMB} MB/s
-                            </p>
-                          )
-                          : null}
-                        {plan.maxOperationCount
-                          ? (
-                            <p>
-                              🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                              {plan.maxOperationCount!.toLocaleString()}
-                            </p>
-                          )
-                          : null}
+                        <p>
+                          ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
+                          {plan.maxConcurrentDownloads
+                            ? plan.maxConcurrentDownloads
+                            : t("billing.limits.unlimited")}
+                        </p>
+                        <p>
+                          ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
+                          {plan.maxConcurrentUploads
+                            ? plan.maxConcurrentUploads
+                            : t("billing.limits.unlimited")}
+                        </p>
+                        <p>
+                          📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
+                          {plan.maxDownloadBandwidthMB
+                            ? `${plan.maxDownloadBandwidthMB} MB/s`
+                            : t("billing.limits.unlimited")}
+                        </p>
+                        <p>
+                          📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
+                          {plan.maxUploadBandwidthMB
+                            ? `${plan.maxUploadBandwidthMB} MB/s`
+                            : t("billing.limits.unlimited")}
+                        </p>
+                        <p>
+                          🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                          {plan.maxOperationCount
+                            ? plan.maxOperationCount.toLocaleString()
+                            : t("billing.limits.unlimited")}
+                        </p>
                       </div>
                     </div>
 
@@ -1405,23 +1381,45 @@ export default function BillingPage() {
               )}
               {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) !== 0 && (
                 <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  ⬇️{" "}
-                  {activeVoucher.maxConcurrentDownloadsModifier! > 0 ? "+" : ""}
+                  ⬇️ {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) > 0
+                    ? "+"
+                    : ""}
                   {activeVoucher.maxConcurrentDownloadsModifier}{" "}
                   {t("billing.limits.maxConcurrentDownloads")}
                 </span>
               )}
               {(activeVoucher.maxConcurrentUploadsModifier ?? 0) !== 0 && (
                 <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  ⬆️{" "}
-                  {activeVoucher.maxConcurrentUploadsModifier! > 0 ? "+" : ""}
+                  ⬆️ {(activeVoucher.maxConcurrentUploadsModifier ?? 0) > 0
+                    ? "+"
+                    : ""}
                   {activeVoucher.maxConcurrentUploadsModifier}{" "}
                   {t("billing.limits.maxConcurrentUploads")}
                 </span>
               )}
+              {(activeVoucher.maxDownloadBandwidthModifier ?? 0) !== 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  📶 {(activeVoucher.maxDownloadBandwidthModifier ?? 0) > 0
+                    ? "+"
+                    : ""}
+                  {activeVoucher.maxDownloadBandwidthModifier} MB/s
+                </span>
+              )}
+              {(activeVoucher.maxUploadBandwidthModifier ?? 0) !== 0 && (
+                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
+                  📶{" "}
+                  {(activeVoucher.maxUploadBandwidthModifier ?? 0) > 0
+                    ? "+"
+                    : ""}
+                  {activeVoucher.maxUploadBandwidthModifier} MB/s
+                </span>
+              )}
               {(activeVoucher.maxOperationCountModifier ?? 0) !== 0 && (
                 <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  🔢 {activeVoucher.maxOperationCountModifier! > 0 ? "+" : ""}
+                  🔢{" "}
+                  {(activeVoucher.maxOperationCountModifier ?? 0) > 0
+                    ? "+"
+                    : ""}
                   {activeVoucher.maxOperationCountModifier}{" "}
                   {t("billing.limits.maxOperationCount")}
                 </span>

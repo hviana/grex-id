@@ -81,7 +81,11 @@ export async function resolveEntityLimit(params: {
     }
   }
 
-  return { limit: planLimit + voucherModifier, planLimit, voucherModifier };
+  return {
+    limit: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
 }
 
 export async function checkPlanAccess(
@@ -137,7 +141,7 @@ export async function resolveRateLimitConfig(params: {
   }
 
   return {
-    globalLimit: planRateLimit + voucherModifier,
+    globalLimit: Math.max(0, planRateLimit + voucherModifier),
     planRateLimit,
     voucherModifier,
   };
@@ -161,7 +165,11 @@ export async function resolveFileCacheLimit(params: {
     voucherModifier = voucher?.fileCacheLimitModifier ?? 0;
   }
 
-  return { maxBytes: planLimit + voucherModifier, planLimit, voucherModifier };
+  return {
+    maxBytes: Math.max(0, planLimit + voucherModifier),
+    planLimit,
+    voucherModifier,
+  };
 }
 
 export async function resolveMaxConcurrentDownloads(params: {
