@@ -464,8 +464,8 @@ this table.
 | `0005_create_company_system.surql`           | `company_system`          | Unique `(companyId, systemId)`. Idempotent creation (§22.1).                                                                                                                                                                                                                                                                                                                                |
 | `0006_create_user_company_system.surql`      | `user_company_system`     | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                                                                                                                                         |
 | `0007_create_role.surql`                     | `role`                    | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                                                                                                                                                |
-| `0008_create_plan.surql`                     | `plan`                    | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, planCredits, isActive.                                                                                                                          |
-| `0009_create_voucher.surql`                  | `voucher`                 | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, entityLimitModifiers, creditIncrement.                                                                                                                         |
+| `0008_create_plan.surql`                     | `plan`                    | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `fileCacheLimitBytes` int default 20971520 (20 MB). `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, fileCacheLimitBytes, planCredits, isActive.                                                 |
+| `0009_create_voucher.surql`                  | `voucher`                 | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, fileCacheLimitModifier, entityLimitModifiers, creditIncrement.                                                                                                 |
 | `0010_create_menu_item.surql`                | `menu_item`               | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                                                                                                                                           |
 | `0011_create_subscription.surql`             | `subscription`            | See §22. `remainingPlanCredits`, `creditAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                                                                                                                                               |
 | `0012_create_payment_method.surql`           | `payment_method`          | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                                                                                                                                                    |
@@ -694,35 +694,36 @@ systemSlug)`. If a key is missing,
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
-| Key                                                | Seed value                                 | Used by                                         |
-| -------------------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
-| `app.name`                                         | `"Core"`                                   | Email templates (`appName`)                     |
-| `app.baseUrl`                                      | `"http://localhost:3000"`                  | Verification/reset links                        |
-| `app.defaultSystem`                                | `""`                                       | Homepage fallback system slug                   |
-| `auth.token.expiry.minutes`                        | `"15"`                                     | System API token lifetime                       |
-| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                                    | Stay-logged-in lifetime (7 days)                |
-| `auth.rateLimit.perMinute`                         | `"5"`                                      | Auth route rate limit                           |
-| `auth.verification.expiry.minutes`                 | `"15"`                                     | Email verification link                         |
-| `auth.passwordReset.expiry.minutes`                | `"30"`                                     | Password reset link                             |
-| `auth.verification.cooldown.seconds`               | `"120"`                                    | Min interval between verification/reset emails  |
-| `auth.twoFactor.enabled`                           | `"true"`                                   | Global 2FA toggle                               |
-| `auth.oauth.enabled`                               | `"false"`                                  | Global OAuth (login) toggle                     |
-| `auth.oauth.providers`                             | `"[]"`                                     | JSON array of enabled providers                 |
-| `files.maxUploadSizeBytes`                         | `"52428800"`                               | 50 MB                                           |
-| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Per-IP limit for unauthenticated uploads        |
-| `files.publicUpload.maxSizeBytes`                  | `"2097152"`                                | 2 MB                                            |
-| `files.publicUpload.allowedExtensions`             | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist               |
-| `files.publicUpload.allowedPathPatterns`           | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist               |
-| `terms.generic`                                    | `""`                                       | Generic LGPD fallback HTML                      |
-| `billing.autoRecharge.minAmount`                   | `"500"`                                    | Min auto-recharge (cents)                       |
-| `billing.autoRecharge.maxAmount`                   | `"50000"`                                  | Max auto-recharge per subscription (cents)      |
-| `auth.recoveryChannel.maxPerUser`                  | `"10"`                                     | Max recovery channels per user                  |
-| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                                     | Recovery channel verification link expiry (min) |
-| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"`                | Frontend WebSocket endpoint (§7.5)              |
-| `db.frontend.namespace`                            | `"main"`                                   | Frontend SurrealDB namespace (§7.5)             |
-| `db.frontend.database`                             | `"grex-id"`                                | Frontend SurrealDB database (§7.5)              |
-| `db.frontend.user`                                 | `""`                                       | SurrealDB auth user for frontend WebSocket      |
-| `db.frontend.pass`                                 | `""`                                       | SurrealDB auth pass for frontend WebSocket      |
+| Key                                                | Seed value                                 | Used by                                             |
+| -------------------------------------------------- | ------------------------------------------ | --------------------------------------------------- |
+| `app.name`                                         | `"Core"`                                   | Email templates (`appName`)                         |
+| `app.baseUrl`                                      | `"http://localhost:3000"`                  | Verification/reset links                            |
+| `app.defaultSystem`                                | `""`                                       | Homepage fallback system slug                       |
+| `auth.token.expiry.minutes`                        | `"15"`                                     | System API token lifetime                           |
+| `auth.token.expiry.stayLoggedIn.hours`             | `"168"`                                    | Stay-logged-in lifetime (7 days)                    |
+| `auth.rateLimit.perMinute`                         | `"5"`                                      | Auth route rate limit                               |
+| `auth.verification.expiry.minutes`                 | `"15"`                                     | Email verification link                             |
+| `auth.passwordReset.expiry.minutes`                | `"30"`                                     | Password reset link                                 |
+| `auth.verification.cooldown.seconds`               | `"120"`                                    | Min interval between verification/reset emails      |
+| `auth.twoFactor.enabled`                           | `"true"`                                   | Global 2FA toggle                                   |
+| `auth.oauth.enabled`                               | `"false"`                                  | Global OAuth (login) toggle                         |
+| `auth.oauth.providers`                             | `"[]"`                                     | JSON array of enabled providers                     |
+| `files.maxUploadSizeBytes`                         | `"52428800"`                               | 50 MB                                               |
+| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Per-IP limit for unauthenticated uploads            |
+| `files.publicUpload.maxSizeBytes`                  | `"2097152"`                                | 2 MB                                                |
+| `files.publicUpload.allowedExtensions`             | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist                   |
+| `files.publicUpload.allowedPathPatterns`           | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist                   |
+| `terms.generic`                                    | `""`                                       | Generic LGPD fallback HTML                          |
+| `billing.autoRecharge.minAmount`                   | `"500"`                                    | Min auto-recharge (cents)                           |
+| `billing.autoRecharge.maxAmount`                   | `"50000"`                                  | Max auto-recharge per subscription (cents)          |
+| `auth.recoveryChannel.maxPerUser`                  | `"10"`                                     | Max recovery channels per user                      |
+| `auth.recoveryChannel.verification.expiry.minutes` | `"15"`                                     | Recovery channel verification link expiry (min)     |
+| `db.frontend.url`                                  | `"ws://127.0.0.1:8000/rpc"`                | Frontend WebSocket endpoint (§7.5)                  |
+| `db.frontend.namespace`                            | `"main"`                                   | Frontend SurrealDB namespace (§7.5)                 |
+| `db.frontend.database`                             | `"grex-id"`                                | Frontend SurrealDB database (§7.5)                  |
+| `db.frontend.user`                                 | `""`                                       | SurrealDB auth user for frontend WebSocket          |
+| `db.frontend.pass`                                 | `""`                                       | SurrealDB auth pass for frontend WebSocket          |
+| `cache.file.maxSize`                               | `"20971520"`                               | Max in-memory file cache for core/superuser (20 MB) |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -867,6 +868,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
 | `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
 | `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
+| `server/utils/file-cache.ts`          | §12.12 — Churn-Decayed Size-Aware LFU file cache                |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1148,6 +1150,15 @@ async function resolveRateLimitConfig(params: {
 }): Promise<RateLimitConfigResult>;
 ```
 
+```typescript
+// Resolve the effective file cache limit from cached plan + voucher.
+// Returns { maxBytes, planLimit, voucherModifier }
+async function resolveFileCacheLimit(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<FileCacheLimitResult>;
+```
+
 #### 12.11 Centralized Cache (`server/utils/cache.ts`)
 
 A unified cache registry that replaces ad-hoc singleton caching. Every
@@ -1233,6 +1244,87 @@ clearAllCacheForSlug(slug: string): void;
 
 Systems and frameworks register their own caches following the same pattern.
 
+#### 12.12 File Cache — Churn-Decayed Size-Aware LFU (`server/utils/file-cache.ts`)
+
+A per-tenant in-memory file cache that stores file content as `Uint8Array` and
+avoids SurrealFS reads on cache hits. **Separate from the config cache
+registry** (§12.11) — the file cache is a standalone singleton
+(`FileCacheManager`) because it stores binary content, not configuration data.
+
+**Algorithm: Churn-Decayed Size-Aware LFU.** A self-adaptive, single-parameter
+cache. The only tuning knob is `maxSize` (total cache capacity in bytes). No
+time windows, no tunable decay constants.
+
+**State per tenant** (keyed by `"companyId:systemSlug"`):
+
+- `files: Map<string, { data: Uint8Array; size: number; hits: number; lastAccess: number }>`
+- `usedSize: number`
+- `churnSize: number`
+
+**Global state:**
+
+- `accessCounter: number` — monotonic counter for LRU tiebreaking
+
+**Priority score:** `score = hits / size`. More accessed files go up; larger
+files need more hits to justify their space.
+
+**Churn aging:** every time the system inserts a total of `maxSize` bytes of new
+data into the cache, divide all `hits` by 2. This makes the cache self-adaptive:
+if the workload changes fast, aging happens fast; if the workload is stable,
+aging happens slowly.
+
+**On access(`tenantKey`, `fileId`, `fileSize`, `maxSize`, `data?`):**
+
+1. `accessCounter += 1`
+2. If file is already cached: `hits += 1`, `lastAccess = accessCounter` → return
+   `{ hit: true, data: entry.data }`
+3. If `fileSize > maxSize`: return `{ hit: false, noCache: true }` — file too
+   large to ever cache
+4. While `usedSize + fileSize > maxSize`: evict the cached file with the lowest
+   `score` (ties broken by oldest `lastAccess`)
+5. If `data` is provided: insert new entry
+   `{ data, size: fileSize, hits: 1,
+   lastAccess: accessCounter }`
+6. `usedSize += fileSize`, `churnSize += fileSize`
+7. While `churnSize >= maxSize`: for every cached file:
+   `hits = floor(hits /
+   2)`, remove files whose `hits` became 0 (subtract
+   their size from `usedSize`), `churnSize -= maxSize`
+8. Return `{ hit: false, noCache: false }`
+
+**Max-size resolution:**
+
+- Tenant (company + system):
+  `plan.fileCacheLimitBytes + voucher.fileCacheLimitModifier`
+- Core / superuser: `Core.getSetting("cache.file.maxSize")` (seeded at 20 MB)
+
+**Integration point:** the download route (`GET /api/files/download`) checks the
+cache before reading from SurrealFS. On cache miss, it reads from SurrealFS and
+stores the content in the cache. Anonymous requests bypass the cache entirely.
+
+**No upload invalidation:** new files are not yet cached; existing files are
+unchanged by uploads. File deletions should call `clearTenant()` for the
+affected tenant to prevent stale data.
+
+**Usage reporting:** `FileCacheManager.getStats(tenantKey, maxSize)` returns
+`{ usedBytes, maxBytes, fileCount }` for the Usage API and UsagePage.
+
+**Contract:**
+
+```typescript
+export interface FileCacheResult {
+  hit: boolean;
+  noCache: boolean; // true when file exceeds maxSize
+  data?: Uint8Array;
+}
+
+export interface FileCacheStats {
+  usedBytes: number;
+  maxBytes: number;
+  fileCount: number;
+}
+```
+
 ### 13. File Storage
 
 Uses `@hviana/surreal-fs` exclusively. All file data **and** metadata are stored
@@ -1266,10 +1358,10 @@ authenticated mode; otherwise → unauthenticated mode.
 2. Validate FormData. Parse `category`. `companyId`, `systemSlug`, and
    `category` are required.
 3. Regular users: `companyId` and `userId` come from the token's tenant;
-   `systemSlug` comes from the FormData (the frontend knows the slug). Superusers
-   without a tenant (`systemId = "0"`): `companyId` defaults to `"core"`,
-   `userId` defaults to `"superuser"`, `systemSlug` comes from the FormData (the
-   form must have a slug filled before the upload is enabled).
+   `systemSlug` comes from the FormData (the frontend knows the slug).
+   Superusers without a tenant (`systemId = "0"`): `companyId` defaults to
+   `"core"`, `userId` defaults to `"superuser"`, `systemSlug` comes from the
+   FormData (the form must have a slug filled before the upload is enabled).
 4. Enforce `files.maxUploadSizeBytes`.
 5. `fileUuid = crypto.randomUUID()`.
 6. Path = `[companyId, systemSlug, userId, ...category, fileUuid, fileName]`.
@@ -1350,6 +1442,50 @@ export interface FileMetadata {
   createdAt: string;
 }
 ```
+
+#### 13.6 File cache integration
+
+The download route (`GET /api/files/download`) integrates with the file cache
+(§12.12). **The route always streams to the client** — caching is a background
+side-effect that never blocks the response.
+
+**Tenant resolution from URI path (not JWT).** The cache key is derived from the
+download URI structure: `uri = "{companyId}/{systemSlug}/..."`. The route splits
+the URI and uses `path[0]` as `companyId` and `path[1]` as `systemSlug` to
+resolve the cache context — independently of authentication state.
+
+**Cache context resolution (`resolveCacheContext`):**
+
+1. Look up `systemSlug` in the Core cache. If a matching system exists, resolve
+   the effective `maxSize` via `resolveFileCacheLimit()` (plan's
+   `fileCacheLimitBytes` + voucher's `fileCacheLimitModifier`). Tenant key:
+   `"{companyId}:{systemSlug}"`.
+2. **Core quota fallback:** if `systemSlug` does not match any system, the file
+   counts towards the core's quota. `maxSize` comes from the
+   `cache.file.maxSize` core setting (default 20 MB). Tenant key: `"core"`.
+3. If the resolved `maxSize` is 0, caching is disabled for that context.
+
+**Flow:**
+
+1. **Cache HIT:** call `access()` with `fileSize=0` (probe-only). On HIT →
+   return `Response` from cached `Uint8Array` (skip SurrealFS entirely).
+2. **Cache MISS:** read from SurrealFS. The response always streams to the
+   client:
+   - `ReadableStream` content: **tee** — one branch streams to the client, the
+     other buffers into a `Uint8Array` in the background and inserts into the
+     cache when fully consumed. Client never waits.
+   - Already-buffered content (`Uint8Array`/`ArrayBuffer`): insert into cache
+     synchronously, then stream to client.
+   - File exceeds `maxSize`: stream directly without caching.
+3. **Anonymous requests** receive bandwidth-throttled SurrealFS reads (existing
+   `control` callback) and bypass the cache entirely.
+
+**Streaming guarantee:** the client receives bytes as soon as SurrealFS provides
+them. Cache insertion is fire-and-forget.
+
+The cache stores file content keyed by URI. No explicit invalidation on upload
+(new files are not yet cached). File deletions via DataDeletion (§20.6) call
+`clearTenant()` for the affected tenant.
 
 ### 14. Event Queue
 
@@ -2114,6 +2250,7 @@ glassmorphism design.
 │  ── Limits ──                                │
 │  📊 API Rate: 1,000 req/min                 │
 │  💾 Storage: 1 GB                           │
+│  🗂️ File Cache: 20 MB                      │
 │  👥 Users: 50                               │
 │  [Subscribe / Current Plan badge]           │
 └─────────────────────────────────────────────┘
@@ -2936,7 +3073,7 @@ values are passed to the `fetchFn` as `startDate`/`endDate` query params on
 
 #### 21.5 `UsagePage` (`src/components/shared/UsagePage.tsx`)
 
-Fetches `GET /api/usage`. Two sections.
+Fetches `GET /api/usage`. Three sections.
 
 **1. Storage.** Horizontal `react-chartjs-2` `Bar` showing used vs. available
 storage (plan limit + voucher `storageLimitModifier`). Storage usage is computed
@@ -2947,7 +3084,12 @@ human-readable format (e.g. `"245 MB /
 1 GB"`). Gradient fill
 `from-[var(--color-primary-green)] to-[var(--color-secondary-blue)]`.
 
-**2. Credit Expenses.** `react-chartjs-2` `Bar` column chart: one column per
+**2. File Cache.** Horizontal bar chart showing used vs. available cache
+capacity (plan `fileCacheLimitBytes` + voucher `fileCacheLimitModifier`). Data
+from `FileCacheManager.getStats()` (§12.12). Same visual pattern as Storage.
+Emoji 🗂️.
+
+**3. Credit Expenses.** `react-chartjs-2` `Bar` column chart: one column per
 **resource key** (translated via `t()`), value = sum of daily `credit_expense`
 records over the selected range. Each expense tracks both `totalAmount` (cents
 consumed) and `totalCount` (number of individual operations).
@@ -2969,6 +3111,7 @@ GET /api/usage?companyId&systemId&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
   success: true,
   data: {
     storage: { usedBytes: number; limitBytes: number /* plan + vouchers */ };
+    cache: { usedBytes: number; maxBytes: number; fileCount: number };
     creditExpenses: { resourceKey: string; totalAmount: number; totalCount: number }[];
   }
 }

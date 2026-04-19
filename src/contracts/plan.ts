@@ -11,6 +11,7 @@ export interface Plan {
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;
+  fileCacheLimitBytes: number;
   planCredits: number;
   isActive: boolean;
   createdAt: string;

@@ -4,6 +4,8 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
+import FileCacheManager from "@/server/utils/file-cache";
+import { resolveFileCacheLimit } from "@/server/utils/guards";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -47,17 +49,21 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Batch: system slug + plan storage limit + voucher modifier + credit expenses (§7.2)
+  // Batch: system slug + plan storage/cache limits + voucher modifiers + credit expenses (§7.2)
   const configResult = await db.query<
     [
       { slug: string }[],
-      { storageLimitBytes: number; voucherId: string | null }[],
-      { storageLimitModifier: number }[],
+      {
+        storageLimitBytes: number;
+        fileCacheLimitBytes: number;
+        voucherId: string | null;
+      }[],
+      { storageLimitModifier: number; fileCacheLimitModifier: number }[],
       { resourceKey: string; totalAmount: number; totalCount: number }[],
     ]
   >(
     `SELECT slug FROM ONLY $systemId;
-     SELECT plan.storageLimitBytes AS storageLimitBytes, voucherId
+     SELECT plan.storageLimitBytes AS storageLimitBytes, plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
        FROM subscription
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
        LIMIT 1
@@ -66,7 +72,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
        LIMIT 1)[0];
      IF $voucherId != NONE {
-       SELECT storageLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+       SELECT storageLimitModifier, fileCacheLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
      } ELSE {
        SELECT NONE FROM NONE;
      };
@@ -87,6 +93,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     ?.[0]?.slug;
   const subRow = (configResult[1] as unknown[])?.[0] as {
     storageLimitBytes?: number;
+    fileCacheLimitBytes?: number;
   } | undefined;
 
   // Calculate storage usage via SurrealFS readDir
@@ -113,6 +120,16 @@ async function getHandler(req: Request, ctx: RequestContext) {
     (configResult[2]?.[0] as unknown as { storageLimitModifier?: number })
       ?.storageLimitModifier ?? 0;
 
+  // File cache stats — tenant key uses systemSlug to match download route
+  const cacheLimitResult = await resolveFileCacheLimit({ companyId, systemId });
+  const tenantKey = systemSlug ? `${companyId}:${systemSlug}` : null;
+  const cacheStats = tenantKey
+    ? FileCacheManager.getInstance().getStats(
+      tenantKey,
+      cacheLimitResult.maxBytes,
+    )
+    : { usedBytes: 0, maxBytes: cacheLimitResult.maxBytes, fileCount: 0 };
+
   const creditExpenses = configResult[3] ?? [];
 
   return Response.json({
@@ -122,6 +139,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
         usedBytes,
         limitBytes: storageLimitBytes,
       },
+      cache: cacheStats,
       creditExpenses,
     },
   });

@@ -120,12 +120,14 @@ const defaults: DefaultSetting[] = [
   {
     key: "files.publicUpload.allowedExtensions",
     value: '[".svg",".png",".jpg",".jpeg",".webp"]',
-    description: "JSON array of allowed file extensions for unauthenticated uploads",
+    description:
+      "JSON array of allowed file extensions for unauthenticated uploads",
   },
   {
     key: "files.publicUpload.allowedPathPatterns",
     value: '["*/*/*/logos/*"]',
-    description: "JSON array of glob patterns for allowed unauthenticated upload paths",
+    description:
+      "JSON array of glob patterns for allowed unauthenticated upload paths",
   },
   {
     key: "billing.autoRecharge.minAmount",
@@ -176,6 +178,12 @@ const defaults: DefaultSetting[] = [
     key: "db.frontend.pass",
     value: "",
     description: "SurrealDB auth pass for frontend WebSocket connection",
+  },
+  {
+    key: "cache.file.maxSize",
+    value: "20971520",
+    description:
+      "Maximum in-memory file cache size in bytes for core/superuser (20 MB default)",
   },
 ];
 

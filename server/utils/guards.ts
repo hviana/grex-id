@@ -25,6 +25,12 @@ export interface RateLimitConfigResult {
   voucherModifier: number;
 }
 
+export interface FileCacheLimitResult {
+  maxBytes: number;
+  planLimit: number;
+  voucherModifier: number;
+}
+
 async function resolveSubscription(
   companyId: string,
   systemId: string,
@@ -129,4 +135,25 @@ export async function resolveRateLimitConfig(params: {
     planRateLimit,
     voucherModifier,
   };
+}
+
+export async function resolveFileCacheLimit(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<FileCacheLimitResult> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) {
+    return { maxBytes: 0, planLimit: 0, voucherModifier: 0 };
+  }
+
+  const plan = await resolvePlan(sub.planId);
+  const planLimit = plan?.fileCacheLimitBytes ?? 20971520;
+
+  let voucherModifier = 0;
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherModifier = voucher?.fileCacheLimitModifier ?? 0;
+  }
+
+  return { maxBytes: planLimit + voucherModifier, planLimit, voucherModifier };
 }

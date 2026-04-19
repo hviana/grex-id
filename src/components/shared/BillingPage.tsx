@@ -41,6 +41,7 @@ interface PlanInfo {
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;
+  fileCacheLimitBytes?: number;
   planCredits?: number;
   isActive: boolean;
 }
@@ -772,6 +773,14 @@ export default function BillingPage() {
                     💾 {t("billing.plans.storage")}:{" "}
                     {formatBytes(activePlan.storageLimitBytes)}
                   </span>
+                  {activePlan.fileCacheLimitBytes
+                    ? (
+                      <span>
+                        🗂️ {t("billing.plans.fileCache")}:{" "}
+                        {formatBytes(activePlan.fileCacheLimitBytes)}
+                      </span>
+                    )
+                    : null}
                   {activePlan.planCredits
                     ? (
                       <span>
@@ -930,6 +939,14 @@ export default function BillingPage() {
                           💾 {t("billing.plans.storage")}:{" "}
                           {formatBytes(plan.storageLimitBytes)}
                         </p>
+                        {plan.fileCacheLimitBytes
+                          ? (
+                            <p>
+                              🗂️ {t("billing.plans.fileCache")}:{" "}
+                              {formatBytes(plan.fileCacheLimitBytes)}
+                            </p>
+                          )
+                          : null}
                         {plan.planCredits
                           ? (
                             <p>

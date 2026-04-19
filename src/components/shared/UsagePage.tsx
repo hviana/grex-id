@@ -46,6 +46,11 @@ interface UsageData {
     usedBytes: number;
     limitBytes: number;
   };
+  cache: {
+    usedBytes: number;
+    maxBytes: number;
+    fileCount: number;
+  };
   creditExpenses: {
     resourceKey: string;
     totalAmount: number;
@@ -123,6 +128,30 @@ export default function UsagePage() {
         {
           label: t("billing.usage.limit"),
           data: [Math.max(0, data.storage.limitBytes - data.storage.usedBytes)],
+          backgroundColor: "rgba(51, 51, 51, 0.5)",
+          borderColor: "#333333",
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
+    }
+    : null;
+
+  const cacheData = data && data.cache && data.cache.maxBytes > 0
+    ? {
+      labels: [t("billing.usage.fileCache")],
+      datasets: [
+        {
+          label: t("billing.usage.used"),
+          data: [data.cache.usedBytes],
+          backgroundColor: "rgba(0, 204, 255, 0.7)",
+          borderColor: "#00ccff",
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+        {
+          label: t("billing.usage.limit"),
+          data: [Math.max(0, data.cache.maxBytes - data.cache.usedBytes)],
           backgroundColor: "rgba(51, 51, 51, 0.5)",
           borderColor: "#333333",
           borderWidth: 1,
@@ -216,6 +245,58 @@ export default function UsagePage() {
                 </div>
               )}
             </div>
+
+            {/* ── File Cache ── */}
+            {data.cache && data.cache.maxBytes > 0 && (
+              <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">
+                <h2 className="text-lg font-semibold text-white mb-4">
+                  🗂️ {t("billing.usage.fileCache")}
+                </h2>
+                <div className="flex items-center gap-4 mb-4">
+                  <p className="text-2xl font-bold text-[var(--color-secondary-blue)]">
+                    {formatBytes(data.cache.usedBytes)}
+                  </p>
+                  <span className="text-[var(--color-light-text)]">/</span>
+                  <p className="text-lg text-[var(--color-light-text)]">
+                    {formatBytes(data.cache.maxBytes)}
+                  </p>
+                  <span className="text-sm text-[var(--color-light-text)]">
+                    ({data.cache.fileCount} {t("billing.usage.files")})
+                  </span>
+                </div>
+                {cacheData && (
+                  <div className="h-16">
+                    <Bar
+                      data={cacheData}
+                      options={{
+                        indexAxis: "y",
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: (ctx) => formatBytes(ctx.raw as number),
+                            },
+                          },
+                        },
+                        scales: {
+                          x: {
+                            stacked: true,
+                            display: false,
+                            max: data.cache.maxBytes,
+                          },
+                          y: {
+                            stacked: true,
+                            display: false,
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Credit Expenses ── */}
             <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">

@@ -6,8 +6,9 @@ DEFINE FIELD priceModifier         ON voucher TYPE int;
 DEFINE FIELD permissions           ON voucher TYPE array<string>;
 DEFINE FIELD entityLimitModifiers  ON voucher TYPE option<object> FLEXIBLE;
 DEFINE FIELD apiRateLimitModifier  ON voucher TYPE int DEFAULT 0;
-DEFINE FIELD storageLimitModifier  ON voucher TYPE int DEFAULT 0;
-DEFINE FIELD creditIncrement       ON voucher TYPE int DEFAULT 0;
+DEFINE FIELD storageLimitModifier    ON voucher TYPE int DEFAULT 0;
+DEFINE FIELD fileCacheLimitModifier  ON voucher TYPE int DEFAULT 0;
+DEFINE FIELD creditIncrement         ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD expiresAt             ON voucher TYPE option<datetime>;
 DEFINE FIELD createdAt             ON voucher TYPE datetime DEFAULT time::now();
 

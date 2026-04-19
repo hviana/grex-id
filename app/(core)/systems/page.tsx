@@ -220,20 +220,20 @@ export default function SystemsPage() {
           </div>
           {formSlug.trim()
             ? (
-                <FileUploadField
-                  fieldName={t("core.systems.logo")}
-                  allowedExtensions={[".svg", ".png", ".jpg", ".jpeg", ".webp"]}
-                  maxSizeBytes={5242880}
-                  companyId="core"
-                  systemSlug={formSlug}
-                  userId="superuser"
-                  category={["logos"]}
-                  previewEnabled
-                  currentUri={formLogo || undefined}
-                  onComplete={(uri) => setFormLogo(uri)}
-                  onRemove={() => setFormLogo("")}
-                />
-              )
+              <FileUploadField
+                fieldName={t("core.systems.logo")}
+                allowedExtensions={[".svg", ".png", ".jpg", ".jpeg", ".webp"]}
+                maxSizeBytes={5242880}
+                companyId="core"
+                systemSlug={formSlug}
+                userId="superuser"
+                category={["logos"]}
+                previewEnabled
+                currentUri={formLogo || undefined}
+                onComplete={(uri) => setFormLogo(uri)}
+                onRemove={() => setFormLogo("")}
+              />
+            )
             : (
               <p className="text-xs text-[var(--color-light-text)]/60">
                 {t("core.systems.logoSlugRequired")}

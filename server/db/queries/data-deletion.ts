@@ -1,5 +1,6 @@
 import { getDb } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
+import FileCacheManager from "@/server/utils/file-cache";
 
 /**
  * Deletes all data scoped to a company+system pair.
@@ -35,6 +36,8 @@ export async function deleteCompanySystemData(
   } catch {
     // If directory doesn't exist or fs fails, continue — data may not have files
   }
+
+  FileCacheManager.getInstance().clearTenant(`${companyId}:${systemSlug}`);
 }
 
 /**

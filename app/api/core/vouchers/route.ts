@@ -62,6 +62,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
+    fileCacheLimitModifier,
     creditIncrement,
     expiresAt,
   } = body;
@@ -101,6 +102,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       }
         apiRateLimitModifier = $apiRateLimitModifier,
         storageLimitModifier = $storageLimitModifier,
+        fileCacheLimitModifier = $fileCacheLimitModifier,
         creditIncrement = $creditIncrement,
         expiresAt = $expiresAt`,
       {
@@ -114,6 +116,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
           : undefined,
         apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
         storageLimitModifier: Number(storageLimitModifier ?? 0),
+        fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
         creditIncrement: Number(creditIncrement ?? 0),
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
@@ -156,6 +159,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
+    fileCacheLimitModifier,
     creditIncrement,
     expiresAt,
   } = body;
@@ -212,6 +216,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (storageLimitModifier !== undefined) {
       sets.push("storageLimitModifier = $storageLimitModifier");
       bindings.storageLimitModifier = Number(storageLimitModifier);
+    }
+    if (fileCacheLimitModifier !== undefined) {
+      sets.push("fileCacheLimitModifier = $fileCacheLimitModifier");
+      bindings.fileCacheLimitModifier = Number(fileCacheLimitModifier);
     }
     if (creditIncrement !== undefined) {
       sets.push("creditIncrement = $creditIncrement");

@@ -71,6 +71,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     entityLimits,
     apiRateLimit,
     storageLimitBytes,
+    fileCacheLimitBytes,
     isActive,
   } = body;
 
@@ -107,6 +108,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         ${hasEntityLimits ? "entityLimits = $entityLimits," : ""}
         apiRateLimit = $apiRateLimit,
         storageLimitBytes = $storageLimitBytes,
+        fileCacheLimitBytes = $fileCacheLimitBytes,
         isActive = $isActive`,
       {
         name: standardizeField("name", sanitizeString(name)),
@@ -120,6 +122,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         entityLimits: hasEntityLimits ? entityLimits : undefined,
         apiRateLimit: apiRateLimit ?? 1000,
         storageLimitBytes: storageLimitBytes ?? 1073741824,
+        fileCacheLimitBytes: fileCacheLimitBytes ?? 20971520,
         isActive: isActive ?? true,
       },
     );
@@ -171,6 +174,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       "entityLimits",
       "apiRateLimit",
       "storageLimitBytes",
+      "fileCacheLimitBytes",
       "isActive",
     ] as const;
 

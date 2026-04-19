@@ -34,7 +34,8 @@ function isPathAllowed(
 async function postHandler(req: Request, ctx: RequestContext) {
   const isAuthenticated = ctx.claims !== undefined;
   const isSuperuser = ctx.tenant.roles.includes("superuser");
-  const isSuperuserWithoutTenant = isAuthenticated && isSuperuser && ctx.tenant.companyId === "0";
+  const isSuperuserWithoutTenant = isAuthenticated && isSuperuser &&
+    ctx.tenant.companyId === "0";
 
   // Unauthenticated: strict per-IP rate limit
   if (!isAuthenticated) {
@@ -176,7 +177,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const patternSetting = await core.getSetting(
         "files.publicUpload.allowedPathPatterns",
       );
-      if (patternSetting) publicAllowedPathPatterns = JSON.parse(patternSetting);
+      if (patternSetting) {
+        publicAllowedPathPatterns = JSON.parse(patternSetting);
+      }
     } catch { /* use defaults */ }
     try {
       const sizeSetting = await core.getSetting(

@@ -23,6 +23,7 @@ interface VoucherItem {
   entityLimitModifiers: Record<string, number> | null;
   apiRateLimitModifier: number;
   storageLimitModifier: number;
+  fileCacheLimitModifier: number;
   creditIncrement: number;
   expiresAt: string | null;
   createdAt: string;
@@ -81,6 +82,9 @@ export default function VouchersPage() {
   >([]);
   const [formApiRateLimitModifier, setFormApiRateLimitModifier] = useState("0");
   const [formStorageLimitModifier, setFormStorageLimitModifier] = useState("0");
+  const [formFileCacheLimitModifier, setFormFileCacheLimitModifier] = useState(
+    "0",
+  );
   const [formCreditIncrement, setFormCreditIncrement] = useState("0");
   const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
     { id: string; label: string }[]
@@ -116,6 +120,7 @@ export default function VouchersPage() {
     setFormEntityLimitModifiers([]);
     setFormApiRateLimitModifier("0");
     setFormStorageLimitModifier("0");
+    setFormFileCacheLimitModifier("0");
     setFormCreditIncrement("0");
     setFormApplicablePlanIds([]);
     setFormExpiresAt("");
@@ -130,6 +135,9 @@ export default function VouchersPage() {
     setFormEntityLimitModifiers(modifiersToKV(item.entityLimitModifiers));
     setFormApiRateLimitModifier(String(item.apiRateLimitModifier));
     setFormStorageLimitModifier(String(item.storageLimitModifier / 1073741824));
+    setFormFileCacheLimitModifier(
+      String((item.fileCacheLimitModifier ?? 0) / 1048576),
+    );
     setFormCreditIncrement(String(item.creditIncrement));
     setFormApplicablePlanIds(
       (item.applicablePlanIds ?? []).map((id) => ({
@@ -157,6 +165,9 @@ export default function VouchersPage() {
         apiRateLimitModifier: Number(formApiRateLimitModifier),
         storageLimitModifier: Math.round(
           Number(formStorageLimitModifier) * 1073741824,
+        ),
+        fileCacheLimitModifier: Math.round(
+          Number(formFileCacheLimitModifier) * 1048576,
         ),
         creditIncrement: Number(formCreditIncrement),
         applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
@@ -278,6 +289,14 @@ export default function VouchersPage() {
                             {voucher.storageLimitModifier > 0 ? "+" : ""}
                             {(voucher.storageLimitModifier / 1073741824)
                               .toFixed(1)} GB
+                          </span>
+                        )}
+                        {voucher.fileCacheLimitModifier !== 0 && (
+                          <span>
+                            🗂️ {t("core.vouchers.fileCache")}:{" "}
+                            {voucher.fileCacheLimitModifier > 0 ? "+" : ""}
+                            {(voucher.fileCacheLimitModifier / 1048576)
+                              .toFixed(1)} MB
                           </span>
                         )}
                         {voucher.creditIncrement > 0 && (
@@ -456,6 +475,21 @@ export default function VouchersPage() {
                 onChange={(e) => setFormCreditIncrement(e.target.value)}
                 placeholder="0"
                 className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {t("core.vouchers.fileCacheLimitModifier")}
+              </label>
+              <input
+                type="number"
+                value={formFileCacheLimitModifier}
+                onChange={(e) => setFormFileCacheLimitModifier(e.target.value)}
+                step="1"
+                placeholder={t(
+                  "core.vouchers.placeholder.fileCacheLimitModifier",
+                )}
+                className={`${inputCls} placeholder-white/30`}
               />
             </div>
           </div>

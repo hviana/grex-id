@@ -24,6 +24,7 @@ import { recoveryChannelResetTemplate } from "./utils/communication/templates/re
 import { loadCoreData } from "./utils/Core.ts";
 import { loadFrontCoreData } from "./utils/FrontCore.ts";
 import { loadJwtSecret } from "./utils/token.ts";
+import FileCacheManager from "./utils/file-cache.ts";
 
 export function registerCore(): void {
   // Caches
@@ -59,4 +60,7 @@ export function registerCore(): void {
   registerTemplate("tenant-invite", tenantInviteTemplate);
   registerTemplate("recovery-verify", recoveryVerifyTemplate);
   registerTemplate("recovery-channel-reset", recoveryChannelResetTemplate);
+
+  // File cache singleton
+  FileCacheManager.getInstance();
 }

@@ -25,6 +25,7 @@ interface PlanItem {
   entityLimits: Record<string, number> | null;
   apiRateLimit: number;
   storageLimitBytes: number;
+  fileCacheLimitBytes: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -102,6 +103,7 @@ export default function PlansPage() {
   );
   const [formApiRateLimit, setFormApiRateLimit] = useState("1000");
   const [formStorageGB, setFormStorageGB] = useState("1");
+  const [formFileCacheMB, setFormFileCacheMB] = useState("20");
   const [formIsActive, setFormIsActive] = useState(true);
   const [loadingSystems, setLoadingSystems] = useState(true);
 
@@ -153,6 +155,7 @@ export default function PlansPage() {
     setFormEntityLimits([]);
     setFormApiRateLimit("1000");
     setFormStorageGB("1");
+    setFormFileCacheMB("20");
     setFormIsActive(true);
     setError(null);
     setShowCreate(true);
@@ -173,6 +176,9 @@ export default function PlansPage() {
     setFormApiRateLimit(String(item.apiRateLimit ?? 1000));
     setFormStorageGB(
       String((item.storageLimitBytes ?? 1073741824) / 1073741824),
+    );
+    setFormFileCacheMB(
+      String((item.fileCacheLimitBytes ?? 20971520) / 1048576),
     );
     setFormIsActive(item.isActive ?? true);
     setError(null);
@@ -199,6 +205,7 @@ export default function PlansPage() {
         entityLimits: kvToEntityLimits(formEntityLimits),
         apiRateLimit: Number(formApiRateLimit),
         storageLimitBytes: Math.round(Number(formStorageGB) * 1073741824),
+        fileCacheLimitBytes: Math.round(Number(formFileCacheMB) * 1048576),
         isActive: formIsActive,
       };
 
@@ -339,6 +346,12 @@ export default function PlansPage() {
                     <span>{t("core.plans.storage")}</span>
                     <span className="text-white">
                       {formatStorage(plan.storageLimitBytes)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🗂️ {t("core.plans.fileCache")}</span>
+                    <span className="text-white">
+                      {formatStorage(plan.fileCacheLimitBytes ?? 20971520)}
                     </span>
                   </div>
                 </div>
@@ -506,7 +519,7 @@ export default function PlansPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
                 {t("core.plans.apiRateLimit")}
@@ -531,6 +544,20 @@ export default function PlansPage() {
                 min="0"
                 step="0.1"
                 placeholder={t("core.plans.placeholder.storageGB")}
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {t("core.plans.fileCacheLimit")} (MB)
+              </label>
+              <input
+                type="number"
+                value={formFileCacheMB}
+                onChange={(e) => setFormFileCacheMB(e.target.value)}
+                min="0"
+                step="1"
+                placeholder={t("core.plans.placeholder.fileCacheMB")}
                 className={`${inputCls} placeholder-white/30`}
               />
             </div>
