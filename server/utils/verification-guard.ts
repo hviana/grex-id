@@ -45,14 +45,14 @@ export async function communicationGuard(params: {
 
   const result = await db.query<
     [
-      { expiresAt: string }[],
+      { id: string }[],
       { cnt: number }[],
       unknown[],
       {
         blockedByPrevious: boolean;
         blockedByRateLimit: boolean;
         allowed: boolean;
-      },
+      }[],
     ]
   >(
     `LET $lastActive = (
@@ -70,12 +70,12 @@ export async function communicationGuard(params: {
       WHERE userId = $userId
         AND type = $type
         AND createdAt > $windowStart
-      GROUP BY ALL
-      LIMIT 1
+      GROUP ALL
     );
 
-    LET $created = IF array::len($lastActive) = 0
-      AND (array::len($windowCount) = 0 OR $windowCount[0].cnt < $maxCount)
+    LET $wCnt = array::len($windowCount) > 0 ? $windowCount[0].cnt : 0;
+
+    LET $created = IF array::len($lastActive) = 0 AND $wCnt < $maxCount
     THEN (
       CREATE verification_request SET
         userId = $userId,
@@ -85,11 +85,11 @@ export async function communicationGuard(params: {
         payload = $payload
     ) ELSE [] END;
 
-    {
+    [{
       blockedByPrevious: array::len($lastActive) > 0,
-      blockedByRateLimit: array::len($windowCount) > 0 AND $windowCount[0].cnt >= $maxCount,
+      blockedByRateLimit: $wCnt >= $maxCount,
       allowed: array::len($created) > 0
-    };`,
+    }];`,
     {
       userId: rid(normalizedUserId),
       type,
@@ -101,7 +101,7 @@ export async function communicationGuard(params: {
     },
   );
 
-  const status = result[3];
+  const status = result[3]?.[0];
 
   if (!status) {
     return { allowed: false };
