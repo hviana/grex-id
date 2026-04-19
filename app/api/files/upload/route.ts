@@ -27,13 +27,14 @@ function isPathAllowed(
 }
 
 /**
- * Dual-mode upload handler.
- * - Authenticated: `withAuth` populates ctx.tenant + ctx.claims; file stored under token's scope.
- * - Unauthenticated: `withAuth` synthesizes an anonymous tenant; strict rate limit, path whitelist, size + extension checks.
+ * Two-tier upload handler (§13.2).
+ * - Authenticated: token present, file stored under tenant path (or superuser defaults).
+ * - Unauthenticated: no token, strict path/extension/size validation.
  */
 async function postHandler(req: Request, ctx: RequestContext) {
   const isAuthenticated = ctx.claims !== undefined;
   const isSuperuser = ctx.tenant.roles.includes("superuser");
+  const isSuperuserWithoutTenant = isAuthenticated && isSuperuser && ctx.tenant.companyId === "0";
 
   // Unauthenticated: strict per-IP rate limit
   if (!isAuthenticated) {
@@ -58,9 +59,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const formData = await req.formData();
   const fileEntry = formData.get("file");
-  const companyId = formData.get("companyId") as string | null;
-  const systemSlug = formData.get("systemSlug") as string | null;
-  const userId = formData.get("userId") as string | null;
+  const formCompanyId = (formData.get("companyId") as string | null) || "";
+  const formSystemSlug = formData.get("systemSlug") as string | null;
+  const formUserId = (formData.get("userId") as string | null) || "";
   const categoryRaw = formData.get("category") as string | null;
   const description = formData.get("description") as string | null;
 
@@ -80,10 +81,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
   }
 
-  if (
-    !(fileEntry instanceof File) || companyId === null || systemSlug === null ||
-    userId === null || !category
-  ) {
+  // companyId, systemSlug, and category are always required
+  if (!(fileEntry instanceof File) || !formSystemSlug || !category) {
     return Response.json(
       {
         success: false,
@@ -94,6 +93,39 @@ async function postHandler(req: Request, ctx: RequestContext) {
       },
       { status: 400 },
     );
+  }
+
+  // Resolve companyId, systemSlug, userId based on tier
+  let companyId: string;
+  let systemSlug: string;
+  let userId: string;
+
+  if (isAuthenticated) {
+    if (isSuperuserWithoutTenant) {
+      companyId = formCompanyId || "core";
+      userId = formUserId || "superuser";
+    } else {
+      companyId = ctx.tenant.companyId;
+      userId = ctx.claims!.actorId;
+    }
+    systemSlug = formSystemSlug;
+  } else {
+    // Unauthenticated: all fields from FormData, userId defaults to "anonymous"
+    if (!formCompanyId) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "common.error.file.missingFields",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    companyId = formCompanyId;
+    systemSlug = formSystemSlug;
+    userId = formUserId || "anonymous";
   }
 
   const fileUuid = crypto.randomUUID();
@@ -114,7 +146,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
     description: description || undefined,
   };
 
-  // Resolve allowed patterns from Core settings for unauthenticated uploads
+  // Resolve size limit for authenticated uploads
+  let maxSizeBytes = AUTH_MAX_SIZE_BYTES;
+  if (isAuthenticated) {
+    const core = Core.getInstance();
+    try {
+      const sizeSetting = await core.getSetting(
+        "files.maxUploadSizeBytes",
+        systemSlug,
+      );
+      if (sizeSetting) maxSizeBytes = Number(sizeSetting);
+    } catch { /* use defaults */ }
+  }
+
+  // Resolve public upload settings for unauthenticated uploads
   let publicAllowedExtensions = ["svg", "png", "jpg", "jpeg", "webp"];
   let publicAllowedPathPatterns = ["*/*/*/logos/*", "*/*/*/avatars/*"];
   let publicMaxSizeBytes = PUBLIC_MAX_SIZE_BYTES;
@@ -131,9 +176,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const patternSetting = await core.getSetting(
         "files.publicUpload.allowedPathPatterns",
       );
-      if (patternSetting) {
-        publicAllowedPathPatterns = JSON.parse(patternSetting);
-      }
+      if (patternSetting) publicAllowedPathPatterns = JSON.parse(patternSetting);
     } catch { /* use defaults */ }
     try {
       const sizeSetting = await core.getSetting(
@@ -143,42 +186,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
     } catch { /* use defaults */ }
   }
 
-  let authMaxSizeBytes = AUTH_MAX_SIZE_BYTES;
-  if (isAuthenticated) {
-    const core = Core.getInstance();
-    try {
-      const sizeSetting = await core.getSetting(
-        "files.maxUploadSizeBytes",
-        systemSlug ?? undefined,
-      );
-      if (sizeSetting) authMaxSizeBytes = Number(sizeSetting);
-    } catch { /* use defaults */ }
-  }
-
-  const finalAllowedExtensions = publicAllowedExtensions;
-  const finalAllowedPathPatterns = publicAllowedPathPatterns;
-  const finalPublicMaxSize = publicMaxSizeBytes;
-  const finalAuthMaxSize = authMaxSizeBytes;
-
-  // All validation happens inside the control callback
   const control = (
     savePath: string[],
     _concurrencyMap: Record<string, number | undefined>,
   ): SaveControlResult => {
     if (!isAuthenticated) {
-      // Unauthenticated: strict path whitelist, size, extensions, concurrency
       return {
-        accessAllowed: isPathAllowed(savePath, finalAllowedPathPatterns),
-        maxFileSizeBytes: finalPublicMaxSize,
-        allowedExtensions: finalAllowedExtensions,
+        accessAllowed: isPathAllowed(savePath, publicAllowedPathPatterns),
+        maxFileSizeBytes: publicMaxSizeBytes,
+        allowedExtensions: publicAllowedExtensions,
         concurrencyIdentifiers: [savePath.slice(0, 3).join("/")],
         kbytesPerSecond: 10,
       };
     }
-    // Authenticated
     return {
       accessAllowed: true,
-      maxFileSizeBytes: finalAuthMaxSize,
+      maxFileSizeBytes: maxSizeBytes,
       allowedExtensions: [],
       concurrencyIdentifiers: [savePath.slice(0, 3).join("/")],
     };
@@ -266,9 +289,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   );
 }
 
-// withAuth is used without requireAuthenticated so it synthesizes an anonymous
-// tenant for unauthenticated requests, allowing the dual-mode handler to
-// differentiate based on ctx.claims presence.
+// withAuth synthesizes an anonymous tenant for unauthenticated requests,
+// allowing the handler to differentiate based on ctx.claims presence.
 export const POST = compose(
   withAuth(),
   async (req, ctx) => postHandler(req, ctx),

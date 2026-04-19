@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
+
 import Spinner from "@/src/components/shared/Spinner";
 import SearchField from "@/src/components/shared/SearchField";
 import CreateButton from "@/src/components/shared/CreateButton";
@@ -22,7 +22,6 @@ interface SystemItem {
 
 export default function SystemsPage() {
   const { t } = useLocale();
-  const { user, loading: authLoading } = useAuth();
   const [systems, setSystems] = useState<SystemItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -118,7 +117,7 @@ export default function SystemsPage() {
   };
 
   const inputCls =
-    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
   return (
     <div className="space-y-6">
@@ -220,15 +219,14 @@ export default function SystemsPage() {
             />
           </div>
           {formSlug.trim()
-            ? (authLoading ? <Spinner size="sm" /> : user?.id
-              ? (
+            ? (
                 <FileUploadField
                   fieldName={t("core.systems.logo")}
                   allowedExtensions={[".svg", ".png", ".jpg", ".jpeg", ".webp"]}
                   maxSizeBytes={5242880}
-                  companyId="0"
+                  companyId="core"
                   systemSlug={formSlug}
-                  userId={String(user.id)}
+                  userId="superuser"
                   category={["logos"]}
                   previewEnabled
                   currentUri={formLogo || undefined}
@@ -236,7 +234,6 @@ export default function SystemsPage() {
                   onRemove={() => setFormLogo("")}
                 />
               )
-              : null)
             : (
               <p className="text-xs text-[var(--color-light-text)]/60">
                 {t("core.systems.logoSlugRequired")}

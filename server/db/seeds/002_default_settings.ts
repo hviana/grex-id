@@ -115,17 +115,17 @@ const defaults: DefaultSetting[] = [
   {
     key: "files.publicUpload.maxSizeBytes",
     value: "2097152",
-    description: "Max size for public uploads (2 MB)",
+    description: "Max size for unauthenticated uploads (2 MB)",
   },
   {
     key: "files.publicUpload.allowedExtensions",
     value: '[".svg",".png",".jpg",".jpeg",".webp"]',
-    description: "JSON array of allowed file extensions for public uploads",
+    description: "JSON array of allowed file extensions for unauthenticated uploads",
   },
   {
     key: "files.publicUpload.allowedPathPatterns",
     value: '["*/*/*/logos/*"]',
-    description: "JSON array of glob patterns for allowed public upload paths",
+    description: "JSON array of glob patterns for allowed unauthenticated upload paths",
   },
   {
     key: "billing.autoRecharge.minAmount",

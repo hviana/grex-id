@@ -2,7 +2,6 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 
@@ -13,7 +12,6 @@ interface SystemFormProps {
 const SystemForm = forwardRef<SubformRef, SystemFormProps>(
   ({ initialData }, ref) => {
     const { t } = useLocale();
-    const { user } = useAuth();
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [slug, setSlug] = useState((initialData?.slug as string) ?? "");
     const [logoUri, setLogoUri] = useState(
@@ -29,7 +27,7 @@ const SystemForm = forwardRef<SubformRef, SystemFormProps>(
     }));
 
     const inputCls =
-      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
+      "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
     return (
       <div className="space-y-4">
@@ -58,15 +56,15 @@ const SystemForm = forwardRef<SubformRef, SystemFormProps>(
             placeholder={t("core.systems.placeholder.slug")}
           />
         </div>
-        {slug.trim() && user?.id
+        {slug.trim()
           ? (
             <FileUploadField
               fieldName={t("core.systems.logo")}
               allowedExtensions={[".svg", ".png", ".jpg", ".jpeg", ".webp"]}
               maxSizeBytes={5242880}
-              companyId="0"
+              companyId="core"
               systemSlug={slug}
-              userId={user.id}
+              userId="superuser"
               category={["logos"]}
               previewEnabled
               onComplete={(uri) => setLogoUri(uri)}

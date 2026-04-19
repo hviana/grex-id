@@ -184,7 +184,7 @@ export default function FileUploadField({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder={t("common.file.description")}
-          className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors"
+          className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
         />
       )}
 

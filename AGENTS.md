@@ -709,7 +709,7 @@ systemSlug)`. If a key is missing,
 | `auth.oauth.enabled`                               | `"false"`                                  | Global OAuth (login) toggle                     |
 | `auth.oauth.providers`                             | `"[]"`                                     | JSON array of enabled providers                 |
 | `files.maxUploadSizeBytes`                         | `"52428800"`                               | 50 MB                                           |
-| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Strict per-IP limit for unauthenticated uploads |
+| `files.publicUpload.rateLimit.perMinute`           | `"3"`                                      | Per-IP limit for unauthenticated uploads        |
 | `files.publicUpload.maxSizeBytes`                  | `"2097152"`                                | 2 MB                                            |
 | `files.publicUpload.allowedExtensions`             | `'[".svg",".png",".jpg",".jpeg",".webp"]'` | Public-upload extension whitelist               |
 | `files.publicUpload.allowedPathPatterns`           | `'["*/*/*/logos/*"]'`                      | Public-upload path glob whitelist               |
@@ -1248,32 +1248,42 @@ within surreal-fs — no separate SQL tables.
 `["documents","invoices"]`), enabling directory-like browsing via
 `fs.readDir()`.
 
-#### 13.2 Upload route (`POST /api/files/upload`) — single dual-mode endpoint
+#### 13.2 Upload route (`POST /api/files/upload`) — two-tier
 
 FormData: `file`, `companyId`, `systemSlug`, `userId`, `category` (JSON string
-array), optional `description`.
+array), optional `description`. `companyId`, `systemSlug`, and `category` are
+always required. `userId` defaults to `"superuser"` for authenticated superusers
+without a tenant, or `"anonymous"` for unauthenticated requests.
+
+All uploads use the same path pattern (§13.1). No special paths exist.
 
 **Mode is determined by the `Authorization` header.** If a valid token exists →
 authenticated mode; otherwise → unauthenticated mode.
 
 **Authenticated mode.**
 
-1. `withAuth` extracts `userId`, `companyId`, `systemId` from the token.
-2. Validate FormData. Parse `category`.
-3. Enforce `files.maxUploadSizeBytes`.
-4. `fileUuid = crypto.randomUUID()`.
-5. Path = `[companyId, systemSlug, userId, ...category, fileUuid, fileName]`.
-6. `fs.save({ path, content, metadata })` — metadata includes `companyId`,
+1. `withAuth` verifies the token and populates `ctx.claims`.
+2. Validate FormData. Parse `category`. `companyId`, `systemSlug`, and
+   `category` are required.
+3. Regular users: `companyId` and `userId` come from the token's tenant;
+   `systemSlug` comes from the FormData (the frontend knows the slug). Superusers
+   without a tenant (`systemId = "0"`): `companyId` defaults to `"core"`,
+   `userId` defaults to `"superuser"`, `systemSlug` comes from the FormData (the
+   form must have a slug filled before the upload is enabled).
+4. Enforce `files.maxUploadSizeBytes`.
+5. `fileUuid = crypto.randomUUID()`.
+6. Path = `[companyId, systemSlug, userId, ...category, fileUuid, fileName]`.
+7. `fs.save({ path, content, metadata })` — metadata includes `companyId`,
    `systemSlug`, `userId`, `category`, `fileName`, `fileUuid`, `mimeType`,
    optional `description`.
-7. Return `{ uri, fileUuid, fileName, sizeBytes, mimeType }`.
+8. Return `{ uri, fileUuid, fileName, sizeBytes, mimeType }`.
 
-**Unauthenticated mode** — used for initial system-logo uploads by the superuser
-and any public-facing form:
+**Unauthenticated mode** — for public-facing forms:
 
 1. Strict per-IP rate limit from `files.publicUpload.rateLimit.perMinute`
    (default 3).
-2. Validate FormData. Parse `category`.
+2. Validate FormData. Parse `category`. `companyId`, `systemSlug`, and
+   `category` are required. `userId` defaults to `"anonymous"`.
 3. **Path whitelist:** constructed path must match one of
    `files.publicUpload.allowedPathPatterns` (JSON glob array).
 4. **Size limit:** ≤ `files.publicUpload.maxSizeBytes` (default 2 MB).
@@ -1866,9 +1876,9 @@ Props: {
   fieldName: string;
   allowedExtensions: string[];
   maxSizeBytes: number;
-  companyId: string;             // may be empty for unauthenticated uploads
-  systemSlug: string;            // slug, not id — matches the upload path
-  userId: string;                // may be empty for unauthenticated uploads
+  companyId: string;             // "core" for superuser without tenant; required for all others
+  systemSlug: string;            // always required — form must enforce it before upload is enabled
+  userId: string;                // "superuser" for superuser without tenant; "anonymous" for unauthenticated
   category: string[];            // e.g. ["logos"] or ["documents","invoices"]
   previewEnabled?: boolean;      // rounded avatar preview
   descriptionEnabled?: boolean;
@@ -1878,9 +1888,10 @@ Props: {
 
 Sends **all** required fields to `/api/files/upload` as FormData (`file`,
 `companyId`, `systemSlug`, `userId`, `category` as JSON, optional
-`description`). Server validates in authenticated or unauthenticated mode
-(§13.2). Shows progress bar, cancel, delete. Preview (if enabled) shows a
-rounded image suitable for avatars. Emits the file URI on completion.
+`description`). Always sends the `Authorization` header when a token is
+available. Server validates in authenticated or unauthenticated mode (§13.2).
+Shows progress bar, cancel, delete. Preview (if enabled) shows a rounded image
+suitable for avatars. Emits the file URI on completion.
 
 **`SearchableSelectField`**
 
@@ -2456,10 +2467,10 @@ All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
 
 - **SystemForm** — name, slug, `FileUploadField` with `previewEnabled` for the
   system logo, `termsOfService` textarea (HTML). The `FileUploadField` uses
-  `category={["logos"]}` and `systemSlug` from form state. For core-admin
-  uploads where user context is not yet available, `companyId` / `userId` /
-  `systemSlug` may be empty — the upload route handles this in unauthenticated
-  mode with strict validation (§13.2). System i18n key:
+  `category={["logos"]}` and `systemSlug` from form state (slug must be filled
+  before the upload is enabled). For superusers without a tenant, `companyId`
+  defaults to `"core"` and `userId` defaults to `"superuser"`. The upload route
+  applies `files.maxUploadSizeBytes` (§13.2). System i18n key:
   `core.systems.termsOfService`.
 - **RoleForm** — name, systemId (select), isBuiltIn (checkbox),
   `MultiBadgeField` for permissions (`mode:"custom"`, format hint
