@@ -72,9 +72,10 @@ async function handler(
   if (!guardResult.allowed) return successResponse;
 
   const expiryMinutes = Number(
-    (await core.getSetting("auth.communication.expiry.minutes")) || 15,
+    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+      15,
   );
-  const baseUrl = (await core.getSetting("app.baseUrl")) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 

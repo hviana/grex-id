@@ -117,19 +117,25 @@ async function handler(
     locale: locale || undefined,
   });
 
+  const systemSlug = body.systemSlug as string | undefined;
+
   const guardResult = await communicationGuard({
     userId: user.id,
     type: "email_verify",
+    systemSlug,
   });
 
   if (guardResult.allowed) {
     const expiryMinutes = Number(
-      (await core.getSetting("auth.communication.expiry.minutes")) || 15,
+      (await core.getSetting(
+        "auth.communication.expiry.minutes",
+        systemSlug,
+      )) ||
+        15,
     );
-    const baseUrl = (await core.getSetting("app.baseUrl")) ??
+    const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
       "http://localhost:3000";
     const verificationLink = `${baseUrl}/verify?token=${guardResult.token}`;
-    const systemSlug = body.systemSlug as string | undefined;
 
     await publish("SEND_EMAIL", {
       recipients: [email!],
