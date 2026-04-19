@@ -1,6 +1,7 @@
 import { getDb, rid } from "../db/connection.ts";
 import { publish } from "../event-queue/publisher.ts";
 import type { Tenant } from "@/src/contracts/tenant.ts";
+import { resolveMaxOperationCount } from "./guards.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -102,9 +103,14 @@ export async function consumeCredits(params: {
   const totalAvailable = planCredits + purchasedCredits;
 
   // Operation-count cap check (§12.3)
+  // 0 on the plan means unlimited — only enforce when cap > 0
   const operationCount = sub.remainingOperationCount ?? 0;
-  if (operationCount === 0) {
-    // Operation count exhausted — send one-shot alert if not already sent
+  const opCap = await resolveMaxOperationCount({
+    companyId: params.companyId,
+    systemId: params.systemId,
+  });
+
+  if (opCap.max > 0 && operationCount === 0) {
     if (!sub.operationCountAlertSent) {
       await sendOperationCountAlert(sub, params);
     }
@@ -174,9 +180,10 @@ export async function consumeCredits(params: {
     return { success: false, source: "insufficient" };
   }
 
-  // Decrement operation count by 1 on successful credit deduction
-  const opCountClause =
-    ", remainingOperationCount = remainingOperationCount - 1";
+  // Decrement operation count by 1 on successful credit deduction (only when cap is active)
+  const opCountClause = opCap.max > 0
+    ? ", remainingOperationCount = remainingOperationCount - 1"
+    : "";
 
   // Deduct: plan credits first, then purchased
   if (planCredits >= params.amount) {

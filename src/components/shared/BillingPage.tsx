@@ -1162,16 +1162,22 @@ export default function BillingPage() {
               {creditsBalance.toLocaleString()}
             </p>
           </div>
-          {displaySub && displaySub.remainingOperationCount > 0 && (
-            <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6">
-              <p className="text-sm text-[var(--color-light-text)]">
-                {t("billing.limits.maxOperationCount")}
-              </p>
-              <p className="text-2xl font-bold text-[var(--color-secondary-blue)]">
-                {displaySub.remainingOperationCount.toLocaleString()}
-              </p>
-            </div>
-          )}
+          {displaySub && (() => {
+            const opCap = (activePlan?.maxOperationCount ?? 0) +
+              (activeVoucher?.maxOperationCountModifier ?? 0);
+            return (
+              <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6">
+                <p className="text-sm text-[var(--color-light-text)]">
+                  {t("billing.limits.maxOperationCount")}
+                </p>
+                <p className="text-2xl font-bold text-[var(--color-secondary-blue)]">
+                  {opCap <= 0
+                    ? t("billing.limits.unlimited")
+                    : `${displaySub.remainingOperationCount.toLocaleString()} / ${opCap.toLocaleString()}`}
+                </p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Purchase */}

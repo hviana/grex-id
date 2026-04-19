@@ -50,7 +50,7 @@ export async function getOperationCount(
 
   const db = await getDb();
   const result = await db.query<[{ remainingOperationCount: number }[]]>(
-    `SELECT VALUE remainingOperationCount FROM subscription
+    `SELECT remainingOperationCount FROM subscription
      WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
      LIMIT 1`,
     {
@@ -59,9 +59,7 @@ export async function getOperationCount(
     },
   );
 
-  const remaining =
-    (result[0] as unknown as { remainingOperationCount?: number }[])
-      ?.[0]?.remainingOperationCount ?? 0;
+  const remaining = result[0]?.[0]?.remainingOperationCount ?? 0;
   const used = Math.max(0, max - remaining);
 
   return { used, max };

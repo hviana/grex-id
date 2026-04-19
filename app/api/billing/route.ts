@@ -5,7 +5,6 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
-import { resolveMaxOperationCount } from "@/server/utils/guards";
 
 function tenantGuard(ctx: RequestContext): Response | null {
   if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
@@ -184,10 +183,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    const operationCountCap = await resolveMaxOperationCount({
-      companyId,
-      systemId,
-    });
+    // Read plan's maxOperationCount directly — resolveMaxOperationCount
+    // cannot be used here because no subscription exists yet (returns 0)
+    const operationCountCap = plan.maxOperationCount ?? 0;
 
     const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
@@ -200,7 +198,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       planId: rid(planId),
       planCredits: plan.planCredits ?? 0,
-      operationCountCap: operationCountCap.max || 0,
+      operationCountCap,
       start: now,
       end: periodEnd,
     };
