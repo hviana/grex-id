@@ -79,6 +79,8 @@ interface PaymentRecord {
   kind: string;
   status: string;
   invoiceUrl?: string;
+  continuityData?: Record<string, any>;
+  expiresAt?: string;
   createdAt: string;
 }
 
@@ -175,6 +177,8 @@ function PaymentHistoryList({
                   ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
                   : p.status === "failed"
                   ? "bg-red-500/20 text-red-400"
+                  : p.status === "expired"
+                  ? "bg-orange-500/20 text-orange-400"
                   : "bg-yellow-500/20 text-yellow-400"
               }`}
             >
@@ -263,6 +267,11 @@ export default function BillingPage() {
   // Retry payment
   const [retrying, setRetrying] = useState(false);
 
+  // Pending async payments
+  const [pendingAsyncPayments, setPendingAsyncPayments] = useState<
+    PaymentRecord[]
+  >([]);
+
   // Payment history
   const [paymentHistoryStart, setPaymentHistoryStart] = useState<
     Date | undefined
@@ -295,6 +304,9 @@ export default function BillingPage() {
         setPaymentMethods(billingJson.data?.paymentMethods ?? []);
         setCreditPurchases(billingJson.data?.creditPurchases ?? []);
         setCreditsBalance(billingJson.data?.creditsBalance ?? 0);
+        setPendingAsyncPayments(
+          billingJson.data?.pendingAsyncPayments ?? [],
+        );
       }
 
       const allPlans: PlanInfo[] = (plansJson.data ?? []).filter(
@@ -315,6 +327,13 @@ export default function BillingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Poll for async payment resolution (§22.9)
+  useEffect(() => {
+    if (pendingAsyncPayments.length === 0) return;
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
+  }, [pendingAsyncPayments.length, loadData]);
 
   // Sync auto-recharge state from active subscription
   useEffect(() => {
@@ -628,6 +647,81 @@ export default function BillingPage() {
       </h1>
 
       <ErrorDisplay message={error} />
+
+      {/* ── Pending Async Payments (§22.9) ── */}
+      {pendingAsyncPayments.length > 0 && (
+        <div className="backdrop-blur-md bg-white/5 border border-dashed border-yellow-500/40 rounded-xl p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-yellow-400">
+            {t("billing.pendingPayments.title")}
+          </h2>
+          <div className="space-y-3">
+            {pendingAsyncPayments.map((p) => {
+              const cd = p.continuityData ?? {};
+              return (
+                <div
+                  key={p.id}
+                  className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-medium">
+                        {formatPrice(p.amount, p.currency)}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                        {t("billing.pendingPayments.awaiting")}
+                      </span>
+                      <span className="text-xs text-[var(--color-light-text)]">
+                        {t("billing.paymentHistory.kind." + p.kind)}
+                      </span>
+                    </div>
+                    {p.expiresAt && (
+                      <span className="text-xs text-orange-400">
+                        {t("billing.pendingPayments.expiresAt")}:{" "}
+                        {formatDate(p.expiresAt)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Continuity data rendering */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {cd.qrCodeUrl && (
+                      <div className="flex flex-col items-center gap-1">
+                        <img
+                          src={cd.qrCodeUrl}
+                          alt="QR Code"
+                          className="w-32 h-32 rounded-lg border border-dashed border-[var(--color-dark-gray)]"
+                        />
+                        <span className="text-xs text-[var(--color-light-text)]">
+                          {t("billing.pendingPayments.scanQrCode")}
+                        </span>
+                      </div>
+                    )}
+                    {cd.paymentLink && (
+                      <a
+                        href={cd.paymentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-4 py-2 rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] text-black font-semibold text-sm hover:-translate-y-0.5 transition-transform"
+                      >
+                        {t("billing.pendingPayments.payNow")}
+                      </a>
+                    )}
+                    {cd.barCode && (
+                      <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-3">
+                        <span className="text-xs text-[var(--color-light-text)] block mb-1">
+                          {t("billing.pendingPayments.copyCode")}
+                        </span>
+                        <span className="font-mono text-sm text-white break-all">
+                          {cd.barCode}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Current Plan ── */}
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">

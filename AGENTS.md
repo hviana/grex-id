@@ -279,7 +279,7 @@ permission errors, and status messages.
 │   ├── event-queue/  (publisher, worker, registry, handlers/*)
 │   ├── module-registry.ts            # §11.1 — central registration API
 │   ├── core-register.ts              # Core self-registration (handlers + jobs)
-│   └── jobs/         (index, start-event-queue, recurring-billing, token-cleanup)
+│   └── jobs/         (index, start-event-queue, recurring-billing, token-cleanup, expire-pending-payments)
 ├── client/                           # Frontend-only; NEVER imported by server
 │   ├── db/connection.ts              # WebSocket for LIVE SELECT
 │   ├── queries/.gitkeep
@@ -490,6 +490,7 @@ this table.
 | `0035_create_recovery_channel.surql`         | `recovery_channel`        | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `0036_alter_verification_request_type.surql` | `verification_request`    | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `0038_create_payment.surql`                  | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"`), paymentMethodId, transactionId, invoiceUrl, failureReason, createdAt. Indexes on (companyId, systemId), createdAt, kind. Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                                                                                                    |
+| `0043_async_payment_fields.surql`            | `payment`, `credit_purchase` | Async payment fields. Adds `continuityData option<object> FLEXIBLE` and `expiresAt option<datetime>` to `payment`. Expands `status` ASSERT on both `payment` and `credit_purchase` to include `"expired"`. Index `idx_payment_expires` on `payment FIELDS status, expiresAt`.                                                                                                                                                                                                                                                                                                                                                                                         |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -1650,7 +1651,8 @@ triggers the Core setting fallback).
 #### 13.4 Public API routes (no middleware pipeline)
 
 Routes under `/api/public/*` require no authentication and expose only
-non-sensitive, read-only data.
+non-sensitive, read-only data. Exception: `POST /api/public/webhook/payment`
+accepts writes from payment providers (§22.9).
 
 - **`GET /api/public/system`** — Query: `slug=<slug>` OR `default=true`
   (resolves from `app.defaultSystem`). Response:
@@ -1659,6 +1661,9 @@ non-sensitive, read-only data.
 - **`GET /api/public/front-core`** — returns the full `front_setting` table as a
   key/value map. Used by FrontCore in the browser (§10.2).
 - **`POST /api/leads/public`** — see §23.2.
+- **`POST /api/public/webhook/payment`** — async payment webhook scaffold (§22.9).
+  Generic JSON body; provider-specific validation is handled by the adapter layer.
+  Publishes `PAYMENT_ASYNC_COMPLETED` event.
 
 #### 13.5 File metadata
 
@@ -1744,6 +1749,7 @@ const handlerRegistry: Record<string, string[]> = {
   "SEND_SMS": ["send_sms"],
   "PAYMENT_DUE": ["process_payment"],
   "TRIGGER_AUTO_RECHARGE": ["auto_recharge"], // §22.5
+  "PAYMENT_ASYNC_COMPLETED": ["resolve_async_payment"], // §22.9
 };
 export function getHandlersForEvent(eventName: string): string[];
 ```
@@ -1890,13 +1896,16 @@ produces a mobile-first, email-client-safe skeleton:
 | `recovery-channel-reset`   | `recovery-channel-reset.ts`   | Password reset initiated via verified recovery channel (§19.13)                                        | `name`, `resetLink`                                                                                                        |
 | `lead-update-verification` | `lead-update-verification.ts` | Existing lead submits updated data via public form (§23.2)                                             | `name`, `verificationLink`, `changes` (array of `{field, from, to}`)                                                       |
 | `operation-count-alert`    | `operation-count-alert.ts`    | Operation count exhausted — published by `consumeCredits` (§22.3)                                      | `name`, `systemName`, `operationCount`, `billingUrl`                                                                       |
+| `payment-pending`          | `payment-pending.ts`          | Async payment awaiting completion — published by `process_payment` async branch (§22.9)                | `name`, `systemName`, `kind`, `amount`, `currency`, `billingUrl`, `expiresInSeconds`, `continuityData`                     |
+| `payment-expired`          | `payment-expired.ts`          | Async payment expired — published by `expire-pending-payments` job (§22.9)                             | `name`, `systemName`, `kind`, `amount`, `currency`, `billingUrl`                                                           |
 
 i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
 `templates.paymentSuccess.*`, `templates.paymentFailure.*`,
 `templates.autoRecharge.*`, `templates.insufficientCredit.*`,
 `templates.tenantInvite.*`, `templates.recoveryVerify.*`,
 `templates.recoveryChannelReset.*`, `templates.leadUpdate.*`,
-`templates.operationCountAlert.*`.
+`templates.operationCountAlert.*`, `templates.paymentPending.*`,
+`templates.paymentExpired.*`.
 
 #### 15.5 Channel handlers
 
@@ -3709,11 +3718,13 @@ export interface Payment {
   amount: number;
   currency: string;
   kind: "recurring" | "credits" | "auto-recharge";
-  status: "pending" | "completed" | "failed";
+  status: "pending" | "completed" | "failed" | "expired";
   paymentMethodId: string;
   transactionId?: string;
   invoiceUrl?: string;
   failureReason?: string;
+  continuityData?: Record<string, any>; // async payment continuation info (§22.9)
+  expiresAt?: string; // async payment expiry (§22.9)
   createdAt: string;
 }
 ```
@@ -3723,6 +3734,85 @@ export interface Payment {
 Returns `{ payments: Payment[], paymentsCursor: string | null }` in the response
 data alongside existing billing data. Date range filter capped at 365 days.
 Cursor-based pagination. Used by BillingPage section 7 (§21.4).
+
+The GET response also includes `pendingAsyncPayments`: an array of `Payment`
+records with `status = "pending"` and `continuityData IS NOT NONE`, used by the
+BillingPage to render the pending payments banner (§22.9).
+
+#### 22.9 Asynchronous (deferred) payments
+
+Some payment methods (PIX, bank slips, cryptocurrency, etc.) do not settle
+synchronously. When `IPaymentProvider.charge()` returns a `PaymentResult` with
+`expiresInSeconds` and `continuityData`, the payment enters a deferred lifecycle:
+
+1. **Deferred detection.** `process_payment` checks for `expiresInSeconds` on the
+   `PaymentResult`. If present, the payment record stays `status = "pending"`,
+   `continuityData` and `expiresAt` are written (migration `0043`), and a
+   `payment-pending` email is sent to the user with the continuation data (QR
+   code, payment link, barcode). The subscription/credit-purchase is **not** yet
+   activated.
+2. **Webhook resolution.** The payment provider calls
+   `POST /api/public/webhook/payment`. The route is a generic scaffold — it
+   parses the JSON body for `transactionId`, `status`, optional `invoiceUrl`,
+   and optional `failureReason`. Provider-specific request validation (signatures,
+   headers, payload normalization) is the responsibility of the adapter layer
+   wrapping this endpoint. On success or failure, the route publishes
+   `PAYMENT_ASYNC_COMPLETED` which triggers the `resolve_async_payment` handler
+   that applies the same subscription/credit effects as the synchronous success
+   or failure branch.
+3. **Expiry.** A scheduled job (`expire-pending-payments`, runs every 15 min)
+   marks any `payment` with `status = "pending"` and `expiresAt <= time::now()`
+   as `status = "expired"`, also expires the related `credit_purchase`, clears
+   re-entrancy guards on the subscription, and sends a `payment-expired`
+   notification to the user.
+4. **Backward compatibility.** When `PaymentResult` does NOT contain
+   `expiresInSeconds`, the existing synchronous flow runs unchanged. No
+   `continuityData` or `expiresAt` fields are written.
+
+**Idempotency.** The webhook handler uses `transactionId` (from the provider)
+as the idempotency key: if the payment is already `completed`, `failed`, or
+`expired`, the webhook is acknowledged but ignored (200, no mutation). The
+`resolve_async_payment` handler is also idempotent — it re-checks the payment
+status before mutating subscription/credit state.
+
+**Single-call rule.** The `resolve_async_payment` handler batches all DB
+mutations into a single `db.query()` call, identical to the synchronous path
+in `process_payment`.
+
+**Race condition.** Both the webhook handler and the expiry job use conditional
+updates (`WHERE status = "pending"`). Whichever runs first wins; the other sees
+the status has changed and skips.
+
+**Webhook endpoint.** `POST /api/public/webhook/payment` — public route (no
+`withAuth`). Generic scaffold accepting a JSON body with `transactionId`,
+`status` (`"succeeded"` or `"failed"`), optional `invoiceUrl`, optional
+`failureReason`. Provider-specific validation (signatures, headers, payload
+normalization) is handled by the adapter layer outside this route.
+
+**PaymentResult extension:**
+
+```typescript
+export interface PaymentResult {
+  success: boolean;
+  transactionId?: string;
+  error?: string;
+  invoiceUrl?: string;
+  expiresInSeconds?: number; // present for async payment methods
+  continuityData?: Record<string, any>; // e.g. { qrCodeUrl, paymentLink, barCode }
+}
+```
+
+**Event registry additions:**
+
+```typescript
+PAYMENT_ASYNC_COMPLETED: ["resolve_async_payment"],
+```
+
+**BillingPage UI.** When `pendingAsyncPayments` is non-empty, the BillingPage
+renders a yellow-themed banner section showing each pending payment with its
+continuity data (QR code image, payment link button, barcode text) and expiry
+time. A 30-second polling interval detects when payments resolve. The payment
+history list shows `"expired"` status in orange.
 
 ### 23. Public / Anonymous API
 

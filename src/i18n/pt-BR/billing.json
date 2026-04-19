@@ -84,6 +84,7 @@
   "credits.status.pending": "Pendente",
   "credits.status.completed": "Concluído",
   "credits.status.failed": "Falhou",
+  "credits.status.expired": "Expirado",
   "paymentStatus.pastDue": "Erro no Pagamento",
   "paymentStatus.pastDueDescription": "Seu último pagamento não pôde ser processado. Por favor, tente novamente ou atualize seu método de pagamento.",
   "paymentStatus.processing": "Processando pagamento...",
@@ -97,6 +98,7 @@
   "paymentHistory.status.pending": "Pendente",
   "paymentHistory.status.completed": "Concluído",
   "paymentHistory.status.failed": "Falhou",
+  "paymentHistory.status.expired": "Expirado",
   "retry.noPastDue": "Nenhuma assinatura em atraso encontrada.",
   "retry.inProgress": "Uma nova tentativa de pagamento já está em andamento.",
   "limits.unlimited": "Ilimitado",
@@ -104,5 +106,12 @@
   "limits.maxConcurrentUploads": "Máx. Uploads Simultâneos",
   "limits.maxDownloadBandwidthMB": "Banda Máx. de Download",
   "limits.maxUploadBandwidthMB": "Banda Máx. de Upload",
-  "limits.maxOperationCount": "Limite de Contagem de Operações"
+  "limits.maxOperationCount": "Limite de Contagem de Operações",
+  "pendingPayments.title": "Pagamentos Pendentes",
+  "pendingPayments.awaiting": "Aguardando seu pagamento",
+  "pendingPayments.expiresAt": "Expira em",
+  "pendingPayments.payNow": "Pagar Agora",
+  "pendingPayments.scanQrCode": "Escaneie o QR code para pagar",
+  "pendingPayments.copyCode": "Copiar código de pagamento",
+  "pendingPayments.noLongerValid": "Este pagamento não é mais válido"
 }

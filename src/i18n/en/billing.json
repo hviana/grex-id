@@ -84,6 +84,7 @@
   "credits.status.pending": "Pending",
   "credits.status.completed": "Completed",
   "credits.status.failed": "Failed",
+  "credits.status.expired": "Expired",
   "paymentStatus.pastDue": "Payment Error",
   "paymentStatus.pastDueDescription": "Your last payment could not be processed. Please retry or update your payment method.",
   "paymentStatus.processing": "Processing payment...",
@@ -97,6 +98,7 @@
   "paymentHistory.status.pending": "Pending",
   "paymentHistory.status.completed": "Completed",
   "paymentHistory.status.failed": "Failed",
+  "paymentHistory.status.expired": "Expired",
   "retry.noPastDue": "No past-due subscription found.",
   "retry.inProgress": "A payment retry is already being processed.",
   "limits.unlimited": "Unlimited",
@@ -104,5 +106,12 @@
   "limits.maxConcurrentUploads": "Max Concurrent Uploads",
   "limits.maxDownloadBandwidthMB": "Max Download Bandwidth",
   "limits.maxUploadBandwidthMB": "Max Upload Bandwidth",
-  "limits.maxOperationCount": "Operation Count Limit"
+  "limits.maxOperationCount": "Operation Count Limit",
+  "pendingPayments.title": "Pending Payments",
+  "pendingPayments.awaiting": "Awaiting your payment",
+  "pendingPayments.expiresAt": "Expires at",
+  "pendingPayments.payNow": "Pay Now",
+  "pendingPayments.scanQrCode": "Scan the QR code to pay",
+  "pendingPayments.copyCode": "Copy payment code",
+  "pendingPayments.noLongerValid": "This payment is no longer valid"
 }

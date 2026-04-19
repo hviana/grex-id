@@ -9,13 +9,17 @@ import { sendEmail } from "./event-queue/handlers/send-email.ts";
 import { sendSms } from "./event-queue/handlers/send-sms.ts";
 import { processPayment } from "./event-queue/handlers/process-payment.ts";
 import { handleAutoRecharge } from "./event-queue/handlers/auto-recharge.ts";
+import { resolveAsyncPayment } from "./event-queue/handlers/resolve-async-payment.ts";
 import { startRecurringBilling } from "./jobs/recurring-billing.ts";
 import { startTokenCleanup } from "./jobs/token-cleanup.ts";
+import { startPaymentExpiry } from "./jobs/expire-pending-payments.ts";
 import { verificationTemplate } from "./utils/communication/templates/verification.ts";
 import { passwordResetTemplate } from "./utils/communication/templates/password-reset.ts";
 import { leadUpdateVerificationTemplate } from "./utils/communication/templates/lead-update-verification.ts";
 import { paymentSuccessTemplate } from "./utils/communication/templates/payment-success.ts";
 import { paymentFailureTemplate } from "./utils/communication/templates/payment-failure.ts";
+import { paymentPendingTemplate } from "./utils/communication/templates/payment-pending.ts";
+import { paymentExpiredTemplate } from "./utils/communication/templates/payment-expired.ts";
 import { autoRechargeTemplate } from "./utils/communication/templates/auto-recharge.ts";
 import { insufficientCreditTemplate } from "./utils/communication/templates/insufficient-credit.ts";
 import { operationCountAlertTemplate } from "./utils/communication/templates/operation-count-alert.ts";
@@ -46,9 +50,13 @@ export function registerCore(): void {
   registerEventHandler("TRIGGER_AUTO_RECHARGE", "auto_recharge");
   registerHandlerFunction("auto_recharge", handleAutoRecharge);
 
+  registerEventHandler("PAYMENT_ASYNC_COMPLETED", "resolve_async_payment");
+  registerHandlerFunction("resolve_async_payment", resolveAsyncPayment);
+
   // Jobs
   registerJob("recurring-billing", startRecurringBilling);
   registerJob("token-cleanup", startTokenCleanup);
+  registerJob("expire-pending-payments", startPaymentExpiry);
 
   // Communication templates
   registerTemplate("verification", verificationTemplate);
@@ -56,6 +64,8 @@ export function registerCore(): void {
   registerTemplate("lead-update-verification", leadUpdateVerificationTemplate);
   registerTemplate("payment-success", paymentSuccessTemplate);
   registerTemplate("payment-failure", paymentFailureTemplate);
+  registerTemplate("payment-pending", paymentPendingTemplate);
+  registerTemplate("payment-expired", paymentExpiredTemplate);
   registerTemplate("auto-recharge", autoRechargeTemplate);
   registerTemplate("insufficient-credit", insufficientCreditTemplate);
   registerTemplate("operation-count-alert", operationCountAlertTemplate);

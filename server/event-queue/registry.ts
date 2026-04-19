@@ -3,6 +3,7 @@ const handlerRegistry: Record<string, string[]> = {
   SEND_SMS: ["send_sms"],
   PAYMENT_DUE: ["process_payment"],
   TRIGGER_AUTO_RECHARGE: ["auto_recharge"],
+  PAYMENT_ASYNC_COMPLETED: ["resolve_async_payment"],
 };
 
 export function getHandlersForEvent(eventName: string): string[] {

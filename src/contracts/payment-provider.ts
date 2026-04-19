@@ -12,6 +12,8 @@ export interface PaymentResult {
   transactionId?: string;
   error?: string;
   invoiceUrl?: string;
+  expiresInSeconds?: number;
+  continuityData?: Record<string, any>;
 }
 
 export interface IClientPaymentProvider {

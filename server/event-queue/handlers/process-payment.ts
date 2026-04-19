@@ -147,16 +147,69 @@ export const processPayment: HandlerFn = async (payload) => {
 
   // TODO: Call actual payment provider with chargeAmount (Phase 6)
   // const providerResult = await provider.charge(chargeAmount, { ... });
-  // const success = providerResult.success;
-  // const failureReason = providerResult.error ?? "";
-  // const invoiceUrl = providerResult.invoiceUrl ?? "";
-  const success = true;
-  const failureReason = "";
-  const invoiceUrl = "";
+  // For now, stub returns synchronous success:
+  const providerResult: { success: boolean; error?: string; invoiceUrl?: string; expiresInSeconds?: number; continuityData?: Record<string, any> } = {
+    success: true,
+  };
+  const success = providerResult.success;
+  const failureReason = providerResult.error ?? "";
+  const invoiceUrl = providerResult.invoiceUrl ?? "";
 
   const billingUrl = `/billing?system=${systemSlug}`;
   const ownerName = owner?.name ?? "";
   const ownerEmail = owner?.email ?? "";
+
+  // Async payment detection (§22.9)
+  const isAsync = providerResult.expiresInSeconds != null
+    && providerResult.continuityData != null;
+
+  if (isAsync) {
+    const expiresAt = new Date(
+      Date.now() + providerResult.expiresInSeconds! * 1000,
+    );
+
+    const stmts: string[] = [];
+    const asyncParams: Record<string, unknown> = {};
+
+    if (paymentId) {
+      stmts.push(
+        `UPDATE $paymentId SET
+          continuityData = $continuityData,
+          expiresAt = $expiresAt
+         WHERE id = $paymentId;`,
+      );
+      asyncParams.paymentId = rid(String(paymentId));
+      asyncParams.continuityData = providerResult.continuityData;
+      asyncParams.expiresAt = expiresAt;
+    }
+
+    if (stmts.length > 0) {
+      await db.query(stmts.join("\n"), asyncParams);
+    }
+
+    // Send payment-pending notification (§22.9)
+    if (ownerEmail) {
+      await publish("SEND_EMAIL", {
+        recipients: [ownerEmail],
+        template: "payment-pending",
+        templateData: {
+          name: ownerName,
+          systemName,
+          kind,
+          amount: String(chargeAmount),
+          currency,
+          billingUrl,
+          expiresInSeconds: String(providerResult.expiresInSeconds),
+          continuityData: providerResult.continuityData,
+        },
+        systemSlug,
+      });
+    }
+
+    // Do NOT activate subscription, credits, or credit purchase.
+    // The webhook handler will resolve the payment later (§22.9).
+    return;
+  }
 
   if (success) {
     if (isRecurring) {

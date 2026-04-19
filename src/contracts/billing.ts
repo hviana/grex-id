@@ -40,7 +40,7 @@ export interface CreditPurchase {
   systemId: string;
   amount: number;
   paymentMethodId: string;
-  status: "pending" | "completed" | "failed";
+  status: "pending" | "completed" | "failed" | "expired";
   createdAt: string;
 }
 
@@ -52,10 +52,12 @@ export interface Payment {
   amount: number;
   currency: string;
   kind: "recurring" | "credits" | "auto-recharge";
-  status: "pending" | "completed" | "failed";
+  status: "pending" | "completed" | "failed" | "expired";
   paymentMethodId: string;
   transactionId?: string;
   invoiceUrl?: string;
   failureReason?: string;
+  continuityData?: Record<string, any>;
+  expiresAt?: string;
   createdAt: string;
 }

@@ -87,13 +87,22 @@ async function getHandler(req: Request, ctx: RequestContext) {
       Record<string, unknown>[],
       Record<string, unknown>[],
       Record<string, unknown>[]?,
+      Record<string, unknown>[]?,
     ]
   >(
     `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
      SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddress;
      SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
      SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";
-     ${paymentQuery}`,
+     ${paymentQuery}
+     SELECT id, amount, currency, kind, continuityData, expiresAt, createdAt
+       FROM payment
+       WHERE companyId = $companyId
+         AND systemId = $systemId
+         AND status = "pending"
+         AND continuityData IS NOT NONE
+       ORDER BY createdAt DESC
+       LIMIT 10;`,
     queryParams,
   );
 
@@ -114,6 +123,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
       ? btoa(String(lastRow.createdAt))
       : null;
   }
+
+  responseData.pendingAsyncPayments = result[5] ?? [];
 
   return Response.json({
     success: true,
