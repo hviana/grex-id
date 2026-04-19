@@ -169,18 +169,18 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
         systemId: rid(String(payment.systemId)),
         amount: chargeAmount,
         period,
-        subId: rid(sub?.id ?? ""),
+        subId: sub ? rid(sub.id) : undefined,
         paymentId: rid(paymentId),
         txId: transactionId ?? undefined,
         invoiceUrl: invoiceUrl ?? undefined,
       };
 
-      if (creditPurchase) {
+      if (creditPurchase && sub) {
         stmts.push(
           `UPDATE credit_purchase SET status = "done" WHERE subscriptionId = $subId AND status = "pending";`,
         );
       }
-      if (kind === "auto-recharge") {
+      if (kind === "auto-recharge" && sub) {
         stmts.push(
           `UPDATE $subId SET autoRechargeInProgress = false;`,
         );
@@ -218,7 +218,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     // Payment failed
     const stmts: string[] = [];
     const params: Record<string, unknown> = {
-      subId: rid(sub?.id ?? ""),
+      subId: sub ? rid(sub.id) : undefined,
       paymentId: rid(paymentId),
     };
 
@@ -228,7 +228,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     if (kind === "auto-recharge") {
       subSets.push(`autoRechargeInProgress = false`);
     }
-    if (subSets.length > 0) {
+    if (subSets.length > 0 && sub) {
       stmts.push(`UPDATE $subId SET ${subSets.join(", ")};`);
     }
 

@@ -37,16 +37,22 @@ export function startPaymentExpiry(): void {
       console.log(`[expiry] Marked ${payments.length} expired payments.`);
 
       for (const payment of payments) {
-        // Batch: owner info + system info (§7.2)
+        // Batch: owner info + system info + expire credit purchase + clear guards (§7.2)
         const result = await db.query<
           [{ email: string; name: string }[], { name: string; slug: string }[]]
         >(
           `LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
            SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
-           SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
+           SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
+           UPDATE credit_purchase SET status = "expired"
+             WHERE subscriptionId = $subId AND status = "pending";
+           UPDATE $subId SET
+            retryPaymentInProgress = false,
+            autoRechargeInProgress = false;`,
           {
             companyId: rid(String(payment.companyId)),
             systemId: rid(String(payment.systemId)),
+            subId: rid(String(payment.subscriptionId)),
           },
         );
 
@@ -54,16 +60,6 @@ export function startPaymentExpiry(): void {
         const systemInfo = result[1]?.[0];
         const systemName = systemInfo?.name ?? "";
         const systemSlug = systemInfo?.slug ?? "";
-
-        // Expire related credit purchase and clear re-entrancy guards (§7.2)
-        await db.query(
-          `UPDATE credit_purchase SET status = "expired"
-             WHERE subscriptionId = $subId AND status = "pending";
-           UPDATE $subId SET
-            retryPaymentInProgress = false,
-            autoRechargeInProgress = false;`,
-          { subId: rid(String(payment.subscriptionId)) },
-        );
 
         if (owner?.email) {
           await publish("SEND_EMAIL", {

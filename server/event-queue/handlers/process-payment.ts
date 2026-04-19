@@ -3,6 +3,7 @@ import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
 import { resolveMaxOperationCount } from "../../utils/guards.ts";
+import type { PaymentResult } from "../../../src/contracts/payment-provider.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -148,7 +149,7 @@ export const processPayment: HandlerFn = async (payload) => {
   // TODO: Call actual payment provider with chargeAmount (Phase 6)
   // const providerResult = await provider.charge(chargeAmount, { ... });
   // For now, stub returns synchronous success:
-  const providerResult: { success: boolean; error?: string; invoiceUrl?: string; expiresInSeconds?: number; continuityData?: Record<string, any> } = {
+  const providerResult: PaymentResult = {
     success: true,
   };
   const success = providerResult.success;
@@ -168,23 +169,18 @@ export const processPayment: HandlerFn = async (payload) => {
       Date.now() + providerResult.expiresInSeconds! * 1000,
     );
 
-    const stmts: string[] = [];
-    const asyncParams: Record<string, unknown> = {};
-
     if (paymentId) {
-      stmts.push(
+      await db.query(
         `UPDATE $paymentId SET
           continuityData = $continuityData,
           expiresAt = $expiresAt
          WHERE id = $paymentId;`,
+        {
+          paymentId: rid(String(paymentId)),
+          continuityData: providerResult.continuityData,
+          expiresAt,
+        },
       );
-      asyncParams.paymentId = rid(String(paymentId));
-      asyncParams.continuityData = providerResult.continuityData;
-      asyncParams.expiresAt = expiresAt;
-    }
-
-    if (stmts.length > 0) {
-      await db.query(stmts.join("\n"), asyncParams);
     }
 
     // Send payment-pending notification (§22.9)
