@@ -12,6 +12,7 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
+import PlanCard from "@/src/components/shared/PlanCard";
 
 interface PlanItem {
   id: string;
@@ -40,19 +41,6 @@ interface PlanItem {
 interface SystemOption {
   id: string;
   name: string;
-}
-
-function formatStorage(bytes: number): string {
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function formatPrice(cents: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
 }
 
 interface EntityLimitEntry {
@@ -326,20 +314,11 @@ export default function PlansPage() {
         : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan) => (
-              <div
+              <PlanCard
                 key={plan.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-5 flex flex-col hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">📋</span>
-                    <div>
-                      <h3 className="font-semibold text-white">{plan.name}</h3>
-                      <p className="text-xs text-[var(--color-light-text)]">
-                        {getSystemName(plan.systemId)}
-                      </p>
-                    </div>
-                  </div>
+                plan={plan}
+                variant="core"
+                badges={
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                       plan.isActive
@@ -351,135 +330,15 @@ export default function PlansPage() {
                       ? t("core.plans.active")
                       : t("core.plans.inactive")}
                   </span>
-                </div>
-
-                <div className="mb-3">
-                  <span className="text-2xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
-                    {formatPrice(plan.price, plan.currency)}
-                  </span>
-                  <span className="text-sm text-[var(--color-light-text)] ml-1">
-                    / {plan.recurrenceDays} {t("core.plans.days")}
-                  </span>
-                </div>
-
-                {plan.description && (
-                  <p className="text-sm text-[var(--color-light-text)] mb-3">
-                    {plan.description}
-                  </p>
-                )}
-
-                {plan.benefits?.length > 0 && (
-                  <div className="mb-3 space-y-1">
-                    {plan.benefits.map((benefit, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-1.5 text-sm text-[var(--color-light-text)]"
-                      >
-                        <span className="text-[var(--color-primary-green)]">
-                          ✓
-                        </span>
-                        {benefit}
-                      </div>
-                    ))}
+                }
+                actions={
+                  <div className="mt-4 flex gap-2 justify-end">
+                    <EditButton onClick={() => openEdit(plan)} />
+                    <DeleteButton onConfirm={() => handleDelete(plan.id)} />
                   </div>
-                )}
-
-                <div className="mt-auto pt-3 border-t border-[var(--color-dark-gray)]/50 space-y-1 text-xs text-[var(--color-light-text)]">
-                  <div className="flex justify-between">
-                    <span>{t("core.plans.apiRateLimit")}</span>
-                    <span className="text-white">
-                      {plan.apiRateLimit.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("core.plans.storage")}</span>
-                    <span className="text-white">
-                      {formatStorage(plan.storageLimitBytes)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>🗂️ {t("core.plans.fileCache")}</span>
-                    <span className="text-white">
-                      {formatStorage(plan.fileCacheLimitBytes ?? 20971520)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("core.plans.planCredits")}</span>
-                    <span className="text-white">{plan.planCredits ?? 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>⬇️ {t("core.plans.maxConcurrentDownloads")}</span>
-                    <span className="text-white">
-                      {(plan.maxConcurrentDownloads ?? 0) ||
-                        t("billing.limits.unlimited")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>⬆️ {t("core.plans.maxConcurrentUploads")}</span>
-                    <span className="text-white">
-                      {(plan.maxConcurrentUploads ?? 0) ||
-                        t("billing.limits.unlimited")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>📶 {t("core.plans.maxDownloadBandwidthMB")}</span>
-                    <span className="text-white">
-                      {(plan.maxDownloadBandwidthMB ?? 0) ||
-                        t("billing.limits.unlimited")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>📶 {t("core.plans.maxUploadBandwidthMB")}</span>
-                    <span className="text-white">
-                      {(plan.maxUploadBandwidthMB ?? 0) ||
-                        t("billing.limits.unlimited")}
-                    </span>
-                  </div>
-                  {plan.maxOperationCount &&
-                      Object.keys(plan.maxOperationCount).length > 0
-                    ? Object.entries(plan.maxOperationCount).map((
-                      [key, val],
-                    ) => (
-                      <div key={key} className="flex justify-between">
-                        <span>
-                          🔢 {t(`billing.limits.${key}`) !==
-                              `billing.limits.${key}`
-                            ? t(`billing.limits.${key}`)
-                            : key}
-                        </span>
-                        <span className="text-white">
-                          {val.toLocaleString()}
-                        </span>
-                      </div>
-                    ))
-                    : (
-                      <div className="flex justify-between">
-                        <span>🔢 {t("core.plans.maxOperationCount")}</span>
-                        <span className="text-white">
-                          {t("billing.limits.unlimited")}
-                        </span>
-                      </div>
-                    )}
-                </div>
-
-                {plan.permissions?.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {plan.permissions.map((perm) => (
-                      <span
-                        key={perm}
-                        className="rounded-full bg-[var(--color-secondary-blue)]/15 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]"
-                      >
-                        {perm}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-4 flex gap-2 justify-end">
-                  <EditButton onClick={() => openEdit(plan)} />
-                  <DeleteButton onConfirm={() => handleDelete(plan.id)} />
-                </div>
-              </div>
+                }
+                systemName={getSystemName(plan.systemId)}
+              />
             ))}
           </div>
         )}

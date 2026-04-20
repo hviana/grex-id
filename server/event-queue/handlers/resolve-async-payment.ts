@@ -123,7 +123,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       });
 
       const creditPurchaseStmt = creditPurchase
-        ? `UPDATE credit_purchase SET status = "done" WHERE subscriptionId = $subId AND status = "pending";`
+        ? `UPDATE credit_purchase SET status = "completed" WHERE subscriptionId = $subId AND status = "pending";`
         : "";
 
       await db.query(
@@ -176,7 +176,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
 
       if (creditPurchase && sub) {
         stmts.push(
-          `UPDATE credit_purchase SET status = "done" WHERE subscriptionId = $subId AND status = "pending";`,
+          `UPDATE credit_purchase SET status = "completed" WHERE subscriptionId = $subId AND status = "pending";`,
         );
       }
       if (kind === "auto-recharge" && sub) {

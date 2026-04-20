@@ -6,6 +6,7 @@ import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import PlanCard from "@/src/components/shared/PlanCard";
 
 interface SystemOption {
   id: string;
@@ -142,20 +143,6 @@ export default function OnboardingSystemPage() {
     }
   };
 
-  const formatPrice = (price: number, currency: string) => {
-    if (price === 0) return t("billing.onboarding.plan.free");
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format(price / 100);
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-    return `${(bytes / 1024).toFixed(0)} KB`;
-  };
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-8">
@@ -262,146 +249,13 @@ export default function OnboardingSystemPage() {
                 : (
                   <div className="space-y-4 mb-6">
                     {plans.map((plan) => (
-                      <button
+                      <PlanCard
                         key={plan.id}
+                        plan={plan}
+                        variant="onboarding"
+                        highlighted={selectedPlan === plan.id}
                         onClick={() => setSelectedPlan(plan.id)}
-                        className={`w-full text-left backdrop-blur-md bg-white/5 border rounded-2xl p-6 transition-all duration-200 ${
-                          selectedPlan === plan.id
-                            ? "border-[var(--color-primary-green)] shadow-lg shadow-[var(--color-light-green)]/20 -translate-y-1"
-                            : "border-dashed border-[var(--color-dark-gray)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-bold text-white text-xl">
-                            {t(plan.name) !== plan.name
-                              ? t(plan.name)
-                              : plan.name}
-                          </h3>
-                          <span className="text-2xl font-bold text-[var(--color-primary-green)]">
-                            {plan.price === 0
-                              ? (
-                                <span className="bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-3 py-1 rounded-full text-base">
-                                  {t("billing.onboarding.plan.free")}
-                                </span>
-                              )
-                              : (
-                                <>
-                                  {formatPrice(plan.price, plan.currency)}
-                                  <span className="text-xs text-[var(--color-light-text)] font-normal ml-1">
-                                    /{plan.recurrenceDays}{" "}
-                                    {t("billing.onboarding.plan.days")}
-                                  </span>
-                                </>
-                              )}
-                          </span>
-                        </div>
-                        {plan.description && (
-                          <p className="text-sm text-[var(--color-light-text)] mb-3">
-                            {t(plan.description) !== plan.description
-                              ? t(plan.description)
-                              : plan.description}
-                          </p>
-                        )}
-                        {plan.benefits && plan.benefits.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-                              {t("billing.plans.benefits")}
-                            </p>
-                            <ul className="space-y-1">
-                              {plan.benefits.map((benefit, i) => (
-                                <li
-                                  key={i}
-                                  className="text-sm text-[var(--color-light-text)] flex items-center gap-2"
-                                >
-                                  <span className="text-[var(--color-primary-green)]">
-                                    ✓
-                                  </span>
-                                  {t(benefit) !== benefit
-                                    ? t(benefit)
-                                    : benefit}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-                            {t("billing.plans.limits")}
-                          </p>
-                          <div className="space-y-1 text-sm text-[var(--color-light-text)]">
-                            <p>
-                              📊 {t("billing.plans.apiRate")}:{" "}
-                              {plan.apiRateLimit?.toLocaleString() ?? "1,000"}
-                              {" "}
-                              {t("billing.plans.reqPerMin")}
-                            </p>
-                            <p>
-                              💾 {t("billing.plans.storage")}: {formatBytes(
-                                plan.storageLimitBytes ?? 1073741824,
-                              )}
-                            </p>
-                            {plan.planCredits > 0 && (
-                              <p>
-                                🪙 {t("billing.plans.planCredits")}:{" "}
-                                {plan.planCredits.toLocaleString()}{" "}
-                                {t("billing.plans.creditsPerPeriod")}
-                              </p>
-                            )}
-                            {plan.entityLimits &&
-                              Object.entries(plan.entityLimits).map((
-                                [key, val],
-                              ) => (
-                                <p key={key}>
-                                  👥 {t(`billing.limits.${key}`) !==
-                                      `billing.limits.${key}`
-                                    ? t(`billing.limits.${key}`)
-                                    : key}: {val.toLocaleString()}
-                                </p>
-                              ))}
-                            {plan.fileCacheLimitBytes > 0 && (
-                              <p>
-                                🗂️ {t("billing.plans.fileCache")}:{" "}
-                                {formatBytes(plan.fileCacheLimitBytes)}
-                              </p>
-                            )}
-                            {plan.maxConcurrentDownloads > 0 && (
-                              <p>
-                                ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-                                {plan.maxConcurrentDownloads}
-                              </p>
-                            )}
-                            {plan.maxConcurrentUploads > 0 && (
-                              <p>
-                                ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-                                {plan.maxConcurrentUploads}
-                              </p>
-                            )}
-                            {plan.maxDownloadBandwidthMB > 0 && (
-                              <p>
-                                📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-                                {plan.maxDownloadBandwidthMB} MB/s
-                              </p>
-                            )}
-                            {plan.maxUploadBandwidthMB > 0 && (
-                              <p>
-                                📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-                                {plan.maxUploadBandwidthMB} MB/s
-                              </p>
-                            )}
-                            {plan.maxOperationCount &&
-                              Object.entries(plan.maxOperationCount).map(
-                                ([key, val]) => (
-                                  <p key={key}>
-                                    🔢 {t(`billing.limits.${key}`) !==
-                                        `billing.limits.${key}`
-                                      ? t(`billing.limits.${key}`)
-                                      : key}: {val.toLocaleString()}
-                                  </p>
-                                ),
-                              )}
-                          </div>
-                        </div>
-                      </button>
+                      />
                     ))}
                   </div>
                 )}

@@ -140,7 +140,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         maxConcurrentUploads: maxConcurrentUploads ?? 0,
         maxDownloadBandwidthMB: maxDownloadBandwidthMB ?? 0,
         maxUploadBandwidthMB: maxUploadBandwidthMB ?? 0,
-        maxOperationCount: maxOperationCount ?? 0,
+        maxOperationCount: maxOperationCount || undefined,
         isActive: isActive ?? true,
       },
     );

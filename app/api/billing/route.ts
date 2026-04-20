@@ -5,7 +5,6 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
-import { resolveAllOperationCounts } from "@/server/utils/guards";
 
 function tenantGuard(ctx: RequestContext): Response | null {
   if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
@@ -195,10 +194,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    const operationCountMap = await resolveAllOperationCounts({
-      companyId,
-      systemId,
-    });
+    // Resolve operation counts from the plan directly (no subscription exists yet,
+    // so resolveAllOperationCounts cannot be used — it requires an existing subscription)
+    const planOpMap = plan.maxOperationCount ?? {};
+    const operationCountMap = Object.keys(planOpMap).length > 0
+      ? Object.fromEntries(
+        Object.entries(planOpMap).filter(([, v]) => v > 0),
+      )
+      : null;
 
     const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
@@ -493,8 +496,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const batchResult = await db.query<
       [
         Record<string, unknown>[],
-        { planId: string; voucherId: string | null }[],
-        { creditModifier: number; maxOperationCountModifier?: Record<string, number> }[],
+        {
+          planId: string;
+          voucherId: string | null;
+          remainingOperationCount?: Record<string, number>;
+        }[],
+        {
+          creditModifier: number;
+          maxOperationCountModifier?: Record<string, number>;
+        }[],
       ]
     >(
       `SELECT * FROM voucher WHERE code = $code LIMIT 1;
@@ -583,7 +593,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Per-resourceKey operation count delta
     const oldOpCountMod = batchResult[2]?.[0]?.maxOperationCountModifier ?? {};
-    const newOpCountMod = (voucher.maxOperationCountModifier ?? {}) as Record<string, number>;
+    const newOpCountMod = (voucher.maxOperationCountModifier ?? {}) as Record<
+      string,
+      number
+    >;
     const allOpKeys = new Set([
       ...Object.keys(oldOpCountMod),
       ...Object.keys(newOpCountMod),
@@ -607,7 +620,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const opCountNewValues: Record<string, number> = {};
     const alertResets: Record<string, boolean> = {};
     // Fetch current remainingOperationCount from the batch result
-    const currentOpCounts = (batchResult[1]?.[0] as { remainingOperationCount?: Record<string, number> })?.remainingOperationCount ?? {};
+    const currentOpCounts = batchResult[1]?.[0]?.remainingOperationCount ?? {};
     for (const key of allOpKeys) {
       const current = currentOpCounts[key] ?? 0;
       const delta = opCountDeltas[key] ?? 0;

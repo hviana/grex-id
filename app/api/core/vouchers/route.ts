@@ -133,7 +133,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         maxConcurrentUploadsModifier: Number(maxConcurrentUploadsModifier ?? 0),
         maxDownloadBandwidthModifier: Number(maxDownloadBandwidthModifier ?? 0),
         maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
-        maxOperationCountModifier: Number(maxOperationCountModifier ?? 0),
+        maxOperationCountModifier: maxOperationCountModifier || undefined,
         creditModifier: Number(creditModifier ?? 0),
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
@@ -273,7 +273,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     }
     if (maxOperationCountModifier !== undefined) {
       sets.push("maxOperationCountModifier = $maxOperationCountModifier");
-      bindings.maxOperationCountModifier = Number(maxOperationCountModifier);
+      bindings.maxOperationCountModifier = maxOperationCountModifier;
     }
     if (expiresAt !== undefined) {
       sets.push("expiresAt = $expiresAt");

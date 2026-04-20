@@ -117,8 +117,11 @@ export async function consumeCredits(params: {
   });
 
   if (opCap.max > 0 && remainingForThisKey === 0) {
+    const rawAlertMap = sub.operationCountAlertSent;
     const alertMap: Record<string, boolean> =
-      (sub.operationCountAlertSent as Record<string, boolean>) ?? {};
+      (typeof rawAlertMap === "object" && rawAlertMap !== null)
+        ? rawAlertMap as Record<string, boolean>
+        : {};
     if (!alertMap[params.resourceKey]) {
       await sendOperationCountAlert(sub, params, opCap.max);
     }
@@ -215,7 +218,11 @@ export async function consumeCredits(params: {
   // Deduct: plan credits first, then purchased
   if (planCredits >= params.amount) {
     await db.query(
-      `UPDATE $subId SET remainingPlanCredits -= $amount${opCountMerge ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)" : ""};
+      `UPDATE $subId SET remainingPlanCredits -= $amount${
+        opCountMerge
+          ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)"
+          : ""
+      };
        UPSERT credit_expense SET
          companyId = $companyId, systemId = $systemId,
          resourceKey = $resourceKey, amount += $amount, count += 1, day = $day,
@@ -246,7 +253,11 @@ export async function consumeCredits(params: {
   const fromPurchased = params.amount - planCredits;
 
   await db.query(
-    `UPDATE $subId SET remainingPlanCredits = 0${opCountMerge ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)" : ""};
+    `UPDATE $subId SET remainingPlanCredits = 0${
+      opCountMerge
+        ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)"
+        : ""
+    };
      UPSERT usage_record SET
        actorType = "user", actorId = "system",
        companyId = $companyId, systemId = $systemId,
@@ -298,10 +309,10 @@ async function checkActorOperationCap(params: {
   const { actorId, actorType, resourceKey, companyId, systemId, db } = params;
 
   // Batched query: actor cap + expense count in one call (§7.2)
-  const table = actorType === "api_token" ? "api_token" : "connected_app";
+  // $actorRid for record ID lookup, $actorStr for credit_expense string match
   const actorQuery = actorType === "api_token"
-    ? `SELECT VALUE maxOperationCount FROM api_token WHERE id = $actorId LIMIT 1;`
-    : `SELECT VALUE maxOperationCount FROM connected_app WHERE id = $actorId LIMIT 1;`;
+    ? `SELECT VALUE maxOperationCount FROM api_token WHERE id = $actorRid LIMIT 1;`
+    : `SELECT VALUE maxOperationCount FROM connected_app WHERE id = $actorRid LIMIT 1;`;
 
   const result = await db.query<
     [
@@ -311,14 +322,15 @@ async function checkActorOperationCap(params: {
   >(
     `${actorQuery}
      SELECT math::sum(count) AS count FROM credit_expense
-     WHERE actorId = $actorId
+     WHERE actorId = $actorStr
        AND resourceKey = $resourceKey
        AND companyId = $companyId
        AND systemId = $systemId
        AND day >= $periodStart
      GROUP ALL;`,
     {
-      actorId: rid(actorId),
+      actorRid: rid(actorId),
+      actorStr: actorId,
       resourceKey,
       companyId: rid(companyId),
       systemId: rid(systemId),
@@ -359,7 +371,7 @@ async function sendOperationCountAlert(
       { name: string; slug: string }[],
     ]
   >(
-    `UPDATE $subId SET operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, $alertMerge);
+    `UPDATE $subId SET operationCountAlertSent = object::merge(CASE WHEN operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
      LET $companyId = $cId;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;

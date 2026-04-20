@@ -4,6 +4,7 @@ DEFINE FIELD companyId       ON connected_app TYPE record<company>;
 DEFINE FIELD systemId        ON connected_app TYPE record<system>;
 DEFINE FIELD permissions     ON connected_app TYPE array<string>;
 DEFINE FIELD monthlySpendLimit ON connected_app TYPE option<int>;
+DEFINE FIELD maxOperationCount ON connected_app TYPE option<object> FLEXIBLE;
 DEFINE FIELD apiTokenId       ON connected_app TYPE option<record<api_token>>;
 DEFINE FIELD createdAt       ON connected_app TYPE datetime DEFAULT time::now();
 

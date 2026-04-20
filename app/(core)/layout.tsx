@@ -132,6 +132,17 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
       hiddenInPlanIds: [],
       createdAt: "",
     },
+    {
+      id: "c11",
+      systemId: "",
+      label: t("core.nav.usage"),
+      emoji: "📊",
+      componentName: "usage",
+      sortOrder: 11,
+      requiredRoles: ["superuser"],
+      hiddenInPlanIds: [],
+      createdAt: "",
+    },
   ];
 }
 

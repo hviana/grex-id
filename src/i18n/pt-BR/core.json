@@ -229,5 +229,18 @@
   "fileAccess.placeholder.allowedExtensions": "ex. jpg",
   "fileAccess.names.companyLogos": "Logos da Empresa",
   "fileAccess.names.userAvatars": "Avatares de Usuários",
-  "fileAccess.names.leadAvatars": "Avatares de Leads"
+  "fileAccess.names.leadAvatars": "Avatares de Leads",
+  "nav.usage": "Uso",
+  "usage.title": "Uso da Plataforma",
+  "usage.filters.companies": "Filtrar por Empresa",
+  "usage.filters.systems": "Filtrar por Sistema",
+  "usage.filters.plans": "Filtrar por Plano",
+  "usage.filters.tokens": "Filtrar por Tokens",
+  "usage.filters.connectedApps": "Filtrar por Apps Conectados",
+  "usage.filters.users": "Filtrar por Usuários",
+  "usage.chart.amount": "Valor",
+  "usage.chart.count": "Quantidade",
+  "usage.totalSpending": "Gasto Total",
+  "usage.averageSpending": "Média por uso",
+  "usage.noData": "Sem dados de uso para o período e filtros selecionados."
 }

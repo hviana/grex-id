@@ -79,3 +79,63 @@ function getCurrentPeriod(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
 }
+
+export interface CoreCreditExpenseRow {
+  resourceKey: string;
+  totalAmount: number;
+  totalCount: number;
+}
+
+export async function getCoreCreditExpenses(params: {
+  startDate: string;
+  endDate: string;
+  companyIds?: string[];
+  systemIds?: string[];
+  planIds?: string[];
+  actorIds?: string[];
+}): Promise<CoreCreditExpenseRow[]> {
+  const db = await getDb();
+  const conditions: string[] = [
+    "day >= $startDate",
+    "day <= $endDate",
+  ];
+  const bindings: Record<string, unknown> = {
+    startDate: params.startDate,
+    endDate: params.endDate,
+  };
+
+  if (params.companyIds?.length) {
+    conditions.push("companyId IN $companyIds");
+    bindings.companyIds = params.companyIds.map((id) => rid(id));
+  }
+
+  if (params.systemIds?.length) {
+    conditions.push("systemId IN $systemIds");
+    bindings.systemIds = params.systemIds.map((id) => rid(id));
+  }
+
+  if (params.planIds?.length) {
+    conditions.push(
+      "companyId IN (SELECT VALUE companyId FROM subscription WHERE planId IN $planIds AND status = 'active')",
+    );
+    bindings.planIds = params.planIds.map((id) => rid(id));
+  }
+
+  if (params.actorIds?.length) {
+    conditions.push("actorId IN $actorIds");
+    bindings.actorIds = params.actorIds;
+  }
+
+  const where = `WHERE ${conditions.join(" AND ")}`;
+
+  const result = await db.query<[CoreCreditExpenseRow[]]>(
+    `SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount
+     FROM credit_expense
+     ${where}
+     GROUP BY resourceKey
+     ORDER BY totalAmount DESC`,
+    bindings,
+  );
+
+  return result[0] ?? [];
+}

@@ -229,5 +229,18 @@
   "fileAccess.placeholder.allowedExtensions": "e.g. jpg",
   "fileAccess.names.companyLogos": "Company Logos",
   "fileAccess.names.userAvatars": "User Avatars",
-  "fileAccess.names.leadAvatars": "Lead Avatars"
+  "fileAccess.names.leadAvatars": "Lead Avatars",
+  "nav.usage": "Usage",
+  "usage.title": "Platform Usage",
+  "usage.filters.companies": "Filter by Company",
+  "usage.filters.systems": "Filter by System",
+  "usage.filters.plans": "Filter by Plan",
+  "usage.filters.tokens": "Filter by Tokens",
+  "usage.filters.connectedApps": "Filter by Connected Apps",
+  "usage.filters.users": "Filter by Users",
+  "usage.chart.amount": "Amount",
+  "usage.chart.count": "Count",
+  "usage.totalSpending": "Total Spending",
+  "usage.averageSpending": "Average per use",
+  "usage.noData": "No usage data for the selected period and filters."
 }

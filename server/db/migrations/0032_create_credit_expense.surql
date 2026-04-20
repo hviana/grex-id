@@ -8,4 +8,7 @@ DEFINE FIELD day          ON credit_expense TYPE string;
 DEFINE FIELD createdAt    ON credit_expense TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_ce_company_day ON credit_expense FIELDS companyId, systemId, day;
+DEFINE FIELD actorId      ON credit_expense TYPE option<string>;
+
 DEFINE INDEX idx_ce_resource    ON credit_expense FIELDS companyId, systemId, resourceKey, day UNIQUE;
+DEFINE INDEX idx_ce_actor_resource ON credit_expense FIELDS actorId, resourceKey, day;

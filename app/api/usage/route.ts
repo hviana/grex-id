@@ -6,10 +6,72 @@ import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { resolveFileCacheLimit } from "@/server/utils/guards";
-import { getOperationCount } from "@/server/db/queries/usage";
+import {
+  getCoreCreditExpenses,
+  getOperationCount,
+} from "@/server/db/queries/usage";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
+  const action = url.searchParams.get("mode");
+
+  // ── Core mode: superuser cross-tenant aggregation ──
+  if (action === "core") {
+    if (!ctx.tenant.roles.includes("superuser")) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.forbidden" },
+        },
+        { status: 403 },
+      );
+    }
+
+    const startDate = url.searchParams.get("startDate") ||
+      new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
+    const endDate = url.searchParams.get("endDate") ||
+      new Date().toISOString().slice(0, 10);
+
+    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+    if (diffMs > 31 * 86400000) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", message: "validation.usage.maxRange" },
+        },
+        { status: 400 },
+      );
+    }
+
+    const companyIdsParam = url.searchParams.get("companyIds");
+    const systemIdsParam = url.searchParams.get("systemIds");
+    const planIdsParam = url.searchParams.get("planIds");
+    const actorIdsParam = url.searchParams.get("actorIds");
+
+    const creditExpenses = await getCoreCreditExpenses({
+      startDate,
+      endDate,
+      companyIds: companyIdsParam
+        ? companyIdsParam.split(",").filter(Boolean)
+        : undefined,
+      systemIds: systemIdsParam
+        ? systemIdsParam.split(",").filter(Boolean)
+        : undefined,
+      planIds: planIdsParam
+        ? planIdsParam.split(",").filter(Boolean)
+        : undefined,
+      actorIds: actorIdsParam
+        ? actorIdsParam.split(",").filter(Boolean)
+        : undefined,
+    });
+
+    return Response.json({
+      success: true,
+      data: { creditExpenses },
+    });
+  }
+
+  // ── Tenant mode ──
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
   const startDate = url.searchParams.get("startDate");
@@ -28,12 +90,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Default date range: last 31 days
   const end = endDate || new Date().toISOString().slice(0, 10);
   const start = startDate ||
     new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
 
-  // Validate max 31 days
   const diffMs = new Date(end).getTime() - new Date(start).getTime();
   if (diffMs > 31 * 86400000) {
     return Response.json(
@@ -50,7 +110,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Batch: system slug + plan storage/cache limits + voucher modifiers + credit expenses (§7.2)
   const configResult = await db.query<
     [
       { slug: string }[],
@@ -97,7 +156,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
     fileCacheLimitBytes?: number;
   } | undefined;
 
-  // Calculate storage usage via SurrealFS readDir
   let usedBytes = 0;
   if (systemSlug) {
     const fs = await getFS();
@@ -121,7 +179,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
     (configResult[2]?.[0] as unknown as { storageLimitModifier?: number })
       ?.storageLimitModifier ?? 0;
 
-  // File cache stats — tenant key uses systemSlug to match download route
   const cacheLimitResult = await resolveFileCacheLimit({ companyId, systemId });
   const tenantKey = systemSlug ? `${companyId}:${systemSlug}` : null;
   const cacheStats = tenantKey

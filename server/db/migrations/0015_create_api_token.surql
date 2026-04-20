@@ -12,6 +12,7 @@ DEFINE FIELD jti            ON api_token TYPE option<string>;
 DEFINE FIELD neverExpires   ON api_token TYPE option<bool> DEFAULT false;
 DEFINE FIELD frontendUse    ON api_token TYPE option<bool> DEFAULT false;
 DEFINE FIELD frontendDomains ON api_token TYPE option<array<string>> DEFAULT [];
+DEFINE FIELD maxOperationCount ON api_token TYPE option<object> FLEXIBLE;
 DEFINE FIELD revokedAt      ON api_token TYPE option<datetime>;
 DEFINE FIELD expiresAt       ON api_token TYPE option<datetime>;
 DEFINE FIELD createdAt       ON api_token TYPE datetime DEFAULT time::now();

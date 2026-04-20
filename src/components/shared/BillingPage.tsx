@@ -8,6 +8,10 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
+import PlanCard, {
+  formatBytes,
+  limitEmoji,
+} from "@/src/components/shared/PlanCard";
 
 interface VoucherInfo {
   id: string;
@@ -380,23 +384,6 @@ export default function BillingPage() {
     } catch {
       return dateStr;
     }
-  };
-
-  const limitEmoji = (key: string) => {
-    const map: Record<string, string> = {
-      users: "👥",
-      storage: "💾",
-      locations: "📍",
-      leads: "👤",
-      tags: "🏷️",
-    };
-    return map[key] ?? "📦";
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-    return `${(bytes / 1024).toFixed(0)} KB`;
   };
 
   const handleSubscribe = async (planId: string) => {
@@ -988,196 +975,41 @@ export default function BillingPage() {
                   totalVoucherModifier !== 0 &&
                   base > 0;
                 return (
-                  <div
+                  <PlanCard
                     key={plan.id}
-                    className={`backdrop-blur-md bg-white/5 border rounded-2xl p-6 transition-all duration-200 ${
-                      isCurrent
-                        ? "border-[var(--color-primary-green)] shadow-lg shadow-[var(--color-light-green)]/20 -translate-y-1"
-                        : "border-dashed border-[var(--color-dark-gray)] hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xl font-bold text-white">
-                        {t(plan.name) !== plan.name ? t(plan.name) : plan.name}
-                      </h3>
-                      {isCurrent && (
+                    plan={plan}
+                    variant="billing"
+                    highlighted={isCurrent}
+                    badges={isCurrent
+                      ? (
                         <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-1 rounded-full">
                           {t("billing.plans.current")}
                         </span>
-                      )}
-                    </div>
-
-                    <div className="mb-1">
-                      {base === 0
-                        ? (
-                          <span className="bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-3 py-1 rounded-full text-base">
-                            {t("billing.onboarding.plan.free")}
-                          </span>
-                        )
-                        : hasDiscount
-                        ? (
-                          <div className="flex items-center gap-2">
-                            <span className="line-through text-sm text-[var(--color-light-text)]">
-                              {formatPrice(base, plan.currency)}
-                            </span>
-                            <span className="text-2xl font-bold text-[var(--color-primary-green)]">
-                              {formatPrice(effective, plan.currency)}
-                            </span>
-                            <span className="text-xs text-[var(--color-light-text)]">
-                              /{plan.recurrenceDays}{" "}
-                              {t("billing.onboarding.plan.days")}
-                            </span>
-                          </div>
-                        )
-                        : (
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-bold text-[var(--color-primary-green)]">
-                              {formatPrice(base, plan.currency)}
-                            </span>
-                            <span className="text-xs text-[var(--color-light-text)]">
-                              /{plan.recurrenceDays}{" "}
-                              {t("billing.onboarding.plan.days")}
-                            </span>
-                          </div>
-                        )}
-                    </div>
-
-                    {plan.description && (
-                      <p className="text-sm text-[var(--color-light-text)] mt-2 mb-3">
-                        {t(plan.description) !== plan.description
-                          ? t(plan.description)
-                          : plan.description}
-                      </p>
-                    )}
-
-                    {/* Benefits */}
-                    {plan.benefits?.length > 0 && (
-                      <div className="mb-3">
-                        <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-                          {t("billing.plans.benefits")}
-                        </p>
-                        <ul className="space-y-1">
-                          {plan.benefits.map((b, i) => (
-                            <li
-                              key={i}
-                              className="text-sm text-[var(--color-light-text)] flex items-center gap-2"
-                            >
-                              <span className="text-[var(--color-primary-green)]">
-                                ✓
-                              </span>
-                              {t(b) !== b ? t(b) : b}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Limits */}
-                    <div className="mb-4">
-                      <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-                        {t("billing.plans.limits")}
-                      </p>
-                      <div className="space-y-1 text-sm text-[var(--color-light-text)]">
-                        <p>
-                          📊 {t("billing.plans.apiRate")}:{" "}
-                          {plan.apiRateLimit.toLocaleString()}{" "}
-                          {t("billing.plans.reqPerMin")}
-                        </p>
-                        <p>
-                          💾 {t("billing.plans.storage")}:{" "}
-                          {formatBytes(plan.storageLimitBytes)}
-                        </p>
-                        {plan.fileCacheLimitBytes
-                          ? (
-                            <p>
-                              🗂️ {t("billing.plans.fileCache")}:{" "}
-                              {formatBytes(plan.fileCacheLimitBytes)}
-                            </p>
-                          )
-                          : null}
-                        {plan.planCredits
-                          ? (
-                            <p>
-                              🪙 {t("billing.plans.planCredits")}:{" "}
-                              {plan.planCredits.toLocaleString()}{" "}
-                              {t("billing.plans.creditsPerPeriod")}
-                            </p>
-                          )
-                          : null}
-                        {plan.entityLimits &&
-                          Object.entries(plan.entityLimits).map((
-                            [key, val],
-                          ) => (
-                            <p key={key}>
-                              {limitEmoji(key)} {t(`billing.limits.${key}`) !==
-                                  `billing.limits.${key}`
-                                ? t(`billing.limits.${key}`)
-                                : key}: {val.toLocaleString()}
-                            </p>
-                          ))}
-                        <p>
-                          ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-                          {plan.maxConcurrentDownloads
-                            ? plan.maxConcurrentDownloads
-                            : t("billing.limits.unlimited")}
-                        </p>
-                        <p>
-                          ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-                          {plan.maxConcurrentUploads
-                            ? plan.maxConcurrentUploads
-                            : t("billing.limits.unlimited")}
-                        </p>
-                        <p>
-                          📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-                          {plan.maxDownloadBandwidthMB
-                            ? `${plan.maxDownloadBandwidthMB} MB/s`
-                            : t("billing.limits.unlimited")}
-                        </p>
-                        <p>
-                          📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-                          {plan.maxUploadBandwidthMB
-                            ? `${plan.maxUploadBandwidthMB} MB/s`
-                            : t("billing.limits.unlimited")}
-                        </p>
-                        {plan.maxOperationCount &&
-                            Object.keys(plan.maxOperationCount).length > 0
-                          ? Object.entries(plan.maxOperationCount).map(
-                            ([key, val]) => (
-                              <p key={key}>
-                                🔢 {t("billing.limits." + key) !==
-                                    `billing.limits.${key}`
-                                  ? t("billing.limits." + key)
-                                  : key}: {val.toLocaleString()}
-                              </p>
-                            ),
-                          )
-                          : (
-                            <p>
-                              🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                              {t("billing.limits.unlimited")}
-                            </p>
+                      )
+                      : undefined}
+                    actions={!isCurrent
+                      ? (
+                        <button
+                          onClick={() => handleSubscribe(plan.id)}
+                          disabled={subscribing === plan.id}
+                          className="w-full rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2.5 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {subscribing === plan.id && (
+                            <Spinner
+                              size="sm"
+                              className="border-black border-t-transparent"
+                            />
                           )}
-                      </div>
-                    </div>
-
-                    {!isCurrent && (
-                      <button
-                        onClick={() => handleSubscribe(plan.id)}
-                        disabled={subscribing === plan.id}
-                        className="w-full rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2.5 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {subscribing === plan.id && (
-                          <Spinner
-                            size="sm"
-                            className="border-black border-t-transparent"
-                          />
-                        )}
-                        {activeSub
-                          ? t("billing.plans.changePlan")
-                          : t("billing.plans.subscribe")}
-                      </button>
-                    )}
-                  </div>
+                          {activeSub
+                            ? t("billing.plans.changePlan")
+                            : t("billing.plans.subscribe")}
+                        </button>
+                      )
+                      : undefined}
+                    voucherPrice={hasDiscount
+                      ? { original: base, effective, currency: plan.currency }
+                      : undefined}
+                  />
                 );
               })}
             </div>

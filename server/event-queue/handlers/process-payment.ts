@@ -276,7 +276,7 @@ export const processPayment: HandlerFn = async (payload) => {
       };
 
       if (creditPurchaseId) {
-        stmts.push(`UPDATE $purchaseId SET status = "done";`);
+        stmts.push(`UPDATE $purchaseId SET status = "completed";`);
         params.purchaseId = rid(creditPurchaseId);
       }
       if (purpose === "auto-recharge") {

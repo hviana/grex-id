@@ -13,8 +13,8 @@ DEFINE FIELD creditAlertSent        ON subscription TYPE bool DEFAULT false;
 DEFINE FIELD autoRechargeEnabled    ON subscription TYPE option<bool> DEFAULT false;
 DEFINE FIELD autoRechargeAmount     ON subscription TYPE option<int> DEFAULT 0;
 DEFINE FIELD autoRechargeInProgress ON subscription TYPE option<bool> DEFAULT false;
-DEFINE FIELD remainingOperationCount ON subscription TYPE int DEFAULT 0;
-DEFINE FIELD operationCountAlertSent ON subscription TYPE bool DEFAULT false;
+DEFINE FIELD remainingOperationCount ON subscription TYPE option<object> FLEXIBLE;
+DEFINE FIELD operationCountAlertSent ON subscription TYPE option<object> FLEXIBLE;
 DEFINE FIELD createdAt              ON subscription TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_sub_company_system ON subscription FIELDS companyId, systemId;
