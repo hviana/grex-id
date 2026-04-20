@@ -2,7 +2,10 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listDetections } from "@/server/db/queries/systems/grex-id/detections";
+import {
+  listDetections,
+  getDetectionStats,
+} from "@/server/db/queries/systems/grex-id/detections";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -39,11 +42,24 @@ async function getHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const cursor = url.searchParams.get("cursor") ?? undefined;
-  const limit = Number(url.searchParams.get("limit") ?? "20");
-  const locationId = url.searchParams.get("locationId") ?? undefined;
+  const action = url.searchParams.get("action");
   const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
   const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
+  const locationId = url.searchParams.get("locationId") ?? undefined;
+
+  if (action === "stats") {
+    const stats = await getDetectionStats({
+      companyId,
+      systemId,
+      startDate,
+      endDate,
+      locationId,
+    });
+    return Response.json({ success: true, data: stats });
+  }
+
+  const cursor = url.searchParams.get("cursor") ?? undefined;
+  const limit = Number(url.searchParams.get("limit") ?? "20");
 
   const result = await listDetections({
     limit,

@@ -11,7 +11,12 @@ import {
   updateLead,
   updateLeadOwner,
 } from "@/server/db/queries/leads";
-import { tryUpsertFace } from "@/server/db/queries/systems/grex-id/faces";
+import {
+  searchOrphanFaceByEmbedding,
+  linkOrphanFaceToLead,
+  tryUpsertFace,
+} from "@/server/db/queries/systems/grex-id/faces";
+import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -142,14 +147,29 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
-      await tryUpsertFace({
-        leadId: lead.id,
-        embedding_type1: faceDescriptor as number[],
-      }, {
-        route: "systems/grex-id/leads:POST",
-        companyId: companyId as string,
-        systemId: systemId as string,
-      });
+      const sensitivity = parseFloat(
+        await getSetting(
+          companyId as string,
+          systemId as string,
+          "detection.sensitivity",
+        ),
+      );
+      const orphanMatch = await searchOrphanFaceByEmbedding(
+        faceDescriptor as number[],
+        sensitivity,
+      );
+      if (orphanMatch.length > 0) {
+        await linkOrphanFaceToLead(orphanMatch[0].id, lead.id);
+      } else {
+        await tryUpsertFace({
+          leadId: lead.id,
+          embedding_type1: faceDescriptor as number[],
+        }, {
+          route: "systems/grex-id/leads:POST",
+          companyId: companyId as string,
+          systemId: systemId as string,
+        });
+      }
     }
 
     return Response.json(
@@ -276,14 +296,29 @@ async function putHandler(req: Request, ctx: RequestContext) {
     }
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
-      await tryUpsertFace({
-        leadId: id as string,
-        embedding_type1: faceDescriptor as number[],
-      }, {
-        route: "systems/grex-id/leads:PUT",
-        companyId: companyId as string,
-        systemId: systemId as string,
-      });
+      const sensitivity = parseFloat(
+        await getSetting(
+          companyId as string,
+          systemId as string,
+          "detection.sensitivity",
+        ),
+      );
+      const orphanMatch = await searchOrphanFaceByEmbedding(
+        faceDescriptor as number[],
+        sensitivity,
+      );
+      if (orphanMatch.length > 0) {
+        await linkOrphanFaceToLead(orphanMatch[0].id, id as string);
+      } else {
+        await tryUpsertFace({
+          leadId: id as string,
+          embedding_type1: faceDescriptor as number[],
+        }, {
+          route: "systems/grex-id/leads:PUT",
+          companyId: companyId as string,
+          systemId: systemId as string,
+        });
+      }
     }
 
     await syncLeadCompanyIds(id as string);

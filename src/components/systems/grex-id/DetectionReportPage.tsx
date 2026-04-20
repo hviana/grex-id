@@ -40,20 +40,30 @@ const DAY_KEYS = [
   "systems.grex-id.report.saturday",
 ];
 
-interface DetectionItem {
-  id: string;
-  detectedAt: string;
-  score: number;
-  locationName: string;
-  locationId: string;
+interface DetectionIndividual {
+  faceId: string;
   leadId?: string;
   leadName?: string;
   leadEmail?: string;
   leadPhone?: string;
   leadAvatarUri?: string;
+  classification: "member" | "visitor" | "unknown";
+  detectionCount: number;
+  lastDetectedAt: string;
+  bestScore: number;
+  locationId: string;
+  locationName: string;
   ownerId?: string;
   ownerName?: string;
-  classification: "member" | "visitor" | "unknown";
+}
+
+interface DetectionStats {
+  uniqueMembers: number;
+  uniqueVisitors: number;
+  uniqueUnknowns: number;
+  individuals: DetectionIndividual[];
+  hourlyUnique: number[];
+  dailyUnique: number[];
 }
 
 function formatDate(iso: string, locale: string): string {
@@ -105,9 +115,8 @@ export default function DetectionReportPage() {
   const { t, locale } = useLocale();
   const { systemToken } = useAuth();
   const { companyId, systemId } = useSystemContext();
-  const [items, setItems] = useState<DetectionItem[]>([]);
+  const [stats, setStats] = useState<DetectionStats | null>(null);
   const [loading, setLoading] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<
     {
       start: string;
@@ -115,19 +124,18 @@ export default function DetectionReportPage() {
     } | null
   >(null);
 
-  const fetchData = useCallback(
-    async (cursor?: string) => {
+  const fetchStats = useCallback(
+    async () => {
       if (!dateRange || !companyId || !systemId || !systemToken) return;
       setLoading(true);
       try {
         const qs = new URLSearchParams({
+          action: "stats",
           startDate: dateRange.start,
           endDate: dateRange.end,
-          limit: "20",
           companyId,
           systemId,
         });
-        if (cursor) qs.set("cursor", cursor);
 
         const res = await fetch(
           `/api/systems/grex-id/detections?${qs.toString()}`,
@@ -136,10 +144,7 @@ export default function DetectionReportPage() {
         const json = await res.json();
 
         if (json.success) {
-          setItems((prev) =>
-            cursor ? [...prev, ...(json.data ?? [])] : json.data ?? []
-          );
-          setNextCursor(json.nextCursor ?? null);
+          setStats(json.data ?? null);
         }
       } finally {
         setLoading(false);
@@ -150,9 +155,8 @@ export default function DetectionReportPage() {
 
   useEffect(() => {
     if (dateRange) {
-      setItems([]);
-      setNextCursor(null);
-      fetchData();
+      setStats(null);
+      fetchStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
@@ -164,40 +168,15 @@ export default function DetectionReportPage() {
     });
   };
 
-  // The backend is authoritative for classification and masking — it already
-  // strips email/phone/owner for visitors and everything for unknown faces.
-  // The frontend just renders what it receives.
-  const resolvedItems = items;
-
-  const classificationCounts = useMemo(() => {
-    const counts = { member: 0, visitor: 0, unknown: 0 };
-    for (const item of resolvedItems) {
-      counts[item.classification] = (counts[item.classification] ?? 0) + 1;
-    }
-    return counts;
-  }, [resolvedItems]);
-
-  const hourCounts = useMemo(() => {
-    const counts = new Array(24).fill(0);
-    for (const item of resolvedItems) {
-      try {
-        const hour = new Date(item.detectedAt).getHours();
-        counts[hour]++;
-      } catch { /* skip invalid */ }
-    }
-    return counts;
-  }, [resolvedItems]);
-
-  const dayOfWeekCounts = useMemo(() => {
-    const counts = new Array(7).fill(0);
-    for (const item of resolvedItems) {
-      try {
-        const day = new Date(item.detectedAt).getDay();
-        counts[day]++;
-      } catch { /* skip invalid */ }
-    }
-    return counts;
-  }, [resolvedItems]);
+  const individuals = stats?.individuals ?? [];
+  const uniqueCounts = useMemo(
+    () => ({
+      member: stats?.uniqueMembers ?? 0,
+      visitor: stats?.uniqueVisitors ?? 0,
+      unknown: stats?.uniqueUnknowns ?? 0,
+    }),
+    [stats],
+  );
 
   const pieData = useMemo(
     () => ({
@@ -209,9 +188,9 @@ export default function DetectionReportPage() {
       datasets: [
         {
           data: [
-            classificationCounts.member,
-            classificationCounts.visitor,
-            classificationCounts.unknown,
+            uniqueCounts.member,
+            uniqueCounts.visitor,
+            uniqueCounts.unknown,
           ],
           backgroundColor: [
             "rgba(2, 208, 125, 0.75)",
@@ -228,7 +207,7 @@ export default function DetectionReportPage() {
         },
       ],
     }),
-    [classificationCounts, t],
+    [uniqueCounts, t],
   );
 
   const hourLabels = useMemo(
@@ -242,8 +221,8 @@ export default function DetectionReportPage() {
       labels: hourLabels,
       datasets: [
         {
-          label: t("systems.grex-id.report.detections"),
-          data: hourCounts,
+          label: t("systems.grex-id.report.uniqueIndividuals"),
+          data: stats?.hourlyUnique ?? new Array(24).fill(0),
           backgroundColor: "rgba(0, 204, 255, 0.6)",
           borderColor: "#00ccff",
           borderWidth: 1,
@@ -252,7 +231,7 @@ export default function DetectionReportPage() {
         },
       ],
     }),
-    [hourCounts, hourLabels, t],
+    [stats?.hourlyUnique, hourLabels, t],
   );
 
   const dayOfWeekData = useMemo(
@@ -260,8 +239,8 @@ export default function DetectionReportPage() {
       labels: DAY_KEYS.map((k) => t(k)),
       datasets: [
         {
-          label: t("systems.grex-id.report.detections"),
-          data: dayOfWeekCounts,
+          label: t("systems.grex-id.report.uniqueIndividuals"),
+          data: stats?.dailyUnique ?? new Array(7).fill(0),
           backgroundColor: [
             "rgba(2, 208, 125, 0.6)",
             "rgba(0, 204, 255, 0.6)",
@@ -294,7 +273,7 @@ export default function DetectionReportPage() {
         },
       ],
     }),
-    [dayOfWeekCounts, t],
+    [stats?.dailyUnique, t],
   );
 
   const chartTextColor = "#cccccc";
@@ -340,25 +319,28 @@ export default function DetectionReportPage() {
   });
 
   const exportData = useCallback(async () => {
-    return resolvedItems.map((item) => ({
-      [t("systems.grex-id.report.exportDate")]: formatDate(
-        item.detectedAt,
-        locale,
-      ),
-      [t("systems.grex-id.report.exportLocation")]: item.locationName,
+    return individuals.map((item) => ({
+      [t("systems.grex-id.report.exportId")]: item.leadId
+        ?? item.faceId,
       [t("systems.grex-id.report.exportClassification")]: t(
         `systems.grex-id.report.${item.classification}`,
       ),
-      [t("systems.grex-id.report.exportName")]: item.leadName ??
-        t("systems.grex-id.report.unknownPerson"),
+      [t("systems.grex-id.report.exportName")]: item.leadName
+        ?? t("systems.grex-id.report.unknownPerson"),
+      [t("systems.grex-id.report.exportDetectionCount")]: item.detectionCount,
+      [t("systems.grex-id.report.exportLocation")]: item.locationName,
+      [t("systems.grex-id.report.exportDate")]: formatDate(
+        item.lastDetectedAt,
+        locale,
+      ),
       [t("systems.grex-id.report.exportEmail")]: item.leadEmail ?? "",
       [t("systems.grex-id.report.exportPhone")]: item.leadPhone ?? "",
       [t("systems.grex-id.report.exportOwner")]: item.ownerName ?? "",
-      [t("systems.grex-id.report.score")]: item.score.toFixed(2),
+      [t("systems.grex-id.report.score")]: item.bestScore.toFixed(2),
     }));
-  }, [resolvedItems, t, locale]);
+  }, [individuals, t, locale]);
 
-  const hasChartData = resolvedItems.length > 0;
+  const hasChartData = individuals.length > 0;
 
   return (
     <div className="space-y-6">
@@ -445,25 +427,25 @@ export default function DetectionReportPage() {
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-primary-green)]" />
                   <span className="text-[var(--color-light-text)]">
-                    {classificationCounts.member}
+                    {uniqueCounts.member}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
                   <span className="text-[var(--color-light-text)]">
-                    {classificationCounts.visitor}
+                    {uniqueCounts.visitor}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
                   <span className="text-[var(--color-light-text)]">
-                    {classificationCounts.unknown}
+                    {uniqueCounts.unknown}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Detections by Time of Day */}
+            {/* Unique individuals by Time of Day */}
             <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
               <div className="h-80">
                 <Bar
@@ -492,17 +474,17 @@ export default function DetectionReportPage() {
         </div>
       )}
 
-      {loading && items.length === 0 && (
+      {loading && !stats && (
         <div className="flex justify-center py-12">
           <Spinner size="lg" />
         </div>
       )}
 
-      {resolvedItems.length > 0 && (
+      {individuals.length > 0 && (
         <div className="space-y-3">
-          {resolvedItems.map((item) => (
+          {individuals.map((item) => (
             <div
-              key={item.id}
+              key={item.faceId}
               className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300"
             >
               <div className="flex items-start gap-4">
@@ -540,12 +522,26 @@ export default function DetectionReportPage() {
                       classification={item.classification}
                       t={t}
                     />
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)] border border-[var(--color-secondary-blue)]/30">
+                      {t("systems.grex-id.report.detectionCount")}: {item.detectionCount}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-[var(--color-light-text)]">
                     <span>📍 {item.locationName}</span>
                     <span>·</span>
-                    <span>{formatDate(item.detectedAt, locale)}</span>
+                    <span>{formatDate(item.lastDetectedAt, locale)}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-[var(--color-light-text)]">
+                    <span>
+                      {t("systems.grex-id.report.faceId")}:{" "}
+                      <span className="font-mono">
+                        {item.classification === "unknown"
+                          ? item.faceId
+                          : item.leadId ?? item.faceId}
+                      </span>
+                    </span>
                   </div>
 
                   {item.ownerName && (
@@ -590,7 +586,7 @@ export default function DetectionReportPage() {
                     {t("systems.grex-id.report.score")}
                   </span>
                   <p className="text-sm font-mono text-white">
-                    {item.score.toFixed(2)}
+                    {item.bestScore.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -599,22 +595,9 @@ export default function DetectionReportPage() {
         </div>
       )}
 
-      {dateRange && !loading && resolvedItems.length === 0 && (
+      {dateRange && !loading && individuals.length === 0 && (
         <div className="text-center py-12 text-[var(--color-light-text)]">
           {t("common.noResults")}
-        </div>
-      )}
-
-      {nextCursor && (
-        <div className="flex justify-center pt-4">
-          <button
-            onClick={() => fetchData(nextCursor)}
-            disabled={loading}
-            className="rounded-lg border border-[var(--color-dark-gray)] px-6 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors flex items-center gap-2"
-          >
-            {loading ? <Spinner size="sm" /> : null}
-            {t("common.loadMore")}
-          </button>
         </div>
       )}
     </div>

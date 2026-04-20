@@ -49,6 +49,7 @@ export interface DetectionReportItem {
   locationName: string;
   locationId: string;
   leadId?: string;
+  faceId?: string;
   leadName?: string;
   leadEmail?: string;
   leadPhone?: string;
@@ -61,10 +62,12 @@ export interface DetectionReportItem {
 export async function createDetection(data: {
   locationId: string;
   leadId?: string;
+  faceId?: string;
   score: number;
 }): Promise<Detection> {
   const db = await getDb();
   const leadId = data.leadId ? normalizeRecordId(data.leadId) : null;
+  const faceId = data.faceId ? normalizeRecordId(data.faceId) : null;
   const bindings: Record<string, unknown> = {
     locationId: rid(data.locationId),
     score: data.score,
@@ -77,6 +80,10 @@ export async function createDetection(data: {
   if (leadId) {
     sets.push("leadId = $leadId");
     bindings.leadId = rid(leadId);
+  }
+  if (faceId) {
+    sets.push("faceId = $faceId");
+    bindings.faceId = rid(faceId);
   }
   const result = await db.query<[Detection[]]>(
     `CREATE grexid_detection SET ${sets.join(", ")}`,
@@ -97,6 +104,9 @@ interface RawDetectionRow {
       companyId: unknown;
       systemId: unknown;
     };
+  faceId?:
+    | (Record<string, unknown> & { id: unknown })
+    | null;
   leadId?:
     | (Record<string, unknown> & {
       id: unknown;
@@ -145,7 +155,7 @@ export async function listDetections(
   }
 
   const query =
-    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, leadId, leadId.profile`;
+    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profile`;
 
   const result = await db.query<[RawDetectionRow[]]>(query, bindings);
   const rawItems = result[0] ?? [];
@@ -218,14 +228,10 @@ export async function listDetections(
       ? row.leadId
       : null;
     const leadRecordId = normalizeRecordId(lead?.id);
+    const faceRecordId = row.faceId && typeof row.faceId === "object"
+      ? normalizeRecordId(row.faceId.id)
+      : undefined;
 
-    // Classification rules (multi-tenant):
-    // - unknown: detection has no leadId (face did not match any registered lead)
-    // - member:  lead is associated with the CURRENT company + system
-    //            (has a lead_company_system row for this tenant)
-    // - visitor: lead exists in the database but is NOT associated with the
-    //            current company + system (it belongs to another tenant, or
-    //            has no tenant at all)
     let classification: "member" | "visitor" | "unknown" = "unknown";
     const assoc = leadRecordId ? assocMap.get(leadRecordId) : undefined;
 
@@ -241,22 +247,14 @@ export async function listDetections(
       score: row.score,
       locationId: normalizeRecordId(loc.id) ?? String(loc.id),
       locationName: loc.name,
-      // leadId is exposed only for members. For visitors we intentionally hide
-      // the record id so the frontend cannot correlate visitors across tenants.
       leadId: isMember ? leadRecordId ?? undefined : undefined,
-      // Name and avatar are shown for members and visitors (so the operator
-      // can still recognize a recurring visitor's face), but never for unknown.
+      faceId: faceRecordId ?? undefined,
       leadName: leadRecordId ? lead?.name ?? undefined : undefined,
       leadAvatarUri: leadRecordId
         ? lead?.profile?.avatarUri ?? undefined
         : undefined,
-      // Contact details are member-only. Visitors and unknown never expose
-      // email/phone — that information belongs to the tenant that owns the lead.
       leadEmail: isMember ? lead?.email ?? undefined : undefined,
       leadPhone: isMember ? lead?.phone ?? undefined : undefined,
-      // Owner is resolved from lead_company_system for the CURRENT tenant only,
-      // so owners from other tenants are never leaked. It is only surfaced for
-      // members because visitors have no association in this tenant.
       ownerId: isMember ? assoc?.ownerId : undefined,
       ownerName: isMember ? assoc?.ownerName : undefined,
       classification,
@@ -267,5 +265,244 @@ export async function listDetections(
     data: enriched,
     nextCursor: hasMore ? enriched[enriched.length - 1]?.id ?? null : null,
     prevCursor: params.cursor ?? null,
+  };
+}
+
+export interface DetectionIndividual {
+  faceId: string;
+  leadId?: string;
+  leadName?: string;
+  leadEmail?: string;
+  leadPhone?: string;
+  leadAvatarUri?: string;
+  classification: "member" | "visitor" | "unknown";
+  detectionCount: number;
+  lastDetectedAt: string;
+  bestScore: number;
+  locationId: string;
+  locationName: string;
+  ownerId?: string;
+  ownerName?: string;
+}
+
+export interface DetectionStats {
+  uniqueMembers: number;
+  uniqueVisitors: number;
+  uniqueUnknowns: number;
+  individuals: DetectionIndividual[];
+  // Hour/day aggregates based on unique individuals
+  hourlyUnique: number[];
+  dailyUnique: number[];
+}
+
+export async function getDetectionStats(params: {
+  companyId: string;
+  systemId: string;
+  startDate: string;
+  endDate: string;
+  locationId?: string;
+}): Promise<DetectionStats> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    startDate: params.startDate,
+    endDate: params.endDate,
+  };
+
+  let whereClause = `
+    WHERE locationId.companyId = $companyId
+      AND locationId.systemId = $systemId
+      AND detectedAt >= type::datetime($startDate)
+      AND detectedAt <= type::datetime($endDate)`;
+
+  if (params.locationId) {
+    whereClause += " AND locationId = $locationId";
+    bindings.locationId = rid(params.locationId);
+  }
+
+  const result = await db.query<[RawDetectionRow[]]>(
+    `SELECT * FROM grexid_detection ${whereClause}
+     ORDER BY detectedAt DESC
+     FETCH locationId, faceId, leadId, leadId.profile`,
+    bindings,
+  );
+
+  const rows = result[0] ?? [];
+
+  // Group by faceId to get unique individuals
+  const faceMap = new Map<
+    string,
+    {
+      leadId?: string;
+      lead?: RawDetectionRow["leadId"];
+      locationId: string;
+      locationName: string;
+      detectionCount: number;
+      lastDetectedAt: string;
+      bestScore: number;
+      detections: { detectedAt: string }[];
+    }
+  >();
+
+  for (const row of rows) {
+    const faceRecordId = row.faceId && typeof row.faceId === "object"
+      ? normalizeRecordId(row.faceId.id)
+      : null;
+    if (!faceRecordId) continue;
+
+    const locId = normalizeRecordId(row.locationId.id) ?? String(row.locationId.id);
+    const lead = row.leadId && typeof row.leadId === "object" ? row.leadId : null;
+    const leadRecordId = normalizeRecordId(lead?.id);
+
+    const existing = faceMap.get(faceRecordId);
+    if (existing) {
+      existing.detectionCount++;
+      if (row.detectedAt > existing.lastDetectedAt) {
+        existing.lastDetectedAt = row.detectedAt;
+      }
+      if (row.score > existing.bestScore) {
+        existing.bestScore = row.score;
+      }
+      existing.detections.push({ detectedAt: row.detectedAt });
+    } else {
+      faceMap.set(faceRecordId, {
+        leadId: leadRecordId ?? undefined,
+        lead,
+        locationId: locId,
+        locationName: row.locationId.name,
+        detectionCount: 1,
+        lastDetectedAt: row.detectedAt,
+        bestScore: row.score,
+        detections: [{ detectedAt: row.detectedAt }],
+      });
+    }
+  }
+
+  // Batch-check lead_company_system for classification
+  const leadIds = [
+    ...new Set(
+      [...faceMap.values()]
+        .map((f) => f.leadId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const assocMap = new Map<string, { ownerId?: string; ownerName?: string }>();
+  if (leadIds.length > 0) {
+    const assocResult = await db.query<
+      [{ leadId: unknown; ownerId: Record<string, unknown> | null }[]]
+    >(
+      `SELECT leadId, ownerId FROM lead_company_system
+       WHERE leadId IN $leadIds
+         AND companyId = $companyId
+         AND systemId = $systemId
+       FETCH ownerId, ownerId.profile`,
+      {
+        leadIds: leadIds.map((id) => rid(id)),
+        companyId: rid(params.companyId),
+        systemId: rid(params.systemId),
+      },
+    );
+
+    for (const row of assocResult[0] ?? []) {
+      const lid = normalizeRecordId(row.leadId);
+      if (!lid) continue;
+      const owner = row.ownerId && typeof row.ownerId === "object"
+        ? row.ownerId
+        : null;
+      assocMap.set(lid, {
+        ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
+        ownerName: (owner as { profile?: { name?: string } })?.profile?.name
+          ?? undefined,
+      });
+    }
+  }
+
+  // Build individuals and count unique per classification
+  let uniqueMembers = 0;
+  let uniqueVisitors = 0;
+  let uniqueUnknowns = 0;
+  const hourlyUnique = new Array(24).fill(0);
+  const dailyUnique = new Array(7).fill(0);
+
+  const individuals: DetectionIndividual[] = [];
+
+  // Track which faces contributed to each hour/day to count unique per slot
+  const hourlyFaceSet = Array.from({ length: 24 }, () => new Set<string>());
+  const dailyFaceSet = Array.from({ length: 7 }, () => new Set<string>());
+
+  for (const [faceRecordId, data] of faceMap) {
+    let classification: "member" | "visitor" | "unknown" = "unknown";
+    const assoc = data.leadId ? assocMap.get(data.leadId) : undefined;
+
+    if (data.leadId) {
+      classification = assoc ? "member" : "visitor";
+    }
+
+    if (classification === "member") uniqueMembers++;
+    else if (classification === "visitor") uniqueVisitors++;
+    else uniqueUnknowns++;
+
+    const isMember = classification === "member";
+
+    individuals.push({
+      faceId: faceRecordId,
+      leadId: isMember ? data.leadId : undefined,
+      leadName: data.leadId
+        ? (data.lead as Record<string, unknown>)?.name as string ?? undefined
+        : undefined,
+      leadAvatarUri: data.leadId
+        ? ((data.lead as Record<string, unknown>)?.profile as { avatarUri?: string })
+            ?.avatarUri ?? undefined
+        : undefined,
+      leadEmail: isMember
+        ? (data.lead as Record<string, unknown>)?.email as string ?? undefined
+        : undefined,
+      leadPhone: isMember
+        ? (data.lead as Record<string, unknown>)?.phone as string ?? undefined
+        : undefined,
+      classification,
+      detectionCount: data.detectionCount,
+      lastDetectedAt: data.lastDetectedAt,
+      bestScore: data.bestScore,
+      locationId: data.locationId,
+      locationName: data.locationName,
+      ownerId: isMember ? assoc?.ownerId : undefined,
+      ownerName: isMember ? assoc?.ownerName : undefined,
+    });
+
+    // Count unique faces per hour/day
+    for (const det of data.detections) {
+      try {
+        const date = new Date(det.detectedAt);
+        const hour = date.getHours();
+        const day = date.getDay();
+        if (!hourlyFaceSet[hour].has(faceRecordId)) {
+          hourlyFaceSet[hour].add(faceRecordId);
+          hourlyUnique[hour]++;
+        }
+        if (!dailyFaceSet[day].has(faceRecordId)) {
+          dailyFaceSet[day].add(faceRecordId);
+          dailyUnique[day]++;
+        }
+      } catch {
+        // skip invalid
+      }
+    }
+  }
+
+  // Sort by lastDetectedAt descending
+  individuals.sort(
+    (a, b) => new Date(b.lastDetectedAt).getTime() - new Date(a.lastDetectedAt).getTime(),
+  );
+
+  return {
+    uniqueMembers,
+    uniqueVisitors,
+    uniqueUnknowns,
+    individuals,
+    hourlyUnique,
+    dailyUnique,
   };
 }

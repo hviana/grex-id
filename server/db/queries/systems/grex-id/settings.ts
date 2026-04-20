@@ -1,4 +1,10 @@
 import { getDb, rid } from "@/server/db/connection";
+import {
+  clearCache,
+  getCache,
+  registerCache,
+  updateCache,
+} from "@/server/utils/cache";
 
 export interface GrexIdSetting {
   id: string;
@@ -14,22 +20,13 @@ const DEFAULTS: Record<string, string> = {
   "detection.sensitivity": "0.5",
 };
 
-export async function getSetting(
-  companyId: string,
-  systemId: string,
-  key: string,
-): Promise<string> {
-  const db = await getDb();
-  const result = await db.query<[GrexIdSetting[]]>(
-    `SELECT * FROM grexid_setting
-     WHERE companyId = $companyId AND systemId = $systemId AND key = $key
-     LIMIT 1`,
-    { companyId: rid(companyId), systemId: rid(systemId), key },
-  );
-  return result[0]?.[0]?.value ?? DEFAULTS[key] ?? "";
+const SLUG = "grex-id";
+
+function settingsCacheName(companyId: string, systemId: string): string {
+  return `settings:${companyId}:${systemId}`;
 }
 
-export async function getAllSettings(
+async function loadSettings(
   companyId: string,
   systemId: string,
 ): Promise<Record<string, string>> {
@@ -39,12 +36,56 @@ export async function getAllSettings(
      WHERE companyId = $companyId AND systemId = $systemId`,
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
-
   const settings: Record<string, string> = { ...DEFAULTS };
   for (const row of result[0] ?? []) {
     settings[row.key] = row.value;
   }
   return settings;
+}
+
+export function registerSettingsCache(
+  companyId: string,
+  systemId: string,
+): void {
+  const name = settingsCacheName(companyId, systemId);
+  registerCache(SLUG, name, () => loadSettings(companyId, systemId));
+}
+
+async function getOrRegisterSettingsCache(
+  companyId: string,
+  systemId: string,
+): Promise<Record<string, string>> {
+  const name = settingsCacheName(companyId, systemId);
+  try {
+    return await getCache<Record<string, string>>(SLUG, name);
+  } catch {
+    registerSettingsCache(companyId, systemId);
+    return getCache<Record<string, string>>(SLUG, name);
+  }
+}
+
+export async function getSetting(
+  companyId: string,
+  systemId: string,
+  key: string,
+): Promise<string> {
+  const settings = await getOrRegisterSettingsCache(companyId, systemId);
+  return settings[key] ?? DEFAULTS[key] ?? "";
+}
+
+export async function getAllSettings(
+  companyId: string,
+  systemId: string,
+): Promise<Record<string, string>> {
+  return getOrRegisterSettingsCache(companyId, systemId);
+}
+
+export function invalidateSettingsCache(
+  companyId: string,
+  systemId: string,
+): void {
+  const name = settingsCacheName(companyId, systemId);
+  clearCache(SLUG, name);
 }
 
 export async function upsertSetting(
@@ -64,6 +105,12 @@ export async function upsertSetting(
       value = $v;`,
     { cid: rid(companyId), sid: rid(systemId), k: key, v: value },
   );
+  const name = settingsCacheName(companyId, systemId);
+  try {
+    await updateCache(SLUG, name);
+  } catch {
+    registerSettingsCache(companyId, systemId);
+  }
 }
 
 export async function upsertSettings(
@@ -73,7 +120,7 @@ export async function upsertSettings(
 ): Promise<Record<string, string>> {
   const db = await getDb();
   const entries = Object.entries(settings);
-  if (entries.length === 0) return getAllSettings(companyId, systemId);
+  if (entries.length === 0) return getOrRegisterSettingsCache(companyId, systemId);
 
   for (const [key, value] of entries) {
     await db.query(
@@ -88,5 +135,11 @@ export async function upsertSettings(
     );
   }
 
-  return getAllSettings(companyId, systemId);
+  const name = settingsCacheName(companyId, systemId);
+  try {
+    await updateCache(SLUG, name);
+  } catch {
+    registerSettingsCache(companyId, systemId);
+  }
+  return getOrRegisterSettingsCache(companyId, systemId);
 }

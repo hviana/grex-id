@@ -2,8 +2,14 @@ import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { publicLeadPostHandler } from "@/app/api/leads/public/route";
-import { tryUpsertFace } from "@/server/db/queries/systems/grex-id/faces";
+import {
+  searchOrphanFaceByEmbedding,
+  linkOrphanFaceToLead,
+  tryUpsertFace,
+} from "@/server/db/queries/systems/grex-id/faces";
 import { getAnonymousTenant } from "@/server/utils/tenant";
+
+const DEFAULT_SENSITIVITY = 0.5;
 
 async function postHandler(req: Request, ctx: RequestContext) {
   try {
@@ -30,12 +36,29 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Handle face biometrics for new leads
     const leadId = coreJson.data?.id;
     if (leadId && faceDescriptor && Array.isArray(faceDescriptor)) {
-      await tryUpsertFace({
-        leadId,
-        embedding_type1: faceDescriptor,
-      }, {
-        route: "systems/grex-id/leads/public:POST",
-      });
+      try {
+        const orphanMatch = await searchOrphanFaceByEmbedding(
+          faceDescriptor,
+          DEFAULT_SENSITIVITY,
+        );
+        if (orphanMatch.length > 0) {
+          await linkOrphanFaceToLead(orphanMatch[0].id, leadId);
+        } else {
+          await tryUpsertFace({
+            leadId,
+            embedding_type1: faceDescriptor,
+          }, {
+            route: "systems/grex-id/leads/public:POST",
+          });
+        }
+      } catch {
+        await tryUpsertFace({
+          leadId,
+          embedding_type1: faceDescriptor,
+        }, {
+          route: "systems/grex-id/leads/public:POST",
+        });
+      }
     }
 
     return Response.json(coreJson, { status: coreRes.status });

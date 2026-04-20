@@ -1,5 +1,5 @@
 DEFINE TABLE face SCHEMAFULL;
-DEFINE FIELD leadId          ON face TYPE record<lead>;
+DEFINE FIELD leadId          ON face TYPE option<record<lead>>;
 DEFINE FIELD embedding_type1 ON face TYPE array<float, 1024>;
 DEFINE FIELD createdAt       ON face TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt       ON face TYPE datetime DEFAULT time::now();
