@@ -25,7 +25,7 @@
   "roles.system": "Sistema",
   "roles.selectSystem": "Selecione um sistema",
   "roles.permissions": "Permissões",
-  "roles.permissionsHint": "ex. read:users, write:billing",
+  "roles.permissionsHint": "ex. core.users.read, core.billing.write",
   "roles.builtIn": "Integrado",
   "roles.isBuiltIn": "Perfil protegido (n\u00e3o pode ser exclu\u00eddo por n\u00e3o superusu\u00e1rios)",
   "roles.builtInWarning": "Este \u00e9 um perfil integrado. Alguns campos n\u00e3o podem ser alterados.",
@@ -214,7 +214,7 @@
   "fileAccess.isolateCompany": "Empresa",
   "fileAccess.isolateUser": "Usuário",
   "fileAccess.permissions": "Permissões",
-  "fileAccess.permissionsHint": "ex. files:download:logos, files:upload:avatars",
+  "fileAccess.permissionsHint": "ex. core.files.download.logos, core.files.upload.avatars",
   "fileAccess.isolationHint": "Ative os controles para exigir contexto de tenant correspondente. Todas as verificações ativadas devem passar (E). Nenhum ativado = acesso anônimo.",
   "fileAccess.anonymous": "Anônimo",
   "fileAccess.maxFileSizeMB": "Tamanho Máx. do Arquivo (MB)",
@@ -224,5 +224,8 @@
   "fileAccess.placeholder.name": "ex. Logos da Empresa",
   "fileAccess.placeholder.categoryPattern": "ex. /logos/",
   "fileAccess.placeholder.maxFileSizeMB": "ex. 5",
-  "fileAccess.placeholder.allowedExtensions": "ex. jpg"
+  "fileAccess.placeholder.allowedExtensions": "ex. jpg",
+  "fileAccess.names.companyLogos": "Logos da Empresa",
+  "fileAccess.names.userAvatars": "Avatares de Usuários",
+  "fileAccess.names.leadAvatars": "Avatares de Leads"
 }

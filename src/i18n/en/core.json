@@ -25,7 +25,7 @@
   "roles.system": "System",
   "roles.selectSystem": "Select a system",
   "roles.permissions": "Permissions",
-  "roles.permissionsHint": "e.g. read:users, write:billing",
+  "roles.permissionsHint": "e.g. core.users.read, core.billing.write",
   "roles.builtIn": "Built-in",
   "roles.isBuiltIn": "Protected role (cannot be deleted by non-superusers)",
   "roles.builtInWarning": "This is a built-in role. Some fields cannot be changed.",
@@ -214,7 +214,7 @@
   "fileAccess.isolateCompany": "Company",
   "fileAccess.isolateUser": "User",
   "fileAccess.permissions": "Permissions",
-  "fileAccess.permissionsHint": "e.g. files:download:logos, files:upload:avatars",
+  "fileAccess.permissionsHint": "e.g. core.files.download.logos, core.files.upload.avatars",
   "fileAccess.isolationHint": "Enable toggles to require matching tenant context. All enabled checks must pass (AND). None enabled = anonymous access.",
   "fileAccess.anonymous": "Anonymous",
   "fileAccess.maxFileSizeMB": "Max File Size (MB)",
@@ -224,5 +224,8 @@
   "fileAccess.placeholder.name": "e.g. Company Logos",
   "fileAccess.placeholder.categoryPattern": "e.g. /logos/",
   "fileAccess.placeholder.maxFileSizeMB": "e.g. 5",
-  "fileAccess.placeholder.allowedExtensions": "e.g. jpg"
+  "fileAccess.placeholder.allowedExtensions": "e.g. jpg",
+  "fileAccess.names.companyLogos": "Company Logos",
+  "fileAccess.names.userAvatars": "User Avatars",
+  "fileAccess.names.leadAvatars": "Lead Avatars"
 }

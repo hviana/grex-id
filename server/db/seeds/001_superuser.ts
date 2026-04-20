@@ -1,6 +1,6 @@
 import type { Surreal } from "surrealdb";
 
-export async function seedSuperuser(db: Surreal): Promise<void> {
+export async function seed(db: Surreal): Promise<void> {
   const existing = await db.query<[{ id: string }[]]>(
     `SELECT id FROM user WHERE roles CONTAINS "superuser" LIMIT 1`,
   );

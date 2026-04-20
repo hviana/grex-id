@@ -140,5 +140,7 @@
   "home.registerError": "Falha no cadastro. Tente novamente.",
   "home.submitBtn": "Cadastrar",
   "home.footer": "Plataforma Inteligente de Reconhecimento Facial",
-  "home.footerTagline": "Usando tecnologia para pastorear pessoas com cuidado e propósito."
+  "home.footerTagline": "Usando tecnologia para pastorear pessoas com cuidado e propósito.",
+  "plans.grexId.standard.name": "PADRÃO",
+  "plans.grexId.standard.description": "Plano padrão com funcionalidades básicas."
 }

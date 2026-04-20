@@ -140,5 +140,7 @@
   "home.registerError": "Registration failed. Please try again.",
   "home.submitBtn": "Register",
   "home.footer": "Intelligent Facial Recognition Platform",
-  "home.footerTagline": "Using technology to shepherd people with care and purpose."
+  "home.footerTagline": "Using technology to shepherd people with care and purpose.",
+  "plans.grexId.standard.name": "STANDARD",
+  "plans.grexId.standard.description": "Standard plan with basic features."
 }

@@ -181,7 +181,7 @@ const defaults: DefaultSetting[] = [
   },
 ];
 
-export async function seedDefaultSettings(db: Surreal): Promise<void> {
+export async function seed(db: Surreal): Promise<void> {
   for (const setting of defaults) {
     const existing = await db.query<[{ id: string }[]]>(
       "SELECT id FROM setting WHERE key = $key AND systemSlug IS NONE LIMIT 1",

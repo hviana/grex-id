@@ -194,8 +194,17 @@ receives no props, reads from `LocaleContext`.
 
 #### 5.6 DB-stored i18n keys
 
-Display names for roles, plans, menu items, and plan benefits are stored in the
-DB as i18n keys (e.g. `"roles.admin.name"`) and resolved at render time.
+This rule applies to **display names and labels** — any DB field whose purpose
+is to show readable text to users in the UI. Examples: role display names, plan
+names, plan descriptions, menu labels, benefit strings, file access rule names.
+These **MUST be i18n keys** (e.g. `"roles.admin.name"`,
+`"plans.grexId.standard.name"`, `"core.fileAccess.names.companyLogos"`) and are
+resolved at render time via `t()`.
+
+This rule does **not** apply to machine-readable identifiers — system names,
+system slugs, permission tokens, file category path patterns. These are
+structural identifiers used for lookup, authorization, and routing; they are
+never shown as-is to users and are outside the scope of the i18n rule.
 
 #### 5.7 Backend-never-returns-text rule
 
@@ -263,7 +272,7 @@ permission errors, and status messages.
 │   ├── db/
 │   │   ├── connection.ts             # §7.8
 │   │   ├── migrations/runner.ts + *.surql + systems/[slug]/*.surql
-│   │   ├── seeds/runner.ts + 001_superuser.ts + 002_default_settings.ts + 003_default_front_settings.ts + 004_default_file_access.ts
+│   │   ├── seeds/runner.ts + 001_superuser.ts + 002_default_settings.ts + 003_default_front_settings.ts + 004_default_file_access.ts + systems/[slug]/*.ts
 │   │   ├── queries/ (auth, users, companies, systems, roles, plans,
 │   │   │            vouchers, menus, billing, connected-apps, tokens,
 │   │   │            usage, event-queue, core-settings, tags, leads,
@@ -442,9 +451,15 @@ DEFINE TABLE notification SCHEMAFULL
   (UNIQUE `name`), scans root + `systems/<slug>/` + every
   `frameworks/<name>/server/db/migrations/` subtree, sorts by numeric prefix
   globally, executes pending in a transaction, records the relative path.
-- `server/db/seeds/runner.ts` — each seed file exports an async function that
-  checks existence before inserting (idempotent). Example: superuser seed skips
-  if `SELECT * FROM user WHERE roles CONTAINS "superuser"` is non-empty.
+- `server/db/seeds/runner.ts` — scans root + `systems/<slug>/` + every
+  `frameworks/<name>/server/db/seeds/` subtree for `NNN_*.ts` files, sorts by
+  numeric prefix globally, dynamically imports each, and calls the exported
+  `seed(db)` function. Each seed file must export
+  `async function seed(db:
+  Surreal): Promise<void>` and be idempotent (check
+  existence before inserting). Example: superuser seed skips if
+  `SELECT * FROM user WHERE roles CONTAINS
+  "superuser"` is non-empty.
 
 ### 8. Schema Index
 
@@ -1788,11 +1803,11 @@ input, supports decimals) and `allowedExtensions`
 
 **Default seeds** (`004_default_file_access.ts`):
 
-| Name          | Pattern          | Download     | Upload                                           | Upload constraints                        |
-| ------------- | ---------------- | ------------ | ------------------------------------------------ | ----------------------------------------- |
-| Company Logos | `/logos/`        | Anonymous    | user+company+system, `files:upload:logos`        | 5 MB, `["svg","png","jpg","jpeg","webp"]` |
-| User Avatars  | `/avatars/`      | user+company | user+company+system, `files:upload:avatars`      | 2 MB, `["png","jpg","jpeg","webp"]`       |
-| Lead Avatars  | `/lead-avatars/` | Anonymous    | user+company+system, `files:upload:lead-avatars` | 2 MB, `["png","jpg","jpeg","webp"]`       |
+| Name                                 | Pattern          | Download     | Upload                                               | Upload constraints                        |
+| ------------------------------------ | ---------------- | ------------ | ---------------------------------------------------- | ----------------------------------------- |
+| `core.fileAccess.names.companyLogos` | `/logos/`        | Anonymous    | user+company+system, `core.files.upload.logos`       | 5 MB, `["svg","png","jpg","jpeg","webp"]` |
+| `core.fileAccess.names.userAvatars`  | `/avatars/`      | user+company | user+company+system, `core.files.upload.avatars`     | 2 MB, `["png","jpg","jpeg","webp"]`       |
+| `core.fileAccess.names.leadAvatars`  | `/lead-avatars/` | Anonymous    | user+company+system, `core.files.upload.leadAvatars` | 2 MB, `["png","jpg","jpeg","webp"]`       |
 
 **Cache invalidation.** Route handlers call `updateCache("core", "file-access")`
 after mutations. `Core.reload()` also clears the file-access cache.
@@ -2378,7 +2393,7 @@ Props: {
   onChange: (value: (string | { name: string; color?: string })[]) => void;
   fetchFn?: (search: string) => Promise<(string | { name: string; color?: string })[]>;
   staticOptions?: (string | { name: string; color?: string })[];
-  formatHint?: string;         // e.g. "e.g. read:users, write:billing"
+  formatHint?: string;         // e.g. "e.g. core.users.read, core.billing.write"
   debounceMs?: number;         // default 300
 }
 ```
@@ -2943,7 +2958,7 @@ All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
   `core.systems.termsOfService`.
 - **RoleForm** — name, systemId (select), isBuiltIn (checkbox),
   `MultiBadgeField` for permissions (`mode:"custom"`, format hint
-  `"e.g. read:users, write:billing"`).
+  `"e.g. core.users.read, core.billing.write"`).
 - **PlanForm** — name, description, systemId, price, currency, recurrenceDays,
   apiRateLimit, storageLimitBytes, fileCacheLimitBytes, maxConcurrentDownloads,
   maxConcurrentUploads, maxDownloadBandwidthMB, maxUploadBandwidthMB,

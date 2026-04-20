@@ -21,7 +21,7 @@ interface FileAccessSeed {
 
 const seeds: FileAccessSeed[] = [
   {
-    name: "Company Logos",
+    name: "core.fileAccess.names.companyLogos",
     categoryPattern: "/logos/",
     download: {
       isolateSystem: false,
@@ -33,13 +33,13 @@ const seeds: FileAccessSeed[] = [
       isolateSystem: true,
       isolateCompany: true,
       isolateUser: true,
-      permissions: ["files:upload:logos"],
+      permissions: ["core.files.upload.logos"],
       maxFileSizeMB: 5,
       allowedExtensions: ["svg", "png", "jpg", "jpeg", "webp"],
     },
   },
   {
-    name: "User Avatars",
+    name: "core.fileAccess.names.userAvatars",
     categoryPattern: "/avatars/",
     download: {
       isolateSystem: false,
@@ -51,13 +51,13 @@ const seeds: FileAccessSeed[] = [
       isolateSystem: true,
       isolateCompany: true,
       isolateUser: true,
-      permissions: ["files:upload:avatars"],
+      permissions: ["core.files.upload.avatars"],
       maxFileSizeMB: 2,
       allowedExtensions: ["png", "jpg", "jpeg", "webp"],
     },
   },
   {
-    name: "Lead Avatars",
+    name: "core.fileAccess.names.leadAvatars",
     categoryPattern: "/lead-avatars/",
     download: {
       isolateSystem: false,
@@ -69,14 +69,14 @@ const seeds: FileAccessSeed[] = [
       isolateSystem: true,
       isolateCompany: true,
       isolateUser: true,
-      permissions: ["files:upload:lead-avatars"],
+      permissions: ["core.files.upload.leadAvatars"],
       maxFileSizeMB: 2,
       allowedExtensions: ["png", "jpg", "jpeg", "webp"],
     },
   },
 ];
 
-export async function seedDefaultFileAccess(db: Surreal): Promise<void> {
+export async function seed(db: Surreal): Promise<void> {
   for (const seed of seeds) {
     const existing = await db.query<[{ id: string }[]]>(
       "SELECT id FROM file_access WHERE name = $name LIMIT 1",
