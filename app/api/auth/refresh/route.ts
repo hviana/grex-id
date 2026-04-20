@@ -53,28 +53,15 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     const db = await getDb();
 
-    // Batch user lookup + superuser check + membership + role permissions into one query
-    const result = await db.query<
-      [
-        { id: string; email: string; stayLoggedIn: boolean; roles: string[] }[],
-        { roles: string[] }[],
-        { permissions: string[] }[],
-      ]
+    // Always fetch user first
+    const userResult = await db.query<
+      [{ id: string; email: string; stayLoggedIn: boolean; roles: string[] }[]]
     >(
-      `SELECT id, email, stayLoggedIn, roles FROM user WHERE id = $userId LIMIT 1;
-       SELECT roles FROM user_company_system
-         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-         LIMIT 1;
-       SELECT permissions FROM role WHERE systemId = $systemId AND id IN (SELECT VALUE roles FROM user_company_system
-         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
-      {
-        userId: rid(claims.actorId),
-        companyId: rid(claims.companyId),
-        systemId: rid(claims.systemId),
-      },
+      `SELECT id, email, stayLoggedIn, roles FROM user WHERE id = $userId LIMIT 1;`,
+      { userId: rid(claims.actorId) },
     );
 
-    const user = result[0]?.[0];
+    const user = userResult[0]?.[0];
     if (!user) {
       return Response.json(
         {
@@ -87,15 +74,29 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     // Resolve updated claims
     let updatedClaims = claims;
-    if (claims.actorType === "user" && claims.systemId !== "0") {
+    if (claims.actorType === "user") {
       const isSuperuser = (user.roles ?? []).includes("superuser");
 
       if (isSuperuser) {
         updatedClaims = { ...claims, roles: ["superuser"], permissions: ["*"] };
-      } else {
-        const roles = result[1]?.[0]?.roles ?? claims.roles;
+      } else if (claims.systemId !== "0" && claims.companyId !== "0") {
+        const membershipResult = await db.query<
+          [{ roles: string[] }[], { permissions: string[] }[]]
+        >(
+          `SELECT roles FROM user_company_system
+             WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+             LIMIT 1;
+           SELECT permissions FROM role WHERE systemId = $systemId AND id IN (SELECT VALUE roles FROM user_company_system
+             WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
+          {
+            userId: rid(claims.actorId),
+            companyId: rid(claims.companyId),
+            systemId: rid(claims.systemId),
+          },
+        );
+        const roles = membershipResult[0]?.[0]?.roles ?? claims.roles;
         const permissions = [
-          ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
+          ...new Set(membershipResult[1]?.flatMap((r) => r.permissions ?? []) ?? []),
         ];
         updatedClaims = { ...claims, roles, permissions };
       }
