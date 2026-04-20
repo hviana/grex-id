@@ -208,14 +208,14 @@ export async function consumeCredits(params: {
   }
 
   // Decrement per-resourceKey operation count on successful deduction
-  const opCountClause = opCap.max > 0
-    ? `, remainingOperationCount = object::merge(remainingOperationCount, { "${params.resourceKey}": math::max(0, (remainingOperationCount.${params.resourceKey} ?? 0) - 1) })`
-    : "";
+  const opCountMerge = opCap.max > 0
+    ? { [params.resourceKey]: Math.max(0, remainingForThisKey - 1) }
+    : null;
 
   // Deduct: plan credits first, then purchased
   if (planCredits >= params.amount) {
     await db.query(
-      `UPDATE $subId SET remainingPlanCredits -= $amount${opCountClause};
+      `UPDATE $subId SET remainingPlanCredits -= $amount${opCountMerge ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)" : ""};
        UPSERT credit_expense SET
          companyId = $companyId, systemId = $systemId,
          resourceKey = $resourceKey, amount += $amount, count += 1, day = $day,
@@ -230,6 +230,7 @@ export async function consumeCredits(params: {
         resourceKey: params.resourceKey,
         day,
         actorId: params.actorId ?? null,
+        ...(opCountMerge ? { opCountMerge } : {}),
       },
     );
 
@@ -245,7 +246,7 @@ export async function consumeCredits(params: {
   const fromPurchased = params.amount - planCredits;
 
   await db.query(
-    `UPDATE $subId SET remainingPlanCredits = 0${opCountClause};
+    `UPDATE $subId SET remainingPlanCredits = 0${opCountMerge ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)" : ""};
      UPSERT usage_record SET
        actorType = "user", actorId = "system",
        companyId = $companyId, systemId = $systemId,
@@ -270,6 +271,7 @@ export async function consumeCredits(params: {
       period: `${new Date().getFullYear()}-${
         String(new Date().getMonth() + 1).padStart(2, "0")
       }`,
+      ...(opCountMerge ? { opCountMerge } : {}),
     },
   );
 
@@ -295,27 +297,20 @@ async function checkActorOperationCap(params: {
 }): Promise<"ok" | "limited"> {
   const { actorId, actorType, resourceKey, companyId, systemId, db } = params;
 
-  // Look up the actor's maxOperationCount for this resourceKey
+  // Batched query: actor cap + expense count in one call (§7.2)
   const table = actorType === "api_token" ? "api_token" : "connected_app";
-  const actorResult = await db.query<
-    [{ maxOperationCount: Record<string, number> | null }[]]
+  const actorQuery = actorType === "api_token"
+    ? `SELECT VALUE maxOperationCount FROM api_token WHERE id = $actorId LIMIT 1;`
+    : `SELECT VALUE maxOperationCount FROM connected_app WHERE id = $actorId LIMIT 1;`;
+
+  const result = await db.query<
+    [
+      (Record<string, number> | null)[],
+      { count: number }[],
+    ]
   >(
-    `SELECT VALUE maxOperationCount FROM ${table}
-     WHERE id = $actorId LIMIT 1;`,
-    { actorId: rid(actorId) },
-  );
-
-  const actorMaxOpCount = actorResult[0]?.[0]?.maxOperationCount as
-    | Record<string, number>
-    | null
-    | undefined;
-  const actorCap = actorMaxOpCount?.[resourceKey] ?? 0;
-
-  if (actorCap <= 0) return "ok";
-
-  // Count the actor's credit_expense entries for this resourceKey in current period
-  const countResult = await db.query<[{ count: number }[]]>(
-    `SELECT math::sum(count) AS count FROM credit_expense
+    `${actorQuery}
+     SELECT math::sum(count) AS count FROM credit_expense
      WHERE actorId = $actorId
        AND resourceKey = $resourceKey
        AND companyId = $companyId
@@ -323,7 +318,7 @@ async function checkActorOperationCap(params: {
        AND day >= $periodStart
      GROUP ALL;`,
     {
-      actorId,
+      actorId: rid(actorId),
       resourceKey,
       companyId: rid(companyId),
       systemId: rid(systemId),
@@ -331,7 +326,15 @@ async function checkActorOperationCap(params: {
     },
   );
 
-  const currentCount = countResult[0]?.[0]?.count ?? 0;
+  const actorMaxOpCount = result[0]?.[0] as
+    | Record<string, number>
+    | null
+    | undefined;
+  const actorCap = actorMaxOpCount?.[resourceKey] ?? 0;
+
+  if (actorCap <= 0) return "ok";
+
+  const currentCount = result[1]?.[0]?.count ?? 0;
   return currentCount >= actorCap ? "limited" : "ok";
 }
 
@@ -356,7 +359,7 @@ async function sendOperationCountAlert(
       { name: string; slug: string }[],
     ]
   >(
-    `UPDATE $subId SET operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, { "${params.resourceKey}": true });
+    `UPDATE $subId SET operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, $alertMerge);
      LET $companyId = $cId;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
@@ -365,6 +368,7 @@ async function sendOperationCountAlert(
       subId: rid(sub.id),
       cId: rid(sub.companyId),
       systemId: rid(sub.systemId),
+      alertMerge: { [params.resourceKey]: true },
     },
   );
 

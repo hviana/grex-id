@@ -135,7 +135,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
           remainingPlanCredits = $remainingPlanCredits,
           remainingOperationCount = $remainingOperationCount,
           creditAlertSent = false,
-          operationCountAlertSent = false;
+          operationCountAlertSent = {};
          UPDATE $paymentId SET
           status = "completed",
           transactionId = $txId,
@@ -183,6 +183,11 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
         stmts.push(
           `UPDATE $subId SET autoRechargeInProgress = false;`,
         );
+      }
+
+      // Reset credit alert on credit purchase success (§22.3)
+      if (sub) {
+        stmts.push(`UPDATE $subId SET creditAlertSent = false;`);
       }
 
       stmts.push(

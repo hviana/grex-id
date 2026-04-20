@@ -283,6 +283,9 @@ export const processPayment: HandlerFn = async (payload) => {
         stmts.push(`UPDATE $subId SET autoRechargeInProgress = false;`);
       }
 
+      // Reset credit alert on credit purchase success (§22.3)
+      stmts.push(`UPDATE $subId SET creditAlertSent = false;`);
+
       // Update payment record to completed
       if (paymentId) {
         stmts.push(

@@ -5,6 +5,7 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
+import { resolveAllOperationCounts } from "@/server/utils/guards";
 
 function tenantGuard(ctx: RequestContext): Response | null {
   if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
@@ -194,9 +195,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    // Read plan's maxOperationCount map directly — resolveAllOperationCounts
-    // cannot be used here because no subscription exists yet
-    const operationCountMap = plan.maxOperationCount ?? null;
+    const operationCountMap = await resolveAllOperationCounts({
+      companyId,
+      systemId,
+    });
 
     const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
@@ -245,7 +247,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         operationCountMap ? "$operationCountMap" : "NONE"
       },
          creditAlertSent = false,
-         operationCountAlertSent = false,
+         operationCountAlertSent = {},
          autoRechargeEnabled = false,
          autoRechargeAmount = 0,
          autoRechargeInProgress = false,
@@ -492,11 +494,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
       [
         Record<string, unknown>[],
         { planId: string; voucherId: string | null }[],
-        { creditModifier: number; maxOperationCountModifier: number }[],
+        { creditModifier: number; maxOperationCountModifier?: Record<string, number> }[],
       ]
     >(
       `SELECT * FROM voucher WHERE code = $code LIMIT 1;
-       SELECT planId, voucherId FROM subscription
+       SELECT planId, voucherId, remainingOperationCount FROM subscription
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
          LIMIT 1;
        LET $oldVoucherId = (SELECT VALUE voucherId FROM subscription
@@ -580,13 +582,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const creditDelta = newCreditMod - oldCreditMod;
 
     // Per-resourceKey operation count delta
-    const oldOpCountMod = (batchResult[2]?.[0]?.maxOperationCountModifier ??
-      {}) as unknown as Record<string, number>;
-    const newOpCountMod =
-      (voucher.maxOperationCountModifier ?? {}) as unknown as Record<
-        string,
-        number
-      >;
+    const oldOpCountMod = batchResult[2]?.[0]?.maxOperationCountModifier ?? {};
+    const newOpCountMod = (voucher.maxOperationCountModifier ?? {}) as Record<string, number>;
     const allOpKeys = new Set([
       ...Object.keys(oldOpCountMod),
       ...Object.keys(newOpCountMod),
@@ -598,15 +595,35 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
     const hasOpCountChanges = Object.keys(opCountDeltas).length > 0;
 
+    // Build the new remainingOperationCount map by applying deltas to current values
+    // object::merge replaces values, so we compute the merged result in the query
+    // using per-key arithmetic instead of passing raw deltas
+    const opCountMergeClause = hasOpCountChanges
+      ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountNewValues), operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, $alertResets)"
+      : "";
+
+    // Compute the new values (current + delta, clamped to >= 0) for each key
+    // Also compute alert resets for keys where count increased above 0
+    const opCountNewValues: Record<string, number> = {};
+    const alertResets: Record<string, boolean> = {};
+    // Fetch current remainingOperationCount from the batch result
+    const currentOpCounts = (batchResult[1]?.[0] as { remainingOperationCount?: Record<string, number> })?.remainingOperationCount ?? {};
+    for (const key of allOpKeys) {
+      const current = currentOpCounts[key] ?? 0;
+      const delta = opCountDeltas[key] ?? 0;
+      const newVal = Math.max(0, current + delta);
+      opCountNewValues[key] = newVal;
+      if (delta > 0 && newVal > 0) {
+        alertResets[key] = false;
+      }
+    }
+
     const creditClause = creditDelta !== 0
       ? ", remainingPlanCredits = remainingPlanCredits + $creditDelta"
       : "";
-    const opCountClause = hasOpCountChanges
-      ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountDeltas), operationCountAlertSent = {}"
-      : "";
 
-    const updateQuery = creditClause || opCountClause
-      ? `UPDATE subscription SET voucherId = $voucherId${creditClause}${opCountClause}
+    const updateQuery = creditClause || opCountMergeClause
+      ? `UPDATE subscription SET voucherId = $voucherId${creditClause}${opCountMergeClause}
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`
       : `UPDATE subscription SET voucherId = $voucherId
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`;
@@ -616,7 +633,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       voucherId: rid(voucher.id as string),
       ...(creditDelta !== 0 ? { creditDelta } : {}),
-      ...(hasOpCountChanges ? { opCountDeltas } : {}),
+      ...(hasOpCountChanges ? { opCountNewValues, alertResets } : {}),
     });
 
     await Core.getInstance().reloadSubscription(companyId, systemId);

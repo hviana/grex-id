@@ -939,7 +939,7 @@ export default function BillingPage() {
                           🔢 {t("billing.limits." + key) !==
                               `billing.limits.${key}`
                             ? t("billing.limits." + key)
-                            : key}: {val.toLocaleString()} ops
+                            : key}: {val.toLocaleString()}
                         </span>
                       ),
                     )
@@ -1147,7 +1147,7 @@ export default function BillingPage() {
                                 🔢 {t("billing.limits." + key) !==
                                     `billing.limits.${key}`
                                   ? t("billing.limits." + key)
-                                  : key}: {val.toLocaleString()} ops
+                                  : key}: {val.toLocaleString()}
                               </p>
                             ),
                           )

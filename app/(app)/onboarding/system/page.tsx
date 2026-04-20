@@ -27,6 +27,12 @@ interface PlanOption {
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;
+  fileCacheLimitBytes: number;
+  maxConcurrentDownloads: number;
+  maxConcurrentUploads: number;
+  maxDownloadBandwidthMB: number;
+  maxUploadBandwidthMB: number;
+  maxOperationCount?: Record<string, number>;
   isActive: boolean;
 }
 
@@ -352,6 +358,47 @@ export default function OnboardingSystemPage() {
                                     : key}: {val.toLocaleString()}
                                 </p>
                               ))}
+                            {plan.fileCacheLimitBytes > 0 && (
+                              <p>
+                                🗂️ {t("billing.plans.fileCache")}:{" "}
+                                {formatBytes(plan.fileCacheLimitBytes)}
+                              </p>
+                            )}
+                            {plan.maxConcurrentDownloads > 0 && (
+                              <p>
+                                ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
+                                {plan.maxConcurrentDownloads}
+                              </p>
+                            )}
+                            {plan.maxConcurrentUploads > 0 && (
+                              <p>
+                                ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
+                                {plan.maxConcurrentUploads}
+                              </p>
+                            )}
+                            {plan.maxDownloadBandwidthMB > 0 && (
+                              <p>
+                                📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
+                                {plan.maxDownloadBandwidthMB} MB/s
+                              </p>
+                            )}
+                            {plan.maxUploadBandwidthMB > 0 && (
+                              <p>
+                                📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
+                                {plan.maxUploadBandwidthMB} MB/s
+                              </p>
+                            )}
+                            {plan.maxOperationCount &&
+                              Object.entries(plan.maxOperationCount).map(
+                                ([key, val]) => (
+                                  <p key={key}>
+                                    🔢 {t(`billing.limits.${key}`) !==
+                                        `billing.limits.${key}`
+                                      ? t(`billing.limits.${key}`)
+                                      : key}: {val.toLocaleString()}
+                                  </p>
+                                ),
+                              )}
                           </div>
                         </div>
                       </button>
