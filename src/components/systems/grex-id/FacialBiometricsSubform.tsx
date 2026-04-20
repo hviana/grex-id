@@ -329,7 +329,7 @@ const FacialBiometricsSubform = forwardRef<
           format: "image/webp",
         });
         const uploadFile = new File(
-          [new Blob([resized], { type: "image/webp" })],
+          [new Blob([resized as BlobPart], { type: "image/webp" })],
           `face_${fileUuid}.webp`,
           { type: "image/webp" },
         );

@@ -141,6 +141,7 @@ export default function PlansPage() {
   };
 
   const load = useCallback(async (q?: string) => {
+    if (!systemToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -153,7 +154,7 @@ export default function PlansPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [systemToken]);
 
   useEffect(() => {
     load();

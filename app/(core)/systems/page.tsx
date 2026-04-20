@@ -37,6 +37,7 @@ export default function SystemsPage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const load = useCallback(async (q?: string) => {
+    if (!systemToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -49,7 +50,7 @@ export default function SystemsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [systemToken]);
 
   useEffect(() => {
     load();

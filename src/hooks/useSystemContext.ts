@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useState } from "react";
 import type { Company } from "@/src/contracts/company";
 import type { System } from "@/src/contracts/system";
 import { setCookie } from "@/src/lib/cookies";
-import { useAuth } from "./useAuth.ts";
+import { useAuth } from "./useAuth";
 
 const COMPANY_COOKIE = "core_company";
 const SYSTEM_COOKIE = "core_system";

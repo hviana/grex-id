@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { connectFrontendDb } from "@/client/db/connection";
 
 interface UseLiveQueryOptions<T> {
@@ -16,6 +16,12 @@ export function useLiveQuery<T>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const stableBindings = useMemo(
+    () => bindings,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(bindings)],
+  );
+
   useEffect(() => {
     if (!enabled) {
       setLoading(false);
@@ -28,16 +34,11 @@ export function useLiveQuery<T>(
       try {
         const db = await connectFrontendDb();
 
-        // Initial query
-        const result = await db.query<[T[]]>(query, bindings);
+        const result = await db.query<[T[]]>(query, stableBindings);
         if (!cancelled) {
           setData(result[0] ?? []);
           setLoading(false);
         }
-
-        // Set up live query
-        // Note: SurrealDB live query API may differ by version
-        // This is a simplified pattern
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err : new Error(String(err)));
@@ -49,7 +50,7 @@ export function useLiveQuery<T>(
     return () => {
       cancelled = true;
     };
-  }, [query, enabled]);
+  }, [query, stableBindings, enabled]);
 
   return { data, loading, error };
 }

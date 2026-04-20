@@ -1,25 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 interface FrontCoreState {
   settings: Map<string, string>;
   loaded: boolean;
 }
 
-let cachedSettings: Map<string, string> | null = null;
+interface FrontCoreContextValue extends FrontCoreState {
+  getSetting: (key: string) => string | undefined;
+  reload: () => Promise<void>;
+}
 
-export function useFrontCore() {
+const FrontCoreContext = createContext<FrontCoreContextValue | null>(null);
+
+export function FrontCoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<FrontCoreState>({
-    settings: cachedSettings ?? new Map(),
-    loaded: cachedSettings !== null,
+    settings: new Map(),
+    loaded: false,
   });
 
   const load = useCallback(async () => {
-    if (cachedSettings) {
-      setState({ settings: cachedSettings, loaded: true });
-      return;
-    }
     try {
       const res = await fetch("/api/public/front-core");
       const json = await res.json();
@@ -32,7 +41,6 @@ export function useFrontCore() {
         ) {
           map.set(key, setting.value);
         }
-        cachedSettings = map;
         setState({ settings: map, loaded: true });
       }
     } catch {
@@ -52,14 +60,30 @@ export function useFrontCore() {
   );
 
   const reload = useCallback(async () => {
-    cachedSettings = null;
     await load();
   }, [load]);
 
-  return {
-    settings: state.settings,
-    loaded: state.loaded,
-    getSetting,
-    reload,
-  };
+  const value = useMemo<FrontCoreContextValue>(
+    () => ({
+      settings: state.settings,
+      loaded: state.loaded,
+      getSetting,
+      reload,
+    }),
+    [state, getSetting, reload],
+  );
+
+  return (
+    <FrontCoreContext.Provider value={value}>
+      {children}
+    </FrontCoreContext.Provider>
+  );
+}
+
+export function useFrontCore(): FrontCoreContextValue {
+  const ctx = useContext(FrontCoreContext);
+  if (!ctx) {
+    throw new Error("useFrontCore must be used within a FrontCoreProvider");
+  }
+  return ctx;
 }

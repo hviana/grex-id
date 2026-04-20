@@ -60,6 +60,7 @@ export default function RolesPage() {
   };
 
   const load = useCallback(async (q?: string) => {
+    if (!systemToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -72,7 +73,7 @@ export default function RolesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [systemToken]);
 
   useEffect(() => {
     load();

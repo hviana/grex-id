@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { User } from "@/src/contracts/user";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
 import { getCookie, removeCookie, setCookie } from "@/src/lib/cookies";
@@ -12,6 +20,25 @@ interface AuthState {
   systemToken: string | null;
   loading: boolean;
 }
+
+interface AuthContextValue extends AuthState {
+  tenant: Tenant;
+  claims: TenantClaims | null;
+  login: (
+    email: string,
+    password: string,
+    stayLoggedIn?: boolean,
+    twoFactorCode?: string,
+  ) => Promise<{ user: User; systemToken: string }>;
+  logout: () => void;
+  refresh: (token?: string) => Promise<void>;
+  exchangeTenant: (
+    companyId: string,
+    systemId: string,
+  ) => Promise<{ token: string }>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
  * Decodes JWT payload without verification (frontend trusts the server-issued token).
@@ -73,12 +100,43 @@ function extractClaims(token: string): TenantClaims | null {
   };
 }
 
-export function useAuth() {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     systemToken: null,
     loading: true,
   });
+
+  const refresh = useCallback(async (token?: string) => {
+    const systemToken = token ?? getCookie(TOKEN_COOKIE_NAME);
+    if (!systemToken) return;
+
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ systemToken }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      removeCookie(TOKEN_COOKIE_NAME);
+      setState({
+        user: null,
+        systemToken: null,
+        loading: false,
+      });
+      return;
+    }
+
+    setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
+
+    setState((s) => ({
+      ...s,
+      user: json.data.user ?? s.user,
+      systemToken: json.data.systemToken,
+      loading: false,
+    }));
+  }, []);
 
   useEffect(() => {
     const token = getCookie(TOKEN_COOKIE_NAME);
@@ -93,8 +151,7 @@ export function useAuth() {
     } else {
       setState((s) => ({ ...s, loading: false }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh]);
 
   const login = useCallback(
     async (
@@ -137,41 +194,6 @@ export function useAuth() {
     });
   }, []);
 
-  const refresh = useCallback(async (token?: string) => {
-    const systemToken = token ?? getCookie(TOKEN_COOKIE_NAME);
-    if (!systemToken) return;
-
-    const res = await fetch("/api/auth/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ systemToken }),
-    });
-    const json = await res.json();
-
-    if (!json.success) {
-      removeCookie(TOKEN_COOKIE_NAME);
-      setState({
-        user: null,
-        systemToken: null,
-        loading: false,
-      });
-      return;
-    }
-
-    setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
-
-    setState((s) => ({
-      ...s,
-      user: json.data.user ?? s.user,
-      systemToken: json.data.systemToken,
-      loading: false,
-    }));
-  }, []);
-
-  /**
-   * Exchanges the current token for a new one scoped to the given company+system.
-   * This is the ONLY mechanism to change tenant on the frontend.
-   */
   const exchangeTenant = useCallback(
     async (companyId: string, systemId: string) => {
       const currentToken = state.systemToken ?? getCookie(TOKEN_COOKIE_NAME);
@@ -206,28 +228,47 @@ export function useAuth() {
     [state.systemToken],
   );
 
-  // Derived properties from the JWT
-  const tenant: Tenant = state.systemToken
-    ? extractTenant(state.systemToken)
-    : {
-      systemId: "0",
-      companyId: "0",
-      systemSlug: "core",
-      roles: [],
-      permissions: [],
-    };
+  const tenant: Tenant = useMemo(
+    () =>
+      state.systemToken ? extractTenant(state.systemToken) : {
+        systemId: "0",
+        companyId: "0",
+        systemSlug: "core",
+        roles: [],
+        permissions: [],
+      },
+    [state.systemToken],
+  );
 
-  const claims: TenantClaims | null = state.systemToken
-    ? extractClaims(state.systemToken)
-    : null;
+  const claims: TenantClaims | null = useMemo(
+    () => state.systemToken ? extractClaims(state.systemToken) : null,
+    [state.systemToken],
+  );
 
-  return {
-    ...state,
-    tenant,
-    claims,
-    login,
-    logout,
-    refresh,
-    exchangeTenant,
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      ...state,
+      tenant,
+      claims,
+      login,
+      logout,
+      refresh,
+      exchangeTenant,
+    }),
+    [state, tenant, claims, login, logout, refresh, exchangeTenant],
+  );
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
 }

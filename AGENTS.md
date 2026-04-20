@@ -2139,15 +2139,64 @@ export interface PaymentResult {
 
 #### 17.3 React hooks
 
-| Hook               | File                            | Purpose                                                                                                                                                                                           |
-| ------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useDebounce`      | `src/hooks/useDebounce.ts`      | Debounced value (configurable delay)                                                                                                                                                              |
-| `useAuth`          | `src/hooks/useAuth.ts`          | Holds opaque `token`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only).                  |
-| `useLiveQuery`     | `src/hooks/useLiveQuery.ts`     | Wraps `LIVE SELECT`; manages WebSocket; reactive data                                                                                                                                             |
-| `useSystemContext` | `src/hooks/useSystemContext.ts` | Thin wrapper over `useAuth` exposing `tenant` + `companies[]`, `systems[]`, `switchCompany()`, `switchSystem()`. Switchers call `useAuth().exchangeTenant()` — never mutate local state directly. |
-| `useLocale`        | `src/hooks/useLocale.ts`        | `locale`, `setLocale()`, `t()`, `supportedLocales`                                                                                                                                                |
-| `usePublicSystem`  | `src/hooks/usePublicSystem.ts`  | Fetches public system info (no auth). Used by homepage + auth pages for branding.                                                                                                                 |
-| `useFrontCore`     | `src/hooks/useFrontCore.ts`     | Lazily loads `FrontCore`; synchronous `get(key)`; reloads on live-query signal from admin panel.                                                                                                  |
+| Hook               | File                            | Purpose                                                                                                                                                                                            |
+| ------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useDebounce`      | `src/hooks/useDebounce.ts`      | Debounced value (configurable delay)                                                                                                                                                               |
+| `useAuth`          | `src/hooks/useAuth.tsx`         | Context+Provider. Holds opaque `token`. Exposes `login()`, `logout()`, `refresh()`, `exchangeTenant(companyId, systemId)`. Decodes the token's Tenant once and exposes it as `tenant` (read-only). |
+| `useLiveQuery`     | `src/hooks/useLiveQuery.ts`     | Wraps `LIVE SELECT`; manages WebSocket; reactive data                                                                                                                                              |
+| `useSystemContext` | `src/hooks/useSystemContext.ts` | Thin wrapper over `useAuth` exposing `tenant` + `companies[]`, `systems[]`, `switchCompany()`, `switchSystem()`. Switchers call `useAuth().exchangeTenant()` — never mutate local state directly.  |
+| `useLocale`        | `src/hooks/useLocale.ts`        | `locale`, `setLocale()`, `t()`, `supportedLocales`                                                                                                                                                 |
+| `usePublicSystem`  | `src/hooks/usePublicSystem.ts`  | Fetches public system info (no auth). Used by homepage + auth pages for branding.                                                                                                                  |
+| `useFrontCore`     | `src/hooks/useFrontCore.tsx`    | Context+Provider. Lazily loads `FrontCore`; synchronous `get(key)`; reloads on live-query signal from admin panel.                                                                                 |
+
+#### 17.3.1 Hook implementation rules
+
+Every hook in `src/hooks/` must follow these rules. Violations are bugs.
+
+**1. Shared-app-state hooks use Context + Provider.** Any hook whose state must
+be consistent across multiple components (`useAuth`, `useFrontCore`,
+`useLocale`, `useSystemContext`) implements the Context + Provider pattern:
+
+- A single `*Provider` component (e.g. `AuthProvider`, `FrontCoreProvider`)
+  holds the state and all mutation functions via `useState` / `useCallback`.
+- The provider is mounted once in `app/layout.tsx`, wrapping all children.
+- The corresponding `use*()` hook reads from `useContext` — never creates its
+  own independent state.
+- Hooks that are truly component-scoped (`useDebounce`, `usePublicSystem`,
+  `useLiveQuery`) may use local state since each instance is independent.
+
+**2. All closures must list every captured value in deps.** Every `useCallback`
+and `useEffect` must include every outer variable it reads in its dependency
+array. Missing deps produce stale closures — the function operates on outdated
+values. Object-type deps that are constructed inline (e.g. `bindings`) must be
+stabilized via `useMemo` to avoid infinite re-execution.
+
+**3. Async effects must include cancellation guards.** Every `useEffect` that
+calls an async function must declare `let cancelled = false` before the async
+call and return a cleanup function that sets `cancelled = true`. All `setState`
+calls inside the async body must be guarded by `if (!cancelled)`. This prevents
+stale responses from overwriting fresh data when deps change rapidly (e.g. slug
+changes, query changes) and prevents setState on unmounted components.
+
+**4. No fire-and-forget data fetches.** Every `fetch()` inside a hook must be
+inside a `useEffect` with proper deps, or inside a `useCallback` whose result is
+consumed by a `useEffect`. Never call `fetch` at the top level of a hook body
+(outside useEffect / useCallback) — it runs on every render.
+
+**5. Loading guards on data-fetching callbacks.** Any `useCallback` that
+performs an authenticated API call (reads `systemToken`) must:
+
+- Include `systemToken` in its dependency array.
+- Early-return if `systemToken` is null / undefined.
+- This prevents API calls with `Authorization: Bearer null` that produce 401s.
+
+**6. useMemo for derived values from context.** Computed values extracted from
+context state (e.g. `tenant` decoded from `systemToken`) must use `useMemo` with
+the source value as a dependency, not be computed inline on every render.
+
+**7. Provider file extensions are `.tsx`.** Any hook file containing JSX
+(Provider components with `<Context.Provider>`) must use the `.tsx` extension.
+Pure-logic hooks (no JSX) use `.ts`.
 
 #### 17.4 Single-token rule
 

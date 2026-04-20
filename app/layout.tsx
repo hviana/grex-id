@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LocaleProvider } from "@/src/hooks/LocaleProvider";
+import { AuthProvider } from "@/src/hooks/useAuth";
+import { FrontCoreProvider } from "@/src/hooks/useFrontCore";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +32,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-[var(--color-black)] text-white">
         <LocaleProvider>
-          {children}
+          <AuthProvider>
+            <FrontCoreProvider>
+              {children}
+            </FrontCoreProvider>
+          </AuthProvider>
         </LocaleProvider>
       </body>
     </html>

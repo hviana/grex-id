@@ -115,6 +115,7 @@ export default function VouchersPage() {
   const [formExpiresAt, setFormExpiresAt] = useState("");
 
   const load = useCallback(async (q?: string) => {
+    if (!systemToken) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -127,7 +128,7 @@ export default function VouchersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [systemToken]);
 
   useEffect(() => {
     load();

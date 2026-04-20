@@ -88,7 +88,7 @@ export default function FileUploadField({
           return;
         }
         const baseName = file.name.replace(/\.[^.]+$/, "");
-        const blob = new Blob([data], { type });
+        const blob = new Blob([data as BlobPart], { type });
         uploadFile = new File([blob], `${baseName}${ext}`, { type });
       }
 
