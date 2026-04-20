@@ -6,13 +6,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
-
-interface FileAccessSection {
-  isolateSystem: boolean;
-  isolateCompany: boolean;
-  isolateUser: boolean;
-  permissions: string[];
-}
+import type { FileAccessSection } from "@/src/contracts/file-access";
 
 interface FileAccessItem {
   id: string;

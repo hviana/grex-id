@@ -104,8 +104,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
+  const sanitizedName = standardizeField("name", sanitizeString(name));
+
   const dupCheck = await checkDuplicates("file_access", [
-    { field: "name", value: standardizeField("name", sanitizeString(name)) },
+    { field: "name", value: sanitizedName },
   ]);
   if (dupCheck.isDuplicate) {
     return Response.json(
@@ -129,7 +131,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         download = $download,
         upload = $upload`,
       {
-        name: standardizeField("name", sanitizeString(name)),
+        name: sanitizedName,
         categoryPattern: sanitizedPattern,
         download: download ?? defaultSection(),
         upload: upload ?? defaultSection(),
@@ -177,8 +179,18 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       bindings.name = standardizeField("name", sanitizeString(name));
     }
     if (categoryPattern !== undefined) {
+      const sanitized = String(categoryPattern).trim().replace(/<>/g, "");
+      if (!sanitized) {
+        return Response.json(
+          {
+            success: false,
+            error: { code: "VALIDATION", errors: ["validation.field.required"] },
+          },
+          { status: 400 },
+        );
+      }
       sets.push("categoryPattern = $categoryPattern");
-      bindings.categoryPattern = categoryPattern;
+      bindings.categoryPattern = sanitized;
     }
     if (download !== undefined) {
       sets.push("download = $download");

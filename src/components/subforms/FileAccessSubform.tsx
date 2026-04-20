@@ -3,14 +3,8 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { FileAccessSection } from "@/src/contracts/file-access";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-
-interface FileAccessSection {
-  isolateSystem: boolean;
-  isolateCompany: boolean;
-  isolateUser: boolean;
-  permissions: string[];
-}
 
 const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
