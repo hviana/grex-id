@@ -45,23 +45,30 @@ if (typeof window !== "undefined") {
 }
 
 let dbInstance: Surreal | null = null;
+let dbInitPromise: Promise<Surreal> | null = null;
 
 export async function getDb(): Promise<Surreal> {
-  if (!dbInstance) {
-    dbInstance = new Surreal();
+  if (dbInstance) return dbInstance;
+  if (dbInitPromise) return dbInitPromise;
 
-    await dbInstance.connect(Core.DB_URL, {
+  dbInitPromise = (async () => {
+    const db = new Surreal();
+
+    await db.connect(Core.DB_URL, {
       authentication: {
         username: Core.DB_USER,
         password: Core.DB_PASS,
       },
     });
-    await dbInstance.use({
+    await db.use({
       namespace: Core.DB_NAMESPACE,
       database: Core.DB_DATABASE,
     });
-  }
-  return dbInstance;
+    dbInstance = db;
+    return db;
+  })();
+
+  return dbInitPromise;
 }
 export async function closeDb(): Promise<void> {
   if (dbInstance) {

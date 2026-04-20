@@ -158,10 +158,10 @@ async function handler(
          $ucs[0].systemId AS systemId,
          $sys[0].slug AS systemSlug,
          (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
-         math::flat($roleRecs[*].permissions) AS permissions
+         array::flatten($roleRecs[*].permissions) AS permissions
        FROM system WHERE id = $ucs[0].systemId LIMIT 1;
      } ELSE {
-       SELECT "0" AS companyId, "0" AS systemId, "core" AS systemSlug, [] AS roles, [] AS permissions WHERE false;
+       RETURN [];
      };`,
     { userId: rid(String(user.id)) },
   );

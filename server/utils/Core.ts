@@ -7,7 +7,7 @@ import type { MenuItem } from "@/src/contracts/menu";
 import type { CoreSetting } from "@/src/contracts/core-settings";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { Subscription } from "@/src/contracts/billing";
-import dbConfig from "../../database.json";
+import dbConfig from "../../database.json" with { type: "json" };
 
 if (typeof window !== "undefined") {
   throw new Error("Core must not be imported in client-side code.");

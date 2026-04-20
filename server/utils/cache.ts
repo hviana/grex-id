@@ -2,6 +2,29 @@ if (typeof window !== "undefined") {
   throw new Error("cache.ts must not be imported in client-side code.");
 }
 
+let booted = false;
+let bootPromise: Promise<void> | null = null;
+
+async function ensureBooted(): Promise<void> {
+  if (booted) return;
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      const { registerCore } = await import("../core-register.ts");
+      registerCore();
+      try {
+        const mod = await import("../../systems/index.ts");
+        mod.registerAllSystems();
+      } catch { /* systems may not exist yet */ }
+      try {
+        const mod = await import("../../frameworks/index.ts");
+        mod.registerAllFrameworks();
+      } catch { /* frameworks may not exist yet */ }
+      booted = true;
+    })();
+  }
+  await bootPromise;
+}
+
 type CacheLoader<T> = () => Promise<T>;
 
 interface CacheEntry<T> {
@@ -38,12 +61,16 @@ export function registerCache<T>(
 
 export async function getCache<T>(slug: string, name: string): Promise<T> {
   const key = cacheKey(slug, name);
-  const entry = cacheRegistry.get(key) as CacheEntry<T> | undefined;
+  let entry = cacheRegistry.get(key) as CacheEntry<T> | undefined;
 
   if (!entry) {
-    throw new Error(
-      `[Cache] "${name}" not registered for slug "${slug}". Call registerCache first.`,
-    );
+    await ensureBooted();
+    entry = cacheRegistry.get(key) as CacheEntry<T> | undefined;
+    if (!entry) {
+      throw new Error(
+        `[Cache] "${name}" not registered for slug "${slug}". Call registerCache first.`,
+      );
+    }
   }
 
   if (entry.loaded) {
