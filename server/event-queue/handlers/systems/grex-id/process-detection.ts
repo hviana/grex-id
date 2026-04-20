@@ -1,6 +1,6 @@
 import {
-  searchFaceByEmbedding,
   createOrphanFace,
+  searchFaceByEmbedding,
 } from "@/server/db/queries/systems/grex-id/faces";
 import { createDetection } from "@/server/db/queries/systems/grex-id/detections";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";

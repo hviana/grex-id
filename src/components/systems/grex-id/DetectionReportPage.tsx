@@ -155,11 +155,9 @@ export default function DetectionReportPage() {
 
   useEffect(() => {
     if (dateRange) {
-      setStats(null);
       fetchStats();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange]);
+  }, [fetchStats]);
 
   const handleDateChange = (start: Date, end: Date) => {
     setDateRange({
@@ -320,13 +318,14 @@ export default function DetectionReportPage() {
 
   const exportData = useCallback(async () => {
     return individuals.map((item) => ({
-      [t("systems.grex-id.report.exportId")]: item.leadId
-        ?? item.faceId,
+      [t("systems.grex-id.report.exportId")]: item.classification === "member"
+        ? item.leadId ?? item.faceId
+        : item.faceId,
       [t("systems.grex-id.report.exportClassification")]: t(
         `systems.grex-id.report.${item.classification}`,
       ),
-      [t("systems.grex-id.report.exportName")]: item.leadName
-        ?? t("systems.grex-id.report.unknownPerson"),
+      [t("systems.grex-id.report.exportName")]: item.leadName ??
+        t("systems.grex-id.report.unknownPerson"),
       [t("systems.grex-id.report.exportDetectionCount")]: item.detectionCount,
       [t("systems.grex-id.report.exportLocation")]: item.locationName,
       [t("systems.grex-id.report.exportDate")]: formatDate(
@@ -474,7 +473,7 @@ export default function DetectionReportPage() {
         </div>
       )}
 
-      {loading && !stats && (
+      {loading && (
         <div className="flex justify-center py-12">
           <Spinner size="lg" />
         </div>
@@ -523,7 +522,8 @@ export default function DetectionReportPage() {
                       t={t}
                     />
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)] border border-[var(--color-secondary-blue)]/30">
-                      {t("systems.grex-id.report.detectionCount")}: {item.detectionCount}
+                      {t("systems.grex-id.report.detectionCount")}:{" "}
+                      {item.detectionCount}
                     </span>
                   </div>
 
@@ -537,9 +537,9 @@ export default function DetectionReportPage() {
                     <span>
                       {t("systems.grex-id.report.faceId")}:{" "}
                       <span className="font-mono">
-                        {item.classification === "unknown"
-                          ? item.faceId
-                          : item.leadId ?? item.faceId}
+                        {item.classification === "member"
+                          ? item.leadId ?? item.faceId
+                          : item.faceId}
                       </span>
                     </span>
                   </div>

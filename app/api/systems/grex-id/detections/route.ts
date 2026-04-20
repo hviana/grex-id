@@ -3,8 +3,8 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  listDetections,
   getDetectionStats,
+  listDetections,
 } from "@/server/db/queries/systems/grex-id/detections";
 
 async function getHandler(req: Request, ctx: RequestContext) {

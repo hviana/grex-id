@@ -1,30 +1,4 @@
-import { getDb, rid } from "@/server/db/connection";
-
-function normalizeRecordId(value: unknown): string | null {
-  if (!value) return null;
-  if (typeof value === "string") {
-    return value.trim() || null;
-  }
-  const stringified = String(value).trim();
-  if (/^[^:\s]+:[^:\s]+$/.test(stringified)) {
-    return stringified;
-  }
-  if (typeof value === "object") {
-    const record = value as { id?: unknown; tb?: unknown };
-    if (typeof record.tb === "string") {
-      const innerId = typeof record.id === "string"
-        ? record.id
-        : record.id != null
-        ? String((record.id as { String?: string }).String ?? record.id)
-        : "";
-      if (innerId) return `${record.tb}:${innerId}`;
-    }
-    if (typeof record.id === "string") {
-      return record.id.trim() || null;
-    }
-  }
-  return stringified || null;
-}
+import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
 
 export interface Face {
   id: string;
@@ -120,7 +94,9 @@ export async function searchFaceByEmbedding(
       if (!id) return null;
       return { id, leadId: normalizeRecordId(row.leadId), score: row.score };
     })
-    .filter((row): row is { id: string; leadId: string | null; score: number } =>
+    .filter((
+      row,
+    ): row is { id: string; leadId: string | null; score: number } =>
       row !== null
     );
 }

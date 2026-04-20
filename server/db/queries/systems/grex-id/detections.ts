@@ -1,46 +1,24 @@
-import { getDb, rid } from "@/server/db/connection";
+import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
-
-function normalizeRecordId(value: unknown): string | null {
-  if (!value) return null;
-
-  if (typeof value === "string") {
-    return value.trim() || null;
-  }
-
-  const stringified = String(value).trim();
-  if (/^[^:\s]+:[^:\s]+$/.test(stringified)) {
-    return stringified;
-  }
-
-  if (typeof value === "object") {
-    const record = value as { id?: unknown; tb?: unknown };
-    if (typeof record.tb === "string") {
-      const innerId = typeof record.id === "string"
-        ? record.id
-        : record.id != null
-        ? String((record.id as { String?: string }).String ?? record.id)
-        : "";
-      if (innerId) return `${record.tb}:${innerId}`;
-    }
-    if (typeof record.id === "string") {
-      const recordId = record.id.trim();
-      return recordId || null;
-    }
-  }
-
-  return stringified || null;
-}
 
 export interface Detection {
   id: string;
   locationId: string;
   leadId?: string;
+  faceId?: string;
   score: number;
   detectedAt: string;
   createdAt: string;
 }
+
+// Classification rules (multi-tenant):
+// - unknown: detection has no leadId (face did not match any registered lead)
+// - member:  lead is associated with the CURRENT company + system
+//            (has a lead_company_system row for this tenant)
+// - visitor: lead exists in the database but is NOT associated with the
+//            current company + system (it belongs to another tenant, or
+//            has no tenant at all)
 
 export interface DetectionReportItem {
   id: string;
@@ -58,6 +36,19 @@ export interface DetectionReportItem {
   ownerName?: string;
   classification: "member" | "visitor" | "unknown";
 }
+
+// leadId is exposed only for members. For visitors we intentionally hide
+// the record id so the frontend cannot correlate visitors across tenants.
+
+// Name and avatar are shown for members and visitors (so the operator
+// can still recognize a recurring visitor's face), but never for unknown.
+
+// Contact details are member-only. Visitors and unknown never expose
+// email/phone — that information belongs to the tenant that owns the lead.
+
+// Owner is resolved from lead_company_system for the CURRENT tenant only,
+// so owners from other tenants are never leaked. It is only surfaced for
+// members because visitors have no association in this tenant.
 
 export async function createDetection(data: {
   locationId: string;
@@ -290,9 +281,29 @@ export interface DetectionStats {
   uniqueVisitors: number;
   uniqueUnknowns: number;
   individuals: DetectionIndividual[];
-  // Hour/day aggregates based on unique individuals
   hourlyUnique: number[];
   dailyUnique: number[];
+}
+
+// Aggregated row returned by SurrealQL GROUP BY + count/math::max
+interface AggregatedFaceRow {
+  faceId: Record<string, unknown> & { id: unknown };
+  leadId:
+    | (Record<string, unknown> & {
+      id: unknown;
+      name?: string;
+      email?: string;
+      phone?: string;
+      profile?: { avatarUri?: string };
+    })
+    | null;
+  locationId: Record<string, unknown> & {
+    id: unknown;
+    name: string;
+  };
+  detectionCount: number;
+  lastDetectedAt: string;
+  bestScore: number;
 }
 
 export async function getDetectionStats(params: {
@@ -310,133 +321,128 @@ export async function getDetectionStats(params: {
     endDate: params.endDate,
   };
 
-  let whereClause = `
-    WHERE locationId.companyId = $companyId
-      AND locationId.systemId = $systemId
-      AND detectedAt >= type::datetime($startDate)
-      AND detectedAt <= type::datetime($endDate)`;
-
+  let locationFilter = "";
   if (params.locationId) {
-    whereClause += " AND locationId = $locationId";
+    locationFilter = " AND locationId = $locationId";
     bindings.locationId = rid(params.locationId);
   }
 
-  const result = await db.query<[RawDetectionRow[]]>(
-    `SELECT * FROM grexid_detection ${whereClause}
-     ORDER BY detectedAt DESC
-     FETCH locationId, faceId, leadId, leadId.profile`,
+  // Single batched query (§7.2):
+  //  1) Per-face aggregation via GROUP BY: count, max score, last detectedAt
+  //  2) Raw detections for hourly/daily unique-face counting
+  //  3) lead_company_system membership check for classification
+  const result = await db.query<
+    [
+      AggregatedFaceRow[],
+      { faceId: unknown; detectedAt: string }[],
+      {
+        leadId: unknown;
+        ownerId:
+          | Record<string, unknown> & {
+            id: unknown;
+            profile?: { name?: string };
+          }
+          | null;
+      }[],
+    ]
+  >(
+    // 1) Group by faceId — SurrealDB GROUP BY provides count() and aggregate functions
+    `SELECT
+        faceId,
+        array::first(leadId) AS leadId,
+        array::first(locationId) AS locationId,
+        count() AS detectionCount,
+        math::max(score) AS bestScore,
+        time::max(detectedAt) AS lastDetectedAt
+      FROM grexid_detection
+      WHERE locationId.companyId = $companyId
+        AND locationId.systemId = $systemId
+        AND detectedAt >= type::datetime($startDate)
+        AND detectedAt <= type::datetime($endDate)${locationFilter}
+      GROUP BY faceId
+      ORDER BY lastDetectedAt DESC
+      FETCH faceId, leadId, leadId.profile, locationId;
+
+    // 2) Raw faceId + detectedAt for hourly/daily unique counts (lightweight)
+    SELECT faceId, detectedAt FROM grexid_detection
+      WHERE locationId.companyId = $companyId
+        AND locationId.systemId = $systemId
+        AND detectedAt >= type::datetime($startDate)
+        AND detectedAt <= type::datetime($endDate)${locationFilter};
+
+    // 3) Batch-check lead_company_system for member classification
+    LET $leadIds = (SELECT VALUE array::first(leadId)
+      FROM grexid_detection
+      WHERE locationId.companyId = $companyId
+        AND locationId.systemId = $systemId
+        AND detectedAt >= type::datetime($startDate)
+        AND detectedAt <= type::datetime($endDate)${locationFilter}
+        AND leadId IS NOT NONE
+      GROUP BY faceId);
+
+    SELECT leadId, ownerId FROM lead_company_system
+      WHERE leadId IN $leadIds
+        AND companyId = $companyId
+        AND systemId = $systemId
+      FETCH ownerId, ownerId.profile;`,
     bindings,
   );
 
-  const rows = result[0] ?? [];
+  const aggregatedFaces = result[0] ?? [];
+  const rawDetections = result[1] ?? [];
+  const assocRows = result[2] ?? [];
 
-  // Group by faceId to get unique individuals
-  const faceMap = new Map<
-    string,
-    {
-      leadId?: string;
-      lead?: RawDetectionRow["leadId"];
-      locationId: string;
-      locationName: string;
-      detectionCount: number;
-      lastDetectedAt: string;
-      bestScore: number;
-      detections: { detectedAt: string }[];
-    }
-  >();
-
-  for (const row of rows) {
-    const faceRecordId = row.faceId && typeof row.faceId === "object"
-      ? normalizeRecordId(row.faceId.id)
-      : null;
-    if (!faceRecordId) continue;
-
-    const locId = normalizeRecordId(row.locationId.id) ?? String(row.locationId.id);
-    const lead = row.leadId && typeof row.leadId === "object" ? row.leadId : null;
-    const leadRecordId = normalizeRecordId(lead?.id);
-
-    const existing = faceMap.get(faceRecordId);
-    if (existing) {
-      existing.detectionCount++;
-      if (row.detectedAt > existing.lastDetectedAt) {
-        existing.lastDetectedAt = row.detectedAt;
-      }
-      if (row.score > existing.bestScore) {
-        existing.bestScore = row.score;
-      }
-      existing.detections.push({ detectedAt: row.detectedAt });
-    } else {
-      faceMap.set(faceRecordId, {
-        leadId: leadRecordId ?? undefined,
-        lead,
-        locationId: locId,
-        locationName: row.locationId.name,
-        detectionCount: 1,
-        lastDetectedAt: row.detectedAt,
-        bestScore: row.score,
-        detections: [{ detectedAt: row.detectedAt }],
-      });
-    }
-  }
-
-  // Batch-check lead_company_system for classification
-  const leadIds = [
-    ...new Set(
-      [...faceMap.values()]
-        .map((f) => f.leadId)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-
+  // Build membership lookup map
   const assocMap = new Map<string, { ownerId?: string; ownerName?: string }>();
-  if (leadIds.length > 0) {
-    const assocResult = await db.query<
-      [{ leadId: unknown; ownerId: Record<string, unknown> | null }[]]
-    >(
-      `SELECT leadId, ownerId FROM lead_company_system
-       WHERE leadId IN $leadIds
-         AND companyId = $companyId
-         AND systemId = $systemId
-       FETCH ownerId, ownerId.profile`,
-      {
-        leadIds: leadIds.map((id) => rid(id)),
-        companyId: rid(params.companyId),
-        systemId: rid(params.systemId),
-      },
-    );
-
-    for (const row of assocResult[0] ?? []) {
-      const lid = normalizeRecordId(row.leadId);
-      if (!lid) continue;
-      const owner = row.ownerId && typeof row.ownerId === "object"
-        ? row.ownerId
-        : null;
-      assocMap.set(lid, {
-        ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
-        ownerName: (owner as { profile?: { name?: string } })?.profile?.name
-          ?? undefined,
-      });
-    }
+  for (const row of assocRows) {
+    const lid = normalizeRecordId(row.leadId);
+    if (!lid) continue;
+    const owner = row.ownerId && typeof row.ownerId === "object"
+      ? row.ownerId
+      : null;
+    assocMap.set(lid, {
+      ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
+      ownerName: owner?.profile?.name ?? undefined,
+    });
   }
 
-  // Build individuals and count unique per classification
-  let uniqueMembers = 0;
-  let uniqueVisitors = 0;
-  let uniqueUnknowns = 0;
-  const hourlyUnique = new Array(24).fill(0);
-  const dailyUnique = new Array(7).fill(0);
-
-  const individuals: DetectionIndividual[] = [];
-
-  // Track which faces contributed to each hour/day to count unique per slot
+  // Build hourly/daily unique-face counts from raw detections
   const hourlyFaceSet = Array.from({ length: 24 }, () => new Set<string>());
   const dailyFaceSet = Array.from({ length: 7 }, () => new Set<string>());
 
-  for (const [faceRecordId, data] of faceMap) {
-    let classification: "member" | "visitor" | "unknown" = "unknown";
-    const assoc = data.leadId ? assocMap.get(data.leadId) : undefined;
+  for (const det of rawDetections) {
+    const fid = normalizeRecordId(det.faceId);
+    if (!fid) continue;
+    try {
+      const date = new Date(det.detectedAt);
+      hourlyFaceSet[date.getHours()].add(fid);
+      dailyFaceSet[date.getDay()].add(fid);
+    } catch {
+      // skip invalid dates
+    }
+  }
 
-    if (data.leadId) {
+  const hourlyUnique = hourlyFaceSet.map((s) => s.size);
+  const dailyUnique = dailyFaceSet.map((s) => s.size);
+
+  // Build individuals from aggregated rows
+  let uniqueMembers = 0;
+  let uniqueVisitors = 0;
+  let uniqueUnknowns = 0;
+  const individuals: DetectionIndividual[] = [];
+
+  for (const faceRow of aggregatedFaces) {
+    const faceRecordId = normalizeRecordId(faceRow.faceId?.id);
+    if (!faceRecordId) continue;
+
+    const lead = faceRow.leadId && typeof faceRow.leadId === "object"
+      ? faceRow.leadId
+      : null;
+    const leadRecordId = normalizeRecordId(lead?.id);
+
+    let classification: "member" | "visitor" | "unknown" = "unknown";
+    const assoc = leadRecordId ? assocMap.get(leadRecordId) : undefined;
+    if (leadRecordId) {
       classification = assoc ? "member" : "visitor";
     }
 
@@ -448,54 +454,24 @@ export async function getDetectionStats(params: {
 
     individuals.push({
       faceId: faceRecordId,
-      leadId: isMember ? data.leadId : undefined,
-      leadName: data.leadId
-        ? (data.lead as Record<string, unknown>)?.name as string ?? undefined
+      leadId: isMember ? leadRecordId ?? undefined : undefined,
+      leadName: leadRecordId ? lead?.name ?? undefined : undefined,
+      leadAvatarUri: leadRecordId
+        ? lead?.profile?.avatarUri ?? undefined
         : undefined,
-      leadAvatarUri: data.leadId
-        ? ((data.lead as Record<string, unknown>)?.profile as { avatarUri?: string })
-            ?.avatarUri ?? undefined
-        : undefined,
-      leadEmail: isMember
-        ? (data.lead as Record<string, unknown>)?.email as string ?? undefined
-        : undefined,
-      leadPhone: isMember
-        ? (data.lead as Record<string, unknown>)?.phone as string ?? undefined
-        : undefined,
+      leadEmail: isMember ? lead?.email ?? undefined : undefined,
+      leadPhone: isMember ? lead?.phone ?? undefined : undefined,
       classification,
-      detectionCount: data.detectionCount,
-      lastDetectedAt: data.lastDetectedAt,
-      bestScore: data.bestScore,
-      locationId: data.locationId,
-      locationName: data.locationName,
+      detectionCount: faceRow.detectionCount,
+      lastDetectedAt: faceRow.lastDetectedAt,
+      bestScore: faceRow.bestScore,
+      locationId: normalizeRecordId(faceRow.locationId?.id) ??
+        String(faceRow.locationId?.id ?? ""),
+      locationName: faceRow.locationId?.name ?? "",
       ownerId: isMember ? assoc?.ownerId : undefined,
       ownerName: isMember ? assoc?.ownerName : undefined,
     });
-
-    // Count unique faces per hour/day
-    for (const det of data.detections) {
-      try {
-        const date = new Date(det.detectedAt);
-        const hour = date.getHours();
-        const day = date.getDay();
-        if (!hourlyFaceSet[hour].has(faceRecordId)) {
-          hourlyFaceSet[hour].add(faceRecordId);
-          hourlyUnique[hour]++;
-        }
-        if (!dailyFaceSet[day].has(faceRecordId)) {
-          dailyFaceSet[day].add(faceRecordId);
-          dailyUnique[day]++;
-        }
-      } catch {
-        // skip invalid
-      }
-    }
   }
-
-  // Sort by lastDetectedAt descending
-  individuals.sort(
-    (a, b) => new Date(b.lastDetectedAt).getTime() - new Date(a.lastDetectedAt).getTime(),
-  );
 
   return {
     uniqueMembers,

@@ -3,18 +3,17 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { publicLeadPostHandler } from "@/app/api/leads/public/route";
 import {
-  searchOrphanFaceByEmbedding,
   linkOrphanFaceToLead,
+  searchOrphanFaceByEmbedding,
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
+import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
 import { getAnonymousTenant } from "@/server/utils/tenant";
-
-const DEFAULT_SENSITIVITY = 0.5;
 
 async function postHandler(req: Request, ctx: RequestContext) {
   try {
     const body = await req.json();
-    const { faceDescriptor } = body;
+    const { faceDescriptor, companyId, systemId } = body;
 
     // Delegate lead creation / verification to core handler
     const coreReq = new Request(req.url, {
@@ -35,11 +34,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Handle face biometrics for new leads
     const leadId = coreJson.data?.id;
-    if (leadId && faceDescriptor && Array.isArray(faceDescriptor)) {
+    if (
+      leadId && faceDescriptor && Array.isArray(faceDescriptor) &&
+      typeof companyId === "string" && typeof systemId === "string"
+    ) {
+      const sensitivity = parseFloat(
+        await getSetting(companyId, systemId, "detection.sensitivity"),
+      );
       try {
         const orphanMatch = await searchOrphanFaceByEmbedding(
           faceDescriptor,
-          DEFAULT_SENSITIVITY,
+          sensitivity,
         );
         if (orphanMatch.length > 0) {
           await linkOrphanFaceToLead(orphanMatch[0].id, leadId);
@@ -49,6 +54,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
             embedding_type1: faceDescriptor,
           }, {
             route: "systems/grex-id/leads/public:POST",
+            companyId,
+            systemId,
           });
         }
       } catch {
@@ -57,6 +64,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
           embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads/public:POST",
+          companyId,
+          systemId,
         });
       }
     }

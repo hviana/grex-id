@@ -12,8 +12,8 @@ import {
   updateLeadOwner,
 } from "@/server/db/queries/leads";
 import {
-  searchOrphanFaceByEmbedding,
   linkOrphanFaceToLead,
+  searchOrphanFaceByEmbedding,
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";

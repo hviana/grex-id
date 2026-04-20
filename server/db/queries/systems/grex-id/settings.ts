@@ -96,13 +96,12 @@ export async function upsertSetting(
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `DELETE grexid_setting
-      WHERE companyId = $cid AND systemId = $sid AND key = $k;
-     CREATE grexid_setting SET
+    `UPSERT grexid_setting SET
       companyId = $cid,
       systemId = $sid,
       key = $k,
-      value = $v;`,
+      value = $v
+    WHERE companyId = $cid AND systemId = $sid AND key = $k`,
     { cid: rid(companyId), sid: rid(systemId), k: key, v: value },
   );
   const name = settingsCacheName(companyId, systemId);
@@ -118,22 +117,35 @@ export async function upsertSettings(
   systemId: string,
   settings: Record<string, string>,
 ): Promise<Record<string, string>> {
-  const db = await getDb();
   const entries = Object.entries(settings);
-  if (entries.length === 0) return getOrRegisterSettingsCache(companyId, systemId);
+  if (entries.length === 0) {
+    return getOrRegisterSettingsCache(companyId, systemId);
+  }
+
+  // Single batched query — builds one UPSERT per entry (§7.2)
+  const statements: string[] = [];
+  const bindings: Record<string, unknown> = {
+    cid: rid(companyId),
+    sid: rid(systemId),
+  };
 
   for (const [key, value] of entries) {
-    await db.query(
-      `DELETE grexid_setting
-        WHERE companyId = $cid AND systemId = $sid AND key = $k;
-       CREATE grexid_setting SET
+    const kVar = `k_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+    const vVar = `v_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+    bindings[kVar] = key;
+    bindings[vVar] = value;
+    statements.push(
+      `UPSERT grexid_setting SET
         companyId = $cid,
         systemId = $sid,
-        key = $k,
-        value = $v;`,
-      { cid: rid(companyId), sid: rid(systemId), k: key, v: value },
+        key = $${kVar},
+        value = $${vVar}
+      WHERE companyId = $cid AND systemId = $sid AND key = $${kVar}`,
     );
   }
+
+  const db = await getDb();
+  await db.query(statements.join(";\n"), bindings);
 
   const name = settingsCacheName(companyId, systemId);
   try {

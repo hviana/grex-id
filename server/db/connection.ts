@@ -6,6 +6,38 @@ export function rid(id: unknown): StringRecordId {
   return new StringRecordId(String(id));
 }
 
+/** Extract a string record ID from SurrealDB response objects. */
+export function normalizeRecordId(value: unknown): string | null {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+
+  const stringified = String(value).trim();
+  if (/^[^:\s]+:[^:\s]+$/.test(stringified)) {
+    return stringified;
+  }
+
+  if (typeof value === "object") {
+    const record = value as { id?: unknown; tb?: unknown };
+    if (typeof record.tb === "string") {
+      const innerId = typeof record.id === "string"
+        ? record.id
+        : record.id != null
+        ? String((record.id as { String?: string }).String ?? record.id)
+        : "";
+      if (innerId) return `${record.tb}:${innerId}`;
+    }
+    if (typeof record.id === "string") {
+      const recordId = record.id.trim();
+      return recordId || null;
+    }
+  }
+
+  return stringified || null;
+}
+
 if (typeof window !== "undefined") {
   throw new Error(
     "server/db/connection.ts must not be imported in client-side code.",
