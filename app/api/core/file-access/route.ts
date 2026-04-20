@@ -6,6 +6,7 @@ import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { updateCache } from "@/server/utils/cache";
 
 const defaultSection = () => ({
@@ -89,6 +90,36 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
+  const sanitizedPattern = categoryPattern.trim().replace(/<>/g, "");
+  if (!sanitizedPattern) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.field.required"],
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const dupCheck = await checkDuplicates("file_access", [
+    { field: "name", value: standardizeField("name", sanitizeString(name)) },
+  ]);
+  if (dupCheck.isDuplicate) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.name.duplicate"],
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   try {
     const db = await getDb();
     const result = await db.query<[Record<string, unknown>[]]>(
@@ -99,7 +130,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         upload = $upload`,
       {
         name: standardizeField("name", sanitizeString(name)),
-        categoryPattern,
+        categoryPattern: sanitizedPattern,
         download: download ?? defaultSection(),
         upload: upload ?? defaultSection(),
       },

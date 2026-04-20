@@ -216,6 +216,7 @@
   "fileAccess.permissions": "Permissões",
   "fileAccess.permissionsHint": "ex. files:download:logos, files:upload:avatars",
   "fileAccess.isolationHint": "Ative os controles para exigir contexto de tenant correspondente. Todas as verificações ativadas devem passar (E). Nenhum ativado = acesso anônimo.",
+  "fileAccess.anonymous": "Anônimo",
   "fileAccess.empty": "Nenhuma regra de acesso a arquivos ainda",
   "fileAccess.placeholder.name": "ex. Logos da Empresa",
   "fileAccess.placeholder.categoryPattern": "ex. /logos/"

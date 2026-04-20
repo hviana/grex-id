@@ -216,6 +216,7 @@
   "fileAccess.permissions": "Permissions",
   "fileAccess.permissionsHint": "e.g. files:download:logos, files:upload:avatars",
   "fileAccess.isolationHint": "Enable toggles to require matching tenant context. All enabled checks must pass (AND). None enabled = anonymous access.",
+  "fileAccess.anonymous": "Anonymous",
   "fileAccess.empty": "No file access rules yet",
   "fileAccess.placeholder.name": "e.g. Company Logos",
   "fileAccess.placeholder.categoryPattern": "e.g. /logos/"

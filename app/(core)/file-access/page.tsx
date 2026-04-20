@@ -70,9 +70,6 @@ export default function FileAccessPage() {
   const { t } = useLocale();
 
   const renderItem = (item: FileAccessItem, controls: React.ReactNode) => {
-    const dl = item.download ?? emptySection();
-    const ul = item.upload ?? emptySection();
-
     return (
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
         <div className="flex items-center justify-between">
@@ -121,7 +118,7 @@ export default function FileAccessPage() {
                   )
                   : (
                     <span className="rounded-full bg-[var(--color-primary-green)]/20 px-2 py-0.5 text-xs text-[var(--color-primary-green)]">
-                      Anonymous
+                      {t("core.fileAccess.anonymous")}
                     </span>
                   )}
                 {sec.permissions.length > 0 && (

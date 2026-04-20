@@ -83,6 +83,7 @@ function SectionEditor({
         value={section.permissions}
         onChange={(vals) =>
           onChange({ ...section, permissions: vals as string[] })}
+        formatHint={t("core.fileAccess.permissionsHint")}
       />
     </div>
   );
