@@ -123,24 +123,24 @@ export async function upsertSettings(
   }
 
   // Single batched query — builds one UPSERT per entry (§7.2)
+  // Use index-based variable names to avoid key collision (e.g. "a.b" vs "a-b")
   const statements: string[] = [];
   const bindings: Record<string, unknown> = {
     cid: rid(companyId),
     sid: rid(systemId),
   };
 
-  for (const [key, value] of entries) {
-    const kVar = `k_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
-    const vVar = `v_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
-    bindings[kVar] = key;
-    bindings[vVar] = value;
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
+    bindings[`k_${i}`] = key;
+    bindings[`v_${i}`] = value;
     statements.push(
       `UPSERT grexid_setting SET
         companyId = $cid,
         systemId = $sid,
-        key = $${kVar},
-        value = $${vVar}
-      WHERE companyId = $cid AND systemId = $sid AND key = $${kVar}`,
+        key = $k_${i},
+        value = $v_${i}
+      WHERE companyId = $cid AND systemId = $sid AND key = $k_${i}`,
     );
   }
 

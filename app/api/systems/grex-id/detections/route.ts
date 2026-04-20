@@ -43,14 +43,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   const action = url.searchParams.get("action");
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
   const locationId = url.searchParams.get("locationId") ?? undefined;
 
   if (action === "stats") {
     const stats = await getDetectionStats({
-      companyId,
-      systemId,
+      companyId: ctx.tenant.companyId,
+      systemId: ctx.tenant.systemId,
       startDate,
       endDate,
       locationId,
@@ -64,8 +62,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const result = await listDetections({
     limit,
     cursor,
-    companyId,
-    systemId,
+    companyId: ctx.tenant.companyId,
+    systemId: ctx.tenant.systemId,
     startDate,
     endDate,
     locationId,
@@ -76,6 +74,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.view_detections"] }),
   async (req, ctx) => getHandler(req, ctx),
 );

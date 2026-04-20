@@ -13,7 +13,7 @@ import { getAnonymousTenant } from "@/server/utils/tenant";
 async function postHandler(req: Request, ctx: RequestContext) {
   try {
     const body = await req.json();
-    const { faceDescriptor, companyId, systemId } = body;
+    const { faceDescriptor } = body;
 
     // Delegate lead creation / verification to core handler
     const coreReq = new Request(req.url, {
@@ -34,6 +34,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Handle face biometrics for new leads
     const leadId = coreJson.data?.id;
+    const companyId = coreJson.data?.companyId;
+    const systemId = coreJson.data?.systemId;
+
     if (
       leadId && faceDescriptor && Array.isArray(faceDescriptor) &&
       typeof companyId === "string" && typeof systemId === "string"

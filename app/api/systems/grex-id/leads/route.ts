@@ -27,9 +27,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyId = parsedBody.companyId || ctx.tenant.companyId;
-    const systemId = parsedBody.systemId || ctx.tenant.systemId;
-    const inferredCompanyIds = companyId ? [companyId as string] : [];
+    const companyId = ctx.tenant.companyId;
+    const systemId = ctx.tenant.systemId;
+    const inferredCompanyIds = companyId ? [companyId] : [];
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; age?: number }
       | undefined;
@@ -78,9 +78,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    // Use avatarUri from facial capture as the profile avatar
     if (avatarUri && profile) {
-      (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
+      (profile as { avatarUri?: string }).avatarUri = avatarUri;
     }
 
     let lead;
@@ -89,16 +88,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
     if (existing) {
       const alreadyAssociated = await isLeadAssociated(
         existing.id,
-        companyId as string,
-        systemId as string,
+        companyId,
+        systemId,
       );
 
       if (!alreadyAssociated) {
         await associateLeadWithCompanySystem({
           leadId: existing.id,
-          companyId: companyId as string,
-          systemId: systemId as string,
-          ownerId: ownerId as string | undefined,
+          companyId,
+          systemId,
+          ownerId,
         });
       }
 
@@ -140,22 +139,18 @@ async function postHandler(req: Request, ctx: RequestContext) {
       });
       await associateLeadWithCompanySystem({
         leadId: lead.id,
-        companyId: companyId as string,
-        systemId: systemId as string,
-        ownerId: ownerId as string | undefined,
+        companyId,
+        systemId,
+        ownerId,
       });
     }
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(
-          companyId as string,
-          systemId as string,
-          "detection.sensitivity",
-        ),
+        await getSetting(companyId, systemId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
-        faceDescriptor as number[],
+        faceDescriptor,
         sensitivity,
       );
       if (orphanMatch.length > 0) {
@@ -163,11 +158,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
       } else {
         await tryUpsertFace({
           leadId: lead.id,
-          embedding_type1: faceDescriptor as number[],
+          embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads:POST",
-          companyId: companyId as string,
-          systemId: systemId as string,
+          companyId,
+          systemId,
         });
       }
     }
@@ -233,8 +228,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyId = parsedBody.companyId || ctx.tenant.companyId;
-    const systemId = parsedBody.systemId || ctx.tenant.systemId;
+    const companyId = ctx.tenant.companyId;
+    const systemId = ctx.tenant.systemId;
     const id = parsedBody.id as string | undefined;
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; age?: number }
@@ -262,24 +257,11 @@ async function putHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (!companyId || !systemId) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            message: "validation.companyAndSystem.required",
-          },
-        },
-        { status: 400 },
-      );
-    }
-
     if (avatarUri && profile) {
-      (profile as { avatarUri?: string }).avatarUri = avatarUri as string;
+      (profile as { avatarUri?: string }).avatarUri = avatarUri;
     }
 
-    const lead = await updateLead(id as string, {
+    const lead = await updateLead(id, {
       name,
       email,
       phone,
@@ -287,41 +269,32 @@ async function putHandler(req: Request, ctx: RequestContext) {
     });
 
     if (ownerId !== undefined) {
-      await updateLeadOwner(
-        id as string,
-        companyId as string,
-        systemId as string,
-        (ownerId as string) || null,
-      );
+      await updateLeadOwner(id, companyId, systemId, ownerId || null);
     }
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(
-          companyId as string,
-          systemId as string,
-          "detection.sensitivity",
-        ),
+        await getSetting(companyId, systemId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
-        faceDescriptor as number[],
+        faceDescriptor,
         sensitivity,
       );
       if (orphanMatch.length > 0) {
-        await linkOrphanFaceToLead(orphanMatch[0].id, id as string);
+        await linkOrphanFaceToLead(orphanMatch[0].id, id);
       } else {
         await tryUpsertFace({
-          leadId: id as string,
-          embedding_type1: faceDescriptor as number[],
+          leadId: id,
+          embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads:PUT",
-          companyId: companyId as string,
-          systemId: systemId as string,
+          companyId,
+          systemId,
         });
       }
     }
 
-    await syncLeadCompanyIds(id as string);
+    await syncLeadCompanyIds(id);
     return Response.json({
       success: true,
       data: lead,
@@ -380,12 +353,12 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
 export const POST = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_leads"] }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_leads"] }),
   async (req, ctx) => putHandler(req, ctx),
 );

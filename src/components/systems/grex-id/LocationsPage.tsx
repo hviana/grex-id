@@ -35,8 +35,6 @@ export default function LocationsPage() {
       if (params.limit) qs.set("limit", String(params.limit));
       if (params.cursor) qs.set("cursor", String(params.cursor));
       if (params.search) qs.set("search", String(params.search));
-      if (companyId) qs.set("companyId", companyId);
-      if (systemId) qs.set("systemId", systemId);
 
       const headers: HeadersInit = {};
       if (systemToken) {
@@ -54,7 +52,7 @@ export default function LocationsPage() {
         prevCursor: json.prevCursor ?? null,
       };
     },
-    [systemToken, companyId, systemId],
+    [systemToken],
   );
 
   return (
@@ -82,7 +80,6 @@ export default function LocationsPage() {
           "address.state": "string",
         }}
         authToken={systemToken}
-        extraData={{ companyId, systemId }}
       />
     </div>
   );

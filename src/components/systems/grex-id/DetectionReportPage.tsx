@@ -126,15 +126,13 @@ export default function DetectionReportPage() {
 
   const fetchStats = useCallback(
     async () => {
-      if (!dateRange || !companyId || !systemId || !systemToken) return;
+      if (!dateRange || !systemToken) return;
       setLoading(true);
       try {
         const qs = new URLSearchParams({
           action: "stats",
           startDate: dateRange.start,
           endDate: dateRange.end,
-          companyId,
-          systemId,
         });
 
         const res = await fetch(
@@ -150,7 +148,7 @@ export default function DetectionReportPage() {
         setLoading(false);
       }
     },
-    [dateRange, companyId, systemId, systemToken],
+    [dateRange, systemToken],
   );
 
   useEffect(() => {

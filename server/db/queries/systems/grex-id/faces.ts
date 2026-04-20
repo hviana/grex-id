@@ -8,40 +8,18 @@ export interface Face {
   updatedAt: string;
 }
 
-export async function getFaceByLeadId(leadId: string): Promise<Face | null> {
-  const db = await getDb();
-  const result = await db.query<[Face[]]>(
-    "SELECT * FROM face WHERE leadId = $leadId LIMIT 1",
-    { leadId: rid(leadId) },
-  );
-  return result[0]?.[0] ?? null;
-}
-
 export async function upsertFace(data: {
   leadId: string;
   embedding_type1: number[];
 }): Promise<Face> {
   const db = await getDb();
-
-  const existing = await getFaceByLeadId(data.leadId);
-
-  if (existing) {
-    const result = await db.query<[Face[]]>(
-      `UPDATE $id SET
-        embedding_type1 = $embedding,
-        updatedAt = time::now()`,
-      {
-        id: rid(existing.id),
-        embedding: data.embedding_type1,
-      },
-    );
-    return result[0][0];
-  }
-
+  // Single batched query (§7.2): UPSERT with WHERE on leadId
   const result = await db.query<[Face[]]>(
-    `CREATE face SET
+    `UPSERT face SET
       leadId = $leadId,
-      embedding_type1 = $embedding`,
+      embedding_type1 = $embedding,
+      updatedAt = time::now()
+    WHERE leadId = $leadId`,
     {
       leadId: rid(data.leadId),
       embedding: data.embedding_type1,
@@ -70,6 +48,15 @@ export async function tryUpsertFace(
     });
     return null;
   }
+}
+
+export async function getFaceByLeadId(leadId: string): Promise<Face | null> {
+  const db = await getDb();
+  const result = await db.query<[Face[]]>(
+    "SELECT * FROM face WHERE leadId = $leadId LIMIT 1",
+    { leadId: rid(leadId) },
+  );
+  return result[0]?.[0] ?? null;
 }
 
 export async function searchFaceByEmbedding(

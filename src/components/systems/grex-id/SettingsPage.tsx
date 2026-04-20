@@ -17,16 +17,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!companyId || !systemId || !systemToken) return;
-    const _companyId = companyId;
-    const _systemId = systemId;
     async function load() {
       setLoading(true);
       try {
-        const qs = new URLSearchParams();
-        qs.set("companyId", _companyId);
-        qs.set("systemId", _systemId);
         const res = await fetch(
-          `/api/systems/grex-id/settings?${qs.toString()}`,
+          `/api/systems/grex-id/settings`,
           {
             headers: { Authorization: `Bearer ${systemToken}` },
           },
@@ -55,8 +50,6 @@ export default function SettingsPage() {
         method: "PUT",
         headers,
         body: JSON.stringify({
-          companyId,
-          systemId,
           settings: { "detection.sensitivity": sensitivity.toString() },
         }),
       });
@@ -65,7 +58,7 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [sensitivity, systemToken, companyId, systemId]);
+  }, [sensitivity, systemToken]);
 
   if (loading) {
     return (

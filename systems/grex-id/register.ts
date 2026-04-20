@@ -53,11 +53,13 @@ export function register(): void {
   });
 
   registerLifecycleHook("lead:verify", async (payload) => {
-    const { leadId, faceDescriptor } = payload;
+    const { leadId, faceDescriptor, systemSlug, systemId } = payload;
     if (
       typeof leadId === "string" &&
       Array.isArray(faceDescriptor) &&
-      faceDescriptor.length > 0
+      faceDescriptor.length > 0 &&
+      typeof systemSlug === "string" &&
+      typeof systemId === "string"
     ) {
       await tryUpsertFace(
         {
@@ -66,8 +68,8 @@ export function register(): void {
         },
         {
           route: "lifecycle:lead:verify",
-          systemSlug: payload.systemSlug as string,
-          systemId: payload.systemId as string,
+          systemSlug,
+          systemId,
         },
       );
     }

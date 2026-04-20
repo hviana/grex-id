@@ -145,72 +145,53 @@ export async function listDetections(
     bindings.cursor = params.cursor;
   }
 
+  // Single batched query (§7.2): detections + lead_company_system membership
   const query =
-    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profile`;
+    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profile;
 
-  const result = await db.query<[RawDetectionRow[]]>(query, bindings);
+    LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId IS NOT NONE ORDER BY detectedAt DESC LIMIT $limit);
+
+    SELECT leadId, ownerId FROM lead_company_system
+      WHERE leadId IN $leadIds
+        AND companyId = $companyId
+        AND systemId = $systemId
+      FETCH ownerId, ownerId.profile;`;
+
+  const result = await db.query<
+    [
+      RawDetectionRow[],
+      unknown,
+      {
+        leadId: unknown;
+        ownerId:
+          | (Record<string, unknown> & {
+            id: unknown;
+            profile?: { name?: string };
+          })
+          | null;
+      }[],
+    ]
+  >(query, bindings);
   const rawItems = result[0] ?? [];
+  const assocRows = result[2] ?? [];
   const hasMore = rawItems.length > limit;
   const fetched = hasMore ? rawItems.slice(0, limit) : rawItems;
-
-  // Collect unique leadIds to batch-check lead_company_system associations.
-  // Only associations for the CURRENT company + system determine "member"
-  // status — the authoritative multi-tenant boundary is lead_company_system,
-  // not lead.companyIds.
-  const leadIds = [
-    ...new Set(
-      fetched
-        .map((r) =>
-          r.leadId && typeof r.leadId === "object"
-            ? normalizeRecordId((r.leadId as { id: unknown }).id)
-            : null
-        )
-        .filter((leadId): leadId is string => Boolean(leadId)),
-    ),
-  ];
 
   const assocMap = new Map<
     string,
     { ownerId?: string; ownerName?: string }
   >();
 
-  if (leadIds.length > 0) {
-    const assocResult = await db.query<
-      [
-        {
-          leadId: unknown;
-          ownerId:
-            | (Record<string, unknown> & {
-              id: unknown;
-              profile?: { name?: string };
-            })
-            | null;
-        }[],
-      ]
-    >(
-      `SELECT leadId, ownerId FROM lead_company_system
-       WHERE leadId IN $leadIds
-         AND companyId = $companyId
-         AND systemId = $systemId
-       FETCH ownerId, ownerId.profile`,
-      {
-        leadIds: leadIds.map((leadId) => rid(leadId)),
-        companyId: rid(params.companyId),
-        systemId: rid(params.systemId),
-      },
-    );
-
-    for (const row of assocResult[0] ?? []) {
-      const lid = normalizeRecordId(row.leadId);
-      if (!lid) continue;
-      const owner = row.ownerId && typeof row.ownerId === "object"
-        ? row.ownerId
-        : null;
-      assocMap.set(lid, {
-        ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
-        ownerName: owner?.profile?.name ?? undefined,
-      });
-    }
+  for (const row of assocRows) {
+    const lid = normalizeRecordId(row.leadId);
+    if (!lid) continue;
+    const owner = row.ownerId && typeof row.ownerId === "object"
+      ? row.ownerId
+      : null;
+    assocMap.set(lid, {
+      ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
+      ownerName: owner?.profile?.name ?? undefined,
+    });
   }
 
   const enriched: DetectionReportItem[] = fetched.map((row) => {

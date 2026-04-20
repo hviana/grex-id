@@ -8,18 +8,16 @@ import {
 } from "@/server/db/queries/systems/grex-id/settings";
 
 async function getHandler(req: Request, ctx: RequestContext) {
-  const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
-  const settings = await getAllSettings(companyId, systemId);
+  const settings = await getAllSettings(
+    ctx.tenant.companyId,
+    ctx.tenant.systemId,
+  );
   return Response.json({ success: true, data: settings });
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { settings, companyId: bodyCompanyId, systemId: bodySystemId } = body;
-  const companyId = bodyCompanyId || ctx.tenant.companyId;
-  const systemId = bodySystemId || ctx.tenant.systemId;
+  const { settings } = body;
 
   if (!settings || typeof settings !== "object") {
     return Response.json(
@@ -36,18 +34,22 @@ async function putHandler(req: Request, ctx: RequestContext) {
     normalized[key] = String(value);
   }
 
-  const updated = await upsertSettings(companyId, systemId, normalized);
+  const updated = await upsertSettings(
+    ctx.tenant.companyId,
+    ctx.tenant.systemId,
+    normalized,
+  );
   return Response.json({ success: true, data: updated });
 }
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_settings"] }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_settings"] }),
   async (req, ctx) => putHandler(req, ctx),
 );

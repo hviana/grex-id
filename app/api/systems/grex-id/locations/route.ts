@@ -23,15 +23,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
-  const companyId = url.searchParams.get("companyId") || ctx.tenant.companyId;
-  const systemId = url.searchParams.get("systemId") || ctx.tenant.systemId;
 
   const result = await listLocations({
     limit,
     cursor,
     search,
-    companyId,
-    systemId,
+    companyId: ctx.tenant.companyId,
+    systemId: ctx.tenant.systemId,
   });
 
   return Response.json({ success: true, ...result });
@@ -39,12 +37,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { name, description, address, companyId, systemId } = body;
+  const { name, description, address } = body;
 
-  const resolvedCompanyId = companyId || ctx.tenant.companyId;
-  const resolvedSystemId = systemId || ctx.tenant.systemId;
-
-  if (!name || !address || !resolvedCompanyId || !resolvedSystemId) {
+  if (!name || !address) {
     return Response.json(
       {
         success: false,
@@ -57,8 +52,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const location = await createLocation({
     name,
     description,
-    companyId: resolvedCompanyId,
-    systemId: resolvedSystemId,
+    companyId: ctx.tenant.companyId,
+    systemId: ctx.tenant.systemId,
     address,
   });
 
@@ -112,18 +107,18 @@ export const GET = compose(
 
 export const POST = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_locations"] }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_locations"] }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuth({ permissions: ["grexid.manage_locations"] }),
   async (req, ctx) => deleteHandler(req, ctx),
 );
