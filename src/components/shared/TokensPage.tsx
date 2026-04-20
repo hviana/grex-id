@@ -8,6 +8,36 @@ import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
+
+interface OpCountEntry {
+  key: string;
+  value: string;
+  description: string;
+}
+
+function opCountToKV(
+  limits: Record<string, number> | null | undefined,
+): OpCountEntry[] {
+  if (!limits) return [];
+  return Object.entries(limits).map(([key, val]) => ({
+    key,
+    value: String(val),
+    description: "",
+  }));
+}
+
+function kvToOpCount(
+  kv: OpCountEntry[],
+): Record<string, number> | undefined {
+  const filtered = kv.filter((e) => e.key.trim() && e.value.trim());
+  if (filtered.length === 0) return undefined;
+  const result: Record<string, number> = {};
+  for (const entry of filtered) {
+    result[entry.key.trim()] = Number(entry.value);
+  }
+  return result;
+}
 
 interface ApiToken {
   id: string;
@@ -15,6 +45,7 @@ interface ApiToken {
   description?: string;
   permissions: string[];
   monthlySpendLimit?: number;
+  maxOperationCount?: Record<string, number>;
   expiresAt?: string;
   createdAt: string;
 }
@@ -41,6 +72,9 @@ export default function TokensPage() {
   const [newPerms, setNewPerms] = useState<string[]>([]);
   const [newSpendLimit, setNewSpendLimit] = useState("");
   const [newExpiry, setNewExpiry] = useState("");
+  const [formMaxOperationCount, setFormMaxOperationCount] = useState<
+    OpCountEntry[]
+  >([]);
 
   const loadTokens = useCallback(async () => {
     if (!systemToken || !companyId || !user) return;
@@ -72,6 +106,7 @@ export default function TokensPage() {
     setNewPerms([]);
     setNewSpendLimit("");
     setNewExpiry("");
+    setFormMaxOperationCount([]);
     setError(null);
   };
 
@@ -120,6 +155,7 @@ export default function TokensPage() {
           systemId,
           permissions: newPerms,
           monthlySpendLimit: newSpendLimit ? Number(newSpendLimit) : undefined,
+          maxOperationCount: kvToOpCount(formMaxOperationCount),
           expiresAt: newExpiry || undefined,
         }),
       });
@@ -244,6 +280,24 @@ export default function TokensPage() {
                     </span>
                   ))}
                 </div>
+                {token.maxOperationCount &&
+                  Object.keys(token.maxOperationCount).length > 0 && (
+                  <div className="mt-2 flex gap-1 flex-wrap">
+                    <span className="text-xs text-[var(--color-light-text)] mr-1">
+                      🔢
+                    </span>
+                    {Object.entries(token.maxOperationCount).map((
+                      [key, val],
+                    ) => (
+                      <span
+                        key={key}
+                        className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
+                      >
+                        {key}: {val}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -289,6 +343,19 @@ export default function TokensPage() {
             placeholder={t("common.tokens.spendLimit")}
             className={inputCls}
           />
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              🔢 {t("common.tokens.maxOperationCount")}
+            </label>
+            <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+              {t("common.tokens.maxOperationCountHint")}
+            </p>
+            <DynamicKeyValueField
+              fields={formMaxOperationCount}
+              onChange={setFormMaxOperationCount}
+              showDescription={false}
+            />
+          </div>
           <input
             type="date"
             value={newExpiry}

@@ -32,7 +32,7 @@ interface PlanItem {
   maxConcurrentUploads: number;
   maxDownloadBandwidthMB: number;
   maxUploadBandwidthMB: number;
-  maxOperationCount: number;
+  maxOperationCount: Record<string, number> | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -121,7 +121,9 @@ export default function PlansPage() {
     "0",
   );
   const [formMaxUploadBandwidthMB, setFormMaxUploadBandwidthMB] = useState("0");
-  const [formMaxOperationCount, setFormMaxOperationCount] = useState("0");
+  const [formMaxOperationCount, setFormMaxOperationCount] = useState<
+    EntityLimitEntry[]
+  >([]);
   const [formIsActive, setFormIsActive] = useState(true);
   const [loadingSystems, setLoadingSystems] = useState(true);
 
@@ -184,7 +186,7 @@ export default function PlansPage() {
     setFormMaxConcurrentUploads("0");
     setFormMaxDownloadBandwidthMB("0");
     setFormMaxUploadBandwidthMB("0");
-    setFormMaxOperationCount("0");
+    setFormMaxOperationCount([]);
     setFormIsActive(true);
     setError(null);
     setShowCreate(true);
@@ -214,7 +216,7 @@ export default function PlansPage() {
     setFormMaxConcurrentUploads(String(item.maxConcurrentUploads ?? 0));
     setFormMaxDownloadBandwidthMB(String(item.maxDownloadBandwidthMB ?? 0));
     setFormMaxUploadBandwidthMB(String(item.maxUploadBandwidthMB ?? 0));
-    setFormMaxOperationCount(String(item.maxOperationCount ?? 0));
+    setFormMaxOperationCount(entityLimitsToKV(item.maxOperationCount));
     setFormIsActive(item.isActive ?? true);
     setError(null);
     setValidationErrors([]);
@@ -246,7 +248,7 @@ export default function PlansPage() {
         maxConcurrentUploads: Number(formMaxConcurrentUploads),
         maxDownloadBandwidthMB: Number(formMaxDownloadBandwidthMB),
         maxUploadBandwidthMB: Number(formMaxUploadBandwidthMB),
-        maxOperationCount: Number(formMaxOperationCount),
+        maxOperationCount: kvToEntityLimits(formMaxOperationCount),
         isActive: formIsActive,
       };
 
@@ -433,13 +435,31 @@ export default function PlansPage() {
                         t("billing.limits.unlimited")}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>🔢 {t("core.plans.maxOperationCount")}</span>
-                    <span className="text-white">
-                      {(plan.maxOperationCount ?? 0) ||
-                        t("billing.limits.unlimited")}
-                    </span>
-                  </div>
+                  {plan.maxOperationCount &&
+                      Object.keys(plan.maxOperationCount).length > 0
+                    ? Object.entries(plan.maxOperationCount).map((
+                      [key, val],
+                    ) => (
+                      <div key={key} className="flex justify-between">
+                        <span>
+                          🔢 {t(`billing.limits.${key}`) !==
+                              `billing.limits.${key}`
+                            ? t(`billing.limits.${key}`)
+                            : key}
+                        </span>
+                        <span className="text-white">
+                          {val.toLocaleString()}
+                        </span>
+                      </div>
+                    ))
+                    : (
+                      <div className="flex justify-between">
+                        <span>🔢 {t("core.plans.maxOperationCount")}</span>
+                        <span className="text-white">
+                          {t("billing.limits.unlimited")}
+                        </span>
+                      </div>
+                    )}
                 </div>
 
                 {plan.permissions?.length > 0 && (
@@ -720,17 +740,17 @@ export default function PlansPage() {
                 className={`${inputCls} placeholder-white/30`}
               />
             </div>
-            <div>
+            <div className="col-span-1 sm:col-span-3">
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
                 🔢 {t("core.plans.maxOperationCount")}
               </label>
-              <input
-                type="number"
-                value={formMaxOperationCount}
-                onChange={(e) => setFormMaxOperationCount(e.target.value)}
-                min="0"
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
+              <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+                {t("core.plans.maxOperationCountHint")}
+              </p>
+              <DynamicKeyValueField
+                fields={formMaxOperationCount}
+                onChange={setFormMaxOperationCount}
+                showDescription={false}
               />
             </div>
           </div>

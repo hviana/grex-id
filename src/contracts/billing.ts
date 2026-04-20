@@ -11,9 +11,9 @@ export interface Subscription {
   currentPeriodEnd: string;
   voucherId?: string; // single voucher — replaced on re-apply
   remainingPlanCredits: number; // resets on renewal
-  remainingOperationCount: number; // operation count; resets on renewal; 0 = unlimited
+  remainingOperationCount?: Record<string, number>; // per-resourceKey map; resets on renewal
   creditAlertSent: boolean; // one-shot credit exhaustion alert
-  operationCountAlertSent: boolean; // one-shot operation count exhaustion alert
+  operationCountAlertSent?: Record<string, boolean>; // per-resourceKey one-shot alert map
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
   autoRechargeInProgress: boolean; // re-entrancy guard

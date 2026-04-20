@@ -2,7 +2,7 @@ import type { HandlerFn } from "../worker.ts";
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
-import { resolveMaxOperationCount } from "../../utils/guards.ts";
+import { resolveAllOperationCounts } from "../../utils/guards.ts";
 import type { PaymentResult } from "../../../src/contracts/payment-provider.ts";
 
 if (typeof window !== "undefined") {
@@ -217,11 +217,10 @@ export const processPayment: HandlerFn = async (payload) => {
       const creditModifier = voucher?.creditModifier ?? 0;
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditModifier;
 
-      const operationCountCap = await resolveMaxOperationCount({
+      const remainingOperationCount = await resolveAllOperationCounts({
         companyId: String(sub.companyId),
         systemId: String(sub.systemId),
       });
-      const remainingOperationCount = operationCountCap.max || 0;
 
       // Batch: update subscription + update payment record (§7.2)
       const statusClause = isRetry
@@ -239,7 +238,7 @@ export const processPayment: HandlerFn = async (payload) => {
           remainingPlanCredits = $remainingPlanCredits,
           remainingOperationCount = $remainingOperationCount,
           creditAlertSent = false,
-          operationCountAlertSent = false;
+          operationCountAlertSent = {};
          ${paymentStmt}`,
         {
           id: rid(sub.id),

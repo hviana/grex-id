@@ -17,7 +17,7 @@ export interface Plan {
   maxConcurrentUploads: number;
   maxDownloadBandwidthMB: number;
   maxUploadBandwidthMB: number;
-  maxOperationCount: number;
+  maxOperationCount?: Record<string, number>;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

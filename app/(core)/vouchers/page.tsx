@@ -29,7 +29,7 @@ interface VoucherItem {
   maxConcurrentUploadsModifier: number;
   maxDownloadBandwidthModifier: number;
   maxUploadBandwidthModifier: number;
-  maxOperationCountModifier: number;
+  maxOperationCountModifier: Record<string, number> | null;
   creditModifier: number;
   expiresAt: string | null;
   createdAt: string;
@@ -107,7 +107,7 @@ export default function VouchersPage() {
   const [formMaxUploadBandwidthModifier, setFormMaxUploadBandwidthModifier] =
     useState("0");
   const [formMaxOperationCountModifier, setFormMaxOperationCountModifier] =
-    useState("0");
+    useState<EntityLimitEntry[]>([]);
   const [formCreditModifier, setFormCreditModifier] = useState("0");
   const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
     { id: string; label: string }[]
@@ -151,7 +151,7 @@ export default function VouchersPage() {
     setFormMaxConcurrentUploadsModifier("0");
     setFormMaxDownloadBandwidthModifier("0");
     setFormMaxUploadBandwidthModifier("0");
-    setFormMaxOperationCountModifier("0");
+    setFormMaxOperationCountModifier([]);
     setFormCreditModifier("0");
     setFormApplicablePlanIds([]);
     setFormExpiresAt("");
@@ -182,7 +182,7 @@ export default function VouchersPage() {
       String(item.maxUploadBandwidthModifier ?? 0),
     );
     setFormMaxOperationCountModifier(
-      String(item.maxOperationCountModifier ?? 0),
+      modifiersToKV(item.maxOperationCountModifier),
     );
     setFormCreditModifier(String(item.creditModifier));
     setFormApplicablePlanIds(
@@ -221,7 +221,7 @@ export default function VouchersPage() {
         maxConcurrentUploadsModifier: Number(formMaxConcurrentUploadsModifier),
         maxDownloadBandwidthModifier: Number(formMaxDownloadBandwidthModifier),
         maxUploadBandwidthModifier: Number(formMaxUploadBandwidthModifier),
-        maxOperationCountModifier: Number(formMaxOperationCountModifier),
+        maxOperationCountModifier: kvToModifiers(formMaxOperationCountModifier),
         creditModifier: Number(formCreditModifier),
         applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
         expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
@@ -406,14 +406,20 @@ export default function VouchersPage() {
                             {voucher.maxUploadBandwidthModifier}
                           </span>
                         )}
-                        {voucher.maxOperationCountModifier !== 0 && (
-                          <span>
-                            🔢 {t("core.vouchers.maxOperationCountModifier")}:
-                            {" "}
-                            {voucher.maxOperationCountModifier > 0 ? "+" : ""}
-                            {voucher.maxOperationCountModifier}
-                          </span>
-                        )}
+                        {voucher.maxOperationCountModifier &&
+                          Object.keys(voucher.maxOperationCountModifier)
+                              .length > 0 &&
+                          Object.entries(voucher.maxOperationCountModifier).map(
+                            ([key, val]) => (
+                              <span key={key}>
+                                🔢 {t(`billing.limits.${key}`) !==
+                                    `billing.limits.${key}`
+                                  ? t(`billing.limits.${key}`)
+                                  : key}: {val > 0 ? "+" : ""}
+                                {val}
+                              </span>
+                            ),
+                          )}
                         {voucher.applicablePlanIds &&
                           voucher.applicablePlanIds.length > 0 && (
                           <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
@@ -665,13 +671,13 @@ export default function VouchersPage() {
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
                 🔢 {t("core.vouchers.maxOperationCountModifier")}
               </label>
-              <input
-                type="number"
-                value={formMaxOperationCountModifier}
-                onChange={(e) =>
-                  setFormMaxOperationCountModifier(e.target.value)}
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
+              <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+                {t("core.vouchers.maxOperationCountModifierHint")}
+              </p>
+              <DynamicKeyValueField
+                fields={formMaxOperationCountModifier}
+                onChange={setFormMaxOperationCountModifier}
+                showDescription={false}
               />
             </div>
           </div>

@@ -14,7 +14,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
-  let query = `SELECT id, name, description, permissions, monthlySpendLimit,
+  let query =
+    `SELECT id, name, description, permissions, monthlySpendLimit, maxOperationCount,
             neverExpires, expiresAt, frontendUse, frontendDomains,
             jti, createdAt
      FROM api_token WHERE revokedAt IS NONE`;
@@ -46,6 +47,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     systemId,
     permissions,
     monthlySpendLimit,
+    maxOperationCount,
     neverExpires,
     expiresAt,
     frontendUse,
@@ -121,6 +123,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       jti = $jti,
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
+      maxOperationCount = $maxOperationCount,
       neverExpires = $neverExpires,
       expiresAt = $expiresAt,
       frontendUse = $frontendUse,
@@ -136,6 +139,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       jti,
       permissions: permissions ?? [],
       monthlySpendLimit: monthlySpendLimit ?? undefined,
+      maxOperationCount: maxOperationCount ?? undefined,
       neverExpires: neverExpires === true,
       expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
       frontendUse: useFrontend,

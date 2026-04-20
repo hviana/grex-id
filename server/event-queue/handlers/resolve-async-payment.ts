@@ -2,7 +2,7 @@ import type { HandlerFn } from "../worker.ts";
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
-import { resolveMaxOperationCount } from "../../utils/guards.ts";
+import { resolveAllOperationCounts } from "../../utils/guards.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -117,11 +117,10 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       const creditModifier = voucher?.creditModifier ?? 0;
       const remainingPlanCredits = (plan?.planCredits ?? 0) + creditModifier;
 
-      const operationCountCap = await resolveMaxOperationCount({
+      const remainingOperationCount = await resolveAllOperationCounts({
         companyId: String(payment.companyId),
         systemId: String(payment.systemId),
       });
-      const remainingOperationCount = operationCountCap.max || 0;
 
       const creditPurchaseStmt = creditPurchase
         ? `UPDATE credit_purchase SET status = "done" WHERE subscriptionId = $subId AND status = "pending";`

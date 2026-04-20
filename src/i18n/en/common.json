@@ -145,6 +145,8 @@
   "connectedApps.unknownApp": "Unknown App",
   "tokens.created": "Token Created",
   "tokens.copy": "Copy Token",
+  "tokens.maxOperationCount": "Operation Count Limits",
+  "tokens.maxOperationCountHint": "Per-resource operation count caps. Leave empty for no limit.",
   "tokens.permissionsHint": "Search permissions defined in this system's roles",
   "users.inviteExisting": "User already exists and was invited to this system",
   "users.rolesHint": "Search available roles for this system",

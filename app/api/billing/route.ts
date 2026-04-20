@@ -194,9 +194,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    // Read plan's maxOperationCount directly — resolveMaxOperationCount
-    // cannot be used here because no subscription exists yet (returns 0)
-    const operationCountCap = plan.maxOperationCount ?? 0;
+    // Read plan's maxOperationCount map directly — resolveAllOperationCounts
+    // cannot be used here because no subscription exists yet
+    const operationCountMap = plan.maxOperationCount ?? null;
 
     const userId = ctx.claims?.actorId ?? null;
     const now = new Date();
@@ -209,7 +209,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       planId: rid(planId),
       planCredits: plan.planCredits ?? 0,
-      operationCountCap,
+      operationCountMap,
       start: now,
       end: periodEnd,
     };
@@ -241,7 +241,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
          currentPeriodEnd = $end,
          voucherId = NONE,
          remainingPlanCredits = $planCredits,
-         remainingOperationCount = $operationCountCap,
+         remainingOperationCount = ${
+        operationCountMap ? "$operationCountMap" : "NONE"
+      },
          creditAlertSent = false,
          operationCountAlertSent = false,
          autoRechargeEnabled = false,
@@ -577,17 +579,30 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const newCreditMod = Number(voucher.creditModifier ?? 0);
     const creditDelta = newCreditMod - oldCreditMod;
 
-    const oldOpCountMod = Number(
-      batchResult[2]?.[0]?.maxOperationCountModifier ?? 0,
-    );
-    const newOpCountMod = Number(voucher.maxOperationCountModifier ?? 0);
-    const opCountDelta = newOpCountMod - oldOpCountMod;
+    // Per-resourceKey operation count delta
+    const oldOpCountMod = (batchResult[2]?.[0]?.maxOperationCountModifier ??
+      {}) as unknown as Record<string, number>;
+    const newOpCountMod =
+      (voucher.maxOperationCountModifier ?? {}) as unknown as Record<
+        string,
+        number
+      >;
+    const allOpKeys = new Set([
+      ...Object.keys(oldOpCountMod),
+      ...Object.keys(newOpCountMod),
+    ]);
+    const opCountDeltas: Record<string, number> = {};
+    for (const key of allOpKeys) {
+      const delta = (newOpCountMod[key] ?? 0) - (oldOpCountMod[key] ?? 0);
+      if (delta !== 0) opCountDeltas[key] = delta;
+    }
+    const hasOpCountChanges = Object.keys(opCountDeltas).length > 0;
 
     const creditClause = creditDelta !== 0
       ? ", remainingPlanCredits = remainingPlanCredits + $creditDelta"
       : "";
-    const opCountClause = opCountDelta !== 0
-      ? ", remainingOperationCount = math::max(0, remainingOperationCount + $opCountDelta), operationCountAlertSent = false"
+    const opCountClause = hasOpCountChanges
+      ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountDeltas), operationCountAlertSent = {}"
       : "";
 
     const updateQuery = creditClause || opCountClause
@@ -601,7 +616,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId: rid(systemId),
       voucherId: rid(voucher.id as string),
       ...(creditDelta !== 0 ? { creditDelta } : {}),
-      ...(opCountDelta !== 0 ? { opCountDelta } : {}),
+      ...(hasOpCountChanges ? { opCountDeltas } : {}),
     });
 
     await Core.getInstance().reloadSubscription(companyId, systemId);

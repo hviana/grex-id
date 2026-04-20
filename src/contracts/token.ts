@@ -12,6 +12,7 @@ export interface ApiToken {
   jti: string; // unique — used for revocation
   permissions: string[]; // duplicated into tenant.permissions at issue time
   monthlySpendLimit?: number;
+  maxOperationCount?: Record<string, number>; // per-resourceKey operation count cap
   neverExpires: boolean; // mutually exclusive with expiresAt
   expiresAt?: string; // null when neverExpires is true
   frontendUse: boolean; // allowed from browsers (CORS enforcement)

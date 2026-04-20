@@ -52,9 +52,10 @@ interface UsageData {
     fileCount: number;
   };
   operationCount: {
+    resourceKey: string;
     used: number;
     max: number;
-  };
+  }[];
   creditExpenses: {
     resourceKey: string;
     totalAmount: number;
@@ -418,69 +419,51 @@ export default function UsagePage() {
             </div>
 
             {/* ── Operation Count ── */}
-            {data.operationCount && data.operationCount.max > 0 && (
+            {data.operationCount && data.operationCount.length > 0 && (
               <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-white mb-4">
                   🔢 {t("billing.limits.maxOperationCount")}
                 </h2>
-                <div className="flex items-center gap-4 mb-4">
-                  <p className="text-2xl font-bold text-[var(--color-primary-green)]">
-                    {data.operationCount.used.toLocaleString()}
-                  </p>
-                  <span className="text-[var(--color-light-text)]">/</span>
-                  <p className="text-lg text-[var(--color-light-text)]">
-                    {data.operationCount.max.toLocaleString()}
-                  </p>
-                </div>
-                <div className="h-16">
-                  <Bar
-                    data={{
-                      labels: [t("billing.limits.maxOperationCount")],
-                      datasets: [
-                        {
-                          label: t("billing.usage.used"),
-                          data: [data.operationCount.used],
-                          backgroundColor: "rgba(255, 159, 64, 0.7)",
-                          borderColor: "#ff9f40",
-                          borderWidth: 1,
-                          borderRadius: 6,
-                        },
-                        {
-                          label: t("billing.usage.limit"),
-                          data: [
-                            Math.max(
-                              0,
-                              data.operationCount.max -
-                                data.operationCount.used,
-                            ),
-                          ],
-                          backgroundColor: "rgba(51, 51, 51, 0.5)",
-                          borderColor: "#333333",
-                          borderWidth: 1,
-                          borderRadius: 6,
-                        },
-                      ],
-                    }}
-                    options={{
-                      indexAxis: "y",
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                      },
-                      scales: {
-                        x: {
-                          stacked: true,
-                          display: false,
-                          max: data.operationCount.max,
-                        },
-                        y: {
-                          stacked: true,
-                          display: false,
-                        },
-                      },
-                    }}
-                  />
+                <div className="space-y-5">
+                  {data.operationCount.map((entry) => {
+                    const label = t("billing.limits." + entry.resourceKey);
+                    const pct = entry.max > 0
+                      ? Math.min(100, (entry.used / entry.max) * 100)
+                      : 0;
+                    return (
+                      <div key={entry.resourceKey}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-[var(--color-light-text)]">
+                            🔢 {label}
+                          </span>
+                          <span className="text-sm text-white font-medium">
+                            {entry.used.toLocaleString()}{" "}
+                            <span className="text-[var(--color-light-text)]">
+                              /
+                            </span>{" "}
+                            <span className="text-[var(--color-light-text)]">
+                              {entry.max > 0
+                                ? entry.max.toLocaleString()
+                                : t("billing.limits.unlimited")}
+                            </span>
+                          </span>
+                        </div>
+                        {entry.max > 0 && (
+                          <div className="w-full h-4 bg-[var(--color-dark-gray)] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] transition-all duration-300"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        )}
+                        {entry.max === 0 && (
+                          <p className="text-xs text-[var(--color-light-text)] mt-1">
+                            {t("billing.limits.unlimited")}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

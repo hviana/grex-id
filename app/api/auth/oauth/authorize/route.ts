@@ -50,6 +50,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     companyId,
     redirectOrigin,
     monthlySpendLimit,
+    maxOperationCount,
   } = body;
 
   if (!clientName || !systemSlug || !companyId) {
@@ -100,7 +101,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
        companyId = $companyId,
        systemId = $systemId,
        permissions = $permissions,
-       monthlySpendLimit = $monthlySpendLimit;
+       monthlySpendLimit = $monthlySpendLimit,
+       maxOperationCount = $maxOperationCount;
      CREATE api_token SET
        userId = $userId,
        companyId = $companyId,
@@ -109,7 +111,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
        description = $redirectOrigin,
        tokenHash = $tokenHash,
        permissions = $permissions,
-       monthlySpendLimit = $monthlySpendLimit;
+       monthlySpendLimit = $monthlySpendLimit,
+       maxOperationCount = $maxOperationCount;
      SELECT * FROM $app[0].id;`,
     {
       clientName,
@@ -119,6 +122,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       monthlySpendLimit: monthlySpendLimit
         ? Number(monthlySpendLimit)
         : undefined,
+      maxOperationCount: maxOperationCount ?? undefined,
       userId: rid(userId),
       redirectOrigin: redirectOrigin ?? "",
       tokenHash,

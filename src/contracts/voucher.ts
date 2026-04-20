@@ -13,7 +13,7 @@ export interface Voucher {
   maxConcurrentUploadsModifier: number;
   maxDownloadBandwidthModifier: number;
   maxUploadBandwidthModifier: number;
-  maxOperationCountModifier: number;
+  maxOperationCountModifier?: Record<string, number>;
   creditModifier: number;
   expiresAt?: string;
   createdAt: string;

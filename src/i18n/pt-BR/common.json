@@ -145,6 +145,8 @@
   "connectedApps.unknownApp": "App Desconhecido",
   "tokens.created": "Token Criado",
   "tokens.copy": "Copiar Token",
+  "tokens.maxOperationCount": "Limites de Contagem de Operações",
+  "tokens.maxOperationCountHint": "Limites de contagem de operações por recurso. Deixe vazio para sem limite.",
   "tokens.permissionsHint": "Busque permissões definidas nas funções deste sistema",
   "users.inviteExisting": "Usuário já existe e foi convidado para este sistema",
   "users.rolesHint": "Busque funções disponíveis para este sistema",

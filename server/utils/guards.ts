@@ -267,17 +267,19 @@ export async function resolveMaxUploadBandwidth(params: {
 export async function resolveMaxOperationCount(params: {
   companyId: string;
   systemId: string;
+  resourceKey: string;
 }): Promise<TransferLimitResult> {
   const sub = await resolveSubscription(params.companyId, params.systemId);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxOperationCount ?? 0;
+  const planLimit = plan?.maxOperationCount?.[params.resourceKey] ?? 0;
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.maxOperationCountModifier ?? 0;
+    voucherModifier =
+      voucher?.maxOperationCountModifier?.[params.resourceKey] ?? 0;
   }
 
   return {
@@ -285,4 +287,42 @@ export async function resolveMaxOperationCount(params: {
     planLimit,
     voucherModifier,
   };
+}
+
+/**
+ * Resolve all operation counts as a merged map (plan + voucher) for
+ * subscription initialization and renewal.
+ */
+export async function resolveAllOperationCounts(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<Record<string, number>> {
+  const sub = await resolveSubscription(params.companyId, params.systemId);
+  if (!sub) return {};
+
+  const plan = await resolvePlan(sub.planId);
+  const planMap = plan?.maxOperationCount ?? {};
+
+  let voucherMap: Record<string, number> = {};
+  if (sub.voucherId) {
+    const voucher = await resolveVoucher(sub.voucherId);
+    voucherMap = voucher?.maxOperationCountModifier ?? {};
+  }
+
+  const allKeys = new Set([
+    ...Object.keys(planMap),
+    ...Object.keys(voucherMap),
+  ]);
+
+  const result: Record<string, number> = {};
+  for (const key of allKeys) {
+    const planVal = planMap[key] ?? 0;
+    const voucherVal = voucherMap[key] ?? 0;
+    const effective = Math.max(0, planVal + voucherVal);
+    if (effective > 0) {
+      result[key] = effective;
+    }
+  }
+
+  return result;
 }

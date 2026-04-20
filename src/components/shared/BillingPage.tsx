@@ -18,7 +18,7 @@ interface VoucherInfo {
   maxConcurrentUploadsModifier?: number;
   maxDownloadBandwidthModifier?: number;
   maxUploadBandwidthModifier?: number;
-  maxOperationCountModifier?: number;
+  maxOperationCountModifier?: Record<string, number> | null;
   expiresAt?: string;
 }
 
@@ -29,7 +29,7 @@ interface Subscription {
   currentPeriodStart: string;
   currentPeriodEnd: string;
   voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
-  remainingOperationCount: number; // operation count; 0 = unlimited
+  remainingOperationCount: Record<string, number> | null; // per-resourceKey; null = unlimited
   autoRechargeEnabled: boolean;
   autoRechargeAmount: number; // cents; 0 when disabled
   retryPaymentInProgress: boolean;
@@ -53,7 +53,7 @@ interface PlanInfo {
   maxConcurrentUploads?: number;
   maxDownloadBandwidthMB?: number;
   maxUploadBandwidthMB?: number;
-  maxOperationCount?: number;
+  maxOperationCount?: Record<string, number> | null;
   isActive: boolean;
 }
 
@@ -931,12 +931,24 @@ export default function BillingPage() {
                       ? `${activePlan.maxUploadBandwidthMB} MB/s`
                       : t("billing.limits.unlimited")}
                   </span>
-                  <span>
-                    🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                    {activePlan.maxOperationCount
-                      ? activePlan.maxOperationCount.toLocaleString()
-                      : t("billing.limits.unlimited")}
-                  </span>
+                  {activePlan.maxOperationCount &&
+                      Object.keys(activePlan.maxOperationCount).length > 0
+                    ? Object.entries(activePlan.maxOperationCount).map(
+                      ([key, val]) => (
+                        <span key={key}>
+                          🔢 {t("billing.limits." + key) !==
+                              `billing.limits.${key}`
+                            ? t("billing.limits." + key)
+                            : key}: {val.toLocaleString()} ops
+                        </span>
+                      ),
+                    )
+                    : (
+                      <span>
+                        🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                        {t("billing.limits.unlimited")}
+                      </span>
+                    )}
                 </div>
               </div>
 
@@ -1127,12 +1139,24 @@ export default function BillingPage() {
                             ? `${plan.maxUploadBandwidthMB} MB/s`
                             : t("billing.limits.unlimited")}
                         </p>
-                        <p>
-                          🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                          {plan.maxOperationCount
-                            ? plan.maxOperationCount.toLocaleString()
-                            : t("billing.limits.unlimited")}
-                        </p>
+                        {plan.maxOperationCount &&
+                            Object.keys(plan.maxOperationCount).length > 0
+                          ? Object.entries(plan.maxOperationCount).map(
+                            ([key, val]) => (
+                              <p key={key}>
+                                🔢 {t("billing.limits." + key) !==
+                                    `billing.limits.${key}`
+                                  ? t("billing.limits." + key)
+                                  : key}: {val.toLocaleString()} ops
+                              </p>
+                            ),
+                          )
+                          : (
+                            <p>
+                              🔢 {t("billing.limits.maxOperationCount")}:{" "}
+                              {t("billing.limits.unlimited")}
+                            </p>
+                          )}
                       </div>
                     </div>
 
@@ -1234,20 +1258,40 @@ export default function BillingPage() {
             </p>
           </div>
           {displaySub && (() => {
-            const opCap = (activePlan?.maxOperationCount ?? 0) +
-              (activeVoucher?.maxOperationCountModifier ?? 0);
-            return (
-              <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6">
-                <p className="text-sm text-[var(--color-light-text)]">
-                  {t("billing.limits.maxOperationCount")}
-                </p>
-                <p className="text-2xl font-bold text-[var(--color-secondary-blue)]">
-                  {opCap <= 0
-                    ? t("billing.limits.unlimited")
-                    : `${displaySub.remainingOperationCount.toLocaleString()} / ${opCap.toLocaleString()}`}
-                </p>
-              </div>
-            );
+            const opCounts = activePlan?.maxOperationCount;
+            const voucherMods = activeVoucher?.maxOperationCountModifier ??
+              null;
+            if (
+              opCounts && typeof opCounts === "object" &&
+              Object.keys(opCounts).length > 0
+            ) {
+              return (
+                <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6 space-y-2">
+                  {Object.entries(opCounts).map(([key, planVal]) => {
+                    const mod = voucherMods?.[key] ?? 0;
+                    const cap = Math.max(0, planVal + mod);
+                    const remaining =
+                      displaySub.remainingOperationCount?.[key] ?? 0;
+                    return (
+                      <div key={key}>
+                        <p className="text-sm text-[var(--color-light-text)]">
+                          🔢 {t("billing.limits." + key) !==
+                              `billing.limits.${key}`
+                            ? t("billing.limits." + key)
+                            : key}
+                        </p>
+                        <p className="text-lg font-bold text-[var(--color-secondary-blue)]">
+                          {cap <= 0
+                            ? t("billing.limits.unlimited")
+                            : `${remaining.toLocaleString()} / ${cap.toLocaleString()}`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }
+            return null;
           })()}
         </div>
 
@@ -1509,16 +1553,22 @@ export default function BillingPage() {
                   {activeVoucher.maxUploadBandwidthModifier} MB/s
                 </span>
               )}
-              {(activeVoucher.maxOperationCountModifier ?? 0) !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  🔢{" "}
-                  {(activeVoucher.maxOperationCountModifier ?? 0) > 0
-                    ? "+"
-                    : ""}
-                  {activeVoucher.maxOperationCountModifier}{" "}
-                  {t("billing.limits.maxOperationCount")}
-                </span>
-              )}
+              {activeVoucher.maxOperationCountModifier &&
+                typeof activeVoucher.maxOperationCountModifier === "object" &&
+                Object.entries(activeVoucher.maxOperationCountModifier).map(
+                  ([key, mod]) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full"
+                    >
+                      🔢 {mod > 0 ? "+" : ""}
+                      {mod} {t("billing.limits." + key) !==
+                          `billing.limits.${key}`
+                        ? t("billing.limits." + key)
+                        : key}
+                    </span>
+                  ),
+                )}
             </div>
           </div>
         )}

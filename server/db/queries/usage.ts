@@ -1,6 +1,6 @@
 import { getDb, rid } from "../connection.ts";
 import type { UsageRecord } from "@/src/contracts/usage";
-import { resolveMaxOperationCount } from "@/server/utils/guards";
+import { resolveAllOperationCounts } from "@/server/utils/guards";
 
 export async function getUsageForPeriod(
   companyId: string,
@@ -40,16 +40,16 @@ export async function getUsageHistory(
 export async function getOperationCount(
   companyId: string,
   systemId: string,
-): Promise<{ used: number; max: number }> {
-  const cap = await resolveMaxOperationCount({ companyId, systemId });
-  const max = cap.max;
+): Promise<{ resourceKey: string; used: number; max: number }[]> {
+  const maxMap = await resolveAllOperationCounts({ companyId, systemId });
+  const keys = Object.keys(maxMap);
 
-  if (max <= 0) {
-    return { used: 0, max: 0 };
-  }
+  if (keys.length === 0) return [];
 
   const db = await getDb();
-  const result = await db.query<[{ remainingOperationCount: number }[]]>(
+  const result = await db.query<
+    [{ remainingOperationCount: Record<string, number> | null }[]]
+  >(
     `SELECT remainingOperationCount FROM subscription
      WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
      LIMIT 1`,
@@ -59,10 +59,18 @@ export async function getOperationCount(
     },
   );
 
-  const remaining = result[0]?.[0]?.remainingOperationCount ?? 0;
-  const used = Math.max(0, max - remaining);
+  const remaining: Record<string, number> =
+    (result[0]?.[0]?.remainingOperationCount as Record<string, number>) ?? {};
 
-  return { used, max };
+  return keys.map((resourceKey) => {
+    const max = maxMap[resourceKey];
+    const rem = remaining[resourceKey] ?? 0;
+    return {
+      resourceKey,
+      used: Math.max(0, max - rem),
+      max,
+    };
+  });
 }
 
 function getCurrentPeriod(): string {
