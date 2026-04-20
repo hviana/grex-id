@@ -184,7 +184,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
         return Response.json(
           {
             success: false,
-            error: { code: "VALIDATION", errors: ["validation.field.required"] },
+            error: {
+              code: "VALIDATION",
+              errors: ["validation.field.required"],
+            },
           },
           { status: 400 },
         );

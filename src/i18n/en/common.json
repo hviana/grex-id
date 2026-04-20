@@ -181,5 +181,12 @@
   "placeholder.companyName": "Acme Inc.",
   "placeholder.documentNumber": "00.000.000/0001-00",
   "files.upload.accessDenied": "You do not have permission to upload this file",
-  "files.download.accessDenied": "You do not have permission to download this file"
+  "files.download.accessDenied": "You do not have permission to download this file",
+  "files.upload.failed": "File upload failed",
+  "files.upload.fileRequired": "A file is required",
+  "files.upload.invalidCategory": "Invalid category format",
+  "files.upload.missingFields": "Missing required upload fields",
+  "files.download.uriRequired": "File URI is required",
+  "files.download.invalidUri": "Invalid file URI",
+  "files.download.notFound": "File not found"
 }
