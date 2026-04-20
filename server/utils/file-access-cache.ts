@@ -1,8 +1,13 @@
 import { getDb } from "../db/connection.ts";
-import type { FileAccess, FileAccessSection } from "@/src/contracts/file-access.ts";
+import type {
+  FileAccess,
+  FileAccessSection,
+} from "@/src/contracts/file-access.ts";
 
 if (typeof window !== "undefined") {
-  throw new Error("file-access-cache.ts must not be imported in client-side code.");
+  throw new Error(
+    "file-access-cache.ts must not be imported in client-side code.",
+  );
 }
 
 export interface CompiledFileAccess {
@@ -25,7 +30,9 @@ const defaultSection: FileAccessSection = {
   permissions: [],
 };
 
-function normalizeSection(raw: Partial<FileAccessSection> | undefined): FileAccessSection {
+function normalizeSection(
+  raw: Partial<FileAccessSection> | undefined,
+): FileAccessSection {
   if (!raw) return { ...defaultSection };
   return {
     isolateSystem: !!raw.isolateSystem,
@@ -61,8 +68,12 @@ export async function loadFileAccessData(): Promise<FileAccessCacheData> {
     name: r.name,
     categoryPattern: r.categoryPattern,
     compiledPattern: compilePattern(r.categoryPattern),
-    download: normalizeSection(r.download as Partial<FileAccessSection> | undefined),
-    upload: normalizeSection(r.upload as Partial<FileAccessSection> | undefined),
+    download: normalizeSection(
+      r.download as Partial<FileAccessSection> | undefined,
+    ),
+    upload: normalizeSection(
+      r.upload as Partial<FileAccessSection> | undefined,
+    ),
   }));
 
   console.log(`[FileAccess] loaded ${rules.length} rules`);

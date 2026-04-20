@@ -177,9 +177,7 @@ export async function paymentExpiredTemplate(
           <tr>
             <td style="padding: 14px 24px; background-color: rgba(255, 165, 0, 0.06); border: 1px solid rgba(255, 165, 0, 0.15); border-radius: 10px;">
               <span style="font-size: 13px; line-height: 1.5; color: #ffa500;">
-                &#x2139;&#xFE0F; ${
-    t("templates.paymentExpired.note", locale)
-  }
+                &#x2139;&#xFE0F; ${t("templates.paymentExpired.note", locale)}
               </span>
             </td>
           </tr>

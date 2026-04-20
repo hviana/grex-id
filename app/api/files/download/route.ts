@@ -12,7 +12,7 @@ import {
 import Core from "@/server/utils/Core";
 import { checkFileAccess } from "@/server/utils/file-access-guard";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
-import { verifyTenantToken, hashToken } from "@/server/utils/token";
+import { hashToken, verifyTenantToken } from "@/server/utils/token";
 import { findTokenByHash } from "@/server/db/queries/tokens";
 import { isJtiRevoked } from "@/server/utils/token-revocation";
 import { getAnonymousTenant } from "@/server/utils/tenant";
@@ -210,12 +210,16 @@ export const GET = compose(
         ) {
           return {
             accessAllowed: false,
-            concurrencyIdentifiers: [fileCompanyId, `${fileCompanyId}/${fileSystemSlug}`],
+            concurrencyIdentifiers: [
+              fileCompanyId,
+              `${fileCompanyId}/${fileSystemSlug}`,
+            ],
           };
         }
 
-        const tenantDownloads = concurrencyMap[`${fileCompanyId}/${fileSystemSlug}`] ??
-          1;
+        const tenantDownloads =
+          concurrencyMap[`${fileCompanyId}/${fileSystemSlug}`] ??
+            1;
         const kbytesPerSecond = resolvedMaxBWMB > 0
           ? Math.floor((resolvedMaxBWMB * 1024) / tenantDownloads)
           : 16384;
@@ -223,7 +227,10 @@ export const GET = compose(
         return {
           accessAllowed: true,
           kbytesPerSecond,
-          concurrencyIdentifiers: [fileCompanyId, `${fileCompanyId}/${fileSystemSlug}`],
+          concurrencyIdentifiers: [
+            fileCompanyId,
+            `${fileCompanyId}/${fileSystemSlug}`,
+          ],
         };
       },
     });

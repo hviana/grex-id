@@ -55,7 +55,7 @@ export async function paymentPendingTemplate(
       </td>
     </tr>`
     : hasPaymentLink
-      ? `
+    ? `
     <tr>
       <td style="padding: 0 0 24px 0; text-align: center;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
@@ -73,8 +73,8 @@ export async function paymentPendingTemplate(
         </table>
       </td>
     </tr>`
-      : hasBarCode
-        ? `
+    : hasBarCode
+    ? `
     <tr>
       <td style="padding: 0 0 24px 0; text-align: center;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: rgba(255, 165, 0, 0.05); border: 1px solid rgba(255, 165, 0, 0.12); border-radius: 12px;">
@@ -84,15 +84,13 @@ export async function paymentPendingTemplate(
       t("templates.paymentPending.barCodeLabel", locale)
     }</span>
               <br/>
-              <span style="font-family: 'Courier New', monospace; font-size: 14px; color: #ffffff; word-break: break-all; letter-spacing: 1px;">${
-      cd.barCode
-    }</span>
+              <span style="font-family: 'Courier New', monospace; font-size: 14px; color: #ffffff; word-break: break-all; letter-spacing: 1px;">${cd.barCode}</span>
             </td>
           </tr>
         </table>
       </td>
     </tr>`
-        : "";
+    : "";
 
   const content = `
     <!-- Clock icon with glow -->

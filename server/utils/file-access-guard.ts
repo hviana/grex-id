@@ -1,10 +1,15 @@
 import { getCache } from "./cache.ts";
-import type { CompiledFileAccess, FileAccessCacheData } from "./file-access-cache.ts";
+import type {
+  CompiledFileAccess,
+  FileAccessCacheData,
+} from "./file-access-cache.ts";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
 import type { FileAccessSection } from "@/src/contracts/file-access.ts";
 
 if (typeof window !== "undefined") {
-  throw new Error("file-access-guard.ts must not be imported in client-side code.");
+  throw new Error(
+    "file-access-guard.ts must not be imported in client-side code.",
+  );
 }
 
 export interface FileAccessCheckParams {
@@ -31,8 +36,12 @@ function checkSection(
   if (needsAuth && !params.claims) return false;
 
   if (isolateUser && params.claims!.actorId !== params.fileUserId) return false;
-  if (isolateCompany && params.tenant.companyId !== params.fileCompanyId) return false;
-  if (isolateSystem && params.tenant.systemSlug !== params.fileSystemSlug) return false;
+  if (isolateCompany && params.tenant.companyId !== params.fileCompanyId) {
+    return false;
+  }
+  if (isolateSystem && params.tenant.systemSlug !== params.fileSystemSlug) {
+    return false;
+  }
 
   if (permissions.length > 0) {
     if (!params.claims) return false;
@@ -62,7 +71,9 @@ export async function checkFileAccess(
     if (!rule.compiledPattern.test(categoryStr)) continue;
     anyMatch = true;
 
-    const section = params.operation === "download" ? rule.download : rule.upload;
+    const section = params.operation === "download"
+      ? rule.download
+      : rule.upload;
     if (checkSection(section, params)) return { allowed: true };
   }
 

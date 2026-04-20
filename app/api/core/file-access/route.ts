@@ -182,8 +182,15 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
-  const { id } = body;
+  const url = new URL(req.url);
+  let id: string | undefined = url.searchParams.get("id") ?? undefined;
+
+  if (!id) {
+    try {
+      const body = await req.json();
+      id = body.id;
+    } catch {}
+  }
 
   if (!id) {
     return Response.json(

@@ -161,8 +161,8 @@ export const processPayment: HandlerFn = async (payload) => {
   const ownerEmail = owner?.email ?? "";
 
   // Async payment detection (§22.9)
-  const isAsync = providerResult.expiresInSeconds != null
-    && providerResult.continuityData != null;
+  const isAsync = providerResult.expiresInSeconds != null &&
+    providerResult.continuityData != null;
 
   if (isAsync) {
     const expiresAt = new Date(
