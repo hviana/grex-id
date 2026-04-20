@@ -1,7 +1,7 @@
 DEFINE TABLE verification_request SCHEMAFULL;
 DEFINE FIELD userId     ON verification_request TYPE record<user | lead>;
 DEFINE FIELD type       ON verification_request TYPE string
-  ASSERT $value IN ["email_verify", "phone_verify", "password_reset", "lead_update"];
+  ASSERT $value IN ["email_verify", "phone_verify", "password_reset", "lead_update", "recovery_verify"];
 DEFINE FIELD token      ON verification_request TYPE string;
 DEFINE FIELD payload    ON verification_request TYPE option<object> FLEXIBLE;
 DEFINE FIELD expiresAt  ON verification_request TYPE datetime;

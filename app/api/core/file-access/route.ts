@@ -175,8 +175,29 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     const bindings: Record<string, unknown> = { id: rid(String(id)) };
 
     if (name !== undefined) {
+      const sanitizedName = standardizeField("name", sanitizeString(name));
+      const dupCheck = await checkDuplicates("file_access", [
+        { field: "name", value: sanitizedName },
+      ]);
+      if (dupCheck.isDuplicate) {
+        const existingId = String(
+          dupCheck.conflicts[0]?.existingRecordId ?? "",
+        );
+        if (existingId !== rid(String(id)).toString()) {
+          return Response.json(
+            {
+              success: false,
+              error: {
+                code: "VALIDATION",
+                errors: ["validation.name.duplicate"],
+              },
+            },
+            { status: 409 },
+          );
+        }
+      }
       sets.push("name = $name");
-      bindings.name = standardizeField("name", sanitizeString(name));
+      bindings.name = sanitizedName;
     }
     if (categoryPattern !== undefined) {
       const sanitized = String(categoryPattern).trim().replace(/<>/g, "");
