@@ -280,10 +280,10 @@ export default function BillingPage() {
     Date | undefined
   >();
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent?: boolean) => {
     if (!companyId || !systemId || !systemToken) return;
-    setLoading(true);
-    setError(null);
+    if (!silent) setLoading(true);
+    if (!silent) setError(null);
 
     try {
       const [billingRes, plansRes] = await Promise.all([
@@ -318,9 +318,9 @@ export default function BillingPage() {
       for (const p of allPlans) map[p.id] = p;
       setPlanMap(map);
     } catch {
-      setError("common.error.network");
+      if (!silent) setError("common.error.network");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [companyId, systemId, systemToken]);
 
@@ -328,10 +328,10 @@ export default function BillingPage() {
     loadData();
   }, [loadData]);
 
-  // Poll for async payment resolution (§22.9)
+  // Poll for async payment resolution (§22.9) — silent to avoid spinner flash
   useEffect(() => {
     if (pendingAsyncPayments.length === 0) return;
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(() => loadData(true), 30000);
     return () => clearInterval(interval);
   }, [pendingAsyncPayments.length, loadData]);
 
