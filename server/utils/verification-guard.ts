@@ -56,7 +56,7 @@ export async function communicationGuard(params: {
     ]
   >(
     `LET $lastActive = (
-      SELECT id FROM verification_request
+      SELECT id, createdAt FROM verification_request
       WHERE userId = $userId
         AND type = $type
         AND usedAt IS NONE
@@ -73,14 +73,17 @@ export async function communicationGuard(params: {
       GROUP ALL
     );
 
-    LET $wCnt = array::len($windowCount) > 0 ? $windowCount[0].cnt : 0;
+    LET $wCnt = IF array::len($windowCount) > 0
+      THEN $windowCount[0].cnt
+      ELSE 0
+    END;
 
     LET $created = IF array::len($lastActive) = 0 AND $wCnt < $maxCount
     THEN (
       CREATE verification_request SET
         userId = $userId,
         type = $type,
-        token = $token,
+        token = $verificationToken,
         expiresAt = $expiresAt,
         payload = $payload
     ) ELSE [] END;
@@ -93,7 +96,7 @@ export async function communicationGuard(params: {
     {
       userId: rid(normalizedUserId),
       type,
-      token,
+      verificationToken: token,
       expiresAt,
       payload: payload ?? undefined,
       windowStart,
