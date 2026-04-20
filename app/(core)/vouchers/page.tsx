@@ -25,7 +25,7 @@ interface VoucherItem {
   apiRateLimitModifier: number;
   storageLimitModifier: number;
   fileCacheLimitModifier: number;
-  creditIncrement: number;
+  creditModifier: number;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -87,7 +87,7 @@ export default function VouchersPage() {
   const [formFileCacheLimitModifier, setFormFileCacheLimitModifier] = useState(
     "0",
   );
-  const [formCreditIncrement, setFormCreditIncrement] = useState("0");
+  const [formCreditModifier, setFormCreditModifier] = useState("0");
   const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
     { id: string; label: string }[]
   >([]);
@@ -125,7 +125,7 @@ export default function VouchersPage() {
     setFormApiRateLimitModifier("0");
     setFormStorageLimitModifier("0");
     setFormFileCacheLimitModifier("0");
-    setFormCreditIncrement("0");
+    setFormCreditModifier("0");
     setFormApplicablePlanIds([]);
     setFormExpiresAt("");
     setError(null);
@@ -142,7 +142,7 @@ export default function VouchersPage() {
     setFormFileCacheLimitModifier(
       String((item.fileCacheLimitModifier ?? 0) / 1048576),
     );
-    setFormCreditIncrement(String(item.creditIncrement));
+    setFormCreditModifier(String(item.creditModifier));
     setFormApplicablePlanIds(
       (item.applicablePlanIds ?? []).map((id) => ({
         id: String(id),
@@ -173,7 +173,7 @@ export default function VouchersPage() {
         fileCacheLimitModifier: Math.round(
           Number(formFileCacheLimitModifier) * 1048576,
         ),
-        creditIncrement: Number(formCreditIncrement),
+        creditModifier: Number(formCreditModifier),
         applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
         expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
       };
@@ -309,10 +309,11 @@ export default function VouchersPage() {
                               .toFixed(1)} MB
                           </span>
                         )}
-                        {voucher.creditIncrement > 0 && (
+                        {voucher.creditModifier !== 0 && (
                           <span>
-                            {t("core.vouchers.creditIncrement")}:{" "}
-                            +{voucher.creditIncrement}
+                            {t("core.vouchers.creditModifier")}:{" "}
+                            {voucher.creditModifier > 0 ? "+" : ""}
+                            {voucher.creditModifier}
                           </span>
                         )}
                         {voucher.applicablePlanIds &&
@@ -477,12 +478,12 @@ export default function VouchersPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.creditIncrement")}
+                {t("core.vouchers.creditModifier")}
               </label>
               <input
                 type="number"
-                value={formCreditIncrement}
-                onChange={(e) => setFormCreditIncrement(e.target.value)}
+                value={formCreditModifier}
+                onChange={(e) => setFormCreditModifier(e.target.value)}
                 placeholder="0"
                 className={inputCls}
               />

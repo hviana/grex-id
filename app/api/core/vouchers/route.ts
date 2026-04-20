@@ -63,7 +63,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     apiRateLimitModifier,
     storageLimitModifier,
     fileCacheLimitModifier,
-    creditIncrement,
+    creditModifier,
     expiresAt,
   } = body;
 
@@ -103,7 +103,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimitModifier = $apiRateLimitModifier,
         storageLimitModifier = $storageLimitModifier,
         fileCacheLimitModifier = $fileCacheLimitModifier,
-        creditIncrement = $creditIncrement,
+        creditModifier = $creditModifier,
         expiresAt = $expiresAt`,
       {
         code: standardizeField("name", sanitizeString(code)),
@@ -117,7 +117,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
         storageLimitModifier: Number(storageLimitModifier ?? 0),
         fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
-        creditIncrement: Number(creditIncrement ?? 0),
+        creditModifier: Number(creditModifier ?? 0),
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
     );
@@ -160,7 +160,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     apiRateLimitModifier,
     storageLimitModifier,
     fileCacheLimitModifier,
-    creditIncrement,
+    creditModifier,
     expiresAt,
   } = body;
 
@@ -221,9 +221,9 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       sets.push("fileCacheLimitModifier = $fileCacheLimitModifier");
       bindings.fileCacheLimitModifier = Number(fileCacheLimitModifier);
     }
-    if (creditIncrement !== undefined) {
-      sets.push("creditIncrement = $creditIncrement");
-      bindings.creditIncrement = Number(creditIncrement);
+    if (creditModifier !== undefined) {
+      sets.push("creditModifier = $creditModifier");
+      bindings.creditModifier = Number(creditModifier);
     }
     if (expiresAt !== undefined) {
       sets.push("expiresAt = $expiresAt");

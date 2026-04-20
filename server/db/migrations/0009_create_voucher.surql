@@ -13,7 +13,7 @@ DEFINE FIELD maxConcurrentUploadsModifier   ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD maxDownloadBandwidthModifier   ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD maxUploadBandwidthModifier     ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD maxOperationCountModifier      ON voucher TYPE int DEFAULT 0;
-DEFINE FIELD creditIncrement         ON voucher TYPE int DEFAULT 0;
+DEFINE FIELD creditModifier         ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD expiresAt             ON voucher TYPE option<datetime>;
 DEFINE FIELD createdAt             ON voucher TYPE datetime DEFAULT time::now();
 

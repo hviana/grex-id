@@ -14,7 +14,7 @@ export interface Voucher {
   maxDownloadBandwidthModifier: number;
   maxUploadBandwidthModifier: number;
   maxOperationCountModifier: number;
-  creditIncrement: number;
+  creditModifier: number;
   expiresAt?: string;
   createdAt: string;
 }

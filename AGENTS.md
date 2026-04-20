@@ -465,7 +465,7 @@ this table.
 | `0006_create_user_company_system.surql`    | `user_company_system`     | Unique `(userId, companyId, systemId)`. Per-(company+system) roles.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `0007_create_role.surql`                   | `role`                    | Unique `(name, systemId)`. `isBuiltIn` flag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `0008_create_plan.surql`                   | `plan`                    | `entityLimits` `option<object> FLEXIBLE`. `planCredits` int default 0. `fileCacheLimitBytes` int default 20971520 (20 MB). `maxConcurrentDownloads` int default 0 (0 = unlimited). `maxConcurrentUploads` int default 0 (0 = unlimited). `maxDownloadBandwidthMB` float default 0 (0 = unlimited). `maxUploadBandwidthMB` float default 0 (0 = unlimited). `maxOperationCount` int default 0 (0 = unlimited, operation count). `isActive` default true. Fields: name, description, systemId, price, currency, recurrenceDays, benefits, permissions, entityLimits, apiRateLimit, storageLimitBytes, fileCacheLimitBytes, planCredits, maxConcurrentDownloads, maxConcurrentUploads, maxDownloadBandwidthMB, maxUploadBandwidthMB, maxOperationCount, isActive. |
-| `0009_create_voucher.surql`                | `voucher`                 | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, fileCacheLimitModifier, entityLimitModifiers, creditIncrement, maxConcurrentDownloadsModifier, maxConcurrentUploadsModifier, maxDownloadBandwidthModifier, maxUploadBandwidthModifier, maxOperationCountModifier.                                                                                                                                                                                                                                                                                                                 |
+| `0009_create_voucher.surql`                | `voucher`                 | Unique `code`. `applicableCompanyIds` array of record (empty = universal). `applicablePlanIds` array of record (empty = valid for every plan) — §22.7. Modifiers: priceModifier, apiRateLimitModifier, storageLimitModifier, fileCacheLimitModifier, entityLimitModifiers, creditModifier, maxConcurrentDownloadsModifier, maxConcurrentUploadsModifier, maxDownloadBandwidthModifier, maxUploadBandwidthModifier, maxOperationCountModifier.                                                                                                                                                                                                                                                                                                                  |
 | `0010_create_menu_item.surql`              | `menu_item`               | `parentId` optional, unlimited depth. Index on `(systemId, parentId, sortOrder)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `0011_create_subscription.surql`           | `subscription`            | See §22. `remainingPlanCredits`, `remainingOperationCount`, `creditAlertSent`, `operationCountAlertSent`, `autoRechargeEnabled/Amount/InProgress`. Status ∈ `active                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `0012_create_payment_method.surql`         | `payment_method`          | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -2029,7 +2029,7 @@ channel event.
   (2) for each, `publish("PAYMENT_DUE", …)`; `process_payment` handler charges
   via the server payment provider.
   - **Success:** advance `currentPeriodStart`/`currentPeriodEnd`, reset
-    `remainingPlanCredits = plan.planCredits + voucher.creditIncrement` (0 when
+    `remainingPlanCredits = plan.planCredits + voucher.creditModifier` (0 when
     no voucher), reset `remainingOperationCount = resolveMaxOperationCount()`
     (plan + voucher), reset `creditAlertSent =
     false`, reset
@@ -2891,7 +2891,7 @@ domain prefix (the `t()` function strips it). Required groups:
   entityLimitModifiersHint, apiRateLimitModifier, storageLimitModifier,
   fileCacheLimitModifier, maxConcurrentDownloadsModifier,
   maxConcurrentUploadsModifier, maxDownloadBandwidthModifier,
-  maxUploadBandwidthModifier, maxOperationCountModifier, creditIncrement,
+  maxUploadBandwidthModifier, maxOperationCountModifier, creditModifier,
   applicablePlanIds, applicablePlansHint, empty, expired, expires, apiRate,
   storage
 - `menus.*` — title, selectSystem, label, emoji, componentName, sortOrder,
@@ -2940,7 +2940,7 @@ All entity forms (`SystemForm`, `RoleForm`, `PlanForm`, `VoucherForm`) use
 - **VoucherForm** — code, priceModifier, apiRateLimitModifier,
   storageLimitModifier, fileCacheLimitModifier, maxConcurrentDownloadsModifier,
   maxConcurrentUploadsModifier, maxDownloadBandwidthModifier,
-  maxUploadBandwidthModifier, maxOperationCountModifier, creditIncrement,
+  maxUploadBandwidthModifier, maxOperationCountModifier, creditModifier,
   expiresAt. `MultiBadgeField mode:"custom"` for permissions;
   `DynamicKeyValueField` for entityLimitModifiers;
   `SearchableSelectField(multiple={true})` for `applicablePlanIds` fetching
@@ -3367,10 +3367,10 @@ mask + holder name + "Default" badge when applicable.
   and the subscription reloads.
 - Displays the currently applied (non-expired) voucher — if any — as a single
   badge showing code + price effect (e.g. `−$5.00` or `+$2.00`). If the voucher
-  has `creditIncrement > 0`, a secondary badge shows the credit bonus (e.g.
-  `+500 credits`). Non-zero transfer or operation-count modifiers shown as
-  secondary badges (e.g. `+2 downloads`, `+100 operations`). Applying a new
-  voucher replaces the badge automatically.
+  has `creditModifier != 0`, a secondary badge shows the credit effect (e.g.
+  `+500 credits` or `−200 credits`, signed modifier). Non-zero transfer or
+  operation-count modifiers shown as secondary badges (e.g. `+2 downloads`,
+  `+100 operations`). Applying a new voucher replaces the badge automatically.
 - Effective price display: `GET /api/billing` returns subscriptions with
   `voucherId` **FETCHed** (full voucher object, or `NONE`). See §18.10 for the
   price rendering rule.
@@ -3529,9 +3529,9 @@ Validates in order: voucher exists; not expired; the company is in
 current `planId` is in `applicablePlanIds` (or that array is empty = all plans).
 Sets `subscription.voucherId` — single-voucher invariant: if the subscription
 already has a voucher, it is replaced atomically in the same batched query
-(§22.7). If the voucher has `creditIncrement > 0`, adds that amount to
-`subscription.remainingPlanCredits` in the same batched query. If the voucher
-has `maxOperationCountModifier != 0`, adjusts
+(§22.7). If the voucher has `creditModifier != 0`, adjusts
+`subscription.remainingPlanCredits` by that signed amount in the same batched
+query. If the voucher has `maxOperationCountModifier != 0`, adjusts
 `subscription.remainingOperationCount` by that amount (clamped to ≥ 0; 0 still
 means unlimited) in the same batched query. Returns the applied voucher's
 details so the frontend can show the effect.
@@ -3563,8 +3563,9 @@ operation cost ≤ `monthlySpendLimit`.
 Credits consumed by system-specific operations identified by i18n resource keys.
 Each plan includes `planCredits` — temporary credits valid only during the
 plan's recurrence period. On subscribe or renew, `remainingPlanCredits` is set
-to `plan.planCredits + voucher.creditIncrement` (the voucher bonus is 0 when no
-voucher is active); these expire when the period ends.
+to `plan.planCredits + voucher.creditModifier` (the voucher modifier is 0 when
+no voucher is active; negative values decrease credits); these expire when the
+period ends.
 
 **Priority (handled by `consumeCredits` in `credit-tracker.ts`):**
 
@@ -3615,7 +3616,7 @@ notified each time credits run out after a replenishment, without spam:
    the active subscription.
 2. **Plan renewal** — the recurring-billing job resets it when renewing
    (alongside
-   `remainingPlanCredits = plan.planCredits + voucher.creditIncrement`).
+   `remainingPlanCredits = plan.planCredits + voucher.creditModifier`).
 
 **`operationCountAlertSent`** resets to `false` in two scenarios:
 
@@ -3631,7 +3632,7 @@ notified each time credits run out after a replenishment, without spam:
   unlimited).
 - **On renewal** (recurring-billing job):
   `remainingPlanCredits =
-  plan.planCredits + voucher.creditIncrement` (0 when
+  plan.planCredits + voucher.creditModifier` (0 when
   no voucher); `remainingOperationCount = resolveMaxOperationCount()` (reset);
   `creditAlertSent = false`; `operationCountAlertSent = false`.
 - **On cancel:** plan credits are forfeited (not refunded);

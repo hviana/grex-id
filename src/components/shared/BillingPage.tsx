@@ -13,7 +13,7 @@ interface VoucherInfo {
   id: string;
   code: string;
   priceModifier: number; // positive = surcharge (in cents), negative = discount
-  creditIncrement: number;
+  creditModifier: number;
   maxConcurrentDownloadsModifier?: number;
   maxConcurrentUploadsModifier?: number;
   maxDownloadBandwidthModifier?: number;
@@ -821,9 +821,10 @@ export default function BillingPage() {
                       })`
                       : ""}
                   </span>
-                  {activeVoucher.creditIncrement > 0 && (
+                  {activeVoucher.creditModifier !== 0 && (
                     <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full">
-                      💰 +{activeVoucher.creditIncrement}
+                      💰 {activeVoucher.creditModifier > 0 ? "+" : ""}
+                      {activeVoucher.creditModifier}
                     </span>
                   )}
                 </div>
@@ -1467,10 +1468,10 @@ export default function BillingPage() {
                   </span>
                 )}
               </span>
-              {activeVoucher.creditIncrement > 0 && (
+              {activeVoucher.creditModifier !== 0 && (
                 <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  💰 +{activeVoucher.creditIncrement}{" "}
-                  {t("billing.credits.title")}
+                  💰 {activeVoucher.creditModifier > 0 ? "+" : ""}
+                  {activeVoucher.creditModifier} {t("billing.credits.title")}
                 </span>
               )}
               {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) !== 0 && (

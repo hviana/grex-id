@@ -485,12 +485,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    // Batch: voucher + current subscription + old voucher creditIncrement & maxOperationCountModifier (§7.2)
+    // Batch: voucher + current subscription + old voucher creditModifier & maxOperationCountModifier (§7.2)
     const batchResult = await db.query<
       [
         Record<string, unknown>[],
         { planId: string; voucherId: string | null }[],
-        { creditIncrement: number; maxOperationCountModifier: number }[],
+        { creditModifier: number; maxOperationCountModifier: number }[],
       ]
     >(
       `SELECT * FROM voucher WHERE code = $code LIMIT 1;
@@ -501,7 +501,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
          WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
          LIMIT 1)[0];
        IF $oldVoucherId != NONE {
-         SELECT creditIncrement, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
+         SELECT creditModifier, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
        } ELSE {
          SELECT NONE FROM NONE;
        };`,
@@ -573,9 +573,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    const oldCreditInc = Number(batchResult[2]?.[0]?.creditIncrement ?? 0);
-    const newCreditInc = Number(voucher.creditIncrement ?? 0);
-    const creditDelta = newCreditInc - oldCreditInc;
+    const oldCreditMod = Number(batchResult[2]?.[0]?.creditModifier ?? 0);
+    const newCreditMod = Number(voucher.creditModifier ?? 0);
+    const creditDelta = newCreditMod - oldCreditMod;
 
     const oldOpCountMod = Number(
       batchResult[2]?.[0]?.maxOperationCountModifier ?? 0,

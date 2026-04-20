@@ -41,8 +41,8 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
     const [maxOperationCountModifier, setMaxOperationCountModifier] = useState(
       (initialData?.maxOperationCountModifier as number) ?? 0,
     );
-    const [creditIncrement, setCreditIncrement] = useState(
-      (initialData?.creditIncrement as number) ?? 0,
+    const [creditModifier, setCreditModifier] = useState(
+      (initialData?.creditModifier as number) ?? 0,
     );
     const [expiresAt, setExpiresAt] = useState(
       (initialData?.expiresAt as string) ?? "",
@@ -62,7 +62,7 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
         maxDownloadBandwidthModifier,
         maxUploadBandwidthModifier,
         maxOperationCountModifier,
-        creditIncrement,
+        creditModifier,
         expiresAt: expiresAt || undefined,
         permissions,
       }),
@@ -105,12 +105,12 @@ const VoucherForm = forwardRef<SubformRef, VoucherFormProps>(
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.vouchers.creditIncrement")}
+              {t("core.vouchers.creditModifier")}
             </label>
             <input
               type="number"
-              value={creditIncrement}
-              onChange={(e) => setCreditIncrement(Number(e.target.value))}
+              value={creditModifier}
+              onChange={(e) => setCreditModifier(Number(e.target.value))}
               className={inputCls}
             />
           </div>

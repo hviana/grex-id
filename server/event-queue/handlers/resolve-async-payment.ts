@@ -44,7 +44,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
         planCredits: number;
         currency: string;
       }[],
-      { priceModifier: number; creditIncrement: number }[],
+      { priceModifier: number; creditModifier: number }[],
       { email: string; name: string }[],
       { name: string; slug: string }[],
       { status?: string }[],
@@ -57,7 +57,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
      SELECT price, recurrenceDays, planCredits, currency FROM plan WHERE id = $planId LIMIT 1;
      LET $voucherId = (SELECT VALUE voucherId FROM subscription WHERE id = $subId LIMIT 1)[0];
      IF $voucherId != NONE {
-       SELECT priceModifier, creditIncrement FROM voucher WHERE id = $voucherId LIMIT 1;
+       SELECT priceModifier, creditModifier FROM voucher WHERE id = $voucherId LIMIT 1;
      } ELSE {
        SELECT NONE FROM NONE;
      };
@@ -114,8 +114,8 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       const newEnd = new Date(
         newStart.getTime() + (plan?.recurrenceDays ?? 30) * 86400000,
       );
-      const creditIncrement = voucher?.creditIncrement ?? 0;
-      const remainingPlanCredits = (plan?.planCredits ?? 0) + creditIncrement;
+      const creditModifier = voucher?.creditModifier ?? 0;
+      const remainingPlanCredits = (plan?.planCredits ?? 0) + creditModifier;
 
       const operationCountCap = await resolveMaxOperationCount({
         companyId: String(payment.companyId),
