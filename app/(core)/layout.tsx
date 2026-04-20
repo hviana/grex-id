@@ -121,6 +121,17 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
       hiddenInPlanIds: [],
       createdAt: "",
     },
+    {
+      id: "c10",
+      systemId: "",
+      label: t("core.nav.fileAccess"),
+      emoji: "📂",
+      componentName: "file-access",
+      sortOrder: 10,
+      requiredRoles: ["superuser"],
+      hiddenInPlanIds: [],
+      createdAt: "",
+    },
   ];
 }
 

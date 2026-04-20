@@ -29,6 +29,7 @@ import { recoveryChannelResetTemplate } from "./utils/communication/templates/re
 import { loadCoreData } from "./utils/Core.ts";
 import { loadFrontCoreData } from "./utils/FrontCore.ts";
 import { loadJwtSecret } from "./utils/token.ts";
+import { loadFileAccessData } from "./utils/file-access-cache.ts";
 import FileCacheManager from "./utils/file-cache.ts";
 
 export function registerCore(): void {
@@ -36,6 +37,7 @@ export function registerCore(): void {
   registerCache("core", "data", loadCoreData);
   registerCache("core", "front-data", loadFrontCoreData);
   registerCache("core", "jwt-secret", loadJwtSecret);
+  registerCache("core", "file-access", loadFileAccessData);
 
   // Event handlers
   registerEventHandler("SEND_EMAIL", "send_email");

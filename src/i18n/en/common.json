@@ -179,5 +179,7 @@
   "company.documentOther": "Other",
   "company.documentNumber": "Document Number",
   "placeholder.companyName": "Acme Inc.",
-  "placeholder.documentNumber": "00.000.000/0001-00"
+  "placeholder.documentNumber": "00.000.000/0001-00",
+  "files.upload.accessDenied": "You do not have permission to upload this file",
+  "files.download.accessDenied": "You do not have permission to download this file"
 }

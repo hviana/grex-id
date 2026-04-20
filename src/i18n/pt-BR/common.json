@@ -179,5 +179,7 @@
   "company.documentOther": "Outro",
   "company.documentNumber": "N\u00famero do Documento",
   "placeholder.companyName": "Empresa Exemplo Ltda.",
-  "placeholder.documentNumber": "00.000.000/0001-00"
+  "placeholder.documentNumber": "00.000.000/0001-00",
+  "files.upload.accessDenied": "Você não tem permissão para enviar este arquivo",
+  "files.download.accessDenied": "Você não tem permissão para baixar este arquivo"
 }

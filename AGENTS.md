@@ -228,11 +228,11 @@ permission errors, and status messages.
 │   ├── (core)/                       # Superuser-only admin panel
 │   │   ├── layout.tsx
 │   │   ├── companies/ systems/ roles/ plans/ vouchers/ menus/ terms/
-│   │   ├── data-deletion/ front-settings/ settings/
+│   │   ├── data-deletion/ front-settings/ file-access/ settings/
 │   └── api/
 │       ├── public/{system,front-core}/route.ts
 │       ├── auth/{login,register,verify,forgot-password,reset-password,refresh,exchange,oauth/[provider],oauth/authorize,recovery-channel-reset}/route.ts
-│       ├── core/{systems,roles,plans,vouchers,menus,terms,companies,data-deletion,settings,settings/missing,front-settings}/route.ts
+│       ├── core/{systems,roles,plans,vouchers,menus,terms,companies,data-deletion,settings,settings/missing,front-settings,file-access}/route.ts
 │       ├── users/route.ts
 │       ├── companies/route.ts + [companyId]/systems/route.ts
 │       ├── billing/route.ts
@@ -256,7 +256,7 @@ permission errors, and status messages.
 │   │                  connected-app, token, file, event-queue,
 │   │                  communication, payment-provider, usage,
 │   │                  core-settings, front-core-settings, tag, lead,
-│   │                  location, recovery-channel, common)
+│   │                  location, recovery-channel, file-access, common)
 │   ├── i18n/         (§5.1)
 │   ├── hooks/        (§17.3)
 │   └── lib/          (formatters, validators — isomorphic, no secrets)
@@ -491,6 +491,7 @@ this table.
 | `0036_alter_verification_request_type.surql` | `verification_request`    | Alters `type` field to add `"recovery_verify"`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `0038_create_payment.surql`                  | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"`), paymentMethodId, transactionId, invoiceUrl, failureReason, createdAt. Indexes on (companyId, systemId), createdAt, kind. Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                                                                                                    |
 | `0043_async_payment_fields.surql`            | `payment`, `credit_purchase` | Async payment fields. Adds `continuityData option<object> FLEXIBLE` and `expiresAt option<datetime>` to `payment`. Expands `status` ASSERT on both `payment` and `credit_purchase` to include `"expired"`. Index `idx_payment_expires` on `payment FIELDS status, expiresAt`.                                                                                                                                                                                                                                                                                                                                                                                         |
+| `0044_create_file_access.surql`             | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -502,6 +503,7 @@ separate `file_metadata` table (§13.5).
 - `002_default_settings.ts` — seeds the server-only Core settings table
   (§10.1.4).
 - `003_default_front_settings.ts` — seeds the FrontCore table (§10.2.6).
+- `004_default_file_access.ts` — seeds default file access rules for logos, avatars, and lead avatars (§13.7).
 
 ---
 
@@ -870,6 +872,8 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
 | `server/utils/file-cache.ts`          | §12.12 — Sliding-Window Size-Aware LFU file cache               |
 | `server/utils/verification-guard.ts`  | §12.13 — unified communication guard (cooldown + rate limit)    |
+| `server/utils/file-access-cache.ts`   | §13.7 — file access rule loader + pattern compiler              |
+| `server/utils/file-access-guard.ts`   | §13.7 — file access guard (tenant isolation + permissions)      |
 | `server/core-register.ts`             | Core self-registration at boot                                  |
 
 #### 12.1 Rate limiter
@@ -1718,6 +1722,68 @@ resolution.
   7) — always, regardless of authentication.
 - File deletions via DataDeletion (§20.6) call `clearTenant()` for the affected
   tenant.
+
+#### 13.7 File Access Control
+
+Category-path-based access rules stored in the `file_access` table. Each rule
+defines a `categoryPattern` (glob-like with `/` separators and `*` wildcards)
+and separate download/upload sections with independent tenant isolation toggles
+and permission lists.
+
+**Pattern compilation.** `file-access-cache.ts` loads all rules at boot and
+compiles each `categoryPattern` into a `RegExp` (`*` → `[^/]+`). Cached via the
+centralized registry (`"core"::"file-access"`).
+
+**Tenant isolation (per download/upload section).** Three independent toggles:
+
+| Toggle           | Check                                          |
+| ---------------- | ---------------------------------------------- |
+| `isolateSystem`  | `tenant.systemSlug` must match `path[1]`       |
+| `isolateCompany` | `tenant.companyId` must match `path[0]`        |
+| `isolateUser`    | `claims.actorId` must match `path[2]`          |
+
+- All off → anonymous access (no authentication required).
+- Any on → authentication required; all enabled checks must pass (AND).
+- Superuser or `*` wildcard permission always passes.
+
+**Permissions.** Non-empty array → actor must have at least one listed
+permission. Empty array → no permission check beyond tenant isolation.
+
+**Guard resolution** (`server/utils/file-access-guard.ts` → `checkFileAccess`):
+
+1. Load cached rules. If none exist → allow (backward compatible).
+2. For each rule, test compiled regex against `categoryPath.join("/")`.
+3. For each matching rule, check the operation-specific section's tenant
+   isolation and permissions.
+4. If ANY matching rule allows → `{ allowed: true }`.
+5. If matching rules exist but none allow → `{ allowed: false }`.
+6. If no matching rules exist → `{ allowed: true }`.
+
+**Upload route integration.** `POST /api/files/upload` calls `checkFileAccess`
+with `operation: "upload"` before `fs.save()`. Returns 403 on denial.
+
+**Download route integration.** `GET /api/files/download` accepts an optional
+`?token=<jwt_or_api_token>` query parameter. When present, the route resolves
+the token independently (JWT via `verifyTenantToken`, API token via
+`hashToken` + `findTokenByHash`), then calls `checkFileAccess` with
+`operation: "download"` using the resolved tenant context. Returns 403 on
+denial. Without a `token` param, uses the middleware-provided `ctx.tenant`.
+
+**Core admin.** `app/(core)/file-access/page.tsx` — superuser CRUD with
+search by name. Form has shared name + category pattern fields, plus separate
+Download and Upload sections each with isolation toggles and permissions
+`MultiBadgeField`.
+
+**Default seeds** (`004_default_file_access.ts`):
+
+| Name            | Pattern          | Download          | Upload                                   |
+| --------------- | ---------------- | ----------------- | ---------------------------------------- |
+| Company Logos   | `/logos/`        | Anonymous         | user+company+system, `files:upload:logos` |
+| User Avatars    | `/avatars/`      | user+company      | user+company+system, `files:upload:avatars` |
+| Lead Avatars    | `/lead-avatars/` | Anonymous         | user+company+system, `files:upload:lead-avatars` |
+
+**Cache invalidation.** Route handlers call `updateCache("core", "file-access")`
+after mutations. `Core.reload()` also clears the file-access cache.
 
 ### 14. Event Queue
 
@@ -2799,7 +2865,7 @@ Links from the forgot-password page via
 
 The `(core)` route group is superuser-only. Layout renders a sidebar with
 hardcoded core menus: **Companies, Systems, Roles, Plans, Vouchers, Menus,
-Terms, Data Deletion, Settings, Front Settings.** All sidebar labels use i18n
+Terms, Data Deletion, Settings, Front Settings, File Access.** All sidebar labels use i18n
 keys (never hardcoded English). Header text uses
 `t("core.layout.superuserPanel")`.
 
@@ -2809,7 +2875,7 @@ Core keys live in `src/i18n/{locale}/core.json`. The JSON omits the `core.`
 domain prefix (the `t()` function strips it). Required groups:
 
 - `nav.*` — sidebar labels (companies, systems, roles, plans, vouchers, menus,
-  terms, dataDeletion, settings, frontSettings)
+  terms, dataDeletion, settings, frontSettings, fileAccess)
 - `layout.*` — layout chrome (e.g. `layout.superuserPanel`)
 - `systems.*` — CRUD keys: title, create, edit, name, slug, logo,
   termsOfService, empty
@@ -2844,6 +2910,10 @@ domain prefix (the `t()` function strips it). Required groups:
   statusFilter, access, accessHint, systems, subscription, plan, status, active,
   cancelled, pastDue, noSubscription, chart, chartCanceled, chartPaid,
   chartProjected, chartErrors, revenueOverview
+- `fileAccess.*` — title, create, edit, name, categoryPattern,
+  categoryPatternHint, download, upload, isolateSystem, isolateCompany,
+  isolateUser, permissions, permissionsHint, isolationHint, empty,
+  placeholder.name, placeholder.categoryPattern
 
 Every key must have full `en` + `pt-BR` translations.
 

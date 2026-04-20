@@ -10,6 +10,7 @@ import {
   resolveMaxConcurrentUploads,
   resolveMaxUploadBandwidth,
 } from "@/server/utils/guards";
+import { checkFileAccess } from "@/server/utils/file-access-guard";
 
 const MB = 1048576;
 
@@ -87,6 +88,26 @@ export const POST = compose(
       mimeType,
     };
     if (description) metadata.description = description;
+
+    // File access control guard
+    const accessCheck = await checkFileAccess({
+      categoryPath: category,
+      fileCompanyId: companyId,
+      fileSystemSlug: systemSlug,
+      fileUserId: userId,
+      tenant: ctx.tenant,
+      claims: ctx.claims,
+      operation: "upload",
+    });
+    if (!accessCheck.allowed) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "FORBIDDEN", message: "files.upload.accessDenied" },
+        },
+        { status: 403 },
+      );
+    }
 
     // Resolve transfer limits from plan + voucher + Core settings (§13.2)
     const core = Core.getInstance();
