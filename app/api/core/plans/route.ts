@@ -72,6 +72,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     apiRateLimit,
     storageLimitBytes,
     fileCacheLimitBytes,
+    planCredits,
+    maxConcurrentDownloads,
+    maxConcurrentUploads,
+    maxDownloadBandwidthMB,
+    maxUploadBandwidthMB,
+    maxOperationCount,
     isActive,
   } = body;
 
@@ -109,6 +115,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimit = $apiRateLimit,
         storageLimitBytes = $storageLimitBytes,
         fileCacheLimitBytes = $fileCacheLimitBytes,
+        planCredits = $planCredits,
+        maxConcurrentDownloads = $maxConcurrentDownloads,
+        maxConcurrentUploads = $maxConcurrentUploads,
+        maxDownloadBandwidthMB = $maxDownloadBandwidthMB,
+        maxUploadBandwidthMB = $maxUploadBandwidthMB,
+        maxOperationCount = $maxOperationCount,
         isActive = $isActive`,
       {
         name: standardizeField("name", sanitizeString(name)),
@@ -123,6 +135,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimit: apiRateLimit ?? 1000,
         storageLimitBytes: storageLimitBytes ?? 1073741824,
         fileCacheLimitBytes: fileCacheLimitBytes ?? 20971520,
+        planCredits: planCredits ?? 0,
+        maxConcurrentDownloads: maxConcurrentDownloads ?? 0,
+        maxConcurrentUploads: maxConcurrentUploads ?? 0,
+        maxDownloadBandwidthMB: maxDownloadBandwidthMB ?? 0,
+        maxUploadBandwidthMB: maxUploadBandwidthMB ?? 0,
+        maxOperationCount: maxOperationCount ?? 0,
         isActive: isActive ?? true,
       },
     );
@@ -175,6 +193,12 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       "apiRateLimit",
       "storageLimitBytes",
       "fileCacheLimitBytes",
+      "planCredits",
+      "maxConcurrentDownloads",
+      "maxConcurrentUploads",
+      "maxDownloadBandwidthMB",
+      "maxUploadBandwidthMB",
+      "maxOperationCount",
       "isActive",
     ] as const;
 

@@ -25,6 +25,11 @@ interface VoucherItem {
   apiRateLimitModifier: number;
   storageLimitModifier: number;
   fileCacheLimitModifier: number;
+  maxConcurrentDownloadsModifier: number;
+  maxConcurrentUploadsModifier: number;
+  maxDownloadBandwidthModifier: number;
+  maxUploadBandwidthModifier: number;
+  maxOperationCountModifier: number;
   creditModifier: number;
   expiresAt: string | null;
   createdAt: string;
@@ -87,6 +92,22 @@ export default function VouchersPage() {
   const [formFileCacheLimitModifier, setFormFileCacheLimitModifier] = useState(
     "0",
   );
+  const [
+    formMaxConcurrentDownloadsModifier,
+    setFormMaxConcurrentDownloadsModifier,
+  ] = useState("0");
+  const [
+    formMaxConcurrentUploadsModifier,
+    setFormMaxConcurrentUploadsModifier,
+  ] = useState("0");
+  const [
+    formMaxDownloadBandwidthModifier,
+    setFormMaxDownloadBandwidthModifier,
+  ] = useState("0");
+  const [formMaxUploadBandwidthModifier, setFormMaxUploadBandwidthModifier] =
+    useState("0");
+  const [formMaxOperationCountModifier, setFormMaxOperationCountModifier] =
+    useState("0");
   const [formCreditModifier, setFormCreditModifier] = useState("0");
   const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
     { id: string; label: string }[]
@@ -125,6 +146,11 @@ export default function VouchersPage() {
     setFormApiRateLimitModifier("0");
     setFormStorageLimitModifier("0");
     setFormFileCacheLimitModifier("0");
+    setFormMaxConcurrentDownloadsModifier("0");
+    setFormMaxConcurrentUploadsModifier("0");
+    setFormMaxDownloadBandwidthModifier("0");
+    setFormMaxUploadBandwidthModifier("0");
+    setFormMaxOperationCountModifier("0");
     setFormCreditModifier("0");
     setFormApplicablePlanIds([]);
     setFormExpiresAt("");
@@ -141,6 +167,21 @@ export default function VouchersPage() {
     setFormStorageLimitModifier(String(item.storageLimitModifier / 1073741824));
     setFormFileCacheLimitModifier(
       String((item.fileCacheLimitModifier ?? 0) / 1048576),
+    );
+    setFormMaxConcurrentDownloadsModifier(
+      String(item.maxConcurrentDownloadsModifier ?? 0),
+    );
+    setFormMaxConcurrentUploadsModifier(
+      String(item.maxConcurrentUploadsModifier ?? 0),
+    );
+    setFormMaxDownloadBandwidthModifier(
+      String(item.maxDownloadBandwidthModifier ?? 0),
+    );
+    setFormMaxUploadBandwidthModifier(
+      String(item.maxUploadBandwidthModifier ?? 0),
+    );
+    setFormMaxOperationCountModifier(
+      String(item.maxOperationCountModifier ?? 0),
     );
     setFormCreditModifier(String(item.creditModifier));
     setFormApplicablePlanIds(
@@ -173,6 +214,13 @@ export default function VouchersPage() {
         fileCacheLimitModifier: Math.round(
           Number(formFileCacheLimitModifier) * 1048576,
         ),
+        maxConcurrentDownloadsModifier: Number(
+          formMaxConcurrentDownloadsModifier,
+        ),
+        maxConcurrentUploadsModifier: Number(formMaxConcurrentUploadsModifier),
+        maxDownloadBandwidthModifier: Number(formMaxDownloadBandwidthModifier),
+        maxUploadBandwidthModifier: Number(formMaxUploadBandwidthModifier),
+        maxOperationCountModifier: Number(formMaxOperationCountModifier),
         creditModifier: Number(formCreditModifier),
         applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
         expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
@@ -314,6 +362,55 @@ export default function VouchersPage() {
                             {t("core.vouchers.creditModifier")}:{" "}
                             {voucher.creditModifier > 0 ? "+" : ""}
                             {voucher.creditModifier}
+                          </span>
+                        )}
+                        {voucher.maxConcurrentDownloadsModifier !== 0 && (
+                          <span>
+                            ⬇️{" "}
+                            {t("core.vouchers.maxConcurrentDownloadsModifier")}:
+                            {" "}
+                            {voucher.maxConcurrentDownloadsModifier > 0
+                              ? "+"
+                              : ""}
+                            {voucher.maxConcurrentDownloadsModifier}
+                          </span>
+                        )}
+                        {voucher.maxConcurrentUploadsModifier !== 0 && (
+                          <span>
+                            ⬆️{" "}
+                            {t("core.vouchers.maxConcurrentUploadsModifier")}:
+                            {" "}
+                            {voucher.maxConcurrentUploadsModifier > 0
+                              ? "+"
+                              : ""}
+                            {voucher.maxConcurrentUploadsModifier}
+                          </span>
+                        )}
+                        {voucher.maxDownloadBandwidthModifier !== 0 && (
+                          <span>
+                            📶{" "}
+                            {t("core.vouchers.maxDownloadBandwidthModifier")}:
+                            {" "}
+                            {voucher.maxDownloadBandwidthModifier > 0
+                              ? "+"
+                              : ""}
+                            {voucher.maxDownloadBandwidthModifier}
+                          </span>
+                        )}
+                        {voucher.maxUploadBandwidthModifier !== 0 && (
+                          <span>
+                            📶 {t("core.vouchers.maxUploadBandwidthModifier")}:
+                            {" "}
+                            {voucher.maxUploadBandwidthModifier > 0 ? "+" : ""}
+                            {voucher.maxUploadBandwidthModifier}
+                          </span>
+                        )}
+                        {voucher.maxOperationCountModifier !== 0 && (
+                          <span>
+                            🔢 {t("core.vouchers.maxOperationCountModifier")}:
+                            {" "}
+                            {voucher.maxOperationCountModifier > 0 ? "+" : ""}
+                            {voucher.maxOperationCountModifier}
                           </span>
                         )}
                         {voucher.applicablePlanIds &&
@@ -500,6 +597,79 @@ export default function VouchersPage() {
                 placeholder={t(
                   "core.vouchers.placeholder.fileCacheLimitModifier",
                 )}
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬇️ {t("core.vouchers.maxConcurrentDownloadsModifier")}
+              </label>
+              <input
+                type="number"
+                value={formMaxConcurrentDownloadsModifier}
+                onChange={(e) =>
+                  setFormMaxConcurrentDownloadsModifier(e.target.value)}
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬆️ {t("core.vouchers.maxConcurrentUploadsModifier")}
+              </label>
+              <input
+                type="number"
+                value={formMaxConcurrentUploadsModifier}
+                onChange={(e) =>
+                  setFormMaxConcurrentUploadsModifier(e.target.value)}
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {t("core.vouchers.maxDownloadBandwidthModifier")}
+              </label>
+              <input
+                type="number"
+                value={formMaxDownloadBandwidthModifier}
+                onChange={(e) =>
+                  setFormMaxDownloadBandwidthModifier(e.target.value)}
+                step="0.1"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {t("core.vouchers.maxUploadBandwidthModifier")}
+              </label>
+              <input
+                type="number"
+                value={formMaxUploadBandwidthModifier}
+                onChange={(e) =>
+                  setFormMaxUploadBandwidthModifier(e.target.value)}
+                step="0.1"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                🔢 {t("core.vouchers.maxOperationCountModifier")}
+              </label>
+              <input
+                type="number"
+                value={formMaxOperationCountModifier}
+                onChange={(e) =>
+                  setFormMaxOperationCountModifier(e.target.value)}
+                placeholder="0"
                 className={`${inputCls} placeholder-white/30`}
               />
             </div>

@@ -63,6 +63,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     apiRateLimitModifier,
     storageLimitModifier,
     fileCacheLimitModifier,
+    maxConcurrentDownloadsModifier,
+    maxConcurrentUploadsModifier,
+    maxDownloadBandwidthModifier,
+    maxUploadBandwidthModifier,
+    maxOperationCountModifier,
     creditModifier,
     expiresAt,
   } = body;
@@ -103,6 +108,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimitModifier = $apiRateLimitModifier,
         storageLimitModifier = $storageLimitModifier,
         fileCacheLimitModifier = $fileCacheLimitModifier,
+        maxConcurrentDownloadsModifier = $maxConcurrentDownloadsModifier,
+        maxConcurrentUploadsModifier = $maxConcurrentUploadsModifier,
+        maxDownloadBandwidthModifier = $maxDownloadBandwidthModifier,
+        maxUploadBandwidthModifier = $maxUploadBandwidthModifier,
+        maxOperationCountModifier = $maxOperationCountModifier,
         creditModifier = $creditModifier,
         expiresAt = $expiresAt`,
       {
@@ -117,6 +127,13 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
         storageLimitModifier: Number(storageLimitModifier ?? 0),
         fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
+        maxConcurrentDownloadsModifier: Number(
+          maxConcurrentDownloadsModifier ?? 0,
+        ),
+        maxConcurrentUploadsModifier: Number(maxConcurrentUploadsModifier ?? 0),
+        maxDownloadBandwidthModifier: Number(maxDownloadBandwidthModifier ?? 0),
+        maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
+        maxOperationCountModifier: Number(maxOperationCountModifier ?? 0),
         creditModifier: Number(creditModifier ?? 0),
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       },
@@ -160,6 +177,11 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     apiRateLimitModifier,
     storageLimitModifier,
     fileCacheLimitModifier,
+    maxConcurrentDownloadsModifier,
+    maxConcurrentUploadsModifier,
+    maxDownloadBandwidthModifier,
+    maxUploadBandwidthModifier,
+    maxOperationCountModifier,
     creditModifier,
     expiresAt,
   } = body;
@@ -224,6 +246,34 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (creditModifier !== undefined) {
       sets.push("creditModifier = $creditModifier");
       bindings.creditModifier = Number(creditModifier);
+    }
+    if (maxConcurrentDownloadsModifier !== undefined) {
+      sets.push(
+        "maxConcurrentDownloadsModifier = $maxConcurrentDownloadsModifier",
+      );
+      bindings.maxConcurrentDownloadsModifier = Number(
+        maxConcurrentDownloadsModifier,
+      );
+    }
+    if (maxConcurrentUploadsModifier !== undefined) {
+      sets.push("maxConcurrentUploadsModifier = $maxConcurrentUploadsModifier");
+      bindings.maxConcurrentUploadsModifier = Number(
+        maxConcurrentUploadsModifier,
+      );
+    }
+    if (maxDownloadBandwidthModifier !== undefined) {
+      sets.push("maxDownloadBandwidthModifier = $maxDownloadBandwidthModifier");
+      bindings.maxDownloadBandwidthModifier = Number(
+        maxDownloadBandwidthModifier,
+      );
+    }
+    if (maxUploadBandwidthModifier !== undefined) {
+      sets.push("maxUploadBandwidthModifier = $maxUploadBandwidthModifier");
+      bindings.maxUploadBandwidthModifier = Number(maxUploadBandwidthModifier);
+    }
+    if (maxOperationCountModifier !== undefined) {
+      sets.push("maxOperationCountModifier = $maxOperationCountModifier");
+      bindings.maxOperationCountModifier = Number(maxOperationCountModifier);
     }
     if (expiresAt !== undefined) {
       sets.push("expiresAt = $expiresAt");

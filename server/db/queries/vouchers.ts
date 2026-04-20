@@ -39,6 +39,12 @@ export async function createVoucher(data: {
   entityLimitModifiers?: Record<string, number>;
   apiRateLimitModifier?: number;
   storageLimitModifier?: number;
+  fileCacheLimitModifier?: number;
+  maxConcurrentDownloadsModifier?: number;
+  maxConcurrentUploadsModifier?: number;
+  maxDownloadBandwidthModifier?: number;
+  maxUploadBandwidthModifier?: number;
+  maxOperationCountModifier?: number;
   creditModifier?: number;
   expiresAt?: string;
 }): Promise<Voucher> {
@@ -58,6 +64,12 @@ export async function createVoucher(data: {
     }
       apiRateLimitModifier = $apiRateLimitModifier,
       storageLimitModifier = $storageLimitModifier,
+      fileCacheLimitModifier = $fileCacheLimitModifier,
+      maxConcurrentDownloadsModifier = $maxConcurrentDownloadsModifier,
+      maxConcurrentUploadsModifier = $maxConcurrentUploadsModifier,
+      maxDownloadBandwidthModifier = $maxDownloadBandwidthModifier,
+      maxUploadBandwidthModifier = $maxUploadBandwidthModifier,
+      maxOperationCountModifier = $maxOperationCountModifier,
       creditModifier = $creditModifier,
       expiresAt = $expiresAt`,
     {
@@ -68,6 +80,12 @@ export async function createVoucher(data: {
         : undefined,
       apiRateLimitModifier: data.apiRateLimitModifier ?? 0,
       storageLimitModifier: data.storageLimitModifier ?? 0,
+      fileCacheLimitModifier: data.fileCacheLimitModifier ?? 0,
+      maxConcurrentDownloadsModifier: data.maxConcurrentDownloadsModifier ?? 0,
+      maxConcurrentUploadsModifier: data.maxConcurrentUploadsModifier ?? 0,
+      maxDownloadBandwidthModifier: data.maxDownloadBandwidthModifier ?? 0,
+      maxUploadBandwidthModifier: data.maxUploadBandwidthModifier ?? 0,
+      maxOperationCountModifier: data.maxOperationCountModifier ?? 0,
       creditModifier: data.creditModifier ?? 0,
       expiresAt: data.expiresAt ?? undefined,
     },

@@ -45,6 +45,13 @@ export async function createPlan(data: {
   entityLimits?: Record<string, number>;
   apiRateLimit?: number;
   storageLimitBytes?: number;
+  fileCacheLimitBytes?: number;
+  planCredits?: number;
+  maxConcurrentDownloads?: number;
+  maxConcurrentUploads?: number;
+  maxDownloadBandwidthMB?: number;
+  maxUploadBandwidthMB?: number;
+  maxOperationCount?: number;
 }): Promise<Plan> {
   const db = await getDb();
   const hasEntityLimits = data.entityLimits &&
@@ -62,6 +69,13 @@ export async function createPlan(data: {
       ${hasEntityLimits ? "entityLimits = $entityLimits," : ""}
       apiRateLimit = $apiRateLimit,
       storageLimitBytes = $storageLimitBytes,
+      fileCacheLimitBytes = $fileCacheLimitBytes,
+      planCredits = $planCredits,
+      maxConcurrentDownloads = $maxConcurrentDownloads,
+      maxConcurrentUploads = $maxConcurrentUploads,
+      maxDownloadBandwidthMB = $maxDownloadBandwidthMB,
+      maxUploadBandwidthMB = $maxUploadBandwidthMB,
+      maxOperationCount = $maxOperationCount,
       isActive = true`,
     {
       ...data,
@@ -69,6 +83,13 @@ export async function createPlan(data: {
       entityLimits: hasEntityLimits ? data.entityLimits : undefined,
       apiRateLimit: data.apiRateLimit ?? 1000,
       storageLimitBytes: data.storageLimitBytes ?? 1073741824,
+      fileCacheLimitBytes: data.fileCacheLimitBytes ?? 20971520,
+      planCredits: data.planCredits ?? 0,
+      maxConcurrentDownloads: data.maxConcurrentDownloads ?? 0,
+      maxConcurrentUploads: data.maxConcurrentUploads ?? 0,
+      maxDownloadBandwidthMB: data.maxDownloadBandwidthMB ?? 0,
+      maxUploadBandwidthMB: data.maxUploadBandwidthMB ?? 0,
+      maxOperationCount: data.maxOperationCount ?? 0,
     },
   );
   return result[0][0];
@@ -93,6 +114,13 @@ export async function updatePlan(
     "entityLimits",
     "apiRateLimit",
     "storageLimitBytes",
+    "fileCacheLimitBytes",
+    "planCredits",
+    "maxConcurrentDownloads",
+    "maxConcurrentUploads",
+    "maxDownloadBandwidthMB",
+    "maxUploadBandwidthMB",
+    "maxOperationCount",
     "isActive",
   ] as const;
   for (const field of fields) {

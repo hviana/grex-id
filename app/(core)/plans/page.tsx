@@ -27,6 +27,12 @@ interface PlanItem {
   apiRateLimit: number;
   storageLimitBytes: number;
   fileCacheLimitBytes: number;
+  planCredits: number;
+  maxConcurrentDownloads: number;
+  maxConcurrentUploads: number;
+  maxDownloadBandwidthMB: number;
+  maxUploadBandwidthMB: number;
+  maxOperationCount: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -106,6 +112,16 @@ export default function PlansPage() {
   const [formApiRateLimit, setFormApiRateLimit] = useState("1000");
   const [formStorageGB, setFormStorageGB] = useState("1");
   const [formFileCacheMB, setFormFileCacheMB] = useState("20");
+  const [formPlanCredits, setFormPlanCredits] = useState("0");
+  const [formMaxConcurrentDownloads, setFormMaxConcurrentDownloads] = useState(
+    "0",
+  );
+  const [formMaxConcurrentUploads, setFormMaxConcurrentUploads] = useState("0");
+  const [formMaxDownloadBandwidthMB, setFormMaxDownloadBandwidthMB] = useState(
+    "0",
+  );
+  const [formMaxUploadBandwidthMB, setFormMaxUploadBandwidthMB] = useState("0");
+  const [formMaxOperationCount, setFormMaxOperationCount] = useState("0");
   const [formIsActive, setFormIsActive] = useState(true);
   const [loadingSystems, setLoadingSystems] = useState(true);
 
@@ -162,6 +178,12 @@ export default function PlansPage() {
     setFormApiRateLimit("1000");
     setFormStorageGB("1");
     setFormFileCacheMB("20");
+    setFormPlanCredits("0");
+    setFormMaxConcurrentDownloads("0");
+    setFormMaxConcurrentUploads("0");
+    setFormMaxDownloadBandwidthMB("0");
+    setFormMaxUploadBandwidthMB("0");
+    setFormMaxOperationCount("0");
     setFormIsActive(true);
     setError(null);
     setShowCreate(true);
@@ -186,6 +208,12 @@ export default function PlansPage() {
     setFormFileCacheMB(
       String((item.fileCacheLimitBytes ?? 20971520) / 1048576),
     );
+    setFormPlanCredits(String(item.planCredits ?? 0));
+    setFormMaxConcurrentDownloads(String(item.maxConcurrentDownloads ?? 0));
+    setFormMaxConcurrentUploads(String(item.maxConcurrentUploads ?? 0));
+    setFormMaxDownloadBandwidthMB(String(item.maxDownloadBandwidthMB ?? 0));
+    setFormMaxUploadBandwidthMB(String(item.maxUploadBandwidthMB ?? 0));
+    setFormMaxOperationCount(String(item.maxOperationCount ?? 0));
     setFormIsActive(item.isActive ?? true);
     setError(null);
     setValidationErrors([]);
@@ -212,6 +240,12 @@ export default function PlansPage() {
         apiRateLimit: Number(formApiRateLimit),
         storageLimitBytes: Math.round(Number(formStorageGB) * 1073741824),
         fileCacheLimitBytes: Math.round(Number(formFileCacheMB) * 1048576),
+        planCredits: Number(formPlanCredits),
+        maxConcurrentDownloads: Number(formMaxConcurrentDownloads),
+        maxConcurrentUploads: Number(formMaxConcurrentUploads),
+        maxDownloadBandwidthMB: Number(formMaxDownloadBandwidthMB),
+        maxUploadBandwidthMB: Number(formMaxUploadBandwidthMB),
+        maxOperationCount: Number(formMaxOperationCount),
         isActive: formIsActive,
       };
 
@@ -364,6 +398,45 @@ export default function PlansPage() {
                     <span>🗂️ {t("core.plans.fileCache")}</span>
                     <span className="text-white">
                       {formatStorage(plan.fileCacheLimitBytes ?? 20971520)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{t("core.plans.planCredits")}</span>
+                    <span className="text-white">{plan.planCredits ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>⬇️ {t("core.plans.maxConcurrentDownloads")}</span>
+                    <span className="text-white">
+                      {(plan.maxConcurrentDownloads ?? 0) ||
+                        t("billing.limits.unlimited")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>⬆️ {t("core.plans.maxConcurrentUploads")}</span>
+                    <span className="text-white">
+                      {(plan.maxConcurrentUploads ?? 0) ||
+                        t("billing.limits.unlimited")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>📶 {t("core.plans.maxDownloadBandwidthMB")}</span>
+                    <span className="text-white">
+                      {(plan.maxDownloadBandwidthMB ?? 0) ||
+                        t("billing.limits.unlimited")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>📶 {t("core.plans.maxUploadBandwidthMB")}</span>
+                    <span className="text-white">
+                      {(plan.maxUploadBandwidthMB ?? 0) ||
+                        t("billing.limits.unlimited")}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🔢 {t("core.plans.maxOperationCount")}</span>
+                    <span className="text-white">
+                      {(plan.maxOperationCount ?? 0) ||
+                        t("billing.limits.unlimited")}
                     </span>
                   </div>
                 </div>
@@ -570,6 +643,92 @@ export default function PlansPage() {
                 min="0"
                 step="1"
                 placeholder={t("core.plans.placeholder.fileCacheMB")}
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {t("core.plans.planCredits")}
+              </label>
+              <input
+                type="number"
+                value={formPlanCredits}
+                onChange={(e) => setFormPlanCredits(e.target.value)}
+                min="0"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬇️ {t("core.plans.maxConcurrentDownloads")}
+              </label>
+              <input
+                type="number"
+                value={formMaxConcurrentDownloads}
+                onChange={(e) => setFormMaxConcurrentDownloads(e.target.value)}
+                min="0"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬆️ {t("core.plans.maxConcurrentUploads")}
+              </label>
+              <input
+                type="number"
+                value={formMaxConcurrentUploads}
+                onChange={(e) => setFormMaxConcurrentUploads(e.target.value)}
+                min="0"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {t("core.plans.maxDownloadBandwidthMB")}
+              </label>
+              <input
+                type="number"
+                value={formMaxDownloadBandwidthMB}
+                onChange={(e) => setFormMaxDownloadBandwidthMB(e.target.value)}
+                min="0"
+                step="0.1"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {t("core.plans.maxUploadBandwidthMB")}
+              </label>
+              <input
+                type="number"
+                value={formMaxUploadBandwidthMB}
+                onChange={(e) => setFormMaxUploadBandwidthMB(e.target.value)}
+                min="0"
+                step="0.1"
+                placeholder="0"
+                className={`${inputCls} placeholder-white/30`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                🔢 {t("core.plans.maxOperationCount")}
+              </label>
+              <input
+                type="number"
+                value={formMaxOperationCount}
+                onChange={(e) => setFormMaxOperationCount(e.target.value)}
+                min="0"
+                placeholder="0"
                 className={`${inputCls} placeholder-white/30`}
               />
             </div>
