@@ -55,6 +55,7 @@ export async function createDetection(data: {
   leadId?: string;
   faceId?: string;
   score: number;
+  eventId?: string;
 }): Promise<Detection> {
   const db = await getDb();
   const leadId = data.leadId ? normalizeRecordId(data.leadId) : null;
@@ -75,6 +76,10 @@ export async function createDetection(data: {
   if (faceId) {
     sets.push("faceId = $faceId");
     bindings.faceId = rid(faceId);
+  }
+  if (data.eventId) {
+    sets.push("eventId = $eventId");
+    bindings.eventId = data.eventId;
   }
   const result = await db.query<[Detection[]]>(
     `CREATE grexid_detection SET ${sets.join(", ")}`,

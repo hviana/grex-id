@@ -21,6 +21,8 @@ const DEFAULTS: Record<string, string> = {
 };
 
 const SLUG = "grex-id";
+const MAX_SETTINGS_CACHES = 100;
+const trackedSettingsCaches = new Set<string>();
 
 function settingsCacheName(companyId: string, systemId: string): string {
   return `settings:${companyId}:${systemId}`;
@@ -49,6 +51,17 @@ export function registerSettingsCache(
 ): void {
   const name = settingsCacheName(companyId, systemId);
   registerCache(SLUG, name, () => loadSettings(companyId, systemId));
+  trackedSettingsCaches.add(name);
+
+  // Evict oldest entries if cache count exceeds limit
+  if (trackedSettingsCaches.size > MAX_SETTINGS_CACHES) {
+    const iter = trackedSettingsCaches.values();
+    const oldest = iter.next().value;
+    if (oldest) {
+      clearCache(SLUG, oldest);
+      trackedSettingsCaches.delete(oldest);
+    }
+  }
 }
 
 async function getOrRegisterSettingsCache(

@@ -64,13 +64,15 @@ export async function searchFaceByEmbedding(
   limit: number = 1,
   candidates: number = 40,
 ): Promise<{ id: string; leadId: string | null; score: number }[]> {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeCandidates = Math.max(1, Math.floor(candidates));
   const db = await getDb();
   const result = await db.query<
     [{ id: unknown; leadId: unknown; score: number }[]]
   >(
     `SELECT id, leadId, vector::distance::knn() AS score
      FROM face
-     WHERE embedding_type1 <|${limit},${candidates}|> $embedding
+     WHERE embedding_type1 <|${safeLimit},${safeCandidates}|> $embedding
      ORDER BY score`,
     { embedding },
   );
@@ -123,6 +125,8 @@ export async function searchOrphanFaceByEmbedding(
   limit: number = 1,
   candidates: number = 40,
 ): Promise<{ id: string; score: number }[]> {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeCandidates = Math.max(1, Math.floor(candidates));
   const db = await getDb();
   const result = await db.query<
     [{ id: unknown; score: number }[]]
@@ -130,7 +134,7 @@ export async function searchOrphanFaceByEmbedding(
     `SELECT id, vector::distance::knn() AS score
      FROM face
      WHERE leadId IS NONE
-       AND embedding_type1 <|${limit},${candidates}|> $embedding
+       AND embedding_type1 <|${safeLimit},${safeCandidates}|> $embedding
      ORDER BY score`,
     { embedding },
   );

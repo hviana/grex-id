@@ -18,7 +18,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
         success: false,
         error: {
           code: "VALIDATION",
-          message: "validation.dateRange.required",
+          errors: ["validation.dateRange.required"],
         },
       },
       { status: 400 },
@@ -35,7 +35,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
         success: false,
         error: {
           code: "VALIDATION",
-          message: "validation.usage.maxRange",
+          errors: ["validation.usage.maxRange"],
         },
       },
       { status: 400 },

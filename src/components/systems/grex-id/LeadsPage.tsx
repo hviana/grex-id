@@ -82,13 +82,12 @@ const OwnerSubform = forwardRef<SubformRef, OwnerSubformProps>(
 OwnerSubform.displayName = "OwnerSubform";
 
 function useLeadSubforms(): SubformConfig[] {
-  const { user, systemToken } = useAuth();
+  const { systemToken } = useAuth();
   const { companyId, systemId, systemSlug } = useSystemContext();
 
   const safeCompanyId = companyId ?? "";
   const safeSystemId = systemId ?? "";
   const safeSystemSlug = systemSlug ?? "";
-  const safeUserId = user?.id ?? "";
 
   return useMemo(() => [
     {
@@ -98,7 +97,6 @@ function useLeadSubforms(): SubformConfig[] {
         companyId: safeCompanyId,
         systemId: safeSystemId,
         systemSlug: safeSystemSlug,
-        userId: safeUserId,
       },
     },
     {
@@ -107,7 +105,6 @@ function useLeadSubforms(): SubformConfig[] {
       extraProps: {
         companyId: safeCompanyId,
         systemSlug: safeSystemSlug,
-        userId: safeUserId,
         systemToken,
       },
     },
@@ -115,7 +112,7 @@ function useLeadSubforms(): SubformConfig[] {
       component: OwnerSubform as SubformConfig["component"],
       key: "owner",
     },
-  ], [safeCompanyId, safeSystemId, safeSystemSlug, safeUserId, systemToken]);
+  ], [safeCompanyId, safeSystemId, safeSystemSlug, systemToken]);
 }
 
 export default function LeadsPage() {
@@ -136,6 +133,11 @@ export default function LeadsPage() {
       if (params.limit) qs.set("limit", String(params.limit));
       if (params.cursor) qs.set("cursor", String(params.cursor));
       if (params.search) qs.set("search", String(params.search));
+      if (params.filters) {
+        for (const [key, value] of Object.entries(params.filters)) {
+          if (value) qs.set(key, String(value));
+        }
+      }
       qs.set("companyId", companyId);
       qs.set("systemId", systemId);
 

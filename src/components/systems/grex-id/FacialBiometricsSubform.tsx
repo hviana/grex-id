@@ -319,15 +319,15 @@ const FacialBiometricsSubform = forwardRef<
       setUploading(true);
       try {
         const blob = await (await fetch(dataUrl)).blob();
+        const fileUuid = crypto.randomUUID();
         const formData = new FormData();
         formData.append(
           "file",
-          new File([blob], `face_${Date.now()}.jpg`, { type: "image/jpeg" }),
+          new File([blob], `face_${fileUuid}.jpg`, { type: "image/jpeg" }),
         );
-        formData.append("companyId", companyId ?? "0");
         formData.append("systemSlug", systemSlug ?? "grex-id");
-        formData.append("userId", userId ?? "0");
         formData.append("category", JSON.stringify(["avatars"]));
+        formData.append("fileUuid", fileUuid);
 
         const headers: HeadersInit = {};
         if (systemToken) headers["Authorization"] = `Bearer ${systemToken}`;

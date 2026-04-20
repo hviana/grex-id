@@ -17,7 +17,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
           success: false,
           error: {
             code: "VALIDATION",
-            message: "validation.grexid.detectFields",
+            errors: ["validation.grexid.detectFields"],
           },
         },
         { status: 400 },
@@ -31,7 +31,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
             success: false,
             error: {
               code: "VALIDATION",
-              message: "validation.embedding.dimensions",
+              errors: ["validation.embedding.dimensions"],
             },
           },
           { status: 400 },
@@ -55,7 +55,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       {
         success: false,
         error: {
-          code: "INTERNAL",
+          code: "ERROR",
           message: "common.error.generic",
         },
       },

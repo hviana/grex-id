@@ -16,6 +16,7 @@ import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 export default function GrexIdHomePage() {
   const { t } = useLocale();
   const { systemInfo } = usePublicSystem("grex-id");
+  const systemName = systemInfo?.name ?? "Grex ID";
   const [showForm, setShowForm] = useState(false);
   const [botToken, setBotToken] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -199,9 +200,8 @@ export default function GrexIdHomePage() {
           {/* Title */}
           <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter">
             <span className="bg-gradient-to-r from-[var(--color-primary-green)] via-[var(--color-light-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
-              Grex
+              {systemName}
             </span>
-            <span className="text-white/90">ID</span>
           </h1>
 
           {/* Subtitle */}
@@ -772,9 +772,8 @@ export default function GrexIdHomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <h3 className="text-2xl font-black mb-2">
             <span className="bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
-              Grex
+              {systemName}
             </span>
-            <span className="text-white/80">ID</span>
           </h3>
           <p className="text-[var(--color-light-text)] text-sm mb-1">
             {t("systems.grex-id.home.footer")}

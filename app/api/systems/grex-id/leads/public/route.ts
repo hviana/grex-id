@@ -79,7 +79,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "INTERNAL", message: "common.error.generic" },
+        error: { code: "ERROR", message: "common.error.generic" },
       },
       { status: 500 },
     );

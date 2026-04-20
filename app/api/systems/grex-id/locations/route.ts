@@ -43,7 +43,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.fields.required" },
+        error: { code: "VALIDATION", errors: ["validation.fields.required"] },
       },
       { status: 400 },
     );
@@ -71,7 +71,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.id.required" },
+        error: { code: "VALIDATION", errors: ["validation.id.required"] },
       },
       { status: 400 },
     );
@@ -89,7 +89,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", message: "validation.id.required" },
+        error: { code: "VALIDATION", errors: ["validation.id.required"] },
       },
       { status: 400 },
     );

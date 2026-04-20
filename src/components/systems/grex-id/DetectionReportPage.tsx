@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
@@ -158,6 +157,7 @@ export default function DetectionReportPage() {
   }, [fetchStats]);
 
   const handleDateChange = (start: Date, end: Date) => {
+    setPage(0);
     setDateRange({
       start: start.toISOString(),
       end: end.toISOString(),
@@ -337,6 +337,14 @@ export default function DetectionReportPage() {
     }));
   }, [individuals, t, locale]);
 
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const paginatedIndividuals = individuals.slice(
+    page * PAGE_SIZE,
+    (page + 1) * PAGE_SIZE,
+  );
+  const totalPages = Math.ceil(individuals.length / PAGE_SIZE);
+
   const hasChartData = individuals.length > 0;
 
   return (
@@ -479,7 +487,7 @@ export default function DetectionReportPage() {
 
       {individuals.length > 0 && (
         <div className="space-y-3">
-          {individuals.map((item) => (
+          {paginatedIndividuals.map((item) => (
             <div
               key={item.faceId}
               className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300"
@@ -489,15 +497,12 @@ export default function DetectionReportPage() {
                 <div className="flex-shrink-0">
                   {item.leadAvatarUri
                     ? (
-                      <Image
+                      <img
                         src={`/api/files/download?uri=${
                           encodeURIComponent(item.leadAvatarUri)
                         }`}
                         alt={item.leadName ??
                           t("systems.grex-id.report.unknownPerson")}
-                        width={56}
-                        height={56}
-                        unoptimized
                         className="w-14 h-14 rounded-full object-cover border-2 border-[var(--color-primary-green)]/30"
                       />
                     )
@@ -590,6 +595,29 @@ export default function DetectionReportPage() {
               </div>
             </div>
           ))}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-xs font-medium text-[var(--color-light-text)] hover:border-[var(--color-primary-green)]/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ← {t("common.previous")}
+              </button>
+              <span className="text-xs text-[var(--color-light-text)]">
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-xs font-medium text-[var(--color-light-text)] hover:border-[var(--color-primary-green)]/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {t("common.next")} →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

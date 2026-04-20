@@ -46,22 +46,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
       ? standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
-    const emailErrors = validateField("email", email, "lead");
-    const nameErrors = validateField("name", name, "lead");
-    const allErrors = [...emailErrors, ...nameErrors];
-
     if (!companyId || !systemId) {
       return Response.json(
         {
           success: false,
           error: {
             code: "VALIDATION",
-            message: "validation.companyAndSystem.required",
+            errors: ["validation.companyAndSystem.required"],
           },
         },
         { status: 400 },
       );
     }
+
+    const emailErrors = validateField("email", email, "lead");
+    const nameErrors = validateField("name", name, "lead");
+    const allErrors = [...emailErrors, ...nameErrors];
 
     if (!profile?.name || allErrors.length > 0) {
       return Response.json(
@@ -83,7 +83,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     let lead;
-    const existing = await findLeadByEmailOrPhone(email!, phone);
+    const existing = email
+      ? await findLeadByEmailOrPhone(email, phone)
+      : phone
+      ? await findLeadByEmailOrPhone("", phone)
+      : null;
 
     if (existing) {
       const alreadyAssociated = await isLeadAssociated(
@@ -110,7 +114,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       await syncLeadCompanyIds(existing.id);
     } else {
       const dup = await checkDuplicates("lead", [
-        { field: "email", value: email! },
+        { field: "email", value: email ?? null },
         { field: "phone", value: phone },
       ]);
       if (dup.isDuplicate) {
@@ -191,7 +195,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             success: false,
             error: {
               code: "VALIDATION",
-              message: "validation.companyAndSystem.required",
+              errors: ["validation.companyAndSystem.required"],
             },
           },
           { status: 400 },
@@ -251,7 +255,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       return Response.json(
         {
           success: false,
-          error: { code: "VALIDATION", message: "validation.id.required" },
+          error: { code: "VALIDATION", errors: ["validation.id.required"] },
         },
         { status: 400 },
       );
@@ -320,7 +324,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
             success: false,
             error: {
               code: "VALIDATION",
-              message: "validation.companyAndSystem.required",
+              errors: ["validation.companyAndSystem.required"],
             },
           },
           { status: 400 },

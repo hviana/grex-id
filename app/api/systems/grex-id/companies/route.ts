@@ -14,35 +14,36 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   try {
     const db = await getDb();
-    // Scope to companies the current user has access to via company_user
     const result = await db.query<
-      [unknown[], { id: string; companyId: { id: string; name: string } }[]]
+      [{ id: string; companyId: { id: string; name: string } }[]]
     >(
       `LET $sys = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1);
        SELECT companyId FROM company_system
        WHERE systemId = $sys[0].id
          AND companyId IN (SELECT companyId FROM company_user WHERE userId = $userId)
-       FETCH companyId;`,
-      { systemSlug: ctx.tenant.systemSlug, userId: ctx.claims!.actorId },
+         AND companyId.name @@ $search
+       FETCH companyId
+       LIMIT 20`,
+      {
+        systemSlug: ctx.tenant.systemSlug,
+        userId: ctx.claims!.actorId,
+        search,
+      },
     );
 
-    const rows = result[1] ?? [];
-    const searchLower = search.toLowerCase();
+    const rows = result[0] ?? [];
     const data = rows
-      .filter((row) => {
+      .map((row) => {
         const company = row.companyId as
           | { id: string; name: string }
           | undefined;
-        return company?.name?.toLowerCase().includes(searchLower);
-      })
-      .slice(0, 20)
-      .map((row) => {
-        const company = row.companyId as { id: string; name: string };
+        if (!company?.id) return null;
         return {
           id: normalizeRecordId(company.id) ?? company.id,
           label: company.name,
         };
-      });
+      })
+      .filter((item): item is { id: string; label: string } => item !== null);
 
     return Response.json({ success: true, data });
   } catch {
