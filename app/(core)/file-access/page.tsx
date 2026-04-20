@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
@@ -44,24 +45,29 @@ const formSubforms: SubformConfig[] = [
   },
 ];
 
-async function fetchFileAccess(
-  params: CursorParams & { search?: string },
-): Promise<PaginatedResult<FileAccessItem>> {
-  const qs = new URLSearchParams();
-  if (params.search) qs.set("search", params.search);
-  if (params.cursor) qs.set("cursor", params.cursor);
-  qs.set("limit", String(params.limit));
-  const res = await fetch(`/api/core/file-access?${qs}`);
-  const json = await res.json();
-  return {
-    data: json.data ?? [],
-    nextCursor: json.nextCursor ?? null,
-    prevCursor: null,
+function createFetchFileAccess(token: string) {
+  return async function fetchFileAccess(
+    params: CursorParams & { search?: string },
+  ): Promise<PaginatedResult<FileAccessItem>> {
+    const qs = new URLSearchParams();
+    if (params.search) qs.set("search", params.search);
+    if (params.cursor) qs.set("cursor", params.cursor);
+    qs.set("limit", String(params.limit));
+    const res = await fetch(`/api/core/file-access?${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    return {
+      data: json.data ?? [],
+      nextCursor: json.nextCursor ?? null,
+      prevCursor: null,
+    };
   };
 }
 
 export default function FileAccessPage() {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
 
   const renderItem = (item: FileAccessItem, controls: React.ReactNode) => {
     return (
@@ -143,7 +149,7 @@ export default function FileAccessPage() {
 
       <GenericList<FileAccessItem>
         entityName={t("core.fileAccess.create")}
-        fetchFn={fetchFileAccess}
+        fetchFn={createFetchFileAccess(systemToken ?? "")}
         renderItem={renderItem}
         createRoute="/api/core/file-access"
         editRoute={() => "/api/core/file-access"}

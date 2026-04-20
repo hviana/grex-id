@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import SearchField from "@/src/components/shared/SearchField";
 import CreateButton from "@/src/components/shared/CreateButton";
@@ -64,6 +65,7 @@ function kvToModifiers(kv: EntityLimitEntry[]): Record<string, number> | null {
 
 export default function VouchersPage() {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -96,7 +98,9 @@ export default function VouchersPage() {
     try {
       const params = new URLSearchParams();
       if (q) params.set("search", q);
-      const res = await fetch(`/api/core/vouchers?${params}`);
+      const res = await fetch(`/api/core/vouchers?${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setVouchers(json.data ?? []);
     } finally {
@@ -177,7 +181,10 @@ export default function VouchersPage() {
       const method = editItem ? "PUT" : "POST";
       const res = await fetch("/api/core/vouchers", {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
@@ -200,7 +207,10 @@ export default function VouchersPage() {
   const handleDelete = async (id: string) => {
     await fetch("/api/core/vouchers", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({ id }),
     });
     load(search);
@@ -505,7 +515,9 @@ export default function VouchersPage() {
               fetchFn={async (search: string) => {
                 const params = new URLSearchParams();
                 if (search) params.set("search", search);
-                const res = await fetch(`/api/core/plans?${params}`);
+                const res = await fetch(`/api/core/plans?${params}`, {
+                  headers: { Authorization: `Bearer ${systemToken}` },
+                });
                 const json = await res.json();
                 return (json.data ?? []).map((
                   p: { id: string; name: string },

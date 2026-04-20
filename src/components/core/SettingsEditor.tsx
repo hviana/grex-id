@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import SearchField from "@/src/components/shared/SearchField";
@@ -28,6 +29,7 @@ export default function SettingsEditor(
   { mode = "core" }: SettingsEditorProps,
 ) {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const isFront = mode === "front";
   const apiPath = isFront ? "/api/core/front-settings" : "/api/core/settings";
   const titleKey = isFront ? "core.frontSettings.title" : "core.settings.title";
@@ -52,7 +54,9 @@ export default function SettingsEditor(
       const params = selectedSystem
         ? `?systemSlug=${encodeURIComponent(selectedSystem)}`
         : "";
-      const res = await fetch(`${apiPath}${params}`);
+      const res = await fetch(`${apiPath}${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setSettings(json.data?.settings ?? json.data ?? []);
     } finally {
@@ -61,7 +65,9 @@ export default function SettingsEditor(
   };
 
   useEffect(() => {
-    fetch("/api/core/systems")
+    fetch("/api/core/systems", {
+      headers: { Authorization: `Bearer ${systemToken}` },
+    })
       .then((r) => r.json())
       .then((json) => {
         if (json.success) {
@@ -117,7 +123,10 @@ export default function SettingsEditor(
       if (selectedSystem) body.systemSlug = selectedSystem;
       const res = await fetch(apiPath, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify(body),
       });
       const json = await res.json();
@@ -141,7 +150,10 @@ export default function SettingsEditor(
       if (selectedSystem) body.systemSlug = selectedSystem;
       await fetch(apiPath, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify(body),
       });
       load();

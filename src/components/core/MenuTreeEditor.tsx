@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import DeleteButton from "@/src/components/shared/DeleteButton";
@@ -64,6 +65,7 @@ function isIncomplete(node: TreeNode): boolean {
 
 export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<MenuItemData | null>(null);
@@ -100,6 +102,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
         `/api/core/roles?systemId=${encodeURIComponent(systemId)}&search=${
           encodeURIComponent(search)
         }&limit=20`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
       return (json.data ?? []).map((r: { name: string }) => r.name);
@@ -113,6 +116,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
         `/api/core/plans?systemId=${encodeURIComponent(systemId)}&search=${
           encodeURIComponent(search)
         }&limit=20`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
       return (json.data ?? []).map((p: { id: string; name: string }) => {
@@ -129,6 +133,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
     try {
       const res = await fetch(
         `/api/core/menus?systemId=${systemId}&limit=200`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
       if (json.success) setItems(json.data ?? []);
@@ -161,7 +166,10 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
 
       const res = await fetch("/api/core/menus", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify({
           systemId,
           parentId: parentId || null,
@@ -199,6 +207,7 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
       try {
         const res = await fetch(
           `/api/core/plans?systemId=${encodeURIComponent(systemId)}&limit=200`,
+          { headers: { Authorization: `Bearer ${systemToken}` } },
         );
         const json = await res.json();
         const planMap = new Map<string, string>();
@@ -228,7 +237,10 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
     try {
       const res = await fetch("/api/core/menus", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify({
           id: editItem.id,
           label: formLabel,
@@ -260,7 +272,10 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
   const handleDelete = async (id: string) => {
     await fetch("/api/core/menus", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({ id }),
     });
     load();
@@ -309,7 +324,10 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
 
     await fetch("/api/core/menus", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({
         id: dragId,
         parentId: newParentId,

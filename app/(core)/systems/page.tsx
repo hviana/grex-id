@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 
 import Spinner from "@/src/components/shared/Spinner";
 import SearchField from "@/src/components/shared/SearchField";
@@ -22,6 +23,7 @@ interface SystemItem {
 
 export default function SystemsPage() {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const [systems, setSystems] = useState<SystemItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -39,7 +41,9 @@ export default function SystemsPage() {
     try {
       const params = new URLSearchParams();
       if (q) params.set("search", q);
-      const res = await fetch(`/api/core/systems?${params}`);
+      const res = await fetch(`/api/core/systems?${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setSystems(json.data ?? []);
     } finally {
@@ -82,7 +86,10 @@ export default function SystemsPage() {
       const method = isEdit ? "PUT" : "POST";
       const res = await fetch("/api/core/systems", {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify({
           id: editItem?.id,
           name: formName,
@@ -110,7 +117,10 @@ export default function SystemsPage() {
   const handleDelete = async (id: string) => {
     await fetch("/api/core/systems", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({ id }),
     });
     load(search);

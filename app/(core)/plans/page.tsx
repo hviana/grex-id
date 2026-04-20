@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import SearchField from "@/src/components/shared/SearchField";
 import CreateButton from "@/src/components/shared/CreateButton";
@@ -79,6 +80,7 @@ function kvToEntityLimits(
 
 export default function PlansPage() {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [systems, setSystems] = useState<SystemOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,9 @@ export default function PlansPage() {
   const loadSystems = async () => {
     setLoadingSystems(true);
     try {
-      const res = await fetch("/api/core/systems?limit=200");
+      const res = await fetch("/api/core/systems?limit=200", {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setSystems(json.data ?? []);
     } catch {
@@ -125,7 +129,9 @@ export default function PlansPage() {
     try {
       const params = new URLSearchParams();
       if (q) params.set("search", q);
-      const res = await fetch(`/api/core/plans?${params}`);
+      const res = await fetch(`/api/core/plans?${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setPlans(json.data ?? []);
     } finally {
@@ -212,7 +218,10 @@ export default function PlansPage() {
       const method = editItem ? "PUT" : "POST";
       const res = await fetch("/api/core/plans", {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
@@ -235,7 +244,10 @@ export default function PlansPage() {
   const handleDelete = async (id: string) => {
     await fetch("/api/core/plans", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({ id }),
     });
     load(search);

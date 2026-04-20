@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import SearchField from "@/src/components/shared/SearchField";
 import CreateButton from "@/src/components/shared/CreateButton";
@@ -27,6 +28,7 @@ interface SystemOption {
 
 export default function RolesPage() {
   const { t } = useLocale();
+  const { systemToken } = useAuth();
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [systems, setSystems] = useState<SystemOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,9 @@ export default function RolesPage() {
   const loadSystems = async () => {
     setLoadingSystems(true);
     try {
-      const res = await fetch("/api/core/systems?limit=200");
+      const res = await fetch("/api/core/systems?limit=200", {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setSystems(json.data ?? []);
     } catch {
@@ -60,7 +64,9 @@ export default function RolesPage() {
     try {
       const params = new URLSearchParams();
       if (q) params.set("search", q);
-      const res = await fetch(`/api/core/roles?${params}`);
+      const res = await fetch(`/api/core/roles?${params}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
       const json = await res.json();
       if (json.success) setRoles(json.data ?? []);
     } finally {
@@ -113,7 +119,10 @@ export default function RolesPage() {
       const method = editItem ? "PUT" : "POST";
       const res = await fetch("/api/core/roles", {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${systemToken}`,
+        },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
@@ -136,7 +145,10 @@ export default function RolesPage() {
   const handleDelete = async (id: string) => {
     await fetch("/api/core/roles", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
       body: JSON.stringify({ id }),
     });
     load(search);

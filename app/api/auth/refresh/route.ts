@@ -96,7 +96,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
         );
         const roles = membershipResult[0]?.[0]?.roles ?? claims.roles;
         const permissions = [
-          ...new Set(membershipResult[1]?.flatMap((r) => r.permissions ?? []) ?? []),
+          ...new Set(
+            membershipResult[1]?.flatMap((r) => r.permissions ?? []) ?? [],
+          ),
         ];
         updatedClaims = { ...claims, roles, permissions };
       }
