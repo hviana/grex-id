@@ -85,11 +85,13 @@ function extractIds(badges: BadgeValue[]): string[] {
 export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const tenant = useSystemContext();
-  const companyId = tenant?.companyId;
-  const systemId = tenant?.systemId;
 
   const isCore = mode === "core";
+
+  // Only use system context for tenant mode
+  const tenant = isCore ? null : useSystemContext();
+  const companyId = isCore ? "0" : tenant?.companyId;
+  const systemId = isCore ? "0" : tenant?.systemId;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
