@@ -37,6 +37,16 @@ function LoginContent() {
   const systemParam = systemSlug
     ? `?system=${encodeURIComponent(systemSlug)}`
     : "";
+  const verifyParams = new URLSearchParams();
+  if (systemSlug) {
+    verifyParams.set("system", systemSlug);
+  }
+  if (email) {
+    verifyParams.set("email", email);
+  }
+  const verifyHref = `/verify${
+    verifyParams.toString() ? `?${verifyParams.toString()}` : ""
+  }`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +115,16 @@ function LoginContent() {
           </div>
 
           <ErrorDisplay message={error} />
+          {error === "auth.login.error.notVerified" && (
+            <div className="mt-4 text-center text-sm">
+              <Link
+                href={verifyHref}
+                className="text-[var(--color-secondary-blue)] transition-colors hover:text-[var(--color-primary-green)]"
+              >
+                {t("auth.verify.resend")}
+              </Link>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
             <div>

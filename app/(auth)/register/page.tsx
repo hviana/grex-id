@@ -73,7 +73,18 @@ function RegisterContent() {
         return;
       }
 
-      router.push(`/verify${systemParam}`);
+      const verifyParams = new URLSearchParams();
+      if (systemSlug) {
+        verifyParams.set("system", systemSlug);
+      }
+      if (email) {
+        verifyParams.set("email", email);
+      }
+      router.push(
+        `/verify${
+          verifyParams.toString() ? `?${verifyParams.toString()}` : ""
+        }`,
+      );
     } catch {
       setError("common.error.network");
     } finally {
