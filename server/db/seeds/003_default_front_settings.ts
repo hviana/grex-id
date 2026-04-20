@@ -41,13 +41,6 @@ const defaults: DefaultFrontSetting[] = [
 
 export async function seed(db: Surreal): Promise<void> {
   for (const setting of defaults) {
-    const existing = await db.query<[{ id: string }[]]>(
-      "SELECT id FROM front_setting WHERE key = $key AND systemSlug IS NONE LIMIT 1",
-      { key: setting.key },
-    );
-
-    if (existing[0] && existing[0].length > 0) continue;
-
     await db.query(
       `CREATE front_setting SET
         key = $key,
@@ -59,7 +52,6 @@ export async function seed(db: Surreal): Promise<void> {
         description: setting.description,
       },
     );
-
     console.log(`[seed] front setting created: ${setting.key}`);
   }
 }

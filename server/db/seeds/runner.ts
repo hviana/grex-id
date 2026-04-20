@@ -10,8 +10,17 @@ interface SeedModule {
   seed: (db: import("surrealdb").Surreal) => Promise<void>;
 }
 
+const SEEDS_TABLE_INIT = `
+DEFINE TABLE IF NOT EXISTS _seeds SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS name ON _seeds TYPE string;
+DEFINE FIELD IF NOT EXISTS appliedAt ON _seeds TYPE datetime DEFAULT time::now();
+DEFINE INDEX IF NOT EXISTS idx_seeds_name ON _seeds FIELDS name UNIQUE;
+`;
+
 export async function runSeeds(): Promise<void> {
   const db = await getDb();
+
+  await db.query(SEEDS_TABLE_INIT);
 
   const seedsDir = path.dirname(new URL(import.meta.url).pathname);
 
@@ -70,12 +79,25 @@ export async function runSeeds(): Promise<void> {
     (a, b) => getPrefix(a.name).localeCompare(getPrefix(b.name)),
   );
 
-  console.log(`[seed] running ${files.length} seed(s)...`);
+  // Load already-applied seed names
+  const applied = await db.query<[{ name: string }[]]>(
+    "SELECT name FROM _seeds",
+  );
+  const appliedNames = new Set(
+    (applied[0] ?? []).map((r: { name: string }) => r.name),
+  );
 
-  for (const { name, filePath } of files) {
+  const pending = files.filter((f) => !appliedNames.has(f.name));
+  console.log(
+    `[seed] ${files.length} seed(s) found, ${pending.length} pending, ${appliedNames.size} already applied.`,
+  );
+
+  for (const { name, filePath } of pending) {
     console.log(`[seed] applying: ${name}`);
     const mod = (await import(filePath)) as SeedModule;
     await mod.seed(db);
+    // Record the seed as applied (idempotent via unique index)
+    await db.query("CREATE _seeds SET name = $name", { name });
     console.log(`[seed] applied: ${name}`);
   }
 

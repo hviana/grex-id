@@ -1,15 +1,6 @@
 import type { Surreal } from "surrealdb";
 
 export async function seed(db: Surreal): Promise<void> {
-  const existing = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM user WHERE roles CONTAINS "superuser" LIMIT 1`,
-  );
-
-  if (existing[0] && existing[0].length > 0) {
-    console.log("[seed] superuser already exists, skipping.");
-    return;
-  }
-
   const email = "core@admin.com";
   const password = "core1234";
   const name = "Super Admin";

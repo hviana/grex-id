@@ -78,13 +78,6 @@ const seeds: FileAccessSeed[] = [
 
 export async function seed(db: Surreal): Promise<void> {
   for (const seed of seeds) {
-    const existing = await db.query<[{ id: string }[]]>(
-      "SELECT id FROM file_access WHERE name = $name LIMIT 1",
-      { name: seed.name },
-    );
-
-    if (existing[0] && existing[0].length > 0) continue;
-
     await db.query(
       `CREATE file_access SET
         name = $name,
@@ -98,7 +91,6 @@ export async function seed(db: Surreal): Promise<void> {
         upload: seed.upload,
       },
     );
-
     console.log(`[seed] file_access created: ${seed.name}`);
   }
 }
