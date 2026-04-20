@@ -223,7 +223,6 @@ permission errors, and status messages.
 │   │   ├── layout.tsx                # Sidebar + profile menu + system logo
 │   │   ├── onboarding/company|system/page.tsx
 │   │   ├── entry/page.tsx             # Spinner-only landing pad
-│   │   ├── usage/page.tsx
 │   │   └── [...slug]/page.tsx        # Resolved by menu componentName
 │   ├── (core)/                       # Superuser-only admin panel
 │   │   ├── layout.tsx
@@ -2505,8 +2504,7 @@ company switch; (3) system switch. The login redirects to `/entry` — a
 lightweight spinner-only landing page at `app/(app)/entry/page.tsx` that never
 renders real content. This avoids loading any component before the layout
 resolves the target route. If the system defines custom menus, the first custom
-one becomes the landing page; otherwise the first default (typically `usage`) is
-used.
+one becomes the landing page; otherwise the first default menu item is used.
 
 #### 18.9 Public homepages
 
@@ -2669,8 +2667,8 @@ Without `?system=`, pages show the core app name (`app.name`) with no logo.
 `(app)` layout checks `GET /api/companies/{companyId}/systems`; empty response →
 redirect `/onboarding/system`.
 
-The usage page always opens with the **default context** (first company + its
-first subscribed system), resolved by the `(app)` layout on mount.
+The initial page opens with the **default context** (first company + its first
+subscribed system), resolved by the `(app)` layout on mount.
 
 #### 19.6 Company / system switching
 
@@ -3986,7 +3984,7 @@ access to a user's data. **This is not social login.**
 
 5. **Login page integration** (`app/(auth)/login/page.tsx`). When `oauth=1` is
    present, after successful login the router pushes to `/oauth/authorize?...`
-   (with all OAuth params) instead of `/entry`/`/usage`.
+   (with all OAuth params) instead of `/entry`.
 
 #### 24.3 Connected Apps page
 

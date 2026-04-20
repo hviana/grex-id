@@ -128,7 +128,7 @@ export default function OnboardingSystemPage() {
         return;
       }
 
-      router.push("/usage");
+      router.push("/entry");
     } catch {
       setError("common.error.network");
     } finally {
