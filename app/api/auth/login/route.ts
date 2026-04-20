@@ -201,7 +201,6 @@ async function handler(
     },
     stayLoggedIn ?? false,
   );
-
   return Response.json({
     success: true,
     data: {
