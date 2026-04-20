@@ -2,7 +2,11 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getFS } from "@/server/utils/fs";
-import { type ReadControlResult, SurrealFS } from "@hviana/surreal-fs";
+import {
+  type File as SFSFile,
+  type ReadControlResult,
+  SurrealFS,
+} from "@hviana/surreal-fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import {
   resolveFileCacheLimit,
@@ -170,7 +174,7 @@ export const GET = compose(
       );
       if (probe.hit && probe.data) {
         const fileName = path[path.length - 1];
-        return new Response(probe.data, {
+        return new Response(probe.data.buffer as ArrayBuffer, {
           headers: {
             "Content-Type": probe.mimeType || DEFAULT_MIME,
             "Content-Disposition": `inline; filename="${fileName}"`,
@@ -236,7 +240,7 @@ export const GET = compose(
     });
 
     if (
-      !file || ("status" in file && file.status !== "complete") || !file.content
+      !file || "status" in file || !("content" in file) || !file.content
     ) {
       return Response.json(
         {
@@ -247,10 +251,11 @@ export const GET = compose(
       );
     }
 
-    const fileName = (file.metadata?.fileName as string) ||
+    const sfsFile = file as SFSFile;
+    const fileName = (sfsFile.metadata?.fileName as string) ||
       path[path.length - 1];
-    const mimeType = (file.metadata?.mimeType as string) || DEFAULT_MIME;
-    const fileSize = file.size;
+    const mimeType = (sfsFile.metadata?.mimeType as string) || DEFAULT_MIME;
+    const fileSize = sfsFile.size;
     const headers: Record<string, string> = {
       "Content-Type": mimeType,
       "Content-Disposition": `inline; filename="${fileName}"`,
@@ -264,7 +269,7 @@ export const GET = compose(
     ) {
       pendingInsertions.add(uri);
       const cache = FileCacheManager.getInstance();
-      const [clientStream, cacheStream] = file.content.tee();
+      const [clientStream, cacheStream] = sfsFile.content!.tee();
 
       (async () => {
         try {
@@ -288,6 +293,6 @@ export const GET = compose(
       return new Response(clientStream, { headers });
     }
 
-    return new Response(file.content, { headers });
+    return new Response(sfsFile.content, { headers });
   },
 );
