@@ -45,8 +45,10 @@ export async function communicationGuard(params: {
 
   const result = await db.query<
     [
-      { id: string }[],
-      { cnt: number }[],
+      unknown[],
+      unknown[],
+      unknown[],
+      unknown[],
       unknown[],
       {
         blockedByPrevious: boolean;
@@ -104,7 +106,7 @@ export async function communicationGuard(params: {
     },
   );
 
-  const status = result[3]?.[0];
+  const status = result[4]?.[0];
 
   if (!status) {
     return { allowed: false };
