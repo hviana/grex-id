@@ -488,7 +488,7 @@ this table.
 | `0034_create_token_revocation.surql`       | `token_revocation`        | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `0035_create_recovery_channel.surql`       | `recovery_channel`        | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `0038_create_payment.surql`                | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"\|"expired"`), paymentMethodId, transactionId, invoiceUrl, failureReason, continuityData (`option<object> FLEXIBLE`), expiresAt (`option<datetime>`), createdAt. Indexes on (companyId, systemId), createdAt, kind, (status, expiresAt). Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                        |
-| `0044_create_file_access.surql`            | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `0044_create_file_access.surql`            | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape plus maxFileSizeMB option<float> and allowedExtensions array<string>), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 **File-metadata note:** `@hviana/surreal-fs` manages its own
 `surreal_fs_files` + `surreal_fs_chunks` tables via `fs.init()` — there is no
@@ -1726,7 +1726,9 @@ resolution.
 Category-path-based access rules stored in the `file_access` table. Each rule
 defines a `categoryPattern` (glob-like with `/` separators and `*` wildcards)
 and separate download/upload sections with independent tenant isolation toggles
-and permission lists.
+and permission lists. The upload section additionally carries `maxFileSizeMB`
+(optional float, e.g. `0.5` = 512 KB) and `allowedExtensions` (array of strings
+without dots, e.g. `["jpg","png"]`; empty = all extensions allowed).
 
 **Pattern compilation.** `file-access-cache.ts` loads all rules at boot and
 compiles each `categoryPattern` into a `RegExp` (`*` → `[^/]+`). Cached via the
@@ -1753,12 +1755,22 @@ permission. Empty array → no permission check beyond tenant isolation.
 2. For each rule, test compiled regex against `categoryPath.join("/")`.
 3. For each matching rule, check the operation-specific section's tenant
    isolation and permissions.
-4. If ANY matching rule allows → `{ allowed: true }`.
+4. If ANY matching rule allows →
+   `{ allowed: true, maxFileSizeBytes?, allowedExtensions? }`.
 5. If matching rules exist but none allow → `{ allowed: false }`.
 6. If no matching rules exist → `{ allowed: true }`.
 
+When `operation = "upload"` and access is allowed, the result additionally
+includes `maxFileSizeBytes` (the smallest non-null `maxFileSizeMB` across all
+matching rules, converted to bytes; absent when no rule specifies a limit) and
+`allowedExtensions` (the intersection of all non-empty `allowedExtensions`
+arrays from matching rules; empty/absent when no restrictions apply). This
+ensures the most restrictive combination is enforced when multiple rules match.
+
 **Upload route integration.** `POST /api/files/upload` calls `checkFileAccess`
-with `operation: "upload"` before `fs.save()`. Returns 403 on denial.
+with `operation: "upload"` before `fs.save()`. Returns 403 on denial. On
+success, the route passes `maxFileSizeBytes` and `allowedExtensions` from the
+guard result into the `control` callback.
 
 **Download route integration.** `GET /api/files/download` accepts an optional
 `?token=<jwt_or_api_token>` query parameter. When present, the route resolves
@@ -1770,15 +1782,17 @@ denial. Without a `token` param, uses the middleware-provided `ctx.tenant`.
 **Core admin.** `app/(core)/file-access/page.tsx` — superuser CRUD with search
 by name. Form has shared name + category pattern fields, plus separate Download
 and Upload sections each with isolation toggles and permissions
-`MultiBadgeField`.
+`MultiBadgeField`. The Upload section additionally has `maxFileSizeMB` (number
+input, supports decimals) and `allowedExtensions`
+(`MultiBadgeField mode:"custom"`).
 
 **Default seeds** (`004_default_file_access.ts`):
 
-| Name          | Pattern          | Download     | Upload                                           |
-| ------------- | ---------------- | ------------ | ------------------------------------------------ |
-| Company Logos | `/logos/`        | Anonymous    | user+company+system, `files:upload:logos`        |
-| User Avatars  | `/avatars/`      | user+company | user+company+system, `files:upload:avatars`      |
-| Lead Avatars  | `/lead-avatars/` | Anonymous    | user+company+system, `files:upload:lead-avatars` |
+| Name          | Pattern          | Download     | Upload                                           | Upload constraints                        |
+| ------------- | ---------------- | ------------ | ------------------------------------------------ | ----------------------------------------- |
+| Company Logos | `/logos/`        | Anonymous    | user+company+system, `files:upload:logos`        | 5 MB, `["svg","png","jpg","jpeg","webp"]` |
+| User Avatars  | `/avatars/`      | user+company | user+company+system, `files:upload:avatars`      | 2 MB, `["png","jpg","jpeg","webp"]`       |
+| Lead Avatars  | `/lead-avatars/` | Anonymous    | user+company+system, `files:upload:lead-avatars` | 2 MB, `["png","jpg","jpeg","webp"]`       |
 
 **Cache invalidation.** Route handlers call `updateCache("core", "file-access")`
 after mutations. `Core.reload()` also clears the file-access cache.
@@ -2909,8 +2923,10 @@ domain prefix (the `t()` function strips it). Required groups:
   chartProjected, chartErrors, revenueOverview
 - `fileAccess.*` — title, create, edit, name, categoryPattern,
   categoryPatternHint, download, upload, isolateSystem, isolateCompany,
-  isolateUser, permissions, permissionsHint, isolationHint, empty,
-  placeholder.name, placeholder.categoryPattern
+  isolateUser, permissions, permissionsHint, isolationHint, maxFileSizeMB,
+  maxFileSizeMBHint, allowedExtensions, allowedExtensionsHint, empty,
+  placeholder.name, placeholder.categoryPattern, placeholder.maxFileSizeMB,
+  placeholder.allowedExtensions
 
 Every key must have full `en` + `pt-BR` translations.
 

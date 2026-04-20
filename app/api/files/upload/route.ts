@@ -109,6 +109,9 @@ export const POST = compose(
       );
     }
 
+    const accessMaxFileSizeBytes = accessCheck.maxFileSizeBytes;
+    const accessAllowedExtensions = accessCheck.allowedExtensions;
+
     // Resolve transfer limits from plan + voucher + Core settings (§13.2)
     const core = Core.getInstance();
     const system = await core.getSystemBySlug(systemSlug);
@@ -154,8 +157,8 @@ export const POST = compose(
           accessAllowed: true,
           kbytesPerSecond,
           concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
-          maxFileSizeBytes: 50 * MB,
-          allowedExtensions: [],
+          maxFileSizeBytes: accessMaxFileSizeBytes ?? 50 * MB,
+          allowedExtensions: accessAllowedExtensions ?? [],
         };
       },
     });

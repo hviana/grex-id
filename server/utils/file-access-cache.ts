@@ -2,6 +2,7 @@ import { getDb } from "../db/connection.ts";
 import type {
   FileAccess,
   FileAccessSection,
+  FileAccessUploadSection,
 } from "@/src/contracts/file-access.ts";
 
 if (typeof window !== "undefined") {
@@ -16,7 +17,7 @@ export interface CompiledFileAccess {
   categoryPattern: string;
   compiledPattern: RegExp;
   download: FileAccessSection;
-  upload: FileAccessSection;
+  upload: FileAccessUploadSection;
 }
 
 export interface FileAccessCacheData {
@@ -30,6 +31,12 @@ const defaultSection: FileAccessSection = {
   permissions: [],
 };
 
+const defaultUploadSection: FileAccessUploadSection = {
+  ...defaultSection,
+  maxFileSizeMB: undefined,
+  allowedExtensions: [],
+};
+
 function normalizeSection(
   raw: Partial<FileAccessSection> | undefined,
 ): FileAccessSection {
@@ -39,6 +46,21 @@ function normalizeSection(
     isolateCompany: !!raw.isolateCompany,
     isolateUser: !!raw.isolateUser,
     permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+  };
+}
+
+function normalizeUploadSection(
+  raw: Partial<FileAccessUploadSection> | undefined,
+): FileAccessUploadSection {
+  if (!raw) return { ...defaultUploadSection };
+  return {
+    ...normalizeSection(raw),
+    maxFileSizeMB: raw.maxFileSizeMB !== undefined && raw.maxFileSizeMB !== null
+      ? Number(raw.maxFileSizeMB)
+      : undefined,
+    allowedExtensions: Array.isArray(raw.allowedExtensions)
+      ? raw.allowedExtensions.map(String)
+      : [],
   };
 }
 
@@ -71,8 +93,8 @@ export async function loadFileAccessData(): Promise<FileAccessCacheData> {
     download: normalizeSection(
       r.download as Partial<FileAccessSection> | undefined,
     ),
-    upload: normalizeSection(
-      r.upload as Partial<FileAccessSection> | undefined,
+    upload: normalizeUploadSection(
+      r.upload as Partial<FileAccessUploadSection> | undefined,
     ),
   }));
 

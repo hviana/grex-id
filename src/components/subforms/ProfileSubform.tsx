@@ -4,6 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import FileUploadField from "@/src/components/fields/FileUploadField";
+import { resizeImage } from "@/src/lib/resize-image";
 
 interface ProfileSubformProps {
   initialData?: Record<string, unknown>;
@@ -61,6 +62,13 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
               userId={userId}
               category={["avatars"]}
               previewEnabled
+              transformFn={async (file) => {
+                const data = await resizeImage(file, {
+                  width: 128,
+                  format: "image/webp",
+                });
+                return { data, type: "image/webp" };
+              }}
               onComplete={(uri) => setAvatarUri(uri)}
             />
           )

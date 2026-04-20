@@ -5,6 +5,15 @@ import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 
+const MIME_TO_EXT: Record<string, string> = {
+  "image/webp": ".webp",
+};
+
+interface TransformResult {
+  data: Uint8Array;
+  type: string;
+}
+
 interface FileUploadFieldProps {
   fieldName: string;
   allowedExtensions: string[];
@@ -16,6 +25,7 @@ interface FileUploadFieldProps {
   previewEnabled?: boolean;
   descriptionEnabled?: boolean;
   currentUri?: string;
+  transformFn?: (file: File) => Promise<TransformResult>;
   onComplete: (uri: string) => void;
   onRemove?: () => void;
 }
@@ -31,6 +41,7 @@ export default function FileUploadField({
   previewEnabled = false,
   descriptionEnabled = false,
   currentUri,
+  transformFn,
   onComplete,
   onRemove,
 }: FileUploadFieldProps) {
@@ -68,8 +79,21 @@ export default function FileUploadField({
     setProgress(0);
 
     try {
+      let uploadFile = file;
+      if (transformFn) {
+        const { data, type } = await transformFn(file);
+        const ext = MIME_TO_EXT[type];
+        if (!ext) {
+          setError("common.error.file.invalidExtension");
+          return;
+        }
+        const baseName = file.name.replace(/\.[^.]+$/, "");
+        const blob = new Blob([data], { type });
+        uploadFile = new File([blob], `${baseName}${ext}`, { type });
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
       formData.append("companyId", companyId);
       formData.append("systemSlug", systemSlug);
       formData.append("userId", userId);

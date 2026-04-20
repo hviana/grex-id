@@ -4,7 +4,10 @@ import type {
   FileAccessCacheData,
 } from "./file-access-cache.ts";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
-import type { FileAccessSection } from "@/src/contracts/file-access.ts";
+import type {
+  FileAccessSection,
+  FileAccessUploadSection,
+} from "@/src/contracts/file-access.ts";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -24,6 +27,8 @@ export interface FileAccessCheckParams {
 
 export interface FileAccessCheckResult {
   allowed: boolean;
+  maxFileSizeBytes?: number;
+  allowedExtensions?: string[];
 }
 
 function checkSection(
@@ -67,6 +72,8 @@ export async function checkFileAccess(
   const categoryStr = params.categoryPath.join("/");
   let anyMatch = false;
 
+  const matchingAllowed: CompiledFileAccess[] = [];
+
   for (const rule of rules) {
     if (!rule.compiledPattern.test(categoryStr)) continue;
     anyMatch = true;
@@ -74,8 +81,35 @@ export async function checkFileAccess(
     const section = params.operation === "download"
       ? rule.download
       : rule.upload;
-    if (checkSection(section, params)) return { allowed: true };
+    if (checkSection(section, params)) {
+      matchingAllowed.push(rule);
+    }
   }
 
-  return { allowed: !anyMatch };
+  if (!anyMatch) return { allowed: true };
+  if (matchingAllowed.length === 0) return { allowed: false };
+
+  const result: FileAccessCheckResult = { allowed: true };
+
+  if (params.operation === "upload") {
+    // Collect maxFileSizeBytes: smallest non-null limit across matching rules
+    const sizeLimits = matchingAllowed
+      .map((r) => (r.upload as FileAccessUploadSection).maxFileSizeMB)
+      .filter((v): v is number => v !== undefined && v > 0);
+    if (sizeLimits.length > 0) {
+      result.maxFileSizeBytes = Math.min(...sizeLimits) * 1048576;
+    }
+
+    // Collect allowedExtensions: intersection of all non-empty arrays
+    const extLists = matchingAllowed
+      .map((r) => (r.upload as FileAccessUploadSection).allowedExtensions)
+      .filter((arr) => arr.length > 0);
+    if (extLists.length > 0) {
+      result.allowedExtensions = extLists.reduce((acc, list) =>
+        acc.filter((ext) => list.includes(ext))
+      );
+    }
+  }
+
+  return result;
 }

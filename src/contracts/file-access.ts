@@ -5,11 +5,16 @@ export interface FileAccessSection {
   permissions: string[];
 }
 
+export interface FileAccessUploadSection extends FileAccessSection {
+  maxFileSizeMB?: number;
+  allowedExtensions: string[];
+}
+
 export interface FileAccess {
   id: string;
   name: string;
   categoryPattern: string;
   download: FileAccessSection;
-  upload: FileAccessSection;
+  upload: FileAccessUploadSection;
   createdAt: string;
 }

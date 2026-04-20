@@ -13,10 +13,17 @@ export async function resizeImage(
   const bitmap = await createImageBitmap(file);
   const { width, height, format } = options;
 
-  const targetWidth = width ??
-    Math.round((height! / bitmap.height) * bitmap.width);
-  const targetHeight = height ??
-    Math.round((width! / bitmap.width) * bitmap.height);
+  const cappedWidth = width !== undefined
+    ? Math.min(width, bitmap.width)
+    : undefined;
+  const cappedHeight = height !== undefined
+    ? Math.min(height, bitmap.height)
+    : undefined;
+
+  const targetWidth = cappedWidth ??
+    Math.round((cappedHeight! / bitmap.height) * bitmap.width);
+  const targetHeight = cappedHeight ??
+    Math.round((cappedWidth! / bitmap.width) * bitmap.height);
 
   const canvas = new OffscreenCanvas(targetWidth, targetHeight);
   const ctx = canvas.getContext("2d");

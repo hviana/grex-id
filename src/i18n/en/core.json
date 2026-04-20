@@ -217,6 +217,12 @@
   "fileAccess.permissionsHint": "e.g. files:download:logos, files:upload:avatars",
   "fileAccess.isolationHint": "Enable toggles to require matching tenant context. All enabled checks must pass (AND). None enabled = anonymous access.",
   "fileAccess.anonymous": "Anonymous",
+  "fileAccess.maxFileSizeMB": "Max File Size (MB)",
+  "fileAccess.maxFileSizeMBHint": "Maximum file size in megabytes. Supports decimals (e.g. 0.5 = 512 KB). Leave empty for no limit.",
+  "fileAccess.allowedExtensions": "Allowed Extensions",
+  "fileAccess.allowedExtensionsHint": "e.g. jpg, png, pdf. Leave empty to allow all extensions.",
   "fileAccess.placeholder.name": "e.g. Company Logos",
-  "fileAccess.placeholder.categoryPattern": "e.g. /logos/"
+  "fileAccess.placeholder.categoryPattern": "e.g. /logos/",
+  "fileAccess.placeholder.maxFileSizeMB": "e.g. 5",
+  "fileAccess.placeholder.allowedExtensions": "e.g. jpg"
 }

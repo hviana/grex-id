@@ -14,6 +14,8 @@ interface FileAccessSeed {
     isolateCompany: boolean;
     isolateUser: boolean;
     permissions: string[];
+    maxFileSizeMB: number;
+    allowedExtensions: string[];
   };
 }
 
@@ -32,6 +34,8 @@ const seeds: FileAccessSeed[] = [
       isolateCompany: true,
       isolateUser: true,
       permissions: ["files:upload:logos"],
+      maxFileSizeMB: 5,
+      allowedExtensions: ["svg", "png", "jpg", "jpeg", "webp"],
     },
   },
   {
@@ -48,6 +52,8 @@ const seeds: FileAccessSeed[] = [
       isolateCompany: true,
       isolateUser: true,
       permissions: ["files:upload:avatars"],
+      maxFileSizeMB: 2,
+      allowedExtensions: ["png", "jpg", "jpeg", "webp"],
     },
   },
   {
@@ -64,6 +70,8 @@ const seeds: FileAccessSeed[] = [
       isolateCompany: true,
       isolateUser: true,
       permissions: ["files:upload:lead-avatars"],
+      maxFileSizeMB: 2,
+      allowedExtensions: ["png", "jpg", "jpeg", "webp"],
     },
   },
 ];

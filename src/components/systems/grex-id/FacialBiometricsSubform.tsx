@@ -11,6 +11,7 @@ import {
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
+import { resizeImage } from "@/src/lib/resize-image";
 
 /* ------------------------------------------------------------------ */
 /*  Human.js types                                                     */
@@ -320,11 +321,20 @@ const FacialBiometricsSubform = forwardRef<
       try {
         const blob = await (await fetch(dataUrl)).blob();
         const fileUuid = crypto.randomUUID();
-        const formData = new FormData();
-        formData.append(
-          "file",
-          new File([blob], `face_${fileUuid}.jpg`, { type: "image/jpeg" }),
+        const rawFile = new File([blob], `face_${fileUuid}.jpg`, {
+          type: "image/jpeg",
+        });
+        const resized = await resizeImage(rawFile, {
+          width: 128,
+          format: "image/webp",
+        });
+        const uploadFile = new File(
+          [new Blob([resized], { type: "image/webp" })],
+          `face_${fileUuid}.webp`,
+          { type: "image/webp" },
         );
+        const formData = new FormData();
+        formData.append("file", uploadFile);
         formData.append("systemSlug", systemSlug ?? "grex-id");
         formData.append("category", JSON.stringify(["avatars"]));
         formData.append("fileUuid", fileUuid);

@@ -7,14 +7,17 @@ import GenericList from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
-import type { FileAccessSection } from "@/src/contracts/file-access";
+import type {
+  FileAccessSection,
+  FileAccessUploadSection,
+} from "@/src/contracts/file-access";
 
 interface FileAccessItem {
   id: string;
   name: string;
   categoryPattern: string;
   download: FileAccessSection;
-  upload: FileAccessSection;
+  upload: FileAccessUploadSection;
   createdAt: string;
   [key: string]: unknown;
 }
@@ -24,6 +27,12 @@ const emptySection = (): FileAccessSection => ({
   isolateCompany: false,
   isolateUser: false,
   permissions: [],
+});
+
+const emptyUploadSection = (): FileAccessUploadSection => ({
+  ...emptySection(),
+  maxFileSizeMB: undefined,
+  allowedExtensions: [],
 });
 
 function IsolationBadge({ label, on }: { label: string; on: boolean }) {
@@ -70,6 +79,8 @@ export default function FileAccessPage() {
   const { systemToken } = useAuth();
 
   const renderItem = (item: FileAccessItem, controls: React.ReactNode) => {
+    const upload = item.upload ?? emptyUploadSection();
+
     return (
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
         <div className="flex items-center justify-between">
@@ -91,7 +102,9 @@ export default function FileAccessPage() {
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(["download", "upload"] as const).map((op) => {
-            const sec = (item[op] ?? emptySection()) as FileAccessSection;
+            const sec = (item[op] ?? (op === "upload"
+              ? emptyUploadSection()
+              : emptySection())) as FileAccessSection;
             const anyIsolation = sec.isolateSystem || sec.isolateCompany ||
               sec.isolateUser;
             return (
@@ -137,6 +150,39 @@ export default function FileAccessPage() {
             );
           })}
         </div>
+
+        {upload &&
+          (upload.maxFileSizeMB !== undefined ||
+            upload.allowedExtensions?.length > 0) &&
+          (
+            <div className="mt-3 pt-3 border-t border-[var(--color-dark-gray)]/50 flex flex-wrap gap-3 text-sm">
+              {upload.maxFileSizeMB !== undefined && (
+                <span className="flex items-center gap-1">
+                  <span className="text-[var(--color-light-text)]">📏</span>
+                  <span className="text-[var(--color-light-text)]">
+                    {t("core.fileAccess.maxFileSizeMB")}:
+                  </span>{" "}
+                  <span className="text-white">{upload.maxFileSizeMB} MB</span>
+                </span>
+              )}
+              {upload.allowedExtensions?.length > 0 && (
+                <span className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[var(--color-light-text)]">📎</span>
+                  <span className="text-[var(--color-light-text)]">
+                    {t("core.fileAccess.allowedExtensions")}:
+                  </span>{" "}
+                  {upload.allowedExtensions.map((ext) => (
+                    <span
+                      key={ext}
+                      className="rounded-full bg-[var(--color-secondary-blue)]/15 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]"
+                    >
+                      .{ext}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
       </div>
     );
   };

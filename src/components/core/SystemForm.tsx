@@ -4,6 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import FileUploadField from "@/src/components/fields/FileUploadField";
+import { resizeImage } from "@/src/lib/resize-image";
 
 interface SystemFormProps {
   initialData?: Record<string, unknown>;
@@ -67,6 +68,13 @@ const SystemForm = forwardRef<SubformRef, SystemFormProps>(
               userId="superuser"
               category={["logos"]}
               previewEnabled
+              transformFn={async (file) => {
+                const data = await resizeImage(file, {
+                  width: 512,
+                  format: "image/webp",
+                });
+                return { data, type: "image/webp" };
+              }}
               onComplete={(uri) => setLogoUri(uri)}
             />
           )
