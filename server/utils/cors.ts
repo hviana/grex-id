@@ -1,9 +1,8 @@
 import type { TenantClaims } from "@/src/contracts/tenant.ts";
 import type { ApiToken } from "@/src/contracts/token.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("cors.ts must not be imported in client-side code.");
-}
+assertServerOnly("cors.ts");
 
 /**
  * Enforces CORS for frontend-use API tokens only.

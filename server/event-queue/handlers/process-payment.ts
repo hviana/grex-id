@@ -4,12 +4,9 @@ import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
 import type { PaymentResult } from "../../../src/contracts/payment-provider.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "process-payment handler must not be imported in client-side code.",
-  );
-}
+assertServerOnly("process-payment handler");
 
 export const processPayment: HandlerFn = async (payload) => {
   const subscriptionId = payload.subscriptionId as string;

@@ -1,10 +1,7 @@
 import { getDb, rid } from "../db/connection.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "token-revocation.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("token-revocation.ts");
 
 /**
  * Revokes a JTI by inserting into the token_revocation table.

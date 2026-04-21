@@ -1,10 +1,7 @@
 import { getDb } from "../db/connection.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/utils/entity-deduplicator.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("server/utils/entity-deduplicator.ts");
 
 export interface DeduplicationField {
   field: string;

@@ -1,10 +1,9 @@
 import { getDb } from "../connection.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { assertServerOnly } from "../../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("Seed runner must not be imported in client-side code.");
-}
+assertServerOnly("Seed runner");
 
 interface SeedModule {
   seed: (db: import("surrealdb").Surreal) => Promise<void>;

@@ -3,10 +3,9 @@ import type { Tenant } from "@/src/contracts/tenant.ts";
 import type { Subscription } from "@/src/contracts/billing.ts";
 import type { Plan } from "@/src/contracts/plan.ts";
 import type { Voucher } from "@/src/contracts/voucher.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("guards.ts must not be imported in client-side code.");
-}
+assertServerOnly("guards.ts");
 
 export interface EntityLimitResult {
   limit: number | null;

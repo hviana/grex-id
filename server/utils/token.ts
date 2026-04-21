@@ -2,12 +2,9 @@ import * as jose from "@panva/jose";
 import Core from "./Core.ts";
 import { getCache } from "./cache.ts";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/utils/token.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("server/utils/token.ts");
 
 export async function loadJwtSecret(): Promise<Uint8Array> {
   const core = Core.getInstance();

@@ -1,8 +1,7 @@
 import { getDb } from "../db/connection.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("usage-tracker.ts must not be imported in client-side code.");
-}
+assertServerOnly("usage-tracker.ts");
 
 function getCurrentPeriod(): string {
   const now = new Date();

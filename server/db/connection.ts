@@ -1,5 +1,8 @@
 import { StringRecordId, Surreal } from "surrealdb";
 import Core from "../utils/Core.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("server/db/connection.ts");
 
 /** Wrap a record ID string (e.g. "system:abc") for use as a SurrealDB binding. */
 export function rid(id: unknown): StringRecordId {
@@ -36,12 +39,6 @@ export function normalizeRecordId(value: unknown): string | null {
   }
 
   return stringified || null;
-}
-
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/db/connection.ts must not be imported in client-side code.",
-  );
 }
 
 let dbInstance: Surreal | null = null;

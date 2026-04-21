@@ -8,12 +8,9 @@ import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "file-access-guard.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("file-access-guard.ts");
 
 export interface FileAccessCheckParams {
   categoryPath: string[];

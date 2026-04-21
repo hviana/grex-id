@@ -4,12 +4,9 @@ import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "file-access-cache.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("file-access-cache.ts");
 
 export interface CompiledFileAccess {
   id: string;

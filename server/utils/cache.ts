@@ -1,6 +1,6 @@
-if (typeof window !== "undefined") {
-  throw new Error("cache.ts must not be imported in client-side code.");
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("cache.ts");
 
 let booted = false;
 let bootPromise: Promise<void> | null = null;

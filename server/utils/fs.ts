@@ -1,11 +1,8 @@
 import { getDb } from "@/server/db/connection";
 import { SurrealFS } from "@hviana/surreal-fs";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/utils/fs.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("server/utils/fs.ts");
 
 let fsInstance: SurrealFS | null = null;
 

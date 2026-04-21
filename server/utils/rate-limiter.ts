@@ -1,6 +1,6 @@
-if (typeof window !== "undefined") {
-  throw new Error("rate-limiter.ts must not be imported in client-side code.");
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("rate-limiter.ts");
 
 interface SlidingWindowEntry {
   timestamps: number[];

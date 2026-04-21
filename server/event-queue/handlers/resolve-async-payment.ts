@@ -3,12 +3,9 @@ import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "resolve-async-payment handler must not be imported in client-side code.",
-  );
-}
+assertServerOnly("resolve-async-payment handler");
 
 export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const paymentId = payload.paymentId as string;

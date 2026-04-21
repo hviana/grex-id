@@ -1,8 +1,6 @@
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/utils/field-validator.ts must not be imported in client-side code.",
-  );
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("server/utils/field-validator.ts");
 
 type ValidatorFn = (value: unknown) => string[];
 

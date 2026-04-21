@@ -1,8 +1,6 @@
-if (typeof window !== "undefined") {
-  throw new Error(
-    "server/utils/field-standardizer.ts must not be imported in client-side code.",
-  );
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("server/utils/field-standardizer.ts");
 
 type StandardizerFn = (value: string) => string;
 

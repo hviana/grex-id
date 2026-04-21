@@ -3,12 +3,9 @@ import { publish } from "../event-queue/publisher.ts";
 import type { Tenant } from "@/src/contracts/tenant.ts";
 import type { TenantActorType } from "@/src/contracts/tenant.ts";
 import { resolveMaxOperationCount } from "./guards.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "credit-tracker.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("credit-tracker.ts");
 
 function getCurrentDay(): string {
   const now = new Date();

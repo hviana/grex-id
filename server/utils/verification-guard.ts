@@ -5,12 +5,9 @@ import type {
   VerificationOwnerType,
   VerificationRequestTenantContext,
 } from "@/src/contracts/verification-request";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "verification-guard.ts must not be imported in client-side code.",
-  );
-}
+assertServerOnly("verification-guard.ts");
 
 export interface CommunicationGuardResult {
   allowed: boolean;

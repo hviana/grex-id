@@ -1,8 +1,7 @@
 import type { Tenant } from "@/src/contracts/tenant.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("tenant.ts must not be imported in client-side code.");
-}
+assertServerOnly("tenant.ts");
 
 /**
  * System-level tenant for jobs and workers that operate without a user context.

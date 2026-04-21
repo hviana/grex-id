@@ -717,12 +717,13 @@ class Core {
 }
 ```
 
-**Server-only guard** — at the top of the file:
+**Server-only guard** — at the top of the file, use the shared
+`assertServerOnly(fileName)` helper from `server/utils/server-only.ts` (§12.14):
 
 ```typescript
-if (typeof window !== "undefined") {
-  throw new Error("Core must not be imported in client-side code.");
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("Core");
 ```
 
 **Backend database credentials.** The static `DB_*` fields are read at class
@@ -938,27 +939,28 @@ review rejects any helper that reintroduces scattered context.
 
 All of the following MUST be used — no ad-hoc reimplementations.
 
-| File                                  | Purpose                                                         |
-| ------------------------------------- | --------------------------------------------------------------- |
-| `server/utils/rate-limiter.ts`        | §12.1                                                           |
-| `server/utils/usage-tracker.ts`       | §12.2                                                           |
-| `server/utils/credit-tracker.ts`      | §12.3                                                           |
-| `server/utils/entity-deduplicator.ts` | §12.4                                                           |
-| `server/utils/field-standardizer.ts`  | §12.5                                                           |
-| `server/utils/field-validator.ts`     | §12.6                                                           |
-| `server/utils/cors.ts`                | §12.7                                                           |
-| `server/utils/token-revocation.ts`    | §12.8                                                           |
-| `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13                |
-| `server/utils/tenant.ts`              | §9.3                                                            |
-| `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant              |
-| `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components |
-| `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement    |
-| `server/utils/cache.ts`               | §12.11 — centralized cache registry                             |
-| `server/utils/file-cache.ts`          | §12.12 — Sliding-Window Size-Aware LFU file cache               |
-| `server/utils/verification-guard.ts`  | §12.13 — unified communication guard (cooldown + rate limit)    |
-| `server/utils/file-access-cache.ts`   | §13.7 — file access rule loader + pattern compiler              |
-| `server/utils/file-access-guard.ts`   | §13.7 — file access guard (tenant isolation + permissions)      |
-| `server/core-register.ts`             | Core self-registration at boot                                  |
+| File                                  | Purpose                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| `server/utils/rate-limiter.ts`        | §12.1                                                                     |
+| `server/utils/usage-tracker.ts`       | §12.2                                                                     |
+| `server/utils/credit-tracker.ts`      | §12.3                                                                     |
+| `server/utils/entity-deduplicator.ts` | §12.4                                                                     |
+| `server/utils/field-standardizer.ts`  | §12.5                                                                     |
+| `server/utils/field-validator.ts`     | §12.6                                                                     |
+| `server/utils/cors.ts`                | §12.7                                                                     |
+| `server/utils/token-revocation.ts`    | §12.8                                                                     |
+| `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13                          |
+| `server/utils/tenant.ts`              | §9.3                                                                      |
+| `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant                        |
+| `server/module-registry.ts`           | §12.9 — central registration API for handlers, jobs, components           |
+| `server/utils/guards.ts`              | §12.10 — internal guard functions for plan-limit enforcement              |
+| `server/utils/cache.ts`               | §12.11 — centralized cache registry                                       |
+| `server/utils/file-cache.ts`          | §12.12 — Sliding-Window Size-Aware LFU file cache                         |
+| `server/utils/verification-guard.ts`  | §12.13 — unified communication guard (cooldown + rate limit)              |
+| `server/utils/file-access-cache.ts`   | §13.7 — file access rule loader + pattern compiler                        |
+| `server/utils/file-access-guard.ts`   | §13.7 — file access guard (tenant isolation + permissions)                |
+| `server/utils/server-only.ts`         | §12.14 — shared guard preventing server files from loading in the browser |
+| `server/core-register.ts`             | Core self-registration at boot                                            |
 
 #### 12.1 Rate limiter
 
@@ -1581,6 +1583,36 @@ export async function communicationGuard(params: {
 Public routes (leads) and authenticated routes (entity-channels resend) return
 429 with the appropriate i18n key (`validation.verification.previousNotExpired`
 or `validation.verification.rateLimited`).
+
+#### 12.14 Server-only guard (`server/utils/server-only.ts`)
+
+Every file under `server/` that must never be imported by frontend code calls
+the shared `assertServerOnly(fileName)` helper at the top of the module, right
+after its imports. The helper throws
+`` `${fileName} must not be imported in client-side code.` `` when `window` is
+defined, so bundler missteps that would pull server code into the browser fail
+loudly at import time.
+
+```typescript
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("Core");
+```
+
+**Rules:**
+
+1. Every module under `server/` (utilities, queries, middleware, event-queue
+   handlers, jobs, connection, runners) MUST call `assertServerOnly` as the
+   first statement after its import block. No raw
+   `typeof window !== "undefined"` checks anywhere else — the helper is the
+   single source of truth.
+2. Pass a short, unambiguous identifier as the `fileName` argument (e.g.
+   `"Core"`, `"tenant.ts"`, `"server/utils/fs.ts"`,
+   `"process-payment handler"`). The message suffix
+   (`must not be imported in client-side code.`) is standard and supplied by the
+   helper.
+3. The guard itself lives in `server/utils/server-only.ts` and is the only file
+   in the project that references `typeof window` for this purpose.
 
 ### 13. File Storage
 

@@ -1,9 +1,8 @@
 import { getCache, updateCache } from "./cache.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
+import { assertServerOnly } from "./server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("FrontCore must not be imported in client-side code.");
-}
+assertServerOnly("FrontCore");
 
 export interface MissingFrontSetting {
   key: string;

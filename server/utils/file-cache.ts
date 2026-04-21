@@ -1,6 +1,6 @@
-if (typeof window !== "undefined") {
-  throw new Error("file-cache.ts must not be imported in client-side code.");
-}
+import { assertServerOnly } from "./server-only.ts";
+
+assertServerOnly("file-cache.ts");
 
 export interface FileCacheResult {
   hit: boolean;

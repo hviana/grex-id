@@ -1,12 +1,9 @@
 import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "auto-recharge handler must not be imported in client-side code.",
-  );
-}
+assertServerOnly("auto-recharge handler");
 
 export async function handleAutoRecharge(
   rawPayload: Record<string, unknown>,

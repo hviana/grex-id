@@ -1,9 +1,8 @@
 import { getDb } from "../db/connection.ts";
 import { getSystemTenant } from "../utils/tenant.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("token-cleanup must not be imported in client-side code.");
-}
+assertServerOnly("token-cleanup");
 
 const CLEANUP_INTERVAL_MS = 86_400_000; // 24 hours
 const REVOKED_OLDER_THAN_DAYS = 90;

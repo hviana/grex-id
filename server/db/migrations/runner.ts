@@ -1,10 +1,9 @@
 import { getDb } from "../connection.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { assertServerOnly } from "../../utils/server-only.ts";
 
-if (typeof window !== "undefined") {
-  throw new Error("Migration runner must not be imported in client-side code.");
-}
+assertServerOnly("Migration runner");
 
 const MIGRATIONS_TABLE_INIT = `
 DEFINE TABLE IF NOT EXISTS _migrations SCHEMAFULL;
