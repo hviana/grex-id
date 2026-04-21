@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
   const success = providerStatus === "succeeded";
 
-  await publish("PAYMENT_ASYNC_COMPLETED", {
+  await publish("resolve_async_payment", {
     paymentId: String(payment.id),
     transactionId,
     success,

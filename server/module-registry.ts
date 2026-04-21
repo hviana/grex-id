@@ -1,10 +1,13 @@
-import type { HandlerFn } from "./event-queue/worker.ts";
-import type { TemplateFunction } from "../src/contracts/communication.ts";
+import type {
+  TemplateBuilder,
+  TemplateFunction,
+} from "../src/contracts/communication.ts";
 
 export {
-  getAllHandlerNames,
-  getHandlersForEvent,
-  registerEventHandler,
+  getAllHandlers,
+  getHandler,
+  hasHandler,
+  registerHandler,
 } from "./event-queue/registry.ts";
 
 export {
@@ -17,7 +20,6 @@ export {
 export { registerSystemI18n } from "../src/i18n/index.ts";
 
 // ── Cache ─────────────────────────────────────────────────
-// Centralized cache registry (§12.11).
 
 export {
   clearAllCacheForSlug,
@@ -28,21 +30,7 @@ export {
   updateCache,
 } from "./utils/cache.ts";
 
-// ── Handler functions ─────────────────────────────────────
-// Maps handler name → executable HandlerFn.
-
-const handlerFunctionRegistry: Record<string, HandlerFn> = {};
-
-export function registerHandlerFunction(name: string, fn: HandlerFn): void {
-  handlerFunctionRegistry[name] = fn;
-}
-
-export function getHandlerFunction(name: string): HandlerFn | undefined {
-  return handlerFunctionRegistry[name];
-}
-
 // ── Jobs ──────────────────────────────────────────────────
-// Maps job name → start function for non-event-queue recurring jobs.
 
 type JobStarter = () => void;
 
@@ -57,25 +45,60 @@ export function getAllJobs(): Record<string, JobStarter> {
 }
 
 // ── Communication templates ───────────────────────────────
-// Maps template name → TemplateFunction.
-// Core and subsystems register their email/SMS templates here.
+// Static per-channel templates. Key shape: "<channel>:<path>".
 
 const templateRegistry: Record<string, TemplateFunction> = {};
 
 export function registerTemplate<T extends Record<string, unknown>>(
-  name: string,
+  channel: string,
+  path: string,
   fn: TemplateFunction<T>,
 ): void {
-  templateRegistry[name] = fn as TemplateFunction;
+  templateRegistry[`${channel}:${path}`] = fn as TemplateFunction;
 }
 
-export function getTemplate(name: string): TemplateFunction | undefined {
-  return templateRegistry[name];
+export function getTemplate(
+  channel: string,
+  path: string,
+): TemplateFunction | undefined {
+  return templateRegistry[`${channel}:${path}`];
+}
+
+// ── Dynamic template builders ─────────────────────────────
+
+const templateBuilderRegistry: Record<string, TemplateBuilder> = {};
+
+export function registerTemplateBuilder(
+  name: string,
+  fn: TemplateBuilder,
+): void {
+  templateBuilderRegistry[name] = fn;
+}
+
+export function getTemplateBuilder(name: string): TemplateBuilder | undefined {
+  return templateBuilderRegistry[name];
+}
+
+// ── Channel registry ──────────────────────────────────────
+// The per-channel handler name is always `send_<channel>` by convention.
+// This registry only tracks which channels exist so the dispatcher can skip
+// unregistered ones and frameworks can advertise new channels.
+
+const channelRegistry = new Set<string>();
+
+export function registerChannel(channel: string): void {
+  channelRegistry.add(channel);
+}
+
+export function hasChannel(channel: string): boolean {
+  return channelRegistry.has(channel);
+}
+
+export function channelHandlerName(channel: string): string {
+  return `send_${channel}`;
 }
 
 // ── Lifecycle hooks ───────────────────────────────────────
-// Subsystems register hooks that the core invokes at specific points.
-// This avoids the core importing subsystem code or checking slugs.
 
 type LifecycleHook = (payload: Record<string, unknown>) => Promise<void>;
 

@@ -1,12 +1,15 @@
 import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { findUserByEmail } from "@/server/db/queries/auth";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
-import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import { communicationGuard } from "@/server/utils/verification-guard";
+import {
+  findVerifiedOwnerByChannelValue,
+  listVerifiedChannelTypes,
+} from "@/server/db/queries/entity-channels";
+import { getDb, rid } from "@/server/db/connection";
 
 function withAuthRateLimit() {
   return async (
@@ -25,37 +28,48 @@ function withAuthRateLimit() {
   };
 }
 
+function guessChannelType(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "email";
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length >= 10 && digits.length <= 15) return "phone";
+  return undefined;
+}
+
 async function handler(
   req: Request,
-  ctx: RequestContext,
+  _ctx: RequestContext,
 ): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json();
   const systemSlug = body.systemSlug as string | undefined;
-  const email = body.email
-    ? standardizeField("email", body.email, "user")
-    : undefined;
+  const raw = (body.identifier ?? body.email ?? body.channelValue) as
+    | string
+    | undefined;
 
-  // Always return success to avoid user enumeration
   const successResponse = Response.json({
     success: true,
-    data: {
-      message: "auth.forgotPassword.success",
-    },
+    data: { message: "auth.forgotPassword.success" },
   });
 
-  const emailErrors = validateField("email", email, "user");
-  if (emailErrors.length > 0) {
-    return successResponse;
-  }
+  if (!raw || typeof raw !== "string") return successResponse;
 
-  const user = await findUserByEmail(email!);
-  if (!user) return successResponse;
+  const type = guessChannelType(raw);
+  const value = type
+    ? standardizeField(type, raw, "entity_channel")
+    : raw.trim();
+
+  const match = await findVerifiedOwnerByChannelValue(value);
+  if (!match || match.ownerType !== "user") return successResponse;
 
   const guardResult = await communicationGuard({
-    userId: user.id,
-    type: "password_reset",
-    systemSlug,
+    ownerId: match.ownerId,
+    ownerType: "user",
+    actionKey: "auth.action.passwordReset",
+    tenant: {
+      systemSlug,
+      actorType: "anonymous",
+    },
   });
 
   if (!guardResult.allowed) return successResponse;
@@ -68,17 +82,38 @@ async function handler(
     "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 
-  await publish("SEND_EMAIL", {
-    recipients: [email!],
-    template: "password-reset",
+  // Channel preference: the matched channel type first, then the user's
+  // remaining verified channels (§19.7).
+  const matchedType = match.channel.type;
+  const allTypes = await listVerifiedChannelTypes(match.ownerId);
+  const channelOrder = [
+    matchedType,
+    ...allTypes.filter((t) => t !== matchedType),
+  ];
+
+  const db = await getDb();
+  const profile = await db.query<
+    [{ profile: { name: string; locale?: string } }[]]
+  >(
+    `SELECT profile FROM $userId FETCH profile`,
+    { userId: rid(match.ownerId) },
+  );
+  const name = profile[0]?.[0]?.profile?.name ?? "";
+  const locale = profile[0]?.[0]?.profile?.locale;
+
+  await publish("send_communication", {
+    channels: channelOrder,
+    recipients: [match.ownerId],
+    template: "human-confirmation",
     templateData: {
-      name: user.profile?.name ?? email!,
-      resetLink,
-      email: email!,
+      actionKey: "auth.action.passwordReset",
+      confirmationLink: resetLink,
+      occurredAt: new Date().toISOString(),
+      actorName: name,
       expiryMinutes: String(expiryMinutes),
+      locale,
+      systemSlug,
     },
-    locale: user.profile?.locale || undefined,
-    systemSlug,
   });
 
   return successResponse;

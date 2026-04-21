@@ -3,11 +3,11 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import {
+  applyPasswordHash,
   findVerificationRequest,
-  markEmailVerified,
   markVerificationUsed,
 } from "@/server/db/queries/auth";
-import { verifyRecoveryChannel } from "@/server/db/queries/recovery-channels";
+import { verifyChannels } from "@/server/db/queries/entity-channels";
 import {
   associateLeadWithCompanySystem,
   isLeadAssociated,
@@ -15,11 +15,10 @@ import {
   updateLead,
 } from "@/server/db/queries/leads";
 import { runLifecycleHooks } from "@/server/module-registry";
+import { getDb, rid } from "@/server/db/connection";
 
 interface LeadUpdatePayload {
   name?: string;
-  email?: string;
-  phone?: string;
   profile?: {
     name?: string;
     avatarUri?: string;
@@ -30,13 +29,13 @@ interface LeadUpdatePayload {
   systemId?: string;
   systemSlug?: string;
   faceDescriptor?: number[];
+  channels?: { type: string; value: string }[];
 }
 
 function parseLeadUpdatePayload(
   payload: Record<string, unknown> | null | undefined,
 ): LeadUpdatePayload {
   if (!payload) return {};
-
   const rawProfile = payload.profile;
   const profile = rawProfile && typeof rawProfile === "object"
     ? (() => {
@@ -49,10 +48,17 @@ function parseLeadUpdatePayload(
     })()
     : undefined;
 
+  const channels = Array.isArray(payload.channels)
+    ? payload.channels.filter(
+      (c): c is { type: string; value: string } =>
+        !!c && typeof c === "object" &&
+        typeof (c as { type?: unknown }).type === "string" &&
+        typeof (c as { value?: unknown }).value === "string",
+    )
+    : undefined;
+
   return {
     name: typeof payload.name === "string" ? payload.name : undefined,
-    email: typeof payload.email === "string" ? payload.email : undefined,
-    phone: typeof payload.phone === "string" ? payload.phone : undefined,
     profile,
     tags: Array.isArray(payload.tags)
       ? payload.tags.filter((tag): tag is string => typeof tag === "string")
@@ -73,6 +79,7 @@ function parseLeadUpdatePayload(
         (value): value is number => typeof value === "number",
       )
       : undefined,
+    channels,
   };
 }
 
@@ -93,7 +100,7 @@ function withAuthRateLimit() {
   };
 }
 
-async function handler(req: Request, ctx: RequestContext): Promise<Response> {
+async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { token } = body;
 
@@ -138,69 +145,109 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  if (
-    request.type === "email_verify" &&
-    typeof request.userId === "string" &&
-    request.userId.startsWith("user:")
-  ) {
-    await markEmailVerified(request.userId);
-  } else if (request.type === "recovery_verify") {
-    // Verify a recovery channel
-    const payload = request.payload as Record<string, unknown> | null;
-    const channelId = payload?.channelId as string | undefined;
-    if (channelId) {
-      await verifyRecoveryChannel(channelId);
-    }
-  } else if (
-    request.type === "lead_update" ||
-    (request.type === "email_verify" &&
-      typeof request.userId === "string" &&
-      request.userId.startsWith("lead:"))
-  ) {
-    const payload = parseLeadUpdatePayload(request.payload);
+  const actionKey = request.actionKey;
+  const payload = request.payload as Record<string, unknown> | null;
 
-    await updateLead(request.userId, {
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone,
-      profile: payload.profile,
-      tags: payload.tags,
+  // ── Registration / entity-channel confirmation flows ──────
+  // Both register and entityChannelAdd actions simply flip the referenced
+  // entity_channel ids to verified.
+  if (
+    actionKey === "auth.action.register" ||
+    actionKey === "auth.action.entityChannelAdd"
+  ) {
+    const ids = Array.isArray(payload?.channelIds)
+      ? (payload!.channelIds as string[]).filter((id) => typeof id === "string")
+      : [];
+    if (ids.length > 0) {
+      await verifyChannels(ids);
+    }
+  } else if (actionKey === "auth.action.leadRegister") {
+    // Verify all channels the lead submitted at registration.
+    const ids = Array.isArray(payload?.channelIds)
+      ? (payload!.channelIds as string[]).filter((id) => typeof id === "string")
+      : [];
+    if (ids.length > 0) {
+      await verifyChannels(ids);
+    }
+  } else if (actionKey === "auth.action.passwordChange") {
+    // Apply the precomputed argon2 hash stored on the request payload (§19.14).
+    const hash = typeof payload?.newPasswordHash === "string"
+      ? payload!.newPasswordHash
+      : "";
+    if (hash) {
+      await applyPasswordHash(request.ownerId, hash);
+    }
+  } else if (actionKey === "auth.action.leadUpdate") {
+    const leadPayload = parseLeadUpdatePayload(payload);
+    const leadId = request.ownerId;
+
+    await updateLead(leadId, {
+      name: leadPayload.name,
+      profile: leadPayload.profile,
+      tags: leadPayload.tags,
     });
 
-    if (payload.systemId && payload.companyIds?.length) {
-      for (const companyId of payload.companyIds) {
+    // Apply any verified channel updates included in the payload
+    if (leadPayload.channels && leadPayload.channels.length > 0) {
+      const db = await getDb();
+      for (const ch of leadPayload.channels) {
+        await db.query(
+          `LET $existing = (SELECT id FROM entity_channel
+             WHERE ownerId = $owner AND type = $type AND value = $value LIMIT 1);
+           IF array::len($existing) = 0 {
+             LET $new = CREATE entity_channel SET
+               ownerId = $owner, ownerType = "lead",
+               type = $type, value = $value, verified = true;
+             UPDATE (SELECT profile FROM lead WHERE id = $owner)[0].profile
+               SET channels += $new[0].id, updatedAt = time::now();
+           } ELSE {
+             UPDATE $existing[0].id SET verified = true, updatedAt = time::now();
+           };`,
+          {
+            owner: rid(leadId),
+            type: ch.type,
+            value: ch.value,
+          },
+        );
+      }
+    }
+
+    if (leadPayload.systemId && leadPayload.companyIds?.length) {
+      for (const companyId of leadPayload.companyIds) {
         const alreadyAssociated = await isLeadAssociated(
-          request.userId,
+          leadId,
           companyId,
-          payload.systemId,
+          leadPayload.systemId,
         );
         if (!alreadyAssociated) {
           await associateLeadWithCompanySystem({
-            leadId: request.userId,
+            leadId,
             companyId,
-            systemId: payload.systemId,
+            systemId: leadPayload.systemId,
           });
         }
       }
     }
 
-    await syncLeadCompanyIds(request.userId);
+    await syncLeadCompanyIds(leadId);
 
-    if (payload.faceDescriptor && payload.faceDescriptor.length > 0) {
+    if (leadPayload.faceDescriptor && leadPayload.faceDescriptor.length > 0) {
       await runLifecycleHooks("lead:verify", {
-        leadId: request.userId,
-        systemSlug: payload.systemSlug,
-        systemId: payload.systemId,
-        faceDescriptor: payload.faceDescriptor,
+        leadId,
+        systemSlug: leadPayload.systemSlug,
+        systemId: leadPayload.systemId,
+        faceDescriptor: leadPayload.faceDescriptor,
       });
     }
   }
+  // auth.action.passwordReset is handled by /api/auth/reset-password,
+  // not here.
 
   await markVerificationUsed(request.id);
 
   return Response.json({
     success: true,
-    data: { message: "auth.verify.success" },
+    data: { message: "auth.verify.success", actionKey },
   });
 }
 

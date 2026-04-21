@@ -39,7 +39,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       }
     }
 
-    const eventId = await publish("GREXID_DETECTION", {
+    const eventId = await publish("grexid_process_detection", {
       locationId,
       embeddings,
     });

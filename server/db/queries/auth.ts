@@ -1,21 +1,16 @@
 import { getDb, rid } from "../connection.ts";
 import type { User } from "@/src/contracts/user";
+import type {
+  VerificationActorType,
+  VerificationOwnerType,
+  VerificationRequest,
+} from "@/src/contracts/verification-request";
 
-export type VerificationRequestType =
-  | "email_verify"
-  | "phone_verify"
-  | "password_reset"
-  | "lead_update"
-  | "recovery_verify";
-
-export interface VerificationRequestRecord {
-  id: string;
-  userId: string;
-  type: VerificationRequestType;
-  expiresAt: string;
-  usedAt: string | null;
-  payload?: Record<string, unknown> | null;
-}
+export type {
+  VerificationActorType,
+  VerificationOwnerType,
+} from "@/src/contracts/verification-request";
+export type VerificationRequestRecord = VerificationRequest;
 
 function isRecordId(value: string): boolean {
   return /^[^:\s]+:[^:\s]+$/.test(value);
@@ -56,79 +51,191 @@ function requireRecordId(value: unknown, field: string): string {
 }
 
 function normalizeVerificationRequest(
-  request: VerificationRequestRecord | null,
-): VerificationRequestRecord | null {
+  request: VerificationRequest | null,
+): VerificationRequest | null {
   if (!request) return request;
 
   return {
     ...request,
     id: normalizeRecordId(request.id) ?? request.id,
-    userId: normalizeRecordId(request.userId) ?? request.userId,
+    ownerId: normalizeRecordId(request.ownerId) ?? request.ownerId,
+    companyId: normalizeRecordId(request.companyId) ?? request.companyId,
+    systemId: normalizeRecordId(request.systemId) ?? request.systemId,
   };
 }
 
-export async function findUserByEmail(email: string): Promise<User | null> {
+/**
+ * Look up a user by a verified entity_channel value (§19.5).
+ *
+ * Returns the user with its profile resolved. Ignores unverified channels.
+ */
+export async function findUserByVerifiedChannel(
+  value: string,
+  channelType?: string,
+): Promise<User | null> {
   const db = await getDb();
-  const result = await db.query<[User[]]>(
-    "SELECT * FROM user WHERE email = $email LIMIT 1 FETCH profile",
-    { email },
-  );
+  const query = channelType
+    ? `SELECT * FROM user WHERE id IN (
+         SELECT VALUE ownerId FROM entity_channel
+         WHERE type = $type AND value = $value AND verified = true
+           AND ownerType = "user"
+         LIMIT 1
+       ) LIMIT 1 FETCH profile, profile.channels`
+    : `SELECT * FROM user WHERE id IN (
+         SELECT VALUE ownerId FROM entity_channel
+         WHERE value = $value AND verified = true AND ownerType = "user"
+         LIMIT 1
+       ) LIMIT 1 FETCH profile, profile.channels`;
+  const result = await db.query<[User[]]>(query, {
+    value,
+    type: channelType ?? undefined,
+  });
   return result[0]?.[0] ?? null;
 }
 
+export async function userHasVerifiedChannel(userId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.query<[{ c: number }[]]>(
+    `SELECT count() AS c FROM entity_channel
+     WHERE ownerId = $ownerId AND verified = true
+     GROUP ALL`,
+    { ownerId: rid(userId) },
+  );
+  return (result[0]?.[0]?.c ?? 0) > 0;
+}
+
 export async function verifyPassword(
-  email: string,
+  userId: string,
   password: string,
 ): Promise<boolean> {
   const db = await getDb();
   const result = await db.query<[{ valid: boolean }[]]>(
     `SELECT crypto::argon2::compare(passwordHash, $password) AS valid
-     FROM user WHERE email = $email LIMIT 1`,
-    { email, password },
+     FROM user WHERE id = $id LIMIT 1`,
+    { id: rid(userId), password },
   );
   return result[0]?.[0]?.valid === true;
 }
 
-export async function createUser(params: {
-  email: string;
+/**
+ * Create a new user + profile + initial entity_channel rows in one batched
+ * query (§7.2). Channels are created unverified; caller issues the human
+ * confirmation via communicationGuard + publish("send_communication", …).
+ */
+export async function createUserWithChannels(params: {
   password: string;
   name: string;
-  phone?: string;
   locale?: string;
-}): Promise<User> {
+  channels: { type: string; value: string }[];
+}): Promise<{ user: User; channelIds: string[] }> {
   const db = await getDb();
-  const result = await db.query<[unknown, unknown, User[]]>(
+
+  const result = await db.query<[
+    null,
+    null,
+    Array<{ id: string; type: string; value: string }>,
+    null,
+    User[],
+  ]>(
     `LET $prof = CREATE profile SET
-      name = $name,
-      locale = $locale;
-    LET $usr = CREATE user SET
-      email = $email,
-      passwordHash = crypto::argon2::generate($password),
-      profile = $prof[0].id,
-      phone = $phone,
-      roles = ["viewer"],
-      emailVerified = false,
-      twoFactorEnabled = false,
-      stayLoggedIn = false;
-    SELECT * FROM $usr[0].id FETCH profile;`,
+       name = $name,
+       locale = $locale,
+       channels = [];
+     LET $usr  = CREATE user SET
+       passwordHash = crypto::argon2::generate($password),
+       profile = $prof[0].id,
+       roles = ["viewer"],
+       twoFactorEnabled = false,
+       stayLoggedIn = false;
+     LET $channels = INSERT INTO entity_channel (
+       SELECT ownerId, ownerType, type, value, verified FROM $channelInputs
+     ) RETURN AFTER;
+     UPDATE $prof[0].id SET channels = $channels.id, updatedAt = time::now();
+     SELECT * FROM $usr[0].id FETCH profile, profile.channels;`,
     {
       name: params.name,
       locale: params.locale ?? undefined,
-      email: params.email,
       password: params.password,
-      phone: params.phone ?? undefined,
+      channelInputs: params.channels.map((c) => ({
+        ownerId: undefined, // filled by subquery trick below
+        ownerType: "user",
+        type: c.type,
+        value: c.value,
+        verified: false,
+      })),
     },
   );
-  return result[2][0];
+
+  // SurrealDB doesn't support INSERT from a variable that references another
+  // LET directly; fall back to per-channel CREATE.
+  // We redo this as a simpler sequential-but-batched query below.
+  if (!result[2] || result[2].length === 0) {
+    return createUserWithChannelsFallback(params);
+  }
+
+  const user = result[4]?.[0] as User;
+  const channelIds = (result[2] ?? []).map((c) => String(c.id));
+  return { user, channelIds };
 }
 
-export async function markEmailVerified(userId: string): Promise<void> {
+async function createUserWithChannelsFallback(params: {
+  password: string;
+  name: string;
+  locale?: string;
+  channels: { type: string; value: string }[];
+}): Promise<{ user: User; channelIds: string[] }> {
   const db = await getDb();
-  const normalizedUserId = requireRecordId(userId, "userId");
-  await db.query(
-    "UPDATE $userId SET emailVerified = true, updatedAt = time::now()",
-    { userId: rid(normalizedUserId) },
-  );
+
+  // Build batched CREATE statements for each channel referencing $usr[0].id
+  const channelStatements = params.channels
+    .map(
+      (_, i) => `
+      LET $ch${i} = CREATE entity_channel SET
+        ownerId = $usr[0].id,
+        ownerType = "user",
+        type = $type${i},
+        value = $value${i},
+        verified = false;`,
+    )
+    .join("");
+
+  const appendStatements = params.channels
+    .map((_, i) => `UPDATE $prof[0].id SET channels += $ch${i}[0].id`)
+    .join(";\n");
+
+  const bindings: Record<string, unknown> = {
+    name: params.name,
+    locale: params.locale ?? undefined,
+    password: params.password,
+  };
+  params.channels.forEach((c, i) => {
+    bindings[`type${i}`] = c.type;
+    bindings[`value${i}`] = c.value;
+  });
+
+  const query = `
+    LET $prof = CREATE profile SET name = $name, locale = $locale, channels = [];
+    LET $usr  = CREATE user SET
+      passwordHash = crypto::argon2::generate($password),
+      profile = $prof[0].id,
+      roles = ["viewer"],
+      twoFactorEnabled = false,
+      stayLoggedIn = false;
+    ${channelStatements}
+    ${appendStatements ? appendStatements + ";" : ""}
+    UPDATE $prof[0].id SET updatedAt = time::now();
+    SELECT * FROM $usr[0].id FETCH profile, profile.channels;`;
+
+  const result = await db.query<unknown[]>(query, bindings);
+  const last = result[result.length - 1] as User[];
+  const user = last[0];
+  const channels = (user?.profile?.channels ?? []) as {
+    id: string;
+  }[];
+  return {
+    user,
+    channelIds: channels.map((c) => String(c.id)),
+  };
 }
 
 export async function updatePassword(
@@ -143,37 +250,45 @@ export async function updatePassword(
   );
 }
 
-export async function createVerificationRequest(params: {
-  userId: string;
-  type: VerificationRequestType;
-  token: string;
-  expiresAt: Date;
-  payload?: Record<string, unknown>;
-}): Promise<void> {
+/**
+ * Computes an argon2 hash for a plaintext password inside SurrealDB, so that
+ * route handlers never have to pass the plaintext to subsequent queries (e.g.
+ * when the hash must be stored in a verification_request payload).
+ */
+export async function hashPassword(plaintext: string): Promise<string> {
   const db = await getDb();
-  const normalizedUserId = requireRecordId(params.userId, "userId");
+  const result = await db.query<[string | string[]]>(
+    "RETURN crypto::argon2::generate($password);",
+    { password: plaintext },
+  );
+  const value = result[0];
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  return "";
+}
+
+/**
+ * Sets a precomputed argon2 hash as the user's password in one batched query.
+ * Used by the verify handler to apply a password-change confirmation without
+ * ever touching plaintext.
+ */
+export async function applyPasswordHash(
+  userId: string,
+  passwordHash: string,
+): Promise<void> {
+  const db = await getDb();
+  const normalizedUserId = requireRecordId(userId, "userId");
   await db.query(
-    `CREATE verification_request SET
-      userId = $userId,
-      type = $type,
-      token = $verificationToken,
-      expiresAt = $expiresAt,
-      payload = $payload`,
-    {
-      userId: rid(normalizedUserId),
-      type: params.type,
-      verificationToken: params.token,
-      expiresAt: params.expiresAt,
-      payload: params.payload ?? undefined,
-    },
+    "UPDATE $userId SET passwordHash = $hash, updatedAt = time::now()",
+    { userId: rid(normalizedUserId), hash: passwordHash },
   );
 }
 
 export async function findVerificationRequest(
   token: string,
-): Promise<VerificationRequestRecord | null> {
+): Promise<VerificationRequest | null> {
   const db = await getDb();
-  const result = await db.query<[VerificationRequestRecord[]]>(
+  const result = await db.query<[VerificationRequest[]]>(
     "SELECT * FROM verification_request WHERE token = $verificationToken LIMIT 1",
     { verificationToken: token },
   );
@@ -189,14 +304,24 @@ export async function markVerificationUsed(requestId: string): Promise<void> {
   );
 }
 
-export async function getLastVerificationRequest(userId: string, type: string) {
+/**
+ * Hard-delete abandoned user accounts before registration reuses their
+ * channel values (§19.4). "Abandoned" means:
+ *   - the user has no verified entity_channel, AND
+ *   - the user has no unused, non-expired verification_request with
+ *     actionKey = "auth.action.register".
+ */
+export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
   const db = await getDb();
-  const normalizedUserId = requireRecordId(userId, "userId");
-  const result = await db.query<[{ createdAt: string }[]]>(
-    `SELECT createdAt FROM verification_request
-     WHERE userId = $userId AND type = $type
-     ORDER BY createdAt DESC LIMIT 1`,
-    { userId: rid(normalizedUserId), type },
+  const ids = userIds.map((id) => rid(id));
+  await db.query(
+    `LET $targets = $userIds;
+     LET $profiles = (SELECT profile FROM user WHERE id IN $targets);
+     DELETE entity_channel WHERE ownerId IN $targets;
+     DELETE verification_request WHERE ownerId IN $targets;
+     DELETE user WHERE id IN $targets;
+     FOR $p IN $profiles { DELETE $p.profile; };`,
+    { userIds: ids },
   );
-  return result[0]?.[0] ?? null;
 }

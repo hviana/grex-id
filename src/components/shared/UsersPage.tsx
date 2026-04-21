@@ -10,15 +10,36 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 
+interface ChannelRow {
+  id: string;
+  type: string;
+  value: string;
+  verified: boolean;
+}
+
 interface UserItem {
   id: string;
-  email: string;
-  emailVerified: boolean;
-  phone?: string;
-  profile?: { name: string; avatarUri?: string };
+  profile?: {
+    name: string;
+    avatarUri?: string;
+    channels?: ChannelRow[];
+  };
   roles: string[];
   contextRoles?: string[];
   createdAt: string;
+}
+
+function channelOf(user: UserItem, type: string): ChannelRow | undefined {
+  const list = user.profile?.channels ?? [];
+  return list.find((c) => c.type === type);
+}
+
+function primaryEmail(user: UserItem): string {
+  return channelOf(user, "email")?.value ?? "";
+}
+
+function primaryPhone(user: UserItem): string {
+  return channelOf(user, "phone")?.value ?? "";
 }
 
 export default function UsersPage() {
@@ -116,8 +137,10 @@ export default function UsersPage() {
           Authorization: `Bearer ${systemToken}`,
         },
         body: JSON.stringify({
-          email: newEmail,
-          phone: newPhone || undefined,
+          channels: [
+            ...(newEmail ? [{ type: "email", value: newEmail }] : []),
+            ...(newPhone ? [{ type: "phone", value: newPhone }] : []),
+          ],
           password: newPassword,
           name: newName,
           companyId,
@@ -163,7 +186,6 @@ export default function UsersPage() {
         body: JSON.stringify({
           id: editUser.id,
           name: editName,
-          phone: editPhone || undefined,
           companyId,
           systemId,
           roles: editRoles,
@@ -211,7 +233,7 @@ export default function UsersPage() {
   const openEdit = (user: UserItem) => {
     setEditUser(user);
     setEditName(user.profile?.name ?? "");
-    setEditPhone(user.phone ?? "");
+    setEditPhone(primaryPhone(user));
     setEditRoles(user.contextRoles ?? user.roles);
     setError(null);
   };
@@ -276,16 +298,16 @@ export default function UsersPage() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
-                    {(user.profile?.name ?? user.email)
+                    {(user.profile?.name ?? primaryEmail(user))
                       .charAt(0)
                       .toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white truncate">
-                      {user.profile?.name ?? user.email}
+                      {user.profile?.name ?? primaryEmail(user)}
                     </h3>
                     <p className="text-sm text-[var(--color-light-text)] truncate">
-                      {user.email}
+                      {primaryEmail(user)}
                     </p>
                   </div>
                   <div className="flex gap-1 flex-wrap shrink-0">
@@ -398,7 +420,7 @@ export default function UsersPage() {
               <label className="block text-xs text-[var(--color-light-text)] mb-1">
                 {t("common.users.email")}
               </label>
-              <p className="text-white text-sm">{editUser.email}</p>
+              <p className="text-white text-sm">{primaryEmail(editUser)}</p>
             </div>
             <input
               type="text"
@@ -449,7 +471,7 @@ export default function UsersPage() {
           <div className="text-center space-y-4">
             <p className="text-white">{t("common.users.deleteConfirm")}</p>
             <p className="text-sm text-[var(--color-light-text)]">
-              {deleteUser.profile?.name ?? deleteUser.email}
+              {deleteUser.profile?.name ?? primaryEmail(deleteUser)}
             </p>
             <div className="flex gap-3 justify-center">
               <button

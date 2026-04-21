@@ -1,7 +1,6 @@
 import {
   registerComponent,
-  registerEventHandler,
-  registerHandlerFunction,
+  registerHandler,
   registerHomePage,
   registerLifecycleHook,
   registerSystemI18n,
@@ -13,9 +12,8 @@ import enGrexId from "@/src/i18n/en/systems/grex-id.json";
 import ptBRGrexId from "@/src/i18n/pt-BR/systems/grex-id.json";
 
 export function register(): void {
-  // Event handlers
-  registerEventHandler("GREXID_DETECTION", "grexid_process_detection");
-  registerHandlerFunction("grexid_process_detection", processDetection);
+  // Event handlers — name is both the event and the function key
+  registerHandler("grexid_process_detection", processDetection);
 
   // Components
   registerComponent(

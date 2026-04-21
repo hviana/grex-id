@@ -2,10 +2,6 @@ import type { Profile } from "./profile.ts";
 
 export interface User {
   id: string;
-  email: string;
-  emailVerified: boolean;
-  phone?: string;
-  phoneVerified?: boolean;
   profile: Profile;
   roles: string[];
   twoFactorEnabled: boolean;
@@ -16,8 +12,12 @@ export interface User {
   updatedAt: string;
 }
 
+export interface SubmittedChannel {
+  type: string;
+  value: string;
+}
+
 export interface UserCredentials {
-  email: string;
-  phone?: string;
+  identifier: string;
   password: string;
 }

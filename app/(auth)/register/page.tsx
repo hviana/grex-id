@@ -47,13 +47,16 @@ function RegisterContent() {
     setErrors([]);
 
     try {
+      const channels: { type: string; value: string }[] = [];
+      if (email) channels.push({ type: "email", value: email });
+      if (phone) channels.push({ type: "phone", value: phone });
+
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          email,
-          phone: phone || undefined,
+          channels,
           password,
           confirmPassword,
           termsAccepted,

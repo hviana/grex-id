@@ -8,18 +8,6 @@ if (typeof window !== "undefined") {
   );
 }
 
-/**
- * Auto-recharge handler — triggered when credits are insufficient and
- * autoRechargeEnabled is true (§22.5).
- *
- * Steps:
- * 1. Verify subscription flags
- * 2. Load default payment method
- * 3. Notify user that auto-recharge is being attempted
- * 4. Create credit_purchase and publish PAYMENT_DUE
- *
- * All DB lookups batched into a single query (§7.2).
- */
 export async function handleAutoRecharge(
   rawPayload: Record<string, unknown>,
 ): Promise<void> {
@@ -31,7 +19,6 @@ export async function handleAutoRecharge(
   };
   const db = await getDb();
 
-  // Batch: subscription + default payment method + owner info + system name
   const result = await db.query<
     [
       {
@@ -43,7 +30,7 @@ export async function handleAutoRecharge(
         systemId: string;
       }[],
       { id: string }[],
-      { email: string; name: string }[],
+      { id: string; name: string }[],
       { name: string; slug: string }[],
     ]
   >(
@@ -54,7 +41,7 @@ export async function handleAutoRecharge(
        WHERE companyId = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0]
        AND isDefault = true LIMIT 1;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1)[0];
-     SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT id, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
      SELECT name, slug FROM system WHERE id = (SELECT VALUE systemId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1;`,
     { subId: rid(payload.subscriptionId) },
   );
@@ -66,26 +53,35 @@ export async function handleAutoRecharge(
 
   const paymentMethod = result[1]?.[0];
   const owner = result[2]?.[0];
+  const ownerId = owner?.id ? String(owner.id) : "";
   const systemInfo = result[3]?.[0];
   const systemName = systemInfo?.name ?? "";
   const systemSlug = systemInfo?.slug ?? "";
+  const billingUrl = `/billing?system=${systemSlug}`;
+  const amountValue = {
+    amount: sub.autoRechargeAmount,
+    currency: "USD",
+  };
 
-  // No payment method — notify failure, clear flag
   if (!paymentMethod) {
-    if (owner?.email) {
-      await publish("SEND_EMAIL", {
-        recipients: [owner.email],
-        template: "payment-failure",
+    if (ownerId) {
+      await publish("send_communication", {
+        recipients: [ownerId],
+        template: "notification",
         templateData: {
-          name: owner.name ?? "",
+          eventKey: "billing.event.paymentFailure.auto-recharge",
+          occurredAt: new Date().toISOString(),
+          actorName: owner?.name ?? "",
           systemName,
-          kind: "auto-recharge",
-          amount: String(sub.autoRechargeAmount),
-          currency: "cents",
-          reason: "billing.autoRecharge.noPaymentMethod",
-          billingUrl: `/billing?system=${systemSlug}`,
+          value: amountValue,
+          resources: [
+            "billing.paymentKind.auto-recharge",
+            "billing.autoRecharge.noPaymentMethod",
+          ],
+          ctaKey: "templates.notification.cta.updatePaymentMethod",
+          ctaUrl: billingUrl,
+          systemSlug,
         },
-        systemSlug,
       });
     }
 
@@ -101,24 +97,24 @@ export async function handleAutoRecharge(
     return;
   }
 
-  // Notify user that auto-recharge is being attempted
-  if (owner?.email) {
-    await publish("SEND_EMAIL", {
-      recipients: [owner.email],
-      template: "auto-recharge",
+  if (ownerId) {
+    await publish("send_communication", {
+      recipients: [ownerId],
+      template: "notification",
       templateData: {
-        name: owner.name ?? "",
+        eventKey: "billing.event.autoRechargeStarted",
+        occurredAt: new Date().toISOString(),
+        actorName: owner?.name ?? "",
         systemName,
-        amount: String(sub.autoRechargeAmount),
-        currency: "cents",
-        triggerResource: payload.resourceKey,
-        billingUrl: `/billing?system=${systemSlug}`,
+        value: amountValue,
+        resources: [payload.resourceKey],
+        ctaKey: "templates.notification.cta.viewBilling",
+        ctaUrl: billingUrl,
+        systemSlug,
       },
-      systemSlug,
     });
   }
 
-  // Create credit purchase and publish PAYMENT_DUE
   const purchase = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
        companyId = $companyId,
@@ -134,7 +130,7 @@ export async function handleAutoRecharge(
     },
   );
 
-  await publish("PAYMENT_DUE", {
+  await publish("process_payment", {
     creditPurchaseId: String(purchase[0]?.[0]?.id ?? ""),
     subscriptionId: String(sub.id),
     companyId: String(sub.companyId),

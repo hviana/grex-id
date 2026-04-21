@@ -5,7 +5,7 @@ import type { RequestContext } from "@/src/contracts/auth";
 import {
   associateLeadWithCompanySystem,
   createLead,
-  findLeadByEmailOrPhone,
+  findLeadByChannelValues,
   isLeadAssociated,
   syncLeadCompanyIds,
   updateLead,
@@ -17,7 +17,6 @@ import {
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
-import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 
@@ -82,11 +81,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
       (profile as { avatarUri?: string }).avatarUri = avatarUri;
     }
 
+    const submittedChannels: { type: string; value: string }[] = [
+      ...(email ? [{ type: "email", value: email }] : []),
+      ...(phone ? [{ type: "phone", value: phone }] : []),
+    ];
+
     let lead;
-    const existing = email
-      ? await findLeadByEmailOrPhone(email, phone)
-      : phone
-      ? await findLeadByEmailOrPhone("", phone)
+    const existing = submittedChannels.length > 0
+      ? await findLeadByChannelValues(submittedChannels.map((c) => c.value))
       : null;
 
     if (existing) {
@@ -107,38 +109,18 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
       lead = await updateLead(existing.id, {
         name: name!,
-        email: email!,
-        phone,
         profile,
       });
       await syncLeadCompanyIds(existing.id);
     } else {
-      const dup = await checkDuplicates("lead", [
-        { field: "email", value: email ?? null },
-        { field: "phone", value: phone },
-      ]);
-      if (dup.isDuplicate) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "DUPLICATE",
-              message: "validation.lead.duplicateContact",
-            },
-          },
-          { status: 409 },
-        );
-      }
-
       lead = await createLead({
         name: name!,
-        email: email!,
-        phone,
         profile: profile as {
           name: string;
           avatarUri?: string;
           age?: number;
         },
+        channels: submittedChannels,
         companyIds: inferredCompanyIds,
       });
       await associateLeadWithCompanySystem({
@@ -267,8 +249,6 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     const lead = await updateLead(id, {
       name,
-      email,
-      phone,
       profile,
     });
 

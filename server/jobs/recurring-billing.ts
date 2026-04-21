@@ -27,7 +27,7 @@ export function startRecurringBilling(): void {
       console.log(`[billing] Found ${subs.length} due subscriptions.`);
 
       for (const sub of subs) {
-        await publish("PAYMENT_DUE", {
+        await publish("process_payment", {
           subscriptionId: sub.id,
           companyId: sub.companyId,
           systemId: sub.systemId,

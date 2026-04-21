@@ -216,7 +216,12 @@ function OAuthAuthorizeContent() {
           {/* Authorizing user info */}
           <p className="text-xs text-center text-[var(--color-light-text)]">
             {t("common.connectedApps.authorizedAs")}{" "}
-            <span className="text-white font-medium">{user.email}</span>
+            <span className="text-white font-medium">
+              {user.profile?.name ??
+                (user.profile?.channels?.find((c) => c.type === "email")
+                  ?.value ??
+                  "")}
+            </span>
           </p>
 
           {/* Action buttons */}

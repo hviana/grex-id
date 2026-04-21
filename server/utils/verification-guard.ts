@@ -1,7 +1,10 @@
 import { getDb, rid } from "@/server/db/connection";
 import { generateSecureToken } from "@/server/utils/token";
-import type { VerificationRequestType } from "@/server/db/queries/auth";
 import Core from "@/server/utils/Core";
+import type {
+  VerificationOwnerType,
+  VerificationRequestTenantContext,
+} from "@/src/contracts/verification-request";
 
 if (typeof window !== "undefined") {
   throw new Error(
@@ -17,13 +20,15 @@ export interface CommunicationGuardResult {
 }
 
 export async function communicationGuard(params: {
-  userId: string;
-  type: VerificationRequestType;
+  ownerId: string;
+  ownerType: VerificationOwnerType;
+  actionKey: string;
   payload?: Record<string, unknown>;
-  systemSlug?: string;
+  tenant?: VerificationRequestTenantContext;
 }): Promise<CommunicationGuardResult> {
   const core = Core.getInstance();
-  const { userId, type, payload, systemSlug } = params;
+  const { ownerId, ownerType, actionKey, payload, tenant } = params;
+  const systemSlug = tenant?.systemSlug;
 
   const expiryMinutes = Number(
     (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
@@ -41,7 +46,6 @@ export async function communicationGuard(params: {
   const windowStart = new Date(Date.now() - windowHours * 3_600_000);
 
   const db = await getDb();
-  const normalizedUserId = String(userId);
 
   const result = await db.query<
     [
@@ -59,8 +63,8 @@ export async function communicationGuard(params: {
   >(
     `LET $lastActive = (
       SELECT id, createdAt FROM verification_request
-      WHERE userId = $userId
-        AND type = $type
+      WHERE ownerId = $ownerId
+        AND actionKey = $actionKey
         AND usedAt IS NONE
         AND expiresAt > time::now()
       ORDER BY createdAt DESC
@@ -69,8 +73,8 @@ export async function communicationGuard(params: {
 
     LET $windowCount = (
       SELECT count() AS cnt FROM verification_request
-      WHERE userId = $userId
-        AND type = $type
+      WHERE ownerId = $ownerId
+        AND actionKey = $actionKey
         AND createdAt > $windowStart
       GROUP ALL
     );
@@ -83,11 +87,17 @@ export async function communicationGuard(params: {
     LET $created = IF array::len($lastActive) = 0 AND $wCnt < $maxCount
     THEN (
       CREATE verification_request SET
-        userId = $userId,
-        type = $type,
+        ownerId = $ownerId,
+        ownerType = $ownerType,
+        actionKey = $actionKey,
         token = $verificationToken,
         expiresAt = $expiresAt,
-        payload = $payload
+        payload = $payload,
+        companyId = $companyId,
+        systemId = $systemId,
+        systemSlug = $systemSlug,
+        actorId = $actorId,
+        actorType = $actorType
     ) ELSE [] END;
 
     [{
@@ -96,13 +106,19 @@ export async function communicationGuard(params: {
       allowed: array::len($created) > 0
     }];`,
     {
-      userId: rid(normalizedUserId),
-      type,
+      ownerId: rid(String(ownerId)),
+      ownerType,
+      actionKey,
       verificationToken: token,
       expiresAt,
       payload: payload ?? undefined,
       windowStart,
       maxCount,
+      companyId: tenant?.companyId ? rid(tenant.companyId) : undefined,
+      systemId: tenant?.systemId ? rid(tenant.systemId) : undefined,
+      systemSlug: tenant?.systemSlug ?? undefined,
+      actorId: tenant?.actorId ?? undefined,
+      actorType: tenant?.actorType ?? undefined,
     },
   );
 

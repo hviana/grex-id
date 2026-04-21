@@ -1,18 +1,17 @@
 import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { findUserByEmail, verifyPassword } from "@/server/db/queries/auth";
+import {
+  findUserByVerifiedChannel,
+  userHasVerifiedChannel,
+  verifyPassword,
+} from "@/server/db/queries/auth";
 import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
-import { validateField } from "@/server/utils/field-validator";
 import { getDb, rid } from "@/server/db/connection";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
 
-/**
- * Auth rate limit middleware — reads config from Core settings.
- * Falls back to default (5 req/min) when settings are unavailable.
- */
 function withAuthRateLimit() {
   return async (
     req: Request,
@@ -30,32 +29,47 @@ function withAuthRateLimit() {
   };
 }
 
+function guessChannelType(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "email";
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length >= 10 && digits.length <= 15) return "phone";
+  return undefined;
+}
+
 async function handler(
   req: Request,
-  ctx: RequestContext,
+  _ctx: RequestContext,
 ): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json();
-  const { password, stayLoggedIn } = body;
-  const email = body.email
-    ? standardizeField("email", body.email, "user")
-    : undefined;
+  const { password, stayLoggedIn, identifier } = body as {
+    password?: string;
+    stayLoggedIn?: boolean;
+    identifier?: string;
+  };
+  // Backwards-compat: older frontends send `email` instead of `identifier`.
+  const raw = identifier ?? (body as { email?: string }).email;
 
-  const emailErrors = validateField("email", email, "user");
-  const passwordErrors = validateField("password", password, "user");
-
-  const allErrors = [...emailErrors, ...passwordErrors];
-  if (allErrors.length > 0) {
+  if (!raw || typeof raw !== "string" || !password) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", errors: allErrors },
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.identifier.required"],
+        },
       },
       { status: 400 },
     );
   }
 
-  const user = await findUserByEmail(email!);
+  const channelType = guessChannelType(raw);
+  const value = channelType
+    ? standardizeField(channelType, raw, "entity_channel")
+    : raw.trim();
+
+  const user = await findUserByVerifiedChannel(value, channelType);
   if (!user) {
     return Response.json(
       {
@@ -69,7 +83,7 @@ async function handler(
     );
   }
 
-  const passwordValid = await verifyPassword(email!, password);
+  const passwordValid = await verifyPassword(String(user.id), password);
   if (!passwordValid) {
     return Response.json(
       {
@@ -83,7 +97,8 @@ async function handler(
     );
   }
 
-  if (!user.emailVerified) {
+  const approved = await userHasVerifiedChannel(String(user.id));
+  if (!approved) {
     return Response.json(
       {
         success: false,
@@ -96,12 +111,11 @@ async function handler(
     );
   }
 
-  // Two-factor authentication check
   const twoFactorGloballyEnabled =
     (await core.getSetting("auth.twoFactor.enabled")) === "true";
 
   if (twoFactorGloballyEnabled && user.twoFactorEnabled) {
-    const { twoFactorCode } = body;
+    const { twoFactorCode } = body as { twoFactorCode?: string };
     if (!twoFactorCode) {
       return Response.json(
         {
@@ -115,7 +129,6 @@ async function handler(
       );
     }
 
-    // Verify TOTP code using otplib (v13 async API)
     if (user.twoFactorSecret) {
       const totp = new TOTP({
         secret: user.twoFactorSecret,
@@ -138,7 +151,6 @@ async function handler(
     }
   }
 
-  // Resolve the user's first company+system membership for the initial tenant
   const db = await getDb();
   const membership = await db.query<
     [{
@@ -183,7 +195,6 @@ async function handler(
       permissions: [] as string[],
     };
 
-  // Superuser detection from user.roles (global)
   const isSuperuser = (user.roles ?? []).includes("superuser");
   if (isSuperuser) {
     tenant.roles = ["superuser"];
@@ -207,7 +218,6 @@ async function handler(
       systemToken,
       user: {
         id: user.id,
-        email: user.email,
         profile: user.profile,
         roles: user.roles,
       },
@@ -215,5 +225,4 @@ async function handler(
   });
 }
 
-// Auth routes use compose() with withRateLimit only (§11)
 export const POST = compose(withAuthRateLimit(), handler);

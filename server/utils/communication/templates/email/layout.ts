@@ -1,6 +1,6 @@
 import { t } from "@/src/i18n";
-import Core from "../../Core.ts";
-import FrontCore from "../../FrontCore.ts";
+import Core from "../../../Core.ts";
+import FrontCore from "../../../FrontCore.ts";
 
 export function escapeHtml(str: string): string {
   return str
@@ -10,23 +10,50 @@ export function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export interface TenantBanner {
+  actorName?: string;
+  companyName?: string;
+  systemName?: string;
+}
+
 export async function emailLayout(
   content: string,
   locale: string,
   preheader?: string,
+  banner?: TenantBanner,
 ): Promise<string> {
   const core = Core.getInstance();
   const frontCore = FrontCore.getInstance();
   const appName = (await core.getSetting("app.name")) ?? "Core";
   const supportEmail = (await frontCore.getSetting("front.support.email")) ??
     "";
+
   const preheaderBlock = preheader
     ? `<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: #000000;">
-  ${preheader}
+  ${escapeHtml(preheader)}
 </div>
 <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">
   &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
 </div>`
+    : "";
+
+  const bannerParts: string[] = [];
+  if (banner?.systemName) bannerParts.push(escapeHtml(banner.systemName));
+  if (banner?.companyName) bannerParts.push(escapeHtml(banner.companyName));
+  if (banner?.actorName) bannerParts.push(escapeHtml(banner.actorName));
+  const bannerBlock = bannerParts.length > 0
+    ? `
+              <tr>
+                <td style="padding: 0 0 20px 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: rgba(0, 204, 255, 0.04); border: 1px solid rgba(0, 204, 255, 0.12); border-radius: 10px;">
+                    <tr>
+                      <td style="padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #8db9c8; text-align: center;">
+                        ${bannerParts.join(" &middot; ")}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>`
     : "";
 
   return `<!DOCTYPE html>
@@ -71,7 +98,6 @@ export async function emailLayout(
 
   ${preheaderBlock}
 
-  <!-- Background wrapper -->
   <div lang="${locale}" style="text-size-adjust: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #000000;">
 
     <!--[if mso | IE]>
@@ -79,43 +105,37 @@ export async function emailLayout(
     <tr><td align="center">
     <![endif]-->
 
-    <!-- Outer table for centering -->
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 auto; background-color: #000000;">
       <tr>
         <td align="center" style="padding: 32px 16px;">
 
-          <!-- Email container -->
           <!--[if mso]>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560"><tr><td>
           <![endif]-->
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="email-container" style="max-width: 560px; width: 100%; margin: 0 auto;">
 
-            <!-- Top gradient accent line -->
             <tr>
               <td style="height: 3px; background: linear-gradient(90deg, #02d07d 0%, #00ccff 50%, #02d07d 100%); font-size: 0; line-height: 0;">&nbsp;</td>
             </tr>
 
-            <!-- Main card -->
             <tr>
-              <td style="background-color: #0d0d0d; border-left: 1px solid #1a1a1a; border-right: 1px solid #1a1a1a; padding: 48px 40px 40px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;" class="padding-mobile">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <td style="background-color: #0d0d0d; border-left: 1px solid #1a1a1a; border-right: 1px solid #1a1a1a; padding: 32px 40px 40px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;" class="padding-mobile">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${bannerBlock}
                   ${content}
                 </table>
               </td>
             </tr>
 
-            <!-- Bottom gradient accent line -->
             <tr>
               <td style="height: 1px; background: linear-gradient(90deg, transparent 0%, #333333 50%, transparent 100%); font-size: 0; line-height: 0;">&nbsp;</td>
             </tr>
 
-            <!-- Footer -->
             <tr>
               <td style="padding: 24px 40px 32px 40px; text-align: center;" class="padding-mobile">
                 <p style="margin: 0 0 8px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.5; color: #555555;">
                   ${escapeHtml(appName)}${
     supportEmail
-      ? ` · <a href="mailto:${
+      ? ` &middot; <a href="mailto:${
         escapeHtml(supportEmail)
       }" style="color: #02d07d;">${escapeHtml(supportEmail)}</a>`
       : ""

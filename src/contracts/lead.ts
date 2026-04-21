@@ -3,8 +3,6 @@ import type { Profile } from "./profile.ts";
 export interface Lead {
   id: string;
   name: string;
-  email: string;
-  phone?: string;
   profile: Profile;
   companyIds: string[];
   tags: string[];

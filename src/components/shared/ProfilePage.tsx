@@ -7,7 +7,8 @@ import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import FileUploadField from "@/src/components/fields/FileUploadField";
-import RecoveryChannelsSubform from "@/src/components/subforms/RecoveryChannelsSubform";
+import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
+import PasswordChangeSubform from "@/src/components/subforms/PasswordChangeSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 
 export default function ProfilePage() {
@@ -16,20 +17,17 @@ export default function ProfilePage() {
   const { companyId, systemSlug } = useSystemContext();
 
   const [name, setName] = useState(user?.profile?.name ?? "");
-  const [phone, setPhone] = useState(user?.phone ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.profile?.avatarUri ?? "");
   const [age, setAge] = useState(user?.profile?.age?.toString() ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const recoveryRef = useRef<SubformRef>(null);
+  const channelsRef = useRef<SubformRef>(null);
 
-  // Sync form state whenever the auth user object changes (e.g. after refresh)
   useEffect(() => {
     if (user) {
       setName(user.profile?.name ?? "");
-      setPhone(user.phone ?? "");
       setAvatarUri(user.profile?.avatarUri ?? "");
       setAge(user.profile?.age?.toString() ?? "");
     }
@@ -50,7 +48,6 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({
           name,
-          phone: phone || undefined,
           avatarUri: avatarUri || undefined,
           age: age ? Number(age) : undefined,
         }),
@@ -62,15 +59,12 @@ export default function ProfilePage() {
           "common.error.generic";
         setError(msg);
       } else {
-        // Update local form state immediately from the API response
         if (json.data) {
           setName(json.data.profile?.name ?? name);
-          setPhone(json.data.phone ?? "");
           setAvatarUri(json.data.profile?.avatarUri ?? "");
           setAge(json.data.profile?.age?.toString() ?? "");
         }
         setSuccess(true);
-        // Refresh auth state so the rest of the app (e.g. ProfileMenu avatar) updates
         await refresh();
         setTimeout(() => setSuccess(false), 3000);
       }
@@ -95,7 +89,6 @@ export default function ProfilePage() {
         {t("common.profile.title")}
       </h1>
 
-      {/* Profile form card */}
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300">
         <ErrorDisplay message={error} />
 
@@ -106,7 +99,6 @@ export default function ProfilePage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Avatar */}
           <div className="flex flex-col items-center gap-4 pb-4 border-b border-[var(--color-dark-gray)]">
             {avatarUri
               ? (
@@ -147,20 +139,6 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Email (read-only) */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("common.profile.email")}
-            </label>
-            <input
-              type="email"
-              value={user.email}
-              readOnly
-              className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-[var(--color-light-text)] outline-none cursor-not-allowed opacity-60"
-            />
-          </div>
-
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
               {t("common.profile.nameLabel")} *
@@ -175,21 +153,6 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("common.profile.phone")}
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t("common.placeholder.phone")}
-              className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-            />
-          </div>
-
-          {/* Age */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
               {t("common.profile.age")}
@@ -205,7 +168,6 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={saving || !name.trim()}
@@ -224,15 +186,23 @@ export default function ProfilePage() {
         </form>
       </div>
 
-      {/* Recovery Channels card */}
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300">
         <h2 className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
-          {t("common.recoveryChannels.title")}
+          {t("common.entityChannels.title")}
         </h2>
-        <RecoveryChannelsSubform
-          ref={recoveryRef}
+        <EntityChannelsSubform
+          ref={channelsRef}
+          channelTypes={["email", "phone"]}
+          requiredTypes={["email"]}
           systemToken={systemToken ?? undefined}
         />
+      </div>
+
+      <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300">
+        <h2 className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
+          {t("auth.passwordChange.title")}
+        </h2>
+        <PasswordChangeSubform />
       </div>
     </div>
   );

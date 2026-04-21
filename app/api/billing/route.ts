@@ -456,7 +456,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const purchase = result[0]?.[0];
     const activeSubId = result[1]?.[0]?.id;
 
-    await publish("PAYMENT_DUE", {
+    await publish("process_payment", {
       creditPurchaseId: String(purchase?.id ?? ""),
       subscriptionId: String(activeSubId ?? ""),
       companyId,
@@ -801,7 +801,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await publish("PAYMENT_DUE", {
+    await publish("process_payment", {
       subscriptionId: String(retryRow.id),
       companyId,
       systemId,

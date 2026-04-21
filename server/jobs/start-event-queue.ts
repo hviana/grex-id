@@ -1,6 +1,5 @@
 import { Worker } from "../event-queue/worker.ts";
-import { getAllHandlerNames } from "../event-queue/registry.ts";
-import { getHandlerFunction } from "../module-registry.ts";
+import { getAllHandlers, getHandler } from "../module-registry.ts";
 import type { WorkerConfig } from "@/src/contracts/event-queue";
 
 const defaultConfig: Omit<WorkerConfig, "handler"> = {
@@ -13,23 +12,18 @@ const defaultConfig: Omit<WorkerConfig, "handler"> = {
 };
 
 export function startEventQueue(): void {
-  const handlers = getAllHandlerNames();
+  const names = getAllHandlers();
 
-  for (const handler of handlers) {
-    const fn = getHandlerFunction(handler);
-    if (!fn) {
-      console.warn(
-        `[event-queue] No function registered for handler: ${handler}`,
-      );
-      continue;
-    }
+  for (const name of names) {
+    const fn = getHandler(name);
+    if (!fn) continue;
 
-    const config: WorkerConfig = { ...defaultConfig, handler };
+    const config: WorkerConfig = { ...defaultConfig, handler: name };
     const worker = new Worker(config, fn);
     worker.start().catch((err) => {
-      console.error(`[event-queue] Worker for ${handler} crashed:`, err);
+      console.error(`[event-queue] Worker for ${name} crashed:`, err);
     });
   }
 
-  console.log(`[event-queue] Started workers for: ${handlers.join(", ")}`);
+  console.log(`[event-queue] Started workers for: ${names.join(", ")}`);
 }

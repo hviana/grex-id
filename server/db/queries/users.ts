@@ -28,11 +28,10 @@ export async function listUsers(
     Omit<User, "twoFactorEnabled" | "oauthProvider" | "stayLoggedIn">
   >({
     table: "user",
-    select:
-      "id, email, emailVerified, phone, phoneVerified, profile, roles, createdAt, updatedAt",
+    select: "id, profile, roles, createdAt, updatedAt",
     conditions,
     bindings,
-    fetch: "profile",
+    fetch: "profile, profile.channels",
     params,
   });
 }
@@ -40,7 +39,7 @@ export async function listUsers(
 export async function getUser(id: string): Promise<User | null> {
   const db = await getDb();
   const result = await db.query<[User[]]>(
-    "SELECT * FROM $id FETCH profile",
+    "SELECT * FROM $id FETCH profile, profile.channels",
     { id: rid(id) },
   );
   return result[0]?.[0] ?? null;
@@ -50,8 +49,6 @@ export async function updateUser(
   id: string,
   data: Partial<
     {
-      email: string;
-      phone: string;
       profile: {
         name: string;
         avatarUri?: string;
@@ -66,20 +63,11 @@ export async function updateUser(
   const sets: string[] = [];
   const bindings: Record<string, unknown> = { id: rid(id) };
 
-  if (data.email !== undefined) {
-    sets.push("email = $email");
-    bindings.email = data.email;
-  }
-  if (data.phone !== undefined) {
-    sets.push("phone = $phone");
-    bindings.phone = data.phone;
-  }
   if (data.roles !== undefined) {
     sets.push("roles = $roles");
     bindings.roles = data.roles;
   }
 
-  // Build a single batched query for all updates
   const statements: string[] = [];
 
   if (data.profile !== undefined) {
@@ -113,13 +101,12 @@ export async function updateUser(
     statements.push(`UPDATE $id SET ${sets.join(", ")}`);
   }
 
-  statements.push("SELECT * FROM $id FETCH profile");
+  statements.push("SELECT * FROM $id FETCH profile, profile.channels");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
     bindings,
   );
-  // The last statement is always the SELECT
   const selectResult = results[results.length - 1] as User[];
   return selectResult[0];
 }
@@ -143,6 +130,8 @@ export async function deleteUser(id: string): Promise<void> {
   const db = await getDb();
   await db.query(
     `LET $usr = (SELECT profile FROM $id);
+    DELETE entity_channel WHERE ownerId = $id;
+    DELETE verification_request WHERE ownerId = $id;
     DELETE $id;
     IF $usr[0].profile != NONE {
       DELETE $usr[0].profile;

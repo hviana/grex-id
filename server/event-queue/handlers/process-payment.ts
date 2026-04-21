@@ -44,7 +44,7 @@ export const processPayment: HandlerFn = async (payload) => {
         currency: string;
       }[],
       { priceModifier: number; creditModifier: number }[],
-      { email: string; name: string }[],
+      { id: string; name: string }[],
       { name: string; slug: string }[],
       { status?: string }[],
     ]
@@ -60,7 +60,7 @@ export const processPayment: HandlerFn = async (payload) => {
      };
      LET $companyId = (SELECT VALUE companyId FROM subscription WHERE id = $id LIMIT 1)[0];
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-     SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT id, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
      LET $systemId = (SELECT VALUE systemId FROM subscription WHERE id = $id LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
      ${creditPurchaseQuery}`,
@@ -158,7 +158,7 @@ export const processPayment: HandlerFn = async (payload) => {
 
   const billingUrl = `/billing?system=${systemSlug}`;
   const ownerName = owner?.name ?? "";
-  const ownerEmail = owner?.email ?? "";
+  const ownerId = owner?.id ? String(owner.id) : "";
 
   // Async payment detection (§22.9)
   const isAsync = providerResult.expiresInSeconds != null &&
@@ -184,21 +184,25 @@ export const processPayment: HandlerFn = async (payload) => {
     }
 
     // Send payment-pending notification (§22.9)
-    if (ownerEmail) {
-      await publish("SEND_EMAIL", {
-        recipients: [ownerEmail],
-        template: "payment-pending",
+    if (ownerId) {
+      await publish("send_communication", {
+        recipients: [ownerId],
+        template: "notification",
         templateData: {
-          name: ownerName,
+          eventKey: `billing.event.paymentPending.${kind}`,
+          occurredAt: new Date().toISOString(),
+          actorName: ownerName,
           systemName,
-          kind,
-          amount: String(chargeAmount),
-          currency,
-          billingUrl,
+          value: { amount: chargeAmount, currency },
+          ctaKey: "templates.notification.cta.viewBilling",
+          ctaUrl: billingUrl,
+          resources: [
+            `billing.paymentKind.${kind}`,
+          ],
+          systemSlug,
           expiresInSeconds: String(providerResult.expiresInSeconds),
           continuityData: providerResult.continuityData,
         },
-        systemSlug,
       });
     }
 
@@ -304,21 +308,23 @@ export const processPayment: HandlerFn = async (payload) => {
       );
     }
 
-    // Email on success (§16)
-    if (ownerEmail) {
-      await publish("SEND_EMAIL", {
-        recipients: [ownerEmail],
-        template: "payment-success",
+    // Notification on success (§16)
+    if (ownerId) {
+      await publish("send_communication", {
+        recipients: [ownerId],
+        template: "notification",
         templateData: {
-          name: ownerName,
+          eventKey: `billing.event.paymentSuccess.${kind}`,
+          occurredAt: new Date().toISOString(),
+          actorName: ownerName,
           systemName,
-          kind,
-          amount: String(chargeAmount),
-          currency,
-          billingUrl,
+          value: { amount: chargeAmount, currency },
           invoiceUrl,
+          ctaKey: "templates.notification.cta.viewBilling",
+          ctaUrl: billingUrl,
+          resources: [`billing.paymentKind.${kind}`],
+          systemSlug,
         },
-        systemSlug,
       });
     }
   } else {
@@ -358,20 +364,24 @@ export const processPayment: HandlerFn = async (payload) => {
       );
     }
 
-    if (ownerEmail) {
-      await publish("SEND_EMAIL", {
-        recipients: [ownerEmail],
-        template: "payment-failure",
+    if (ownerId) {
+      await publish("send_communication", {
+        recipients: [ownerId],
+        template: "notification",
         templateData: {
-          name: ownerName,
+          eventKey: `billing.event.paymentFailure.${kind}`,
+          occurredAt: new Date().toISOString(),
+          actorName: ownerName,
           systemName,
-          kind,
-          amount: String(chargeAmount),
-          currency,
-          reason: failureReason || "billing.payment.genericFailure",
-          billingUrl,
+          value: { amount: chargeAmount, currency },
+          ctaKey: "templates.notification.cta.updatePaymentMethod",
+          ctaUrl: billingUrl,
+          resources: [
+            `billing.paymentKind.${kind}`,
+            failureReason || "billing.payment.genericFailure",
+          ],
+          systemSlug,
         },
-        systemSlug,
       });
     }
   }

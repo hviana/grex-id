@@ -6,31 +6,35 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import {
-  createRecoveryChannel,
-  deleteRecoveryChannel,
-  findRecoveryChannelById,
-  findRecoveryChannelByUserAndValue,
-  listRecoveryChannels,
-} from "@/server/db/queries/recovery-channels";
+  countVerifiedChannelsOfType,
+  createChannel,
+  deleteChannel,
+  findChannelById,
+  findChannelByOwnerTypeAndValue,
+  listChannelsByOwner,
+  listVerifiedChannelTypes,
+} from "@/server/db/queries/entity-channels";
 import Core from "@/server/utils/Core";
 import {
   communicationGuard,
   type CommunicationGuardResult,
 } from "@/server/utils/verification-guard";
+import { getDb, rid } from "@/server/db/connection";
 
-async function sendChannelVerification(
+async function sendChannelConfirmation(
   userId: string,
   channelId: string,
-  channelType: "email" | "phone",
-  channelValue: string,
+  channelType: string,
   userName: string,
   systemSlug: string,
+  actionKey: "auth.action.register" | "auth.action.entityChannelAdd",
 ): Promise<CommunicationGuardResult> {
   const guardResult = await communicationGuard({
-    userId,
-    type: "recovery_verify",
-    payload: { channelId },
-    systemSlug,
+    ownerId: userId,
+    ownerType: "user",
+    actionKey,
+    payload: { channelIds: [channelId] },
+    tenant: { systemSlug, actorId: userId, actorType: "user" },
   });
 
   if (!guardResult.allowed) return guardResult;
@@ -42,29 +46,36 @@ async function sendChannelVerification(
   );
   const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
     "http://localhost:3000";
-  const verificationLink = `${baseUrl}/verify?token=${guardResult.token}`;
+  const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 
-  await publish(
-    channelType === "email" ? "SEND_EMAIL" : "SEND_SMS",
-    {
-      recipients: [channelValue],
-      template: "recovery-verify",
-      templateData: {
-        name: userName,
-        verificationLink,
-        channelValue,
-        expiryMinutes: String(expiryMinutes),
-      },
+  // The primary channel is the one being verified; fall back to the owner's
+  // other verified channels if delivery fails.
+  const otherVerified = await listVerifiedChannelTypes(userId);
+  const channels = [
+    channelType,
+    ...otherVerified.filter((t) => t !== channelType),
+  ];
+
+  await publish("send_communication", {
+    channels,
+    recipients: [userId],
+    template: "human-confirmation",
+    templateData: {
+      actionKey,
+      confirmationLink,
+      occurredAt: new Date().toISOString(),
+      actorName: userName,
+      expiryMinutes: String(expiryMinutes),
       systemSlug,
     },
-  );
+  });
 
   return guardResult;
 }
 
-async function getHandler(req: Request, ctx: RequestContext) {
+async function getHandler(_req: Request, ctx: RequestContext) {
   const userId = ctx.claims!.actorId;
-  const channels = await listRecoveryChannels(userId);
+  const channels = await listChannelsByOwner(userId);
   return Response.json({ success: true, data: channels });
 }
 
@@ -72,8 +83,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
   const userId = ctx.claims!.actorId;
+  const db = await getDb();
 
-  // Resend verification for an existing unverified channel
   if (action === "resend-verification") {
     const body = await req.json();
     const { channelId } = body;
@@ -88,8 +99,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const channel = await findRecoveryChannelById(channelId);
-    if (!channel || String(channel.userId) !== String(userId)) {
+    const channel = await findChannelById(channelId);
+    if (!channel || String(channel.ownerId) !== String(userId)) {
       return Response.json(
         {
           success: false,
@@ -105,22 +116,33 @@ async function postHandler(req: Request, ctx: RequestContext) {
           success: false,
           error: {
             code: "ERROR",
-            message: "auth.recoveryChannel.error.notVerified",
+            message: "auth.entityChannel.error.alreadyVerified",
           },
         },
         { status: 400 },
       );
     }
 
-    const name = (ctx.claims as any)?.profile?.name ?? "";
+    const profileRow = await db.query<[{ profile: { name: string } }[]]>(
+      `SELECT profile FROM $uid FETCH profile`,
+      { uid: rid(userId) },
+    );
+    const name = profileRow[0]?.[0]?.profile?.name ?? "";
 
-    const result = await sendChannelVerification(
+    // Pending confirmation: unverified channel still needs an initial
+    // verified channel on the account to distinguish register from add.
+    const anyVerified = (await listVerifiedChannelTypes(userId)).length > 0;
+    const actionKey = anyVerified
+      ? "auth.action.entityChannelAdd"
+      : "auth.action.register";
+
+    const result = await sendChannelConfirmation(
       userId,
       String(channel.id),
-      channel.type as "email" | "phone",
-      channel.value,
+      channel.type,
       name,
       ctx.tenant.systemSlug,
+      actionKey,
     );
 
     if (!result.allowed) {
@@ -136,7 +158,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true });
   }
 
-  // Add new recovery channel
   const body = await req.json();
   const { type, value } = body;
 
@@ -147,8 +168,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
         error: {
           code: "VALIDATION",
           errors: [
-            ...(!type ? ["validation.recoveryChannel.type.required"] : []),
-            ...(!value ? ["validation.recoveryChannel.value.required"] : []),
+            ...(!type ? ["validation.channel.type.required"] : []),
+            ...(!value ? ["validation.channel.value.required"] : []),
           ],
         },
       },
@@ -156,23 +177,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (type !== "email" && type !== "phone") {
-    return Response.json(
-      {
-        success: false,
-        error: {
-          code: "VALIDATION",
-          errors: ["validation.recoveryChannel.type.required"],
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  const fieldType = type === "email" ? "email" : "phone";
-  const stdValue = standardizeField(fieldType, value, "recovery_channel");
-
-  const valueErrors = validateField(fieldType, stdValue, "user");
+  const stdValue = standardizeField(type, value, "entity_channel");
+  const valueErrors = validateField(type, stdValue, "entity_channel");
   if (valueErrors.length > 0) {
     return Response.json(
       { success: false, error: { code: "VALIDATION", errors: valueErrors } },
@@ -180,19 +186,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Check duplicate channel for this user
-  const existing = await findRecoveryChannelByUserAndValue(
-    userId,
-    type,
-    stdValue,
-  );
+  const existing = await findChannelByOwnerTypeAndValue(userId, type, stdValue);
   if (existing) {
     return Response.json(
       {
         success: false,
         error: {
           code: "ERROR",
-          message: "auth.recoveryChannel.error.duplicate",
+          message: "auth.entityChannel.error.duplicate",
         },
       },
       { status: 409 },
@@ -200,18 +201,28 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   const core = Core.getInstance();
-  const maxPerUser = Number(
+  const maxPerOwner = Number(
     (await core.getSetting(
-      "auth.recoveryChannel.maxPerUser",
+      "auth.entityChannel.maxPerOwner",
       ctx.tenant.systemSlug,
     )) || 10,
   );
 
-  const channel = await createRecoveryChannel({
-    userId,
+  const profileResult = await db.query<[{ profile: string }[]]>(
+    `SELECT profile FROM $uid`,
+    { uid: rid(userId) },
+  );
+  const profileId = profileResult[0]?.[0]?.profile
+    ? String(profileResult[0][0].profile)
+    : undefined;
+
+  const channel = await createChannel({
+    ownerId: userId,
+    ownerType: "user",
     type,
     value: stdValue,
-    maxPerUser,
+    maxPerOwner,
+    appendToProfileId: profileId,
   });
 
   if (!channel) {
@@ -220,22 +231,26 @@ async function postHandler(req: Request, ctx: RequestContext) {
         success: false,
         error: {
           code: "ERROR",
-          message: "auth.recoveryChannel.error.maxReached",
+          message: "auth.entityChannel.error.maxReached",
         },
       },
       { status: 400 },
     );
   }
 
-  const name = (ctx.claims as any)?.profile?.name ?? "";
+  const profileRow = await db.query<[{ profile: { name: string } }[]]>(
+    `SELECT profile FROM $uid FETCH profile`,
+    { uid: rid(userId) },
+  );
+  const name = profileRow[0]?.[0]?.profile?.name ?? "";
 
-  await sendChannelVerification(
+  await sendChannelConfirmation(
     userId,
     String(channel.id),
     type,
-    stdValue,
     name,
     ctx.tenant.systemSlug,
+    "auth.action.entityChannelAdd",
   );
 
   return Response.json({ success: true, data: channel }, { status: 201 });
@@ -243,7 +258,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { channelId } = body;
+  const { channelId, requiredTypes } = body as {
+    channelId?: string;
+    requiredTypes?: string[];
+  };
   const userId = ctx.claims!.actorId;
 
   if (!channelId) {
@@ -256,9 +274,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Verify ownership
-  const channel = await findRecoveryChannelById(channelId);
-  if (!channel || String(channel.userId) !== String(userId)) {
+  const channel = await findChannelById(channelId);
+  if (!channel || String(channel.ownerId) !== String(userId)) {
     return Response.json(
       {
         success: false,
@@ -268,7 +285,34 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await deleteRecoveryChannel(channelId, userId);
+  // Required-type invariant: removing a verified channel of a required type
+  // must leave at least one other verified channel of that type (§19.13).
+  if (channel.verified && requiredTypes?.includes(channel.type)) {
+    const remaining = await countVerifiedChannelsOfType(userId, channel.type);
+    if (remaining <= 1) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: ["auth.entityChannel.error.requiredType"],
+          },
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  const db = await getDb();
+  const profileResult = await db.query<[{ profile: string }[]]>(
+    `SELECT profile FROM $uid`,
+    { uid: rid(userId) },
+  );
+  const profileId = profileResult[0]?.[0]?.profile
+    ? String(profileResult[0][0].profile)
+    : undefined;
+
+  await deleteChannel({ channelId, profileId });
   return Response.json({ success: true });
 }
 

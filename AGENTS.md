@@ -299,7 +299,7 @@ permission errors, and status messages.
 │   │   ├── data-deletion/ front-settings/ file-access/ settings/
 │   └── api/
 │       ├── public/{system,front-core}/route.ts
-│       ├── auth/{login,register,verify,forgot-password,reset-password,refresh,exchange,oauth/[provider],oauth/authorize,recovery-channel-reset}/route.ts
+│       ├── auth/{login,register,verify,forgot-password,reset-password,password-change,refresh,exchange,oauth/[provider],oauth/authorize}/route.ts
 │       ├── core/{systems,roles,plans,vouchers,menus,terms,companies,data-deletion,settings,settings/missing,front-settings,file-access}/route.ts
 │       ├── users/route.ts
 │       ├── companies/route.ts + [companyId]/systems/route.ts
@@ -307,7 +307,7 @@ permission errors, and status messages.
 │       ├── usage/route.ts
 │       ├── connected-apps/route.ts
 │       ├── tokens/route.ts
-│       ├── recovery-channels/route.ts
+│       ├── entity-channels/route.ts
 │       ├── leads/{route.ts,public/route.ts}
 │       ├── tags/route.ts
 │       ├── files/{upload,download}/route.ts
@@ -324,7 +324,7 @@ permission errors, and status messages.
 │   │                  connected-app, token, file, event-queue,
 │   │                  communication, payment-provider, usage,
 │   │                  core-settings, front-core-settings, tag, lead,
-│   │                  location, recovery-channel, file-access, common)
+│   │                  location, entity-channel, file-access, common)
 │   ├── i18n/         (§5.1)
 │   ├── hooks/        (§17.3)
 │   └── lib/          (formatters, validators — isomorphic, no secrets)
@@ -336,7 +336,7 @@ permission errors, and status messages.
 │   │   ├── queries/ (auth, users, companies, systems, roles, plans,
 │   │   │            vouchers, menus, billing, connected-apps, tokens,
 │   │   │            usage, event-queue, core-settings, tags, leads,
-│   │   │            locations, data-deletion, recovery-channels, systems/[slug]/)
+│   │   │            locations, data-deletion, entity-channels, systems/[slug]/)
 │   │   └── frontend-queries/ (messages, notifications, systems/[slug]/)
 │   ├── middleware/   (compose, withAuth, withRateLimit, withPlanAccess, withEntityLimit)
 │   ├── utils/        (Core, FrontCore, cache, fs, token, token-revocation, cors,
@@ -426,16 +426,19 @@ Pass values between statements with `LET`. Use `UPSERT … WHERE` instead of
 read-then-write. The final `SELECT … FETCH` (to resolve record links) must be
 part of the same batched query.
 
-**Example — create a user with a composable profile and return the fully
-resolved row in one call:**
+**Example — create a user with a composable profile and an email
+`entity_channel`, then return the fully resolved row in one call:**
 
 ```surql
-LET $prof = CREATE profile SET name = $name, locale = $locale;
-LET $u    = CREATE user    SET email = $email,
-                               passwordHash = crypto::argon2::generate($password),
+LET $prof = CREATE profile SET name = $name, locale = $locale, channels = [];
+LET $u    = CREATE user    SET passwordHash = crypto::argon2::generate($password),
                                profile = $prof[0].id,
                                roles = [];
-SELECT * FROM user WHERE id = $u[0].id FETCH profile;
+LET $ch   = CREATE entity_channel SET
+              ownerId = $u[0].id, ownerType = "user",
+              type = "email", value = $email, verified = false;
+UPDATE $prof[0].id SET channels = [$ch[0].id];
+SELECT * FROM user WHERE id = $u[0].id FETCH profile, profile.channels;
 ```
 
 #### 7.3 Mandatory query-layer helpers
@@ -531,7 +534,7 @@ this table.
 | Migration file                             | Table                     | Key rules                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0000_db_generals.surql`                   | `_migrations`, analyzers  | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `0001_create_user.surql`                   | `user`                    | `profile` is `record<profile>`. Unique `email`, unique `phone`. `passwordHash` via argon2. Fields: email, emailVerified, phone, phoneVerified, passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `0001_create_user.surql`                   | `user`                    | `profile` is `record<profile>`. `passwordHash` via argon2. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. Fields: passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `0002_create_company.surql`                | `company`                 | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `0003_create_company_user.surql`           | `company_user`            | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `0004_create_system.surql`                 | `system`                  | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -550,18 +553,18 @@ this table.
 | `0018_create_queue_event.surql`            | `queue_event`             | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `0019_create_delivery.surql`               | `delivery`                | Status ∈ `pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `0020_create_core_setting.surql`           | `setting`                 | Unique `(key, systemSlug)`. `systemSlug option<string>` — `NONE` = core-level default; non-null = per-system override.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `0021_create_verification_request.surql`   | `verification_request`    | type ∈ `email_verify`, `phone_verify`, `password_reset`, `lead_update`, `recovery_verify`. Unique `token`. Index on `(userId, type, createdAt)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `0021_create_verification_request.surql`   | `verification_request`    | `actionKey` i18n string (e.g. `"auth.action.register"`). `ownerId` `record<user\|lead>` for the entity being confirmed. `payload` `object FLEXIBLE` (no sensitive data — never passwords, card numbers, tokens). `companyId`/`systemId`/`systemSlug`/`actorId`/`actorType` capture tenant context. Unique `token`. Index on `(ownerId, actionKey, createdAt)`.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `0022_create_live_query_permissions.surql` | various                   | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `0023_create_lead.surql`                   | `lead`                    | `profile` is `record<profile>`. Unique `email` / `phone`. `companyIds` array of record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `0023_create_lead.surql`                   | `lead`                    | `profile` is `record<profile>`. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. `companyIds` array of record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `0024_create_lead_company_system.surql`    | `lead_company_system`     | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `0025_create_location.surql`               | `location`                | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `0029_create_tag.surql`                    | `tag`                     | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `0030_create_profile.surql`                | `profile`                 | Composable. Fields: name, avatarUri, age, locale, recoveryChannels (`array<record<recovery_channel>>`). FULLTEXT `name`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `0030_create_profile.surql`                | `profile`                 | Composable. Fields: name, avatarUri, age, locale, channels (`array<record<entity_channel>>`). FULLTEXT `name`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `0031_create_address.surql`                | `address`                 | Composable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0032_create_credit_expense.surql`         | `credit_expense`          | Daily container. Unique `(companyId, systemId, resourceKey, day)`. Fields: `amount` (total cents consumed), `count` (number of individual consumptions), `actorId` `option<string>`. Both increment atomically via UPSERT.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `0033_create_front_core_setting.surql`     | `front_setting`           | Unique `(key, systemSlug)`. Same `systemSlug` override pattern as `setting`. Physically separated from `setting` (§10.2.8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0034_create_token_revocation.surql`       | `token_revocation`        | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `0035_create_recovery_channel.surql`       | `recovery_channel`        | Composable. `userId` → user. `type` ∈ `["email","phone"]`. Unique `(userId, type, value)`. `verified` bool default false. Max 10 per user enforced at query layer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `0035_create_entity_channel.surql`         | `entity_channel`          | Composable, generalized communication channel. `ownerId` `record<user\|lead>`. `ownerType` ∈ `["user","lead"]` — denormalized for cheap filtering. `type` open string identifying the channel (seeded defaults `"email"`, `"phone"`; subframeworks may register their own). `value` string. `verified` bool default false. Unique `(ownerId, type, value)`. Index on `(type, value)` and on `(ownerId, verified)`. Max per owner enforced at the query layer via `auth.entityChannel.maxPerOwner`.                                                                                                                                                                                                                                                                                              |
 | `0038_create_payment.surql`                | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"\|"expired"`), paymentMethodId, transactionId, invoiceUrl, failureReason, continuityData (`option<object> FLEXIBLE`), expiresAt (`option<datetime>`), createdAt. Indexes on (companyId, systemId), createdAt, kind, (status, expiresAt). Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                         |
 | `0044_create_file_access.surql`            | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape plus maxFileSizeMB option<float> and allowedExtensions array<string>), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -571,7 +574,13 @@ separate `file_metadata` table (§13.5).
 
 **Seed files:**
 
-- `001_superuser.ts` — creates the superuser if none exists.
+- `001_superuser.ts` — creates the superuser if none exists. Creates a `profile`
+  (display name from `app.name` or `"Super Admin"` fallback) **plus** one
+  verified `entity_channel` of type `"email"` linked to the profile, and
+  attaches the superuser `user` to that profile. The verified channel is what
+  satisfies the approval invariant (§19.3) so the superuser can log in from
+  first boot, and it also enables the recovery / profile flows that expect at
+  least one verified channel.
 - `002_default_settings.ts` — seeds the server-only Core settings table
   (§10.1.4).
 - `003_default_front_settings.ts` — seeds the FrontCore table (§10.2.6).
@@ -770,35 +779,37 @@ systemSlug)`. If a key is missing,
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
-| Key                                       | Seed value                  | Used by                                               |
-| ----------------------------------------- | --------------------------- | ----------------------------------------------------- |
-| `app.name`                                | `"Core"`                    | Email templates (`appName`)                           |
-| `app.baseUrl`                             | `"http://localhost:3000"`   | Verification/reset links                              |
-| `app.defaultSystem`                       | `""`                        | Homepage fallback system slug                         |
-| `auth.token.expiry.minutes`               | `"15"`                      | System API token lifetime                             |
-| `auth.token.expiry.stayLoggedIn.hours`    | `"168"`                     | Stay-logged-in lifetime (7 days)                      |
-| `auth.rateLimit.perMinute`                | `"5"`                       | Auth route rate limit                                 |
-| `auth.communication.expiry.minutes`       | `"15"`                      | Unified verification/communication token expiry (min) |
-| `auth.communication.maxCount`             | `"5"`                       | Max sends per (user, type) in rolling window          |
-| `auth.communication.windowHours`          | `"1"`                       | Rolling window for communication rate limit (hours)   |
-| `auth.twoFactor.enabled`                  | `"true"`                    | Global 2FA toggle                                     |
-| `auth.oauth.enabled`                      | `"false"`                   | Global OAuth (login) toggle                           |
-| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled providers                       |
-| `terms.generic`                           | `""`                        | Generic LGPD fallback HTML                            |
-| `billing.autoRecharge.minAmount`          | `"500"`                     | Min auto-recharge (cents)                             |
-| `billing.autoRecharge.maxAmount`          | `"50000"`                   | Max auto-recharge per subscription (cents)            |
-| `auth.recoveryChannel.maxPerUser`         | `"10"`                      | Max recovery channels per user                        |
-| `db.frontend.url`                         | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)                    |
-| `db.frontend.namespace`                   | `"main"`                    | Frontend SurrealDB namespace (§7.5)                   |
-| `db.frontend.database`                    | `"grex-id"`                 | Frontend SurrealDB database (§7.5)                    |
-| `db.frontend.user`                        | `""`                        | SurrealDB auth user for frontend WebSocket            |
-| `db.frontend.pass`                        | `""`                        | SurrealDB auth pass for frontend WebSocket            |
-| `cache.core.size`                         | `"20"`                      | Core file cache size (MB)                             |
-| `cache.file.hitWindowHours`               | `"1"`                       | Sliding window for cache hit counting (hours)         |
-| `transfer.default.maxConcurrentDownloads` | `"0"`                       | Default max concurrent downloads (0 = unlimited)      |
-| `transfer.default.maxConcurrentUploads`   | `"0"`                       | Default max concurrent uploads (0 = unlimited)        |
-| `transfer.default.maxDownloadBandwidthMB` | `"0"`                       | Default max download bandwidth MB/s (0 = unlimited)   |
-| `transfer.default.maxUploadBandwidthMB`   | `"0"`                       | Default max upload bandwidth MB/s (0 = unlimited)     |
+| Key                                       | Seed value                  | Used by                                                                                                                       |
+| ----------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `app.name`                                | `"Core"`                    | Email templates (`appName`)                                                                                                   |
+| `app.baseUrl`                             | `"http://localhost:3000"`   | Verification/reset links                                                                                                      |
+| `app.defaultSystem`                       | `""`                        | Homepage fallback system slug                                                                                                 |
+| `auth.token.expiry.minutes`               | `"15"`                      | System API token lifetime                                                                                                     |
+| `auth.token.expiry.stayLoggedIn.hours`    | `"168"`                     | Stay-logged-in lifetime (7 days)                                                                                              |
+| `auth.rateLimit.perMinute`                | `"5"`                       | Auth route rate limit                                                                                                         |
+| `auth.communication.expiry.minutes`       | `"15"`                      | Unified verification/communication token expiry (min)                                                                         |
+| `auth.communication.maxCount`             | `"5"`                       | Max sends per (owner, actionKey) in rolling window                                                                            |
+| `auth.communication.windowHours`          | `"1"`                       | Rolling window for communication rate limit (hours)                                                                           |
+| `auth.twoFactor.enabled`                  | `"true"`                    | Global 2FA toggle                                                                                                             |
+| `auth.oauth.enabled`                      | `"false"`                   | Global OAuth (login) toggle                                                                                                   |
+| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled providers                                                                                               |
+| `terms.generic`                           | `""`                        | Generic LGPD fallback HTML                                                                                                    |
+| `billing.autoRecharge.minAmount`          | `"500"`                     | Min auto-recharge (cents)                                                                                                     |
+| `billing.autoRecharge.maxAmount`          | `"50000"`                   | Max auto-recharge per subscription (cents)                                                                                    |
+| `auth.entityChannel.maxPerOwner`          | `"10"`                      | Max entity channels per owner (user or lead)                                                                                  |
+| `auth.entityChannel.defaultTypes`         | `"[\"email\",\"phone\"]"`   | JSON array of seeded channel types                                                                                            |
+| `auth.communication.defaultChannels`      | `"[\"email\",\"sms\"]"`     | JSON array of channels used by system-wide communications when the caller omits `channels`; order defines fallback precedence |
+| `db.frontend.url`                         | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)                                                                                            |
+| `db.frontend.namespace`                   | `"main"`                    | Frontend SurrealDB namespace (§7.5)                                                                                           |
+| `db.frontend.database`                    | `"grex-id"`                 | Frontend SurrealDB database (§7.5)                                                                                            |
+| `db.frontend.user`                        | `""`                        | SurrealDB auth user for frontend WebSocket                                                                                    |
+| `db.frontend.pass`                        | `""`                        | SurrealDB auth pass for frontend WebSocket                                                                                    |
+| `cache.core.size`                         | `"20"`                      | Core file cache size (MB)                                                                                                     |
+| `cache.file.hitWindowHours`               | `"1"`                       | Sliding window for cache hit counting (hours)                                                                                 |
+| `transfer.default.maxConcurrentDownloads` | `"0"`                       | Default max concurrent downloads (0 = unlimited)                                                                              |
+| `transfer.default.maxConcurrentUploads`   | `"0"`                       | Default max concurrent uploads (0 = unlimited)                                                                                |
+| `transfer.default.maxDownloadBandwidthMB` | `"0"`                       | Default max download bandwidth MB/s (0 = unlimited)                                                                           |
+| `transfer.default.maxUploadBandwidthMB`   | `"0"`                       | Default max upload bandwidth MB/s (0 = unlimited)                                                                             |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -1041,7 +1052,7 @@ export async function checkDuplicates(
 **Rules:**
 
 - Call `checkDuplicates` **before** the `CREATE` query on any entity with a
-  UNIQUE index or logical uniqueness (user email/phone, company document, system
+  UNIQUE index or logical uniqueness (entity channels, company document, system
   slug, voucher code, tag name-per-scope, etc.).
 - Pass every uniqueness field. `null`/`undefined` values are silently skipped
   (e.g. optional phone).
@@ -1158,9 +1169,12 @@ handlers, jobs, and components. The core never imports subsystem code — all
 wiring goes through `register*` functions called at boot.
 
 ```typescript
-// Handler functions — maps handler name → executable HandlerFn
-registerHandlerFunction(name: string, fn: HandlerFn): void;
-getHandlerFunction(name: string): HandlerFn | undefined;
+// Event handlers — one name per handler, used as both event name and
+// function key. Publishers call `publish(name, payload)`; workers resolve
+// the function by the same name.
+registerHandler(name: string, fn: HandlerFn): void;
+getHandler(name: string): HandlerFn | undefined;
+getAllHandlers(): string[];
 
 // Jobs — maps job name → start function for non-event-queue recurring jobs
 registerJob(name: string, startFn: () => void): void;
@@ -1169,8 +1183,16 @@ getAllJobs(): Record<string, () => void>;
 // i18n — system-specific translation files
 registerSystemI18n(systemSlug: string, locale: string, data: TranslationMap): void;
 
-// Communication templates — email/SMS templates resolved by name at send time
-registerTemplate(name: string, fn: TemplateFunction): void;
+// Communication templates — static per-channel TemplateFunctions, resolved at
+// send time by path under `server/utils/communication/templates/<channel>/`.
+registerTemplate(channel: string, path: string, fn: TemplateFunction): void;
+// Dynamic template builders — called once per channel iteration (§15.2).
+registerTemplateBuilder(name: string, fn: TemplateBuilder): void;
+// Register a channel name so the dispatcher can route to its handler.
+// The handler name is always `send_<channel>` by convention; the registry
+// only tracks which channels exist.
+registerChannel(channel: string): void;
+hasChannel(channel: string): boolean;
 
 // Cache — centralized cache registry (§12.11)
 registerCache<T>(slug: string, name: string, loader: () => Promise<T>): void;
@@ -1185,15 +1207,14 @@ runLifecycleHooks(event: LifecycleEvent, payload: Record<string, unknown>): Prom
 // Lifecycle events: "lead:delete", "lead:verify"
 
 // Re-exports from existing registries for one-import convenience:
-registerEventHandler, registerComponent, registerHomePage
+registerComponent, registerHomePage
 ```
 
 **Boot sequence** (in `server/jobs/index.ts`):
 
 1. `registerCore()` — `server/core-register.ts` registers core caches
    (`"core"::"data"`, `"core"::"front-data"`, `"core"::"jwt-secret"`), core
-   event handlers, handler functions, and core jobs (recurring-billing,
-   token-cleanup).
+   event handlers, and core jobs (recurring-billing, token-cleanup).
 2. `registerAllSystems()` — `systems/index.ts` calls each subsystem's
    `register()` function, which may register system-specific caches.
 3. `registerAllFrameworks()` — `frameworks/index.ts` calls each framework's
@@ -1506,22 +1527,24 @@ manually checking cooldowns or creating `verification_request` rows.
 
 **Settings** (dynamic, seeded via `002_default_settings.ts`):
 
-| Key                                 | Default | Purpose                                                   |
-| ----------------------------------- | ------- | --------------------------------------------------------- |
-| `auth.communication.expiry.minutes` | `"15"`  | Unified expiry for all verification/communication tokens  |
-| `auth.communication.maxCount`       | `"5"`   | Max verification sends per (user, type) in rolling window |
-| `auth.communication.windowHours`    | `"1"`   | Rolling window in hours for the rate limit                |
+| Key                                 | Default | Purpose                                                         |
+| ----------------------------------- | ------- | --------------------------------------------------------------- |
+| `auth.communication.expiry.minutes` | `"15"`  | Unified expiry for all verification/communication tokens        |
+| `auth.communication.maxCount`       | `"5"`   | Max verification sends per (owner, actionKey) in rolling window |
+| `auth.communication.windowHours`    | `"1"`   | Rolling window in hours for the rate limit                      |
 
 **Rules enforced in a single batched `db.query()` (§7.2):**
 
 1. **Previous-not-expired:** If an unused, non-expired `verification_request`
-   exists for the same `(userId, type)`, the new request is blocked with reason
-   `previousNotExpired`.
-2. **Rate limit:** If the user has >= `maxCount` requests of this type within
-   the rolling window (`windowHours`), the request is blocked with reason
+   exists for the same `(ownerId, actionKey)`, the new request is blocked with
+   reason `previousNotExpired`.
+2. **Rate limit:** If the owner has >= `maxCount` requests with this `actionKey`
+   within the rolling window (`windowHours`), the request is blocked with reason
    `rateLimited`.
 3. If both checks pass, the `verification_request` row is created atomically in
-   the same batched query.
+   the same batched query with the supplied tenant context fields (`companyId`,
+   `systemId`, `systemSlug`, `actorId`, `actorType`) captured alongside
+   `payload`.
 
 **Contract:**
 
@@ -1534,19 +1557,30 @@ export interface CommunicationGuardResult {
 }
 
 export async function communicationGuard(params: {
-  userId: string;
-  type: VerificationRequestType;
-  payload?: Record<string, unknown>;
-  systemSlug?: string;
+  ownerId: string; // user:… or lead:…
+  actionKey: string; // i18n key, e.g. "auth.action.register"
+  payload?: Record<string, unknown>; // non-sensitive only
+  tenant?: { // tenant context captured in the
+    companyId?: string; //   verification_request row
+    systemId?: string;
+    systemSlug?: string;
+    actorId?: string;
+    actorType?:
+      | "user"
+      | "lead"
+      | "api_token"
+      | "connected_app"
+      | "anonymous"
+      | "system";
+  };
 }): Promise<CommunicationGuardResult>;
 ```
 
 **Route integration.** Routes that protect against user enumeration
-(forgot-password, recovery-channel-reset) return generic success when
-`!allowed`. Public routes (leads) and authenticated routes (recovery-channels
-resend) return 429 with the appropriate i18n key
-(`validation.verification.previousNotExpired` or
-`validation.verification.rateLimited`).
+(forgot-password, account-recovery) return generic success when `!allowed`.
+Public routes (leads) and authenticated routes (entity-channels resend) return
+429 with the appropriate i18n key (`validation.verification.previousNotExpired`
+or `validation.verification.rateLimited`).
 
 ### 13. File Storage
 
@@ -1760,7 +1794,7 @@ accepts writes from payment providers (§22.9).
 - **`POST /api/leads/public`** — see §23.2.
 - **`POST /api/public/webhook/payment`** — async payment webhook scaffold
   (§22.9). Generic JSON body; provider-specific validation is handled by the
-  adapter layer. Publishes `PAYMENT_ASYNC_COMPLETED` event.
+  adapter layer. Publishes `payment_async_completed` event.
 
 #### 13.5 File metadata
 
@@ -1916,18 +1950,29 @@ handlers for this event name in the registry; (3) for each handler, insert a
 
 #### 14.3 Registry (`server/event-queue/registry.ts`)
 
+**One event ⇒ one handler, same name.** The registry is a `Set<string>` of
+registered names; the event name and its handler function are looked up by the
+same key. There is no seeded map — every handler is added at boot through the
+single call:
+
 ```typescript
-const handlerRegistry: Record<string, string[]> = {
-  "SEND_EMAIL": ["send_email"],
-  "SEND_SMS": ["send_sms"],
-  "PAYMENT_DUE": ["process_payment"],
-  "TRIGGER_AUTO_RECHARGE": ["auto_recharge"], // §22.5
-  "PAYMENT_ASYNC_COMPLETED": ["resolve_async_payment"], // §22.9
-};
-export function getHandlersForEvent(eventName: string): string[];
+registerHandler(name: string, fn: HandlerFn): void;
+getHandler(name: string): HandlerFn | undefined;
+getAllHandlers(): string[];
 ```
 
-Systems and frameworks add entries via `registerEventHandler()` (§12.9) at boot,
+Publishers call `publish(name, payload)` using the same name. Core registers
+`send_communication`, `send_email`, `send_sms`, `process_payment`,
+`auto_recharge`, and `resolve_async_payment` in `core-register.ts`.
+
+`send_communication` is the **sole handler** external callers invoke for
+communications (§15). It receives the §15.2 contract and publishes the
+registered per-channel handler (`send_email`, `send_sms`, …) for the first
+channel whose recipients resolve for the entity. Per-channel handlers are
+reserved for the dispatcher; route and handler code calls
+`publish("send_communication", …)` exclusively.
+
+Systems and frameworks add handlers via `registerHandler()` (§12.9) at boot,
 never by editing this file directly.
 
 #### 14.4 Worker loop (`server/event-queue/worker.ts`)
@@ -1995,38 +2040,183 @@ idempotency key when talking to external services.
 If a worker crashes, its `processing` rows become claimable again once
 `leaseUntil` expires (claim filter: `OR leaseUntil <= time::now()`).
 
-### 15. Communication (Email / SMS)
+### 15. Communication (Channel-agnostic)
 
-**No provider abstraction.** All channels are implemented directly as event
-handlers. Entities needing to send communication simply `publish()` an event
-with recipients + template name + template data — the handler resolves
-templates, reads Core settings, and calls the external service.
+All communication flows through a **single entry point** (`send_communication`)
+that dispatches to per-channel handlers (`send_email`, `send_sms`, and any
+subframework-registered channel). There is only one unified contract and only
+**two visual template families** — one for _human confirmations_ (actions that
+require a click to proceed) and one for _notifications_ (informational events).
 
-#### 15.1 Templates
+#### 15.1 Universal communication contract
 
-Live in `server/utils/communication/templates/`. Each template function:
+Every publisher of a communication — route handlers, event handlers, jobs,
+subsystems, frameworks — publishes the **same** event shape:
+
+```typescript
+import type { TemplateBuilder } from "@/src/contracts/communication";
+
+await publish("send_communication", {
+  channels: string[],                        // allowed channels, ordered.
+                                             // First viable channel wins.
+                                             // Empty or omitted → Core setting
+                                             //   auth.communication.defaultChannels
+  senders?: string[],                        // override per-channel default senders
+  recipients: string[],                      // raw recipient values OR
+                                             // entity_channel-owning entity ids
+                                             // (user:…, lead:…). When a
+                                             // non-raw id is passed, the
+                                             // dispatcher resolves channel
+                                             // values via profile.channels
+                                             // filtered by the current channel.
+  template: string | TemplateBuilder,        // deterministic path, no channel prefix
+                                             // (e.g. "human-confirmation"
+                                             // resolves to
+                                             // server/utils/communication/
+                                             // templates/<channel>/human-confirmation.ts)
+                                             // OR a dynamic TemplateBuilder.
+  templateData: Record<string, unknown>,     // everything the template needs,
+                                             // including tenant context
+                                             // (systemSlug, companyId, systemId,
+                                             //  actorId, actorType, actionKey,
+                                             //  occurredAt, locale, …)
+});
+```
+
+**Rules:**
+
+1. **Never publish `send_email`/`send_sms` directly** — they are reserved for
+   the dispatcher. All callers publish `send_communication`.
+2. **`channels` is ordered.** The dispatcher iterates left-to-right; the first
+   channel whose per-channel handler resolves recipients and renders the
+   template successfully wins. Subsequent channels are **fallbacks**, only
+   attempted when the preceding channel returns
+   `{ delivered: false, reason: … }` (missing recipient, unknown type, template
+   missing, provider error).
+3. **Empty `channels` ⇒ Core setting `auth.communication.defaultChannels`.**
+4. **Tenant context always travels in `templateData`.** No separate top-level
+   field for `systemSlug`, `companyId`, `actorId`, etc. — templates read them
+   directly from `templateData`.
+5. **Sensitive data never goes into `templateData` or
+   `verification_request.
+   payload`.** No passwords, card numbers, raw tokens,
+   secrets. Only i18n keys, display names, action identifiers, and non-sensitive
+   context (occurredAt, companyName, systemName, actorName, resource keys, URLs,
+   etc.).
+
+#### 15.2 `TemplateBuilder` — dynamic templates
+
+Subframeworks and systems can generate templates at runtime instead of writing
+one file per template path. A `TemplateBuilder` is called once per channel
+iteration by the dispatcher.
 
 ```typescript
 export interface TemplateResult {
   body: string;
   title?: string;
 }
-export type TemplateFunction = (
-  locale: string,
-  data: Record<string, string>,
-) => TemplateResult;
+
+export type TemplateBuilder = (
+  senders: string[],
+  recipients: string[],
+  templateData: Record<string, unknown>,
+  channel: string,
+) => Promise<TemplateResult>;
 ```
 
-Every template MUST use `t()` for all strings — no hardcoded English. All
-templates have full `en` + `pt-BR` translations in
-`src/i18n/{locale}/templates.json`, committed together with the template file.
+Register a builder with `registerTemplateBuilder(name, fn)`. Core registers its
+two canonical builders (`human-confirmation`, `notification`) in
+`core-register.ts` so every caller can reference them by name without a file
+import. Frameworks and systems register their own builders inside their
+`register()` function.
 
-#### 15.2 Shared email layout (`_layout.ts`)
+#### 15.3 Template path convention
 
-All email templates wrap their body in `emailLayout(bodyHtml, locale)`, which
-produces a mobile-first, email-client-safe skeleton:
+Static per-channel templates live under
+`server/utils/communication/templates/<channel>/<path>.ts`. The `template` field
+passed to `send_communication` is always the **channel-less path**; the
+dispatcher prepends `<channel>/` before resolving. This lets the same caller
+target multiple channels without string gymnastics.
 
-- 600 px max width desktop; collapses on mobile via `<meta viewport>` +
+Examples:
+
+| `template` field        | Channel | Resolved file                                                         |
+| ----------------------- | ------- | --------------------------------------------------------------------- |
+| `"human-confirmation"`  | `email` | `server/utils/communication/templates/email/human-confirmation.ts`    |
+| `"human-confirmation"`  | `sms`   | `server/utils/communication/templates/sms/human-confirmation.ts`      |
+| `"notification"`        | `email` | `server/utils/communication/templates/email/notification.ts`          |
+| `foo-framework/invoice` | `email` | `server/utils/communication/templates/email/foo-framework/invoice.ts` |
+
+For dynamic templates, the `TemplateBuilder` registered under the given name is
+called instead.
+
+#### 15.4 The two core templates
+
+Core ships **exactly two** templates per channel. All Core actions and events
+funnel through these builders — no bespoke templates remain.
+
+##### 15.4.1 `human-confirmation` — action requires a click
+
+Used whenever the system needs an explicit human confirmation to proceed: email
+verification, password reset, recovery channel verification, lead-data update,
+tenant invite, credential change. Backed by a `verification_request` row (§8)
+that captures the action + tenant context.
+
+**`templateData` fields** (all strings unless noted):
+
+| Field              | Required | Description                                                             |
+| ------------------ | -------- | ----------------------------------------------------------------------- |
+| `actionKey`        | yes      | i18n key for the action name (e.g. `"auth.action.register"`)            |
+| `confirmationLink` | yes      | HTTPS link to the confirmation endpoint                                 |
+| `occurredAt`       | yes      | ISO-8601 timestamp of the action request                                |
+| `actorName`        | no       | Display name of the acting user (absent for anonymous / system actions) |
+| `companyName`      | no       | Tenant company name (absent for core / anonymous actions)               |
+| `systemName`       | no       | Tenant system name (absent for core / anonymous actions)                |
+| `expiryMinutes`    | no       | Minutes until the link expires (defaults to Core setting)               |
+
+##### 15.4.2 `notification` — informational event
+
+Used whenever the system needs to **inform** without requiring a human response:
+payment outcomes, auto-recharge notices, credit alerts, operation-limit alerts,
+pending/expired payments, subscription status changes, any framework event.
+
+**`templateData` fields:**
+
+| Field         | Required | Description                                                                            |
+| ------------- | -------- | -------------------------------------------------------------------------------------- |
+| `eventKey`    | yes      | i18n key for the event name (e.g. `"billing.event.paymentSuccess"`)                    |
+| `occurredAt`  | yes      | ISO-8601 timestamp of the event                                                        |
+| `actorName`   | no       | Display name of the actor who triggered the event                                      |
+| `companyName` | no       | Tenant company name                                                                    |
+| `systemName`  | no       | Tenant system name                                                                     |
+| `resources`   | no       | `string[]` — i18n keys identifying affected resources (e.g. plan names, resource keys) |
+| `value`       | no       | `{ amount: number; currency: string }` — monetary value                                |
+| `invoiceUrl`  | no       | Invoice link                                                                           |
+| `ctaKey`      | no       | i18n key for an optional CTA button label                                              |
+| `ctaUrl`      | no       | URL for the optional CTA button                                                        |
+
+#### 15.5 Tenant-context conventions in `templateData`
+
+Because the Tenant contract (§9) must handle anonymous, core-only, automatic,
+and per-user contexts, callers follow these conventions when populating the
+display fields for the two core templates:
+
+| Context                                 | `actorName`            | `companyName`     | `systemName`      |
+| --------------------------------------- | ---------------------- | ----------------- | ----------------- |
+| Authenticated user in a tenant          | user's profile.name    | company.name      | system.name       |
+| Authenticated user in core scope        | user's profile.name    | _(omit)_          | _(omit)_          |
+| Anonymous request (public forms)        | _(omit)_               | company.name      | system.name       |
+| System automatic action (jobs, workers) | i18n `common.system`   | tenant when known | tenant when known |
+| Superuser action                        | superuser profile.name | _(omit)_          | _(omit)_          |
+
+Templates show a field only when provided.
+
+#### 15.6 Shared layout (`templates/<channel>/layout.ts`)
+
+Each channel ships a `layout.ts` that wraps the rendered body. For
+`email/layout.ts`, the output is a mobile-first, email-client-safe skeleton:
+
+- 600 px max-width container; collapses on mobile via `<meta viewport>` +
   `@media (max-width: 600px)` (`table-layout: fixed`, inline fallback widths,
   padding). **Table-based layout only** — Flexbox/Grid don't render in most
   email clients.
@@ -2040,85 +2230,92 @@ produces a mobile-first, email-client-safe skeleton:
   `@media (prefers-color-scheme: dark)` overrides for text + borders.
 - **Preheader text:** first element in `<body>` is a hidden (`display:none`)
   preheader summarizing the content for inbox previews.
+- **Tenant banner**: top of the card, always renders the trio (`actorName` ·
+  `companyName` · `systemName`) whenever any of those are supplied — compact,
+  non-decorative, separated by middle-dot glyphs.
 
-#### 15.3 Template body structure (mandatory order)
+For `sms/layout.ts`, the "layout" collapses to a plain-text assembly:
+`[systemName] actorName · actionKey/eventKey · link` — short enough for most
+carriers.
 
-1. Bold emoji hero block (🧾/✅/⚠️/🔁/🤝 — match the semantic).
-2. Greeting using the recipient's `name`.
-3. One-sentence summary of the event.
-4. Table of facts (amount, plan, date, resource, next billing cycle, …) — every
-   cell via `t()`.
-5. Single gradient CTA → `billingUrl`/`loginUrl`/etc. Label key
-   `templates.<name>.cta`.
-6. Footer with `Core.getSetting("app.name")`, support link from
-   `FrontCore.getSetting("front.support.email")`, and a "this email was sent to
-   <recipient>" disclaimer.
+#### 15.7 Template body structure
 
-#### 15.4 Template catalog
+Both templates share the same mandatory sections — the only difference is the
+CTA and the facts table.
 
-| Template                   | File                          | When published                                                                                         | Payload fields                                                                                                             |
-| -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `verification`             | `verification.ts`             | Registration / email change                                                                            | `name`, `verificationLink`                                                                                                 |
-| `password-reset`           | `password-reset.ts`           | `forgot-password` flow                                                                                 | `name`, `resetLink`                                                                                                        |
-| `payment-success`          | `payment-success.ts`          | Recurring charge OK; credit purchase OK; auto-recharge OK                                              | `name`, `systemName`, `kind` (`"recurring"\|"credits"\|"auto-recharge"`), `amount`, `currency`, `billingUrl`, `invoiceUrl` |
-| `payment-failure`          | `payment-failure.ts`          | Recurring charge failed; credit purchase failed; auto-recharge failed                                  | `name`, `systemName`, `kind`, `amount`, `currency`, `reason`, `billingUrl`                                                 |
-| `auto-recharge`            | `auto-recharge.ts`            | Auto-recharge initiated (always followed by a success/failure template)                                | `name`, `systemName`, `amount`, `currency`, `triggerResource`, `billingUrl`                                                |
-| `insufficient-credit`      | `insufficient-credit.ts`      | Credit deduction failed and auto-recharge disabled / exhausted — published by `consumeCredits` (§22.3) | `name`, `systemName`, `resourceKey`, `purchaseLink`                                                                        |
-| `tenant-invite`            | `tenant-invite.ts`            | Admin adds an existing user to a new (company, system) pair (§21.1)                                    | `name`, `inviterName`, `companyName`, `systemName`, `roles`, `loginUrl`                                                    |
-| `recovery-verify`          | `recovery-verify.ts`          | User adds a recovery channel (§19.13)                                                                  | `name`, `verificationLink`                                                                                                 |
-| `recovery-channel-reset`   | `recovery-channel-reset.ts`   | Password reset initiated via verified recovery channel (§19.13)                                        | `name`, `resetLink`                                                                                                        |
-| `lead-update-verification` | `lead-update-verification.ts` | Existing lead submits updated data via public form (§23.2)                                             | `name`, `verificationLink`, `changes` (array of `{field, from, to}`)                                                       |
-| `operation-count-alert`    | `operation-count-alert.ts`    | Operation count exhausted — published by `consumeCredits` (§22.3)                                      | `name`, `systemName`, `operationCount`, `billingUrl`                                                                       |
-| `payment-pending`          | `payment-pending.ts`          | Async payment awaiting completion — published by `process_payment` async branch (§22.9)                | `name`, `systemName`, `kind`, `amount`, `currency`, `billingUrl`, `expiresInSeconds`, `continuityData`                     |
-| `payment-expired`          | `payment-expired.ts`          | Async payment expired — published by `expire-pending-payments` job (§22.9)                             | `name`, `systemName`, `kind`, `amount`, `currency`, `billingUrl`                                                           |
+1. **Tenant banner** (`actorName` · `companyName` · `systemName`, when present).
+2. **Hero icon** (envelope for confirmations, check/warning for notifications).
+3. **Title** — `t(actionKey)` or `t(eventKey)`.
+4. **Summary sentence** — fixed per template, interpolates `actorName`.
+5. **Facts card** — `occurredAt` plus (for notifications) `resources`, `value`,
+   `invoiceUrl`; (for confirmations) `expiryMinutes`.
+6. **CTA button** —
+   - human-confirmation: label `t("templates.humanConfirmation.action")` →
+     `confirmationLink`.
+   - notification: when `ctaUrl` + `ctaKey` supplied, renders `t(ctaKey)` →
+     `ctaUrl`; else omitted.
+7. **Footer** — `Core.getSetting("app.name")`, support link from
+   `FrontCore.getSetting("front.support.email")`, and a "this message was sent
+   to `<recipient>`" disclaimer.
 
-i18n keys live under `templates.verification.*`, `templates.passwordReset.*`,
-`templates.paymentSuccess.*`, `templates.paymentFailure.*`,
-`templates.autoRecharge.*`, `templates.insufficientCredit.*`,
-`templates.tenantInvite.*`, `templates.recoveryVerify.*`,
-`templates.recoveryChannelReset.*`, `templates.leadUpdate.*`,
-`templates.operationCountAlert.*`, `templates.paymentPending.*`,
-`templates.paymentExpired.*`.
+i18n keys live under `templates.humanConfirmation.*` and
+`templates.notification.*`. Action/event keys are owned by the publishing domain
+(e.g. `auth.action.register`, `billing.event.paymentSuccess`).
 
-#### 15.5 Channel handlers
+#### 15.8 Channel handlers
 
-Two handlers talk to external services — the **only** ones.
+Each channel ships a single event handler that:
 
-**`send_email`** (`handlers/send-email.ts`) — expects payload:
+1. Resolves the locale (§5.4) — prefer `templateData.locale` → owner profile
+   locale → system default → `"en"`.
+2. Resolves recipients. If a recipient string is a record id
+   (`user:…`/`lead:…`), look up `entity_channel` rows where
+   `ownerId = <id> AND type = <current channel> AND verified = true` and use
+   their `value`. **The `entity_channel.type` always matches the delivery
+   channel name** — `send_sms` resolves rows of type `"sms"`, `send_email`
+   resolves rows of type `"email"`, `send_phone` (if a framework adds phone
+   calls) resolves rows of type `"phone"`. Phone numbers and SMS destinations
+   are stored as distinct channel rows because a phone number may or may not
+   receive SMS (VoIP, landlines), and a texting-only line is not a voice line.
+   If no recipients resolve, return
+   `{ delivered: false, reason:
+   "no-recipients" }` so the dispatcher tries
+   the next channel.
+3. Resolves senders: `payload.senders` → Core setting
+   `communication.<channel>.senders`.
+4. Resolves the template — `string` → look up
+   `server/utils/communication/templates/<channel>/<template>.ts` default export
+   (or the registered `TemplateBuilder`). `TemplateBuilder` → call it with
+   `(senders, recipients, templateData, channel)`.
+5. Renders and delivers through the external provider configured via Core
+   settings (`communication.email.*`, `communication.sms.*`, …).
+6. Returns `{ delivered: true }` on success.
 
-```typescript
-{
-  recipients: string[];
-  template: string;                       // e.g. "verification"
-  templateData: Record<string, string>;
-  locale?: string;                        // explicit; prefer user's profile.locale
-  systemSlug?: string;                    // locale fallback
-  senders?: string[];                     // override default senders
-}
-```
+Core ships `send_email` and `send_sms`. Subframeworks register additional
+channels (e.g. `push`, `webhook`, `phone` for voice calls) with
+`registerHandler("send_<channel>", fn)` + `registerChannel("<channel>")`.
 
-Handler steps: (1) resolve locale via §5.4; (2) resolve senders:
-`payload.senders` → `communication.email.senders`; (3) resolve template function
-from the module registry (`getTemplate`); (4) render; (5) call the email service
-configured in `communication.email.provider`.
+#### 15.9 Dispatcher (`send_communication`)
 
-**`send_sms`** (`handlers/send-sms.ts`) — same payload with phone numbers as
-`recipients`. Uses `communication.sms.provider`.
+Core registers `send_communication` as the handler for
+`publish("send_communication", …)`:
 
-**Publishing example** (registration route):
+1. Resolve `channels` — fall back to `auth.communication.defaultChannels` when
+   empty.
+2. Pick the first channel whose handler is registered (by convention the handler
+   name is `send_<channel>`; frameworks register channels via
+   `registerChannel(<channel>)` and their handler via
+   `registerHandler("send_<channel>", fn)`).
+3. `publish("send_<channel>", { channel, channelFallback, ...payload })` where
+   `channelFallback` is the remaining suffix of `channels` after the picked
+   entry. The per-channel handler, on delivery failure it can recover from (no
+   recipients, missing template), dispatches to the next channel by publishing
+   `send_<channelFallback[0]>` with the shortened tail.
+4. If all channels are exhausted without success, the delivery is marked `dead`
+   by the queue (`maxAttempts` applies per-channel handler, not per dispatcher).
 
-```typescript
-await publish("SEND_EMAIL", {
-  recipients: [email],
-  template: "verification",
-  templateData: { name, verificationLink },
-  systemSlug,
-});
-```
-
-Route handlers publish `SEND_EMAIL`/`SEND_SMS` directly. No intermediate
-business event handlers — the route does its business logic and publishes the
-channel event.
+Fallback wiring is purely data — adding a channel never requires patching the
+dispatcher.
 
 ### 16. Jobs
 
@@ -2128,14 +2325,13 @@ channel event.
   jobs.
 - **`server/jobs/start-event-queue.ts`** — creates a worker per registered
   handler name with its `WorkerConfig`. Resolves handler functions from the
-  module registry (`getHandlerFunction`) — never imports subsystem handlers
-  directly.
+  module registry (`getHandler`) — never imports subsystem handlers directly.
 - **`server/jobs/recurring-billing.ts`** — periodic (e.g. hourly) under the
   system Tenant. (1)
   `SELECT subscription WHERE status="active" AND
   currentPeriodEnd <= now()`;
-  (2) for each, `publish("PAYMENT_DUE", …)`; `process_payment` handler charges
-  via the server payment provider.
+  (2) for each, `publish("process_payment", …)`; the handler charges via the
+  server payment provider.
   - **Success:** advance `currentPeriodStart`/`currentPeriodEnd`, reset
     `remainingPlanCredits = plan.planCredits + voucher.creditModifier` (0 when
     no voucher), reset `remainingOperationCount = resolveAllOperationCounts()`
@@ -2143,13 +2339,17 @@ channel event.
     false`, reset
     `operationCountAlertSent` to `{}` (empty map), clear
     `retryPaymentInProgress = false`, create `payment` record with
-    `status = "completed"` and `invoiceUrl`, publish `SEND_EMAIL` with
-    `payment-success` (`kind =
-    "recurring"`).
+    `status = "completed"` and `invoiceUrl`, publish `send_communication` with
+    `template = "notification"` and
+    `templateData.eventKey =
+    "billing.event.paymentSuccess.recurring"`.
   - **Failure:** set `status = "past_due"`, clear
     `retryPaymentInProgress = false`, create `payment` record with
-    `status = "failed"` and `failureReason`, publish `SEND_EMAIL` with
-    `payment-failure` (`kind = "recurring"`, with gateway `reason`).
+    `status = "failed"` and `failureReason`, publish `send_communication` with
+    `template = "notification"` and
+    `templateData.eventKey =
+    "billing.event.paymentFailure.recurring"` (with
+    gateway `reason` as a resource entry).
 - **`server/jobs/token-cleanup.ts`** — daily under the system Tenant.
   Hard-deletes `api_token` rows where `revokedAt` is older than 90 days. Cleans
   orphaned `connected_app` rows whose underlying token was removed.
@@ -2580,17 +2780,18 @@ interface SubformProps {
 }
 ```
 
-| Subform                        | Fields                                                                                                   | Used by                         |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `ProfileSubform`               | `name`, `avatarUri` (FileUploadField), `age`                                                             | Users, Agents                   |
-| `ContactSubform`               | `email`, `phone`                                                                                         | User register/edit              |
-| `PasswordSubform`              | `password`, `confirmPassword`                                                                            | User register/edit              |
-| `AddressSubform`               | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode`               | Company, PaymentMethod          |
-| `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                       | Company create/edit             |
-| `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform` | Payment method                  |
-| `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                     | Tokens, Connected Apps, generic |
-| `RecoveryChannelsSubform`      | Recovery channels (email/phone), verification status, add/remove/resend                                  | Profile                         |
-| `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                              | Leads                           |
+| Subform                        | Fields                                                                                                                                       | Used by                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `ProfileSubform`               | `name`, `avatarUri` (FileUploadField), `age`                                                                                                 | Users, Agents                   |
+| `ContactSubform`               | `email`, `phone`                                                                                                                             | User register/edit              |
+| `PasswordSubform`              | `password`, `confirmPassword`                                                                                                                | User register/edit              |
+| `PasswordChangeSubform`        | `currentPassword`, `newPassword`, `confirmPassword`. Submits `POST /api/auth/password-change` which requires human confirmation (§19.14)     | ProfilePage                     |
+| `AddressSubform`               | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode`                                                   | Company, PaymentMethod          |
+| `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                                                           | Company create/edit             |
+| `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform`                                     | Payment method                  |
+| `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                                                         | Tokens, Connected Apps, generic |
+| `EntityChannelsSubform`        | Entity channels (email/phone/…), verification status, add/remove/resend. Props: `channelTypes: string[]`, `requiredTypes: string[]` (§19.13) | Profile, Lead editor            |
+| `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                                                                  | Leads                           |
 
 #### 18.6 Sidebar
 
@@ -2827,31 +3028,78 @@ across the entire unauthenticated flow.
 
 Without `?system=`, pages show the core app name (`app.name`) with no logo.
 
-#### 19.3 Registration flow
+#### 19.3 Account-approval invariant (entity-channel-based)
 
-1. User submits email, password, optional phone. Bot protection validated.
-   **LGPD terms checkbox must be checked** (§25).
+An account (user or lead) is **"approved"** only when its profile has **at least
+one verified `entity_channel`**. The system never stores identity fields
+(email/phone) directly on `user` or `lead` — all identity values flow through
+`entity_channel` rows linked via `profile.channels` (§8). The previous boolean
+`emailVerified`/`phoneVerified` flags have been removed.
+
+Approval gates:
+
+- Login (§19.5) requires at least one verified channel.
+- API authentication (via `withAuth`) treats accounts without a verified channel
+  as "pending" and rejects non-verification routes.
+- Profile edits that change a verified channel require human confirmation
+  (§19.13).
+
+#### 19.4 Registration flow
+
+1. User submits: password, optional `name`, and a `channels: {type, value}[]`
+   array (at least one entry required; default UI offers `email` and `phone`).
+   Bot protection validated.
 2. Backend validates `termsAccepted: true`; rejects with
    `validation.terms.required` if missing.
 3. Auth rate limit check (aggressive).
-4. Password hashed via `crypto::argon2::generate(password)` inside SurrealDB.
-5. `verification_request` row created via `communicationGuard()` (§12.13) with
-   `auth.communication.expiry.minutes` expiry.
-6. Publish `SEND_EMAIL` (or `SEND_SMS` if phone-only) with the `verification`
-   template.
-7. Login blocked until `emailVerified = true` (or `phoneVerified` for
-   phone-only).
+4. **Conflict check.** For each submitted `{type, value}`, look up existing
+   `entity_channel` rows with the same `(type, value)` whose owner is a `user`.
+   The registration is rejected with `validation.channel.conflict` when any
+   conflicting channel is either (a) `verified = true`, or (b) unverified but
+   still within an active, non-expired confirmation window (a non-used
+   `verification_request` with `actionKey = "auth.action.register"` pointing at
+   that owner). Abandoned accounts — no verified channel and no pending
+   confirmation — are hard-deleted by the registration handler in the same
+   batched query before the new user is created.
+5. Password hashed via `crypto::argon2::generate(password)` inside SurrealDB.
+6. Create `profile` with `channels = []`, then `user` referencing the profile.
+7. Create one `entity_channel` row per submitted channel with
+   `ownerId = user.id`, `ownerType = "user"`, `verified = false`, and append
+   each channel record to `profile.channels` — all in the same batched query
+   (§7.2).
+8. For every channel of a type that appears in
+   `auth.communication.defaultChannels`, open a `verification_request` via
+   `communicationGuard()` with `actionKey = "auth.action.register"` and
+   `payload = { channelIds: [<channel ids verified by this confirmation>] }`.
+   The confirmation link hits `/api/auth/verify` with the token and marks every
+   referenced channel `verified = true` in one atomic batched update.
+9. Publish a **single** `send_communication` with:
+   - `channels` = the `type`s of the user's newly-created channels, ordered to
+     match the user's submitted preference (falling back to the core default).
+   - `recipients` = the new `user.id`.
+   - `template` = `"human-confirmation"`.
+   - `templateData.actionKey` = `"auth.action.register"`.
+10. Login is blocked until at least one `entity_channel` belonging to the user
+    reaches `verified = true`.
 
-#### 19.4 Login flow
+#### 19.5 Login flow
 
 1. Bot protection validated.
 2. Auth rate limit check.
-3. Fetch user by email; verify with `crypto::argon2::compare()`.
-4. `emailVerified = false` → reject "account not verified".
-5. `twoFactorEnabled = true` → require TOTP before issuing tokens.
-6. Issue System API Token (short-lived from `auth.token.expiry.minutes`;
+3. Resolve the user: find a **verified** `entity_channel` whose `value` matches
+   the submitted identifier (email, phone, or any framework-registered channel
+   value). Reject with `auth.error.invalidCredentials` when no verified channel
+   matches.
+4. Verify password with `crypto::argon2::compare()`. Reject with
+   `auth.error.invalidCredentials` on mismatch.
+5. If the user has **no** verified channel, reject with
+   `auth.error.notVerified`. (Step 3's verified-only lookup already prevents
+   this, but the check also covers edge cases where the identifier matched a row
+   that was un-verified between steps.)
+6. `twoFactorEnabled = true` → require TOTP before issuing tokens.
+7. Issue System API Token (short-lived from `auth.token.expiry.minutes`;
    extended by `auth.token.expiry.stayLoggedIn.hours` when `stayLoggedIn`).
-7. Return the System API Token to the client.
+8. Return the System API Token to the client.
 
 #### 19.5 Post-login routing
 
@@ -2882,26 +3130,37 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 
 #### 19.7 Password recovery
 
-1. Submit email/phone. Bot protection + auth rate limit.
-2. `communicationGuard()` (§12.13) enforces previous-not-expired + rate-limit
-   rules. Generic success returned on block (anti-enumeration).
-3. Create `verification_request` of type `password_reset` (expiry
-   `auth.communication.expiry.minutes`).
-4. Publish `SEND_EMAIL`/`SEND_SMS` with `password-reset` template.
-5. User clicks link → `reset-password` page validates token → submit new
-   password → backend updates `passwordHash` and marks the request `usedAt`.
+1. Submit any verified channel value (email, phone, framework channel). Bot
+   protection + auth rate limit.
+2. Resolve the owning user by looking up `entity_channel` rows with
+   `verified = true` and `value = <submitted>`. When no match, still return a
+   generic success (anti-enumeration).
+3. `communicationGuard()` (§12.13) enforces previous-not-expired + rate-limit
+   rules against the user + action `"auth.action.passwordReset"`. Generic
+   success on block.
+4. Publish `send_communication` with:
+   - `channels` = the `type` of the matched channel **followed by** the user's
+     remaining verified channel types (ordered by
+     `auth.communication.
+     defaultChannels` for ties).
+   - `recipients` = the user's id.
+   - `template` = `"human-confirmation"`.
+   - `templateData.actionKey` = `"auth.action.passwordReset"`.
+5. User clicks the link → `/reset-password` page validates the token → submits
+   the new password → backend updates `passwordHash` and marks the request
+   `usedAt`.
 
-**Alternative path via recovery channels (§19.13).** Users who have lost access
-to their primary email can initiate password reset through any **verified**
-recovery channel at `/account-recovery`. The flow reuses the `password_reset`
-verification-request type with the `recovery-channel-reset` template.
+The `/account-recovery` page is the **same** flow — there is no longer a
+separate "recovery channel reset". Any verified channel is accepted uniformly.
 
 #### 19.8 OAuth login flow (if `auth.oauth.enabled = "true"`)
 
 1. Redirect to provider.
 2. Callback: verify OAuth token, extract email.
 3. If user exists → link OAuth provider, issue tokens.
-4. If not → create with `emailVerified = true` (trusted), issue tokens.
+4. If not → create the user, then create a verified `entity_channel` of type
+   `"email"` and the matching `verification_request` marked
+   `usedAt = time::now()`, all in the same batched query (§7.2). Issue tokens.
 
 #### 19.9 Security measures
 
@@ -3015,50 +3274,95 @@ tokens as well as persisted `api_token` / connected-app tokens.
   who hold the raw bearer value cannot continue calling the API after the user
   revokes.
 
-#### 19.13 Recovery Channels
+#### 19.13 Entity Channels
 
-Users register alternative email addresses and phone numbers as **recovery
-channels** to regain access when they lose their primary credentials.
+Every user and lead owns one or more `entity_channel` rows — the **single
+mechanism** the platform uses to hold identity values (email, phone, …) and to
+deliver communications. Channels double as the account-approval signal (§19.3)
+and as the account-recovery entry points.
 
 **Lifecycle:**
 
-1. **Add.** Authenticated user adds a channel (email or phone) via
-   `POST /api/recovery-channels`. Creates an unverified `recovery_channel`
-   record linked to the user's profile. Publishes `SEND_EMAIL` or `SEND_SMS`
-   with `recovery-verify` template containing a verification link.
-2. **Verify.** User clicks the link → `POST /api/auth/verify` handles
-   `recovery_verify` type → sets `recovery_channel.verified = true` and marks
-   the verification request `usedAt`. Only verified channels can be used for
-   recovery.
-3. **Use for recovery.** Unauthenticated user visits `/account-recovery`, enters
-   a recovery channel value. `POST /api/auth/recovery-channel-reset` looks up
-   the channel (must be verified), creates a `password_reset` verification
-   request for the associated user, and publishes `SEND_EMAIL` or `SEND_SMS`
-   with `recovery-channel-reset` template. The reset flow from §19.7 applies
-   unchanged. Always returns generic success to prevent enumeration.
-4. **Resend verification.**
-   `POST /api/recovery-channels?action=resend-verification` re-sends the
-   verification email/SMS for an existing unverified channel, subject to
-   `communicationGuard()` (§12.13).
-5. **Remove.** Authenticated user removes a channel via
-   `DELETE /api/recovery-channels`. Removes from profile's `recoveryChannels`
-   array and deletes the record in one batched query.
+1. **Add (authenticated).** Adding a channel goes through
+   `POST /api/entity-channels`. The channel is created with `verified = false`
+   and a `verification_request` (actionKey `"auth.action.entityChannelAdd"`) is
+   opened via `communicationGuard()`. A `send_communication` publish with
+   `template = "human-confirmation"` is dispatched on the channel's own type
+   first, falling back through the user's other verified channels if the new
+   value cannot be reached (e.g. typo).
+2. **Verify.** Clicking the confirmation link hits `POST /api/auth/verify`. The
+   payload carries the `entity_channel` id(s) to flip to `verified = true`. The
+   handler marks the request `usedAt` and updates the channel row(s) in a single
+   batched query.
+3. **Change / replace existing channel.** A verified channel's `value` cannot be
+   mutated directly. Users replace it by adding the new value (which goes
+   through the add+verify flow), then deleting the old row. Profile forms
+   present this as "replace" for UX but the backend executes it as two atomic
+   operations.
+4. **Delete.** `DELETE /api/entity-channels` is permitted **only** when (a) the
+   channel is unverified **or** (b) removing it leaves at least one other
+   verified channel of a type listed in the subform's `requiredTypes`. Never
+   marks a channel unverified in-place.
+5. **Use for recovery.** `/account-recovery` submits any verified channel value;
+   the backend path is described in §19.7 and always returns generic success to
+   prevent enumeration.
+6. **Resend confirmation.**
+   `POST /api/entity-channels?action=resend-verification` re-sends the
+   verification, subject to `communicationGuard()` (§12.13).
 
 **Limits:**
 
-- Maximum 10 channels per user (`auth.recoveryChannel.maxPerUser`, default 10).
+- Maximum channels per owner: `auth.entityChannel.maxPerOwner` (default 10).
+- Default types seeded at `auth.entityChannel.defaultTypes` (default
+  `["email","phone"]`).
 - Verification link expiry: `auth.communication.expiry.minutes` (default 15).
 - Cooldown for resend: `communicationGuard()` (§12.13).
 
-**Management UI.** The ProfilePage (`src/components/shared/ProfilePage.tsx`)
-renders a "Recovery Channels" card using `RecoveryChannelsSubform` (§18.5),
-which manages channel listing, add/remove/resend actions internally via
-`/api/recovery-channels`.
+**Per-feature channel configuration.** Every system resource or action that uses
+communication channels declares an **ordered vector of allowed channel types**.
+The first channel that resolves a recipient and renders is used; the rest serve
+as fallbacks (§15.9). System-wide fallback order comes from
+`auth.communication.defaultChannels` when the caller does not provide its own.
+
+**Management UI.** The ProfilePage renders an "Entity Channels" card via
+`EntityChannelsSubform` (§18.5). The subform is shared across user and lead
+profile editors. Props:
+
+| Prop            | Type       | Meaning                                                                                          |
+| --------------- | ---------- | ------------------------------------------------------------------------------------------------ |
+| `channelTypes`  | `string[]` | Types presented in the add form. Order defines default display.                                  |
+| `requiredTypes` | `string[]` | Types the owner must always have at least one verified row for (enforced server-side on delete). |
 
 **Account recovery page.** `app/(auth)/account-recovery/page.tsx` —
-unauthenticated page following the same pattern as `forgot-password/page.tsx`.
-Links from the forgot-password page via
-`auth.forgotPassword.useRecoveryChannel`.
+unauthenticated page that accepts any verified channel value and drives the flow
+described in §19.7.
+
+#### 19.14 Password change (authenticated)
+
+Authenticated users change their password from the ProfilePage, **not** via the
+forgot-password flow. The endpoint is `POST /api/auth/password-change` with
+`{ currentPassword, newPassword, confirmPassword }`.
+
+1. Verify `currentPassword` with `crypto::argon2::compare()` against the user's
+   stored `passwordHash`. Reject with `auth.error.invalidCredentials` on
+   mismatch.
+2. Validate `newPassword` via the `password` validator and require
+   `newPassword === confirmPassword`.
+3. Compute the new hash inside SurrealDB
+   (`crypto::argon2::generate($newPassword)`) and open a `verification_request`
+   (actionKey `"auth.action.passwordChange"`) via `communicationGuard()` with
+   `payload = { newPasswordHash }`. **Only the hash is stored** — never the
+   plaintext. Tenant context is captured on the request row.
+4. Publish `send_communication` with `template = "human-confirmation"`. The
+   channel order starts with the user's verified channel types ordered by
+   `auth.communication.defaultChannels`. The confirmation link points at
+   `/verify?token=…`.
+5. `POST /api/auth/verify` for action `"auth.action.passwordChange"` writes
+   `passwordHash = $payload.newPasswordHash` on the user row and marks the
+   request `usedAt`, all in one batched query.
+
+The new password never takes effect until the user clicks the confirmation link
+— same as channel changes (§19.13).
 
 ### 20. Superuser Core Admin Panel `(core)`
 
@@ -3397,13 +3701,13 @@ visible only to users whose `useSystemContext().roles` contains `admin`.
 - **New user** (no existing email): creates `user` with profile, hashes
   password, creates `company_user` + `user_company_system` with the specified
   roles.
-- **Existing user** (email match): **does not create a new account.** Creates or
-  updates `company_user` + `user_company_system` for the target (company,
-  system), setting the specified roles. Returns
+- **Existing user** (matched by any submitted channel value): **does not create
+  a new account.** Creates or updates `company_user` + `user_company_system` for
+  the target (company, system), setting the specified roles. Returns
   `{ success: true, invited: true }`. Frontend shows
-  `common.users.inviteExisting`. Backend publishes `SEND_EMAIL` with the
-  `tenant-invite` template (inviter name, company, system, roles) — **this email
-  is mandatory**.
+  `common.users.inviteExisting`. Backend publishes `send_communication` with
+  `template = "notification"` and `eventKey = "auth.event.tenantInvite"`
+  (inviter name, company, system, roles) — **this notification is mandatory**.
 
 **Roles are per (company, system) pair.** Stored in `user_company_system`. Same
 user can have different roles in different systems. `DELETE /api/users` only
@@ -3734,13 +4038,13 @@ promotes the next available.
 **`purchase_credits`** — body:
 `{ action, companyId, systemId, amount,
 paymentMethodId }`. Creates
-`credit_purchase` `status = "pending"`; publishes `PAYMENT_DUE`;
+`credit_purchase` `status = "pending"`; publishes `payment_due`;
 `process_payment` charges + updates status. On success: increments credit
 balance via `usage_record resource =
-"credits"` and publishes `SEND_EMAIL` with
+"credits"` and publishes `send_email` with
 `payment-success` (`kind =
 "credits"`); **also resets
-`subscription.creditAlertSent = false`**. On failure: `SEND_EMAIL` with
+`subscription.creditAlertSent = false`**. On failure: `send_email` with
 `payment-failure` (`kind = "credits"`, with gateway `reason`).
 
 **`set_auto_recharge`** — body:
@@ -3769,7 +4073,7 @@ applied voucher's details so the frontend can show the effect.
 **`retry_payment`** — body: `{ action }`. Finds the `past_due` subscription for
 the tenant. Returns 404 (`billing.retry.noPastDue`) if none. Returns 409
 (`billing.retry.inProgress`) if `retryPaymentInProgress = true`. Sets
-`retryPaymentInProgress = true` in a batched query, publishes `PAYMENT_DUE` with
+`retryPaymentInProgress = true` in a batched query, publishes `payment_due` with
 `purpose = "retry"`. The `process_payment` handler charges the subscription's
 payment method. On success: restores `status = "active"`, advances period,
 resets credits, clears `retryPaymentInProgress`. On failure: keeps
@@ -3817,7 +4121,8 @@ period ends.
    `remainingForThisKey` is `0`, reject with
    `{ success: false, source: "operationLimit" }` — no alert or auto-recharge.
    If `operationCountAlertSent[resourceKey]` is falsy, publish
-   `SEND_EMAIL operation-count-alert` and set
+   `send_communication` with `template = "notification"` and
+   `eventKey = "billing.event.operationCountAlert"`, and set
    `operationCountAlertSent[resourceKey] = true`. 4a. **Actor-level cap check:**
    when `tenant.actorType` is `"api_token"` or `"connected_app"`, resolve the
    actor's `maxOperationCount[resourceKey]` from the `api_token` or
@@ -3828,15 +4133,16 @@ period ends.
 5. If `total < amount`:
    - If `autoRechargeEnabled = true` AND `autoRechargeInProgress = false`: set
      `autoRechargeInProgress = true` (re-entrancy guard) and publish
-     `TRIGGER_AUTO_RECHARGE { subscriptionId, companyId, systemId,
+     `trigger_auto_recharge { subscriptionId, companyId, systemId,
      resourceKey }`.
      Return `{ success: false, source: "insufficient" }`. Caller retries after
      the recharge completes; retry policy is system-specific (most resources
      fail the current op and let the user retry).
    - Else (disabled or already in progress):
-     - If `creditAlertSent = false`: publish
-       `SEND_EMAIL
-       insufficient-credit` and set `creditAlertSent = true`.
+     - If `creditAlertSent = false`: publish `send_communication` with
+       `template = "notification"` and
+       `eventKey = "billing.event.insufficientCredit"`, and set
+       `creditAlertSent = true`.
      - Return `{ success: false, source: "insufficient" }`.
 6. If `remainingPlanCredits >= amount`: decrement it; record the expense in
    `credit_expense` (daily container, UPSERT increments both `amount` and
@@ -3889,7 +4195,7 @@ in two scenarios:
 #### 22.5 Auto-recharge credits
 
 When a deduction fails and `autoRechargeEnabled = true`, the credit tracker
-publishes `TRIGGER_AUTO_RECHARGE` instead of immediately sending the
+publishes `trigger_auto_recharge` instead of immediately sending the
 insufficient-credit email. The `auto_recharge` handler
 (`server/event-queue/handlers/auto-recharge.ts`) performs the recharge.
 
@@ -3899,25 +4205,28 @@ insufficient-credit email. The `auto_recharge` handler
    `autoRechargeInProgress = true`. Otherwise mark delivery `done` with no side
    effects.
 2. Load the company's default payment method. Missing → publish
-   `SEND_EMAIL payment-failure kind="auto-recharge"`
-   (`reason = "billing.autoRecharge.noPaymentMethod"`); clear
+   `send_communication` with `template = "notification"` and
+   `eventKey = "billing.event.paymentFailure.auto-recharge"` (with
+   `"billing.autoRecharge.noPaymentMethod"` as a resource entry); clear
    `autoRechargeInProgress`; finish.
-3. Publish `SEND_EMAIL auto-recharge` (user should know a charge is being
-   attempted).
+3. Publish `send_communication` with `template = "notification"` and
+   `eventKey = "billing.event.autoRechargeStarted"` (user should know a charge
+   is being attempted).
 4. Create
    `credit_purchase { amount: autoRechargeAmount, status:
    "pending", purpose: "auto-recharge" }`;
-   publish `PAYMENT_DUE`. Since handlers can't block, this chains:
-   `process_payment` sees the `purpose` flag and, on success, publishes
-   `SEND_EMAIL
-   payment-success kind="auto-recharge"` + credits the balance;
-   on failure, `SEND_EMAIL payment-failure kind="auto-recharge"`.
+   publish `payment_due`. Since handlers can't block, this chains:
+   `process_payment` sees the `purpose` flag and, on success, publishes a
+   notification with `eventKey = "billing.event.paymentSuccess.auto-recharge"`
+   - credits the balance; on failure, a notification with
+     `eventKey = "billing.event.paymentFailure.auto-recharge"`.
 5. Whichever terminal branch runs clears `autoRechargeInProgress = false`.
 
-**Email guarantees.** Every auto-recharge attempt generates ≥ 2 emails: one
-`auto-recharge` notice when initiated + one `payment-success` or
-`payment-failure` when it settles. Users can silence by disabling auto-recharge;
-the on/off state itself triggers no extra emails.
+**Notification guarantees.** Every auto-recharge attempt generates ≥ 2
+notifications: one `autoRechargeStarted` notice when initiated + one
+`paymentSuccess.auto-recharge` or `paymentFailure.auto-recharge` when it
+settles. Users can silence by disabling auto-recharge; the on/off state itself
+triggers no extra notifications.
 
 **Security.**
 
@@ -4072,7 +4381,7 @@ lifecycle:
    and optional `failureReason`. Provider-specific request validation
    (signatures, headers, payload normalization) is the responsibility of the
    adapter layer wrapping this endpoint. On success or failure, the route
-   publishes `PAYMENT_ASYNC_COMPLETED` which triggers the
+   publishes `payment_async_completed` which triggers the
    `resolve_async_payment` handler that applies the same subscription/credit
    effects as the synchronous success or failure branch.
 3. **Expiry.** A scheduled job (`expire-pending-payments`, runs every 15 min)
@@ -4117,10 +4426,10 @@ export interface PaymentResult {
 }
 ```
 
-**Event registry additions:**
+**Handler registry additions:**
 
 ```typescript
-PAYMENT_ASYNC_COMPLETED: ["resolve_async_payment"],
+registerHandler("payment_async_completed", resolveAsyncPayment);
 ```
 
 **BillingPage UI.** When `pendingAsyncPayments` is non-empty, the BillingPage
@@ -4138,18 +4447,24 @@ See §13.4.
 #### 23.2 `POST /api/leads/public` — unauthenticated lead registration / update verification
 
 - Requires `botToken` (bot-protection challenge).
-- Payload: `name`, `email`, `phone?`, `profile`, `companyIds`, `systemSlug`,
-  `termsAccepted`. **Tags are not accepted** — only authenticated users can
-  manage tags.
+- Payload: `name`, `channels: {type,value}[]` (at least one required),
+  `profile`, `companyIds`, `systemSlug`, `termsAccepted`. **Tags are not
+  accepted** — only authenticated users can manage tags.
 - Backend requires `termsAccepted: true`; rejects otherwise.
-- **New lead:** create `lead` record; associate with `companyIds` + system.
-  Return `{ requiresVerification: false, id }`.
-- **Existing lead** (matched by email or phone): do not modify directly. Create
-  a `verification_request` of type `email_verify`; publish `SEND_EMAIL` with
-  `verification` template. Return `{ requiresVerification: true }`. Lead data is
-  updated only after the user clicks the verification link.
+- **New lead:** create `lead` + `profile`, then one `entity_channel` row per
+  submitted channel (all unverified) in a single batched query. Associate with
+  `companyIds` + system. Publish one `send_communication` with
+  `template = "human-confirmation"` and
+  `templateData.actionKey = "auth.action.leadRegister"` on the channel types
+  ordered by submission preference. Return `{ requiresVerification: true }`.
+- **Existing lead** (matched by any channel `(type, value)` pair): do not modify
+  directly. Create a `verification_request` with
+  `actionKey = "auth.action.leadUpdate"` capturing the proposed diff in its
+  payload; publish `send_communication` with `template = "human-confirmation"`.
+  Return `{ requiresVerification: true }`. Lead data and channel rows are
+  updated only after the user clicks the confirmation link.
 - **Cooldown:** `communicationGuard()` (§12.13). Returns 429 if blocked.
-- **Expiry:** `auth.communication.expiry.minutes` for the verification token.
+- **Expiry:** `auth.communication.expiry.minutes` for the confirmation token.
 - System-specific routes (e.g. `/api/systems/grex-id/leads/public`) can delegate
   here and add their own logic (e.g. face biometrics).
 
@@ -4443,15 +4758,14 @@ register through separate entry points.
 
 ```typescript
 // Example: systems/grex-id/register.ts
-import { registerEventHandler, registerHandlerFunction,
-         registerComponent, registerHomePage,
-         registerSystemI18n, registerTemplate,
-         registerLifecycleHook } from "@/server/module-registry";
+import { registerHandler, registerComponent, registerHomePage,
+         registerSystemI18n, registerTemplate, registerTemplateBuilder,
+         registerChannel, registerLifecycleHook }
+  from "@/server/module-registry";
 
 export function register(): void {
-  // Event handlers
-  registerEventHandler("GREXID_DETECTION", "grexid_process_detection");
-  registerHandlerFunction("grexid_process_detection", processDetection);
+  // Event handlers — name is both the event and the handler function key
+  registerHandler("grexid_process_detection", processDetection);
 
   // Components
   registerComponent("grexid-locations", () => import("..."));
@@ -4482,9 +4796,9 @@ export function register(): void {
 - The core never imports subsystem or framework code directly.
 - Exactly one `register()` function per system/framework — imported only by
   `systems/index.ts` or `frameworks/index.ts` respectively.
-- Components, homepages, event handlers, handler functions, jobs, i18n, and
-  lifecycle hooks, and communication templates are all registered through the
-  module-registry API at boot.
+- Components, homepages, event handlers, jobs, i18n, and lifecycle hooks, and
+  communication templates are all registered through the module-registry API at
+  boot.
 
 ---
 
@@ -4503,14 +4817,17 @@ Core loads.
 
 **Phase 2 — Authentication.** `@panva/jose` token utilities; rate limiter; all
 `/api/auth/*` routes; `BotProtection`; auth pages (login, register w/ LGPD
-checkbox §25, verify, forgot-password, reset-password); verification-request
-system w/ `communicationGuard()` (§12.13); terms-acceptance validation on
-register + public leads; `useAuth`; minimal event-queue foundation (`send_email`
-handler + verification/password-reset templates).
+checkbox §25, verify, forgot-password, reset-password, account-recovery);
+verification-request system w/ `communicationGuard()` (§12.13);
+entity_channel-based account approval invariant (§19.3); terms-acceptance
+validation on register + public leads; `useAuth`; minimal event-queue foundation
+(`send_communication` dispatcher + `send_email` per-channel handler +
+`human-confirmation` + `notification` templates).
 
 **Phase 3 — Event Queue.** `publisher.ts`, `registry.ts`, `worker.ts` (claim,
-lease, backoff, dead-letter); `send_email` + `send_sms` handlers; templates
-(verification, password-reset); `start-event-queue`.
+lease, backoff, dead-letter); `send_communication` dispatcher + `send_email` and
+`send_sms` per-channel handlers; unified `human-confirmation` and `notification`
+templates per channel; `start-event-queue`.
 
 **Phase 4 — Shared UI Components.** `Spinner`, `LocaleSelector`, `Modal`,
 `SearchField` (+ `useDebounce`), `GenericList` + `GenericListItem`,

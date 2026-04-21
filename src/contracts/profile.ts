@@ -1,4 +1,4 @@
-import type { RecoveryChannel } from "./recovery-channel.ts";
+import type { EntityChannel } from "./entity-channel.ts";
 
 export interface Profile {
   id: string;
@@ -6,7 +6,7 @@ export interface Profile {
   avatarUri?: string;
   age?: number;
   locale?: string;
-  recoveryChannels: RecoveryChannel[];
+  channels: EntityChannel[];
   createdAt: string;
   updatedAt: string;
 }

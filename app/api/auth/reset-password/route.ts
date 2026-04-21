@@ -26,7 +26,7 @@ function withAuthRateLimit() {
   };
 }
 
-async function handler(req: Request, ctx: RequestContext): Promise<Response> {
+async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { token, password, confirmPassword } = body;
 
@@ -59,7 +59,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   const request = await findVerificationRequest(token);
-  if (!request || request.type !== "password_reset") {
+  if (!request || request.actionKey !== "auth.action.passwordReset") {
     return Response.json(
       {
         success: false,
@@ -90,7 +90,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   await markVerificationUsed(request.id);
-  await updatePassword(request.userId, password);
+  await updatePassword(request.ownerId, password);
 
   return Response.json({
     success: true,

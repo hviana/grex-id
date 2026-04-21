@@ -1,20 +1,38 @@
 import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getAnonymousTenant } from "@/server/utils/tenant";
 import {
   associateLeadWithCompanySystem,
   createLead,
-  findLeadByEmailOrPhone,
+  findLeadByChannelValues,
   isLeadAssociated,
 } from "@/server/db/queries/leads";
-import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { publish } from "@/server/event-queue/publisher";
 import { getDb } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { communicationGuard } from "@/server/utils/verification-guard";
+
+interface SubmittedChannel {
+  type: string;
+  value: string;
+}
+
+function parseChannels(raw: unknown): SubmittedChannel[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SubmittedChannel[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const t = (entry as { type?: unknown }).type;
+    const v = (entry as { value?: unknown }).value;
+    if (typeof t !== "string" || typeof v !== "string") continue;
+    const std = standardizeField(t, v, "entity_channel");
+    if (std.length === 0) continue;
+    out.push({ type: t, value: std });
+  }
+  return out;
+}
 
 async function postHandler(req: Request, _ctx: RequestContext) {
   let body: Record<string, unknown> | null = null;
@@ -42,12 +60,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const tags = Array.isArray(parsedBody.tags) ? parsedBody.tags : undefined;
-    const email = parsedBody.email
-      ? standardizeField("email", String(parsedBody.email), "lead")
-      : undefined;
-    const phone = parsedBody.phone
-      ? standardizeField("phone", String(parsedBody.phone), "lead")
-      : undefined;
+    const channels = parseChannels(parsedBody.channels);
     const name = parsedBody.name
       ? standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
@@ -75,28 +88,28 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       );
     }
 
-    const emailErrors = validateField("email", email, "lead");
-    const nameErrors = validateField("name", name, "lead");
-    const allErrors = [...emailErrors, ...nameErrors];
+    const errors: string[] = [
+      ...validateField("name", name, "lead"),
+    ];
+    for (const ch of channels) {
+      errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+    }
+    if (channels.length === 0) errors.push("validation.channel.required");
+    if (!profile?.name || !systemSlug) {
+      errors.push("validation.name.required");
+    }
 
-    if (!profile?.name || !systemSlug || allErrors.length > 0) {
+    if (errors.length > 0) {
       return Response.json(
         {
           success: false,
-          error: {
-            code: "VALIDATION",
-            errors: allErrors.length > 0
-              ? allErrors
-              : ["validation.name.required"],
-          },
+          error: { code: "VALIDATION", errors },
         },
         { status: 400 },
       );
     }
 
-    if (
-      !companyIds || !Array.isArray(companyIds) || companyIds.length === 0
-    ) {
+    if (!companyIds || companyIds.length === 0) {
       return Response.json(
         {
           success: false,
@@ -135,16 +148,19 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       );
     }
 
-    const existing = await findLeadByEmailOrPhone(email!, phone);
+    // Look up any existing lead matching ANY of the submitted channel values.
+    const existing = await findLeadByChannelValues(
+      channels.map((c) => c.value),
+    );
 
     if (existing) {
       const guardResult = await communicationGuard({
-        userId: existing.id,
-        type: "lead_update",
+        ownerId: existing.id,
+        ownerType: "lead",
+        actionKey: "auth.action.leadUpdate",
         payload: {
           name: name ?? undefined,
-          email: email ?? undefined,
-          phone: phone ?? undefined,
+          channels,
           profile: mergedProfile,
           tags,
           companyIds,
@@ -154,7 +170,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
             ? faceDescriptor
             : undefined,
         },
-        systemSlug,
+        tenant: { systemSlug, actorType: "anonymous" },
       });
 
       if (!guardResult.allowed) {
@@ -174,28 +190,6 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         );
       }
 
-      // Compute changes between existing and submitted data
-      const changes: { field: string; from: string; to: string }[] = [];
-      if (name && name !== existing.name) {
-        changes.push({ field: "name", from: existing.name ?? "", to: name });
-      }
-      if (email && email !== existing.email) {
-        changes.push({ field: "email", from: existing.email ?? "", to: email });
-      }
-      if (phone && phone !== (existing.phone ?? "")) {
-        changes.push({ field: "phone", from: existing.phone ?? "", to: phone });
-      }
-      if (
-        mergedProfile?.avatarUri &&
-        mergedProfile.avatarUri !== existing.profile?.avatarUri
-      ) {
-        changes.push({
-          field: "avatarUri",
-          from: existing.profile?.avatarUri ?? "",
-          to: mergedProfile.avatarUri,
-        });
-      }
-
       const core = Core.getInstance();
       const expiryMinutes = Number(
         (await core.getSetting(
@@ -205,23 +199,26 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       );
       const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
         "http://localhost:3000";
-      const verificationLink =
+      const confirmationLink =
         `${baseUrl}/verify?token=${guardResult.token}&system=${
           encodeURIComponent(systemSlug)
         }`;
 
-      await publish("SEND_EMAIL", {
-        recipients: [existing.email],
-        template: "lead-update-verification",
+      const channelOrder = [...new Set(channels.map((c) => c.type))];
+
+      await publish("send_communication", {
+        channels: channelOrder,
+        recipients: [existing.id],
+        template: "human-confirmation",
         templateData: {
-          name: existing.name ?? existing.email,
-          verificationLink,
-          changes,
-          email: existing.email,
+          actionKey: "auth.action.leadUpdate",
+          confirmationLink,
+          occurredAt: new Date().toISOString(),
+          actorName: existing.name,
           expiryMinutes: String(expiryMinutes),
+          locale: locale || undefined,
+          systemSlug,
         },
-        locale: locale || undefined,
-        systemSlug,
       });
 
       return Response.json({
@@ -233,32 +230,14 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       });
     }
 
-    const dup = await checkDuplicates("lead", [
-      { field: "email", value: email! },
-      { field: "phone", value: phone },
-    ]);
-    if (dup.isDuplicate) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "DUPLICATE",
-            message: "validation.lead.duplicate",
-          },
-        },
-        { status: 409 },
-      );
-    }
-
     const lead = await createLead({
       name: name!,
-      email: email!,
-      phone,
       profile: mergedProfile as {
         name: string;
         avatarUri?: string;
         age?: number;
       },
+      channels,
       companyIds,
       tags,
     });
@@ -278,8 +257,53 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       }
     }
 
+    // Gather the newly-created channel ids for the confirmation payload.
+    const channelIds = (lead.profile?.channels ?? [])
+      .map((c: unknown) =>
+        typeof c === "string" ? c : String((c as { id?: string }).id ?? "")
+      )
+      .filter((s) => s.length > 0);
+
+    const guardResult = await communicationGuard({
+      ownerId: lead.id,
+      ownerType: "lead",
+      actionKey: "auth.action.leadRegister",
+      payload: { channelIds },
+      tenant: { systemSlug, actorType: "anonymous" },
+    });
+
+    if (guardResult.allowed) {
+      const core = Core.getInstance();
+      const expiryMinutes = Number(
+        (await core.getSetting(
+          "auth.communication.expiry.minutes",
+          systemSlug,
+        )) || 15,
+      );
+      const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+        "http://localhost:3000";
+      const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
+
+      const channelOrder = [...new Set(channels.map((c) => c.type))];
+
+      await publish("send_communication", {
+        channels: channelOrder,
+        recipients: [lead.id],
+        template: "human-confirmation",
+        templateData: {
+          actionKey: "auth.action.leadRegister",
+          confirmationLink,
+          occurredAt: new Date().toISOString(),
+          actorName: lead.name,
+          expiryMinutes: String(expiryMinutes),
+          locale: locale || undefined,
+          systemSlug,
+        },
+      });
+    }
+
     return Response.json(
-      { success: true, data: { id: lead.id, requiresVerification: false } },
+      { success: true, data: { id: lead.id, requiresVerification: true } },
       { status: 201 },
     );
   } catch (err) {

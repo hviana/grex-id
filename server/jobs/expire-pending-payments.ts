@@ -39,10 +39,10 @@ export function startPaymentExpiry(): void {
       for (const payment of payments) {
         // Batch: owner info + system info + expire credit purchase + clear guards (§7.2)
         const result = await db.query<
-          [{ email: string; name: string }[], { name: string; slug: string }[]]
+          [{ id: string; name: string }[], { name: string; slug: string }[]]
         >(
           `LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-           SELECT email, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+           SELECT id, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
            SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
            UPDATE credit_purchase SET status = "expired"
              WHERE subscriptionId = $subId AND status = "pending";
@@ -61,19 +61,24 @@ export function startPaymentExpiry(): void {
         const systemName = systemInfo?.name ?? "";
         const systemSlug = systemInfo?.slug ?? "";
 
-        if (owner?.email) {
-          await publish("SEND_EMAIL", {
-            recipients: [owner.email],
-            template: "payment-expired",
+        if (owner?.id) {
+          await publish("send_communication", {
+            recipients: [String(owner.id)],
+            template: "notification",
             templateData: {
-              name: owner.name ?? "",
+              eventKey: `billing.event.paymentExpired.${payment.kind}`,
+              occurredAt: new Date().toISOString(),
+              actorName: owner.name ?? "",
               systemName,
-              kind: payment.kind,
-              amount: String(payment.amount),
-              currency: payment.currency ?? "USD",
-              billingUrl: `/billing?system=${systemSlug}`,
+              value: {
+                amount: payment.amount,
+                currency: payment.currency ?? "USD",
+              },
+              ctaKey: "templates.notification.cta.viewBilling",
+              ctaUrl: `/billing?system=${systemSlug}`,
+              resources: [`billing.paymentKind.${payment.kind}`],
+              systemSlug,
             },
-            systemSlug,
           });
         }
 

@@ -5,11 +5,35 @@ import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
 import { updateUserLocale } from "@/server/db/queries/users";
+import { createUserWithChannels } from "@/server/db/queries/auth";
+import {
+  findChannelsByTypeAndValue,
+} from "@/server/db/queries/entity-channels";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import Core from "@/server/utils/Core";
-import { generateSecureToken } from "@/server/utils/token";
+import { communicationGuard } from "@/server/utils/verification-guard";
+
+interface SubmittedChannel {
+  type: string;
+  value: string;
+}
+
+function parseChannels(raw: unknown): SubmittedChannel[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SubmittedChannel[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const t = (entry as { type?: unknown }).type;
+    const v = (entry as { value?: unknown }).value;
+    if (typeof t !== "string" || typeof v !== "string") continue;
+    const std = standardizeField(t, v, "entity_channel");
+    if (std.length === 0) continue;
+    out.push({ type: t, value: std });
+  }
+  return out;
+}
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -17,7 +41,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
-  // Return the authenticated user's roles for a specific company+system
   if (action === "context") {
     if (!companyId || !systemId) {
       return Response.json(
@@ -53,11 +76,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const db = await getDb();
   const bindings: Record<string, unknown> = { limit: limit + 1 };
 
-  // If companyId+systemId provided, filter by user_company_system association
   if (companyId && systemId) {
-    // Single query: fetch user IDs with inline contextRoles via subquery (§7.2, §1.9)
-    let userQuery =
-      `SELECT id, email, emailVerified, phone, profile, roles, createdAt,
+    let userQuery = `SELECT id, profile, roles, createdAt,
          (SELECT VALUE roles FROM user_company_system
            WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
        FROM user
@@ -78,7 +98,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
       userBindings.cursor = cursor;
     }
 
-    userQuery += " ORDER BY createdAt DESC LIMIT $limit FETCH profile";
+    userQuery +=
+      " ORDER BY createdAt DESC LIMIT $limit FETCH profile, profile.channels";
 
     const result = await db.query<[Record<string, unknown>[]]>(
       userQuery,
@@ -97,9 +118,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  // Fallback: list all users (original behavior)
-  let query =
-    "SELECT id, email, emailVerified, phone, profile, roles, createdAt FROM user";
+  let query = "SELECT id, profile, roles, createdAt FROM user";
   const conditions: string[] = [];
 
   if (search) {
@@ -112,7 +131,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile";
+  query +=
+    " ORDER BY createdAt DESC LIMIT $limit FETCH profile, profile.channels";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const items = result[0] ?? [];
@@ -130,22 +150,23 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { email, phone, password, name, roles } = body;
+  const { password, name, roles } = body;
+  const channels = parseChannels(body.channels);
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
-  // Standardize
-  const stdEmail = standardizeField("email", email ?? "", "user");
-  const stdPhone = phone ? standardizeField("phone", phone, "user") : undefined;
   const stdName = standardizeField("name", name ?? "", "user");
 
-  // Validate
   const errors: string[] = [
-    ...validateField("email", stdEmail, "user"),
     ...validateField("password", password, "user"),
     ...validateField("name", stdName, "user"),
   ];
-  if (stdPhone) errors.push(...validateField("phone", stdPhone, "user"));
+  if (channels.length === 0) {
+    errors.push("validation.channel.required");
+  }
+  for (const ch of channels) {
+    errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+  }
   if (!companyId || companyId === "0") {
     errors.push("validation.companyId.required");
   }
@@ -162,16 +183,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Check if user already exists (invite flow: associate without creating)
-  const existingResult = await db.query<[Record<string, unknown>[]]>(
-    `SELECT id, email, phone, profile, roles FROM user WHERE email = $email LIMIT 1 FETCH profile`,
-    { email: stdEmail },
-  );
-  const existingUser = existingResult[0]?.[0];
+  // Try to find an existing user by any submitted channel value.
+  let existingUserId: string | null = null;
+  for (const ch of channels) {
+    const rows = await findChannelsByTypeAndValue(ch.type, ch.value);
+    const hit = rows.find((r) => r.ownerType === "user");
+    if (hit) {
+      existingUserId = String(hit.ownerId);
+      break;
+    }
+  }
 
-  if (existingUser) {
-    // User already exists — invite them to this company+system
-    // Batch: association creation + inviter/system/company lookups in one query (§7.2, §1.6)
+  if (existingUserId) {
+    // Invite flow: associate existing user with the tenant + notify.
     const batchResult = await db.query<
       [
         unknown,
@@ -179,7 +203,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
         {
           sys: { name: string }[];
           comp: { name: string }[];
-          inviter: { email: string; profileName: string }[];
+          inviter: { profileName?: string }[];
+          invitee: { profileName?: string }[];
         },
       ]
     >(
@@ -194,10 +219,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
        };
        LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
        LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
-       LET $inviter = (SELECT email, profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
-       RETURN {sys: $sys, comp: $comp, inviter: $inviter};`,
+       LET $inviter = (SELECT profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
+       LET $invitee = (SELECT profile.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profile);
+       RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
       {
-        userId: rid(String(existingUser.id)),
+        userId: rid(existingUserId),
         companyId: rid(companyId),
         systemId: rid(systemId),
         roles: roles ?? [],
@@ -205,112 +231,107 @@ async function postHandler(req: Request, ctx: RequestContext) {
       },
     );
 
-    const returnData = batchResult[2] as {
-      sys: { name: string }[];
-      comp: { name: string }[];
-      inviter: { email: string; profileName: string }[];
-    } | undefined;
+    const returnData = batchResult[2];
     const sysName = returnData?.sys?.[0]?.name ?? "";
     const compName = returnData?.comp?.[0]?.name ?? "";
-    const inviterName = returnData?.inviter?.[0]?.profileName ??
-      returnData?.inviter?.[0]?.email ?? "";
+    const inviterName = returnData?.inviter?.[0]?.profileName ?? "";
+    const inviteeName = returnData?.invitee?.[0]?.profileName ?? "";
 
     const core = Core.getInstance();
     const baseUrl =
       (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
         "http://localhost:3000";
 
-    await publish("SEND_EMAIL", {
-      recipients: [stdEmail],
-      template: "tenant-invite",
+    await publish("send_communication", {
+      recipients: [existingUserId],
+      template: "notification",
       templateData: {
-        name: (existingUser as any).profile?.name ?? stdEmail,
-        inviterName,
+        eventKey: "auth.event.tenantInvite",
+        occurredAt: new Date().toISOString(),
+        actorName: inviteeName,
         companyName: compName,
         systemName: sysName,
-        roles: (roles ?? []).join(", "),
-        loginUrl: `${baseUrl}/login?system=${ctx.tenant.systemSlug}`,
+        resources: (roles ?? []).map((r: string) => `roles.${r}.name`),
+        ctaKey: "templates.notification.cta.goToDashboard",
+        ctaUrl: `${baseUrl}/login?system=${ctx.tenant.systemSlug}`,
+        systemSlug: ctx.tenant.systemSlug,
+        inviterName,
       },
-      locale: undefined,
-      systemSlug: ctx.tenant.systemSlug,
     });
 
     return Response.json(
-      { success: true, data: existingUser, invited: true },
+      { success: true, data: { id: existingUserId }, invited: true },
       { status: 200 },
     );
   }
 
-  // New user — create with profile, then associate (§19.3: emailVerified = false)
-  const verifyToken = generateSecureToken();
-  const core = Core.getInstance();
-  const expiryMinutes = Number(
-    (await core.getSetting(
-      "auth.verification.expiry.minutes",
-      ctx.tenant.systemSlug,
-    )) ?? "15",
-  );
-  const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
-  const baseUrl =
-    (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
-      "http://localhost:3000";
+  // New user — create with channels + register verification.
+  const { user, channelIds } = await createUserWithChannels({
+    password,
+    name: stdName,
+    channels,
+  });
 
-  const result = await db.query<
-    [unknown, unknown, unknown, unknown, unknown, Record<string, unknown>[]]
-  >(
-    `LET $prof = CREATE profile SET name = $name;
-     LET $usr = CREATE user SET
-       email = $email,
-       phone = $phone,
-       passwordHash = crypto::argon2::generate($password),
-       profile = $prof[0].id,
-       roles = [],
-       emailVerified = false;
-     CREATE company_user SET companyId = $companyId, userId = $usr[0].id;
+  await db.query(
+    `CREATE company_user SET companyId = $companyId, userId = $userId;
      CREATE user_company_system SET
-       userId = $usr[0].id,
+       userId = $userId,
        companyId = $companyId,
        systemId = $systemId,
-       roles = $roles;
-     CREATE verification_request SET
-       type = "email_verify",
-       userId = $usr[0].id,
-       token = $verifyToken,
-       expiresAt = $expiresAt;
-     SELECT * FROM $usr[0].id FETCH profile;`,
+       roles = $roles;`,
     {
-      name: stdName,
-      email: stdEmail,
-      phone: stdPhone,
-      password,
+      userId: rid(String(user.id)),
       companyId: rid(companyId),
       systemId: rid(systemId),
       roles: roles ?? [],
-      verifyToken,
-      expiresAt,
     },
   );
 
-  const newUser = result[5]?.[0];
-  const verificationLink = `${baseUrl}/verify?token=${verifyToken}&email=${
-    encodeURIComponent(stdEmail)
-  }`;
-
-  await publish("SEND_EMAIL", {
-    recipients: [stdEmail],
-    template: "verification",
-    templateData: {
-      name: stdName,
-      verificationLink,
-      email: stdEmail,
-      expiryMinutes: String(expiryMinutes),
+  const guardResult = await communicationGuard({
+    ownerId: String(user.id),
+    ownerType: "user",
+    actionKey: "auth.action.register",
+    payload: { channelIds },
+    tenant: {
+      companyId,
+      systemId,
+      systemSlug: ctx.tenant.systemSlug,
+      actorId: ctx.claims!.actorId,
+      actorType: "user",
     },
-    locale: undefined,
-    systemSlug: ctx.tenant.systemSlug,
   });
 
+  if (guardResult.allowed) {
+    const core = Core.getInstance();
+    const expiryMinutes = Number(
+      (await core.getSetting(
+        "auth.communication.expiry.minutes",
+        ctx.tenant.systemSlug,
+      )) || 15,
+    );
+    const baseUrl =
+      (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
+        "http://localhost:3000";
+    const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
+    const channelOrder = [...new Set(channels.map((c) => c.type))];
+
+    await publish("send_communication", {
+      channels: channelOrder,
+      recipients: [String(user.id)],
+      template: "human-confirmation",
+      templateData: {
+        actionKey: "auth.action.register",
+        confirmationLink,
+        occurredAt: new Date().toISOString(),
+        actorName: stdName,
+        expiryMinutes: String(expiryMinutes),
+        systemSlug: ctx.tenant.systemSlug,
+      },
+    });
+  }
+
   return Response.json(
-    { success: true, data: newUser },
+    { success: true, data: user },
     { status: 201 },
   );
 }
@@ -336,10 +357,9 @@ async function putHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true });
   }
 
-  // Self-service profile update (authenticated user updates their own profile)
   if (action === "profile") {
     const body = await req.json();
-    const { name, phone, avatarUri, age } = body;
+    const { name, avatarUri, age } = body;
     const userId = ctx.claims!.actorId;
     const db = await getDb();
 
@@ -367,48 +387,23 @@ async function putHandler(req: Request, ctx: RequestContext) {
       profileBindings.age = age ? Number(age) : null;
     }
 
-    const userSets: string[] = ["updatedAt = time::now()"];
-    const userBindings: Record<string, unknown> = { userId: rid(userId) };
-
-    if (phone !== undefined) {
-      const stdPhone = phone ? standardizeField("phone", phone, "user") : null;
-      if (stdPhone) {
-        const phoneErrors = validateField("phone", stdPhone, "user");
-        if (phoneErrors.length > 0) {
-          return Response.json(
-            {
-              success: false,
-              error: { code: "VALIDATION", errors: phoneErrors },
-            },
-            { status: 400 },
-          );
-        }
-      }
-      userSets.push("phone = $phone");
-      userBindings.phone = stdPhone;
-    }
-
-    // Single batched query: update profile + user fields + return updated user (§7.2)
     const stmts = [
       `LET $prof = (SELECT profile FROM user WHERE id = $userId)[0].profile`,
       `UPDATE $prof SET ${profileSets.join(", ")}`,
-      ...(userSets.length > 1
-        ? [`UPDATE $userId SET ${userSets.join(", ")}`]
-        : []),
-      `SELECT * FROM $userId FETCH profile`,
+      `UPDATE $userId SET updatedAt = time::now()`,
+      `SELECT * FROM $userId FETCH profile, profile.channels`,
     ];
     const result = await db.query<Record<string, unknown>[][]>(
       stmts.join(";\n"),
-      { ...profileBindings, ...userBindings },
+      profileBindings,
     );
     const updatedUser = result[result.length - 1]?.[0];
 
     return Response.json({ success: true, data: updatedUser });
   }
 
-  // Edit user profile + roles (admin)
   const body = await req.json();
-  const { id, name, phone, companyId, systemId, roles } = body;
+  const { id, name, companyId, systemId, roles } = body;
 
   if (!id) {
     return Response.json(
@@ -422,30 +417,15 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Batch profile + user updates into one query (§7.2, §1.8)
-  const stmts: string[] = [];
-  const bindings: Record<string, unknown> = { id: rid(id) };
-
   if (name !== undefined) {
     const stdName = standardizeField("name", name, "user");
-    bindings.name = stdName;
-    stmts.push(
+    await db.query(
       `LET $prof = (SELECT profile FROM $id);
        UPDATE $prof[0].profile SET name = $name, updatedAt = time::now()`,
+      { id: rid(id), name: stdName },
     );
   }
 
-  if (phone !== undefined) {
-    const stdPhone = phone ? standardizeField("phone", phone, "user") : null;
-    bindings.phone = stdPhone;
-    stmts.push(`UPDATE $id SET phone = $phone, updatedAt = time::now()`);
-  }
-
-  if (stmts.length > 0) {
-    await db.query(stmts.join("; "), bindings);
-  }
-
-  // Update context roles — enforce admin invariant (§21.1, §7.2)
   if (roles !== undefined && companyId && systemId) {
     const res = await db.query(
       `LET $ac = (SELECT count() AS c FROM user_company_system
@@ -481,7 +461,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   return Response.json({ success: true });
 }
 
-async function deleteHandler(req: Request, ctx: RequestContext) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { userId, companyId, systemId } = body;
 
@@ -497,7 +477,6 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Admin invariant (§21.1): atomic check + delete in single batched query (§7.2)
   const res = await db.query(
     `LET $isTargetAdmin = (SELECT count() AS c FROM user_company_system
        WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId

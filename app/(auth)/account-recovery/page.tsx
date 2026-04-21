@@ -34,11 +34,11 @@ function AccountRecoveryContent() {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/recovery-channel-reset", {
+      const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channelValue,
+          identifier: channelValue,
           botToken,
           systemSlug: systemSlug || undefined,
         }),
@@ -107,7 +107,7 @@ function AccountRecoveryContent() {
                       value={channelValue}
                       onChange={(e) => setChannelValue(e.target.value)}
                       required
-                      placeholder={t("common.placeholder.recoveryChannel")}
+                      placeholder={t("common.placeholder.entityChannel")}
                       className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
                     />
                   </div>

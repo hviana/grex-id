@@ -2,11 +2,10 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import {
   associateLeadWithCompanySystem,
   createLead,
-  findLeadByEmailOrPhone,
+  findLeadByChannelValues,
   getLeadById,
   isLeadAssociated,
   listLeads,
@@ -56,25 +55,42 @@ async function getHandler(req: Request, ctx: RequestContext) {
   return Response.json({ success: true, ...result });
 }
 
+interface SubmittedChannel {
+  type: string;
+  value: string;
+}
+
+function parseChannels(raw: unknown): SubmittedChannel[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SubmittedChannel[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const t = (entry as { type?: unknown }).type;
+    const v = (entry as { value?: unknown }).value;
+    if (typeof t !== "string" || typeof v !== "string") continue;
+    const std = standardizeField(t, v, "entity_channel");
+    if (std.length === 0) continue;
+    out.push({ type: t, value: std });
+  }
+  return out;
+}
+
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
   const inferredCompanyIds = companyId && companyId !== "0" ? [companyId] : [];
   const { profile, ownerId } = body;
-  const email = body.email
-    ? standardizeField("email", body.email, "lead")
-    : undefined;
-  const phone = body.phone
-    ? standardizeField("phone", body.phone, "lead")
-    : undefined;
+  const channels = parseChannels(body.channels);
   const name = body.name
     ? standardizeField("name", body.name, "lead")
     : undefined;
 
-  const emailErrors = validateField("email", email, "lead");
-  const nameErrors = validateField("name", name, "lead");
-  const allErrors = [...emailErrors, ...nameErrors];
+  const errors: string[] = [...validateField("name", name, "lead")];
+  for (const ch of channels) {
+    errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+  }
+  if (channels.length === 0) errors.push("validation.channel.required");
 
   if (!companyId || !systemId) {
     return Response.json(
@@ -89,22 +105,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!profile?.name || allErrors.length > 0) {
+  if (!profile?.name || errors.length > 0) {
     return Response.json(
       {
         success: false,
         error: {
           code: "VALIDATION",
-          errors: allErrors.length > 0
-            ? allErrors
-            : ["validation.name.required"],
+          errors: errors.length > 0 ? errors : ["validation.name.required"],
         },
       },
       { status: 400 },
     );
   }
 
-  const existing = await findLeadByEmailOrPhone(email!, phone);
+  const existing = await findLeadByChannelValues(channels.map((c) => c.value));
 
   if (existing) {
     const alreadyAssociated = await isLeadAssociated(
@@ -137,29 +151,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  const dup = await checkDuplicates("lead", [
-    { field: "email", value: email! },
-    { field: "phone", value: phone },
-  ]);
-  if (dup.isDuplicate) {
-    return Response.json(
-      {
-        success: false,
-        error: {
-          code: "DUPLICATE",
-          message: "validation.lead.duplicateContact",
-        },
-      },
-      { status: 409 },
-    );
-  }
-
   const tags = Array.isArray(body.tags) ? body.tags : [];
   const lead = await createLead({
     name: name!,
-    email: email!,
-    phone,
     profile,
+    channels,
     companyIds: inferredCompanyIds,
     tags,
   });
@@ -178,12 +174,6 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
   const { id, profile, ownerId } = body;
-  const email = body.email
-    ? standardizeField("email", body.email, "lead")
-    : undefined;
-  const phone = body.phone
-    ? standardizeField("phone", body.phone, "lead")
-    : undefined;
   const name = body.name
     ? standardizeField("name", body.name, "lead")
     : undefined;
@@ -212,7 +202,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   const tags = body.tags !== undefined ? body.tags : undefined;
-  const lead = await updateLead(id, { name, email, phone, profile, tags });
+  const lead = await updateLead(id, { name, profile, tags });
 
   if (ownerId !== undefined) {
     await updateLeadOwner(id, companyId, systemId, ownerId || null);

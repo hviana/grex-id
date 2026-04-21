@@ -152,7 +152,7 @@ export async function consumeCredits(params: {
   if (totalAvailable < params.amount) {
     // Auto-recharge guard was set atomically in the batched query above
     if (sub.autoRechargeGuardSet) {
-      await publish("TRIGGER_AUTO_RECHARGE", {
+      await publish("auto_recharge", {
         subscriptionId: String(sub.id),
         companyId: String(sub.companyId),
         systemId: String(sub.systemId),
@@ -168,14 +168,14 @@ export async function consumeCredits(params: {
         [
           unknown[],
           { name: string; ownerId: string }[],
-          { email: string; name: string; locale: string }[],
+          { id: string; name: string; locale: string }[],
           { name: string; slug: string }[],
         ]
       >(
         `UPDATE $subId SET creditAlertSent = true;
          SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
          LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-         SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+         SELECT id, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
          SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
         {
           subId: rid(sub.id),
@@ -185,24 +185,27 @@ export async function consumeCredits(params: {
       );
 
       const user = alertResult[2]?.[0];
-      const ownerEmail = user?.email;
+      const ownerId = user?.id ? String(user.id) : "";
       const ownerName = user?.name ?? "";
       const ownerLocale = user?.locale;
       const systemName = alertResult[3]?.[0]?.name ?? "";
       const systemSlug = alertResult[3]?.[0]?.slug ?? "";
 
-      if (ownerEmail) {
-        await publish("SEND_EMAIL", {
-          recipients: [ownerEmail],
-          template: "insufficient-credit",
+      if (ownerId) {
+        await publish("send_communication", {
+          recipients: [ownerId],
+          template: "notification",
           templateData: {
-            name: ownerName,
+            eventKey: "billing.event.insufficientCredit",
+            occurredAt: new Date().toISOString(),
+            actorName: ownerName,
             systemName,
-            resourceKey: params.resourceKey,
-            purchaseLink: `/billing?system=${systemSlug}`,
+            resources: [params.resourceKey],
+            ctaKey: "templates.notification.cta.purchaseCredits",
+            ctaUrl: `/billing?system=${systemSlug}`,
+            locale: ownerLocale || undefined,
+            systemSlug,
           },
-          locale: ownerLocale || undefined,
-          systemSlug,
         });
       }
     }
@@ -367,14 +370,14 @@ async function sendOperationCountAlert(
   const alertResult = await db.query<
     [
       unknown[],
-      { email: string; name: string; locale: string }[],
+      { id: string; name: string; locale: string }[],
       { name: string; slug: string }[],
     ]
   >(
     `UPDATE $subId SET operationCountAlertSent = object::merge(CASE WHEN operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
      LET $companyId = $cId;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-     SELECT email, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT id, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       subId: rid(sub.id),
@@ -385,24 +388,27 @@ async function sendOperationCountAlert(
   );
 
   const user = alertResult[1]?.[0];
-  const ownerEmail = user?.email;
+  const ownerId = user?.id ? String(user.id) : "";
   const ownerName = user?.name ?? "";
   const ownerLocale = user?.locale;
   const systemName = alertResult[2]?.[0]?.name ?? "";
   const systemSlug = alertResult[2]?.[0]?.slug ?? "";
 
-  if (ownerEmail) {
-    await publish("SEND_EMAIL", {
-      recipients: [ownerEmail],
-      template: "operation-count-alert",
+  if (ownerId) {
+    await publish("send_communication", {
+      recipients: [ownerId],
+      template: "notification",
       templateData: {
-        name: ownerName,
+        eventKey: "billing.event.operationCountAlert",
+        occurredAt: new Date().toISOString(),
+        actorName: ownerName,
         systemName,
-        operationCount: String(maxCount),
-        billingUrl: `/billing?system=${systemSlug}`,
+        resources: [params.resourceKey],
+        ctaKey: "templates.notification.cta.viewBilling",
+        ctaUrl: `/billing?system=${systemSlug}`,
+        locale: ownerLocale || undefined,
+        systemSlug,
       },
-      locale: ownerLocale || undefined,
-      systemSlug,
     });
   }
 }

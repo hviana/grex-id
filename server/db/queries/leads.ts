@@ -113,14 +113,10 @@ export async function listLeads(
     bindings.search = params.search;
   }
 
-  // Statement 0: LET $lcs (returns null)
-  // Statement 1: LET $ids (returns null)
-  // Statement 2: SELECT leads
-  // Statement 3: SELECT owner map
   const query = `
     LET $lcs = (SELECT leadId, ownerId, createdAt FROM lead_company_system WHERE ${lcsWhere} ORDER BY createdAt DESC LIMIT $limit);
     LET $ids = $lcs.leadId;
-    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profile, tags;
+    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profile, profile.channels, tags;
     SELECT leadId, ownerId FROM lead_company_system WHERE ${lcsWhere};`;
 
   const result = await db.query<
@@ -131,7 +127,6 @@ export async function listLeads(
   );
   const leads = result[2] ?? [];
 
-  // Build owner map from statement 3
   const lcsRows = result[3] ?? [];
   const ownerMap = new Map<string, string | undefined>();
   for (const row of lcsRows) {
@@ -161,35 +156,33 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
   const result = await db.query<[Lead[]]>(
-    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profile",
+    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profile, profile.channels",
     { id: rid(leadId) },
   );
   return normalizeLead(result[0]?.[0] ?? null);
 }
 
-export async function findLeadByEmailOrPhone(
-  email: string,
-  phone?: string,
+export async function findLeadByChannelValues(
+  values: string[],
 ): Promise<Lead | null> {
+  if (values.length === 0) return null;
   const db = await getDb();
-  let query = "SELECT * FROM lead WHERE email = $email";
-  const bindings: Record<string, unknown> = { email };
-
-  if (phone) {
-    query += " OR phone = $phone";
-    bindings.phone = phone;
-  }
-
-  query += " LIMIT 1 FETCH profile";
-  const result = await db.query<[Lead[]]>(query, bindings);
+  const result = await db.query<[Lead[]]>(
+    `SELECT * FROM lead
+     WHERE id IN (
+       SELECT VALUE ownerId FROM entity_channel
+       WHERE value IN $values AND ownerType = "lead"
+     )
+     LIMIT 1 FETCH profile, profile.channels`,
+    { values },
+  );
   return normalizeLead(result[0]?.[0] ?? null);
 }
 
 export async function createLead(data: {
   name: string;
-  email: string;
-  phone?: string;
   profile: { name: string; avatarUri?: string; age?: number };
+  channels: { type: string; value: string }[];
   companyIds?: string[];
   tags?: string[];
 }): Promise<Lead> {
@@ -197,39 +190,60 @@ export async function createLead(data: {
   const companyIds = normalizeRecordIds(data.companyIds ?? []).map((
     companyId,
   ) => rid(requireRecordId(companyId, "companyId")));
-  const result = await db.query<[unknown, unknown, Lead[]]>(
-    `LET $prof = CREATE profile SET
+
+  const channelStmts = data.channels
+    .map(
+      (_, i) => `
+      LET $ch${i} = CREATE entity_channel SET
+        ownerId = $ld[0].id,
+        ownerType = "lead",
+        type = $ctype${i},
+        value = $cvalue${i},
+        verified = false;`,
+    )
+    .join("");
+
+  const appendStmts = data.channels
+    .map((_, i) => `UPDATE $prof[0].id SET channels += $ch${i}[0].id`)
+    .join(";\n");
+
+  const bindings: Record<string, unknown> = {
+    profileName: data.profile.name,
+    avatarUri: data.profile.avatarUri ?? undefined,
+    age: data.profile.age ?? undefined,
+    name: data.name,
+    companyIds,
+    tags: data.tags ?? [],
+  };
+  data.channels.forEach((c, i) => {
+    bindings[`ctype${i}`] = c.type;
+    bindings[`cvalue${i}`] = c.value;
+  });
+
+  const query = `
+    LET $prof = CREATE profile SET
       name = $profileName,
       avatarUri = $avatarUri,
-      age = $age;
+      age = $age,
+      channels = [];
     LET $ld = CREATE lead SET
       name = $name,
-      email = $email,
-      phone = $phone,
       profile = $prof[0].id,
       companyIds = $companyIds,
       tags = $tags;
-    SELECT * FROM $ld[0].id FETCH profile;`,
-    {
-      profileName: data.profile.name,
-      avatarUri: data.profile.avatarUri ?? undefined,
-      age: data.profile.age ?? undefined,
-      name: data.name,
-      email: data.email,
-      phone: data.phone ?? undefined,
-      companyIds,
-      tags: data.tags ?? [],
-    },
-  );
-  return normalizeLead(result[2][0])!;
+    ${channelStmts}
+    ${appendStmts ? appendStmts + ";" : ""}
+    SELECT * FROM $ld[0].id FETCH profile, profile.channels;`;
+
+  const result = await db.query<unknown[]>(query, bindings);
+  const last = result[result.length - 1] as Lead[];
+  return normalizeLead(last[0])!;
 }
 
 export async function updateLead(
   id: string,
   data: {
     name?: string;
-    email?: string;
-    phone?: string;
     profile?: { name?: string; avatarUri?: string; age?: number };
     companyIds?: string[];
     tags?: string[];
@@ -249,14 +263,6 @@ export async function updateLead(
     sets.push("name = $name");
     bindings.name = data.name;
   }
-  if (data.email !== undefined) {
-    sets.push("email = $email");
-    bindings.email = data.email;
-  }
-  if (data.phone !== undefined) {
-    sets.push("phone = $phone");
-    bindings.phone = data.phone || undefined;
-  }
   if (data.tags !== undefined) {
     sets.push("tags = $tags");
     bindings.tags = data.tags;
@@ -264,7 +270,6 @@ export async function updateLead(
   sets.push("companyIds = $companyIds");
   bindings.companyIds = companyIds.map((companyId) => rid(companyId));
 
-  // Build a single batched query for all updates
   const statements: string[] = [];
 
   if (data.profile) {
@@ -290,7 +295,7 @@ export async function updateLead(
   }
 
   statements.push(`UPDATE $id SET ${sets.join(", ")}`);
-  statements.push("SELECT * FROM $id FETCH profile");
+  statements.push("SELECT * FROM $id FETCH profile, profile.channels");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
@@ -322,6 +327,8 @@ export async function deleteLead(id: string): Promise<void> {
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
     `LET $ld = (SELECT profile FROM lead WHERE id = $id);
+    DELETE entity_channel WHERE ownerId = $id;
+    DELETE verification_request WHERE ownerId = $id;
     DELETE FROM lead WHERE id = $id;
     IF $ld[0].profile != NONE {
       DELETE $ld[0].profile;

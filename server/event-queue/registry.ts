@@ -1,30 +1,23 @@
-const handlerRegistry: Record<string, string[]> = {
-  SEND_EMAIL: ["send_email"],
-  SEND_SMS: ["send_sms"],
-  PAYMENT_DUE: ["process_payment"],
-  TRIGGER_AUTO_RECHARGE: ["auto_recharge"],
-  PAYMENT_ASYNC_COMPLETED: ["resolve_async_payment"],
-};
+import type { HandlerFn } from "./worker.ts";
 
-export function getHandlersForEvent(eventName: string): string[] {
-  return handlerRegistry[eventName] ?? [];
+/**
+ * One name per handler. The name is both the event (what `publish()` accepts)
+ * and the function key (what the worker looks up).
+ */
+const handlerRegistry = new Map<string, HandlerFn>();
+
+export function registerHandler(name: string, fn: HandlerFn): void {
+  handlerRegistry.set(name, fn);
 }
 
-export function registerEventHandler(eventName: string, handler: string): void {
-  if (!handlerRegistry[eventName]) {
-    handlerRegistry[eventName] = [];
-  }
-  if (!handlerRegistry[eventName].includes(handler)) {
-    handlerRegistry[eventName].push(handler);
-  }
+export function getHandler(name: string): HandlerFn | undefined {
+  return handlerRegistry.get(name);
 }
 
-export function getAllHandlerNames(): string[] {
-  const names = new Set<string>();
-  for (const handlers of Object.values(handlerRegistry)) {
-    for (const h of handlers) {
-      names.add(h);
-    }
-  }
-  return [...names];
+export function hasHandler(name: string): boolean {
+  return handlerRegistry.has(name);
+}
+
+export function getAllHandlers(): string[] {
+  return [...handlerRegistry.keys()];
 }
