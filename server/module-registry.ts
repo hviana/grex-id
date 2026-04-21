@@ -49,10 +49,16 @@ export function getAllJobs(): Record<string, JobStarter> {
 
 const templateRegistry: Record<string, TemplateFunction> = {};
 
-export function registerTemplate<T extends Record<string, unknown>>(
+// Templates typed with a specific data shape are stored as generic
+// TemplateFunctions — the runtime contract is "receive the templateData
+// from the dispatcher", and type-checking the individual data shape happens
+// inside the template itself (§15.4).
+// deno-lint-ignore no-explicit-any
+export function registerTemplate(
   channel: string,
   path: string,
-  fn: TemplateFunction<T>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (locale: string, data: any) => Promise<{ body: string; title?: string }>,
 ): void {
   templateRegistry[`${channel}:${path}`] = fn as TemplateFunction;
 }

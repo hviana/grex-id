@@ -15,18 +15,17 @@ import type {
 
 const CHANNEL = "sms";
 
-function isRecordId(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z_][a-z0-9_]*:[^:\s]+$/i.test(value);
+function isRecordId(value: string): boolean {
+  return /^[a-z_][a-z0-9_]*:[^:\s]+$/i.test(value);
 }
 
 async function resolveRecipients(raw: string[]): Promise<string[]> {
   const resolved: string[] = [];
   const db = await getDb();
   for (const entry of raw) {
+    if (typeof entry !== "string" || entry.length === 0) continue;
     if (!isRecordId(entry)) {
-      if (typeof entry === "string" && entry.length > 0) {
-        resolved.push(entry);
-      }
+      resolved.push(entry);
       continue;
     }
     // SMS delivery uses the dedicated "sms" entity_channel type, not "phone".

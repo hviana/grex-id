@@ -67,7 +67,6 @@ export default function UsersPage() {
 
   // Edit form state
   const [editName, setEditName] = useState("");
-  const [editPhone, setEditPhone] = useState("");
   const [editRoles, setEditRoles] = useState<string[]>([]);
 
   // Fetch available role names for this system
@@ -233,7 +232,6 @@ export default function UsersPage() {
   const openEdit = (user: UserItem) => {
     setEditUser(user);
     setEditName(user.profile?.name ?? "");
-    setEditPhone(primaryPhone(user));
     setEditRoles(user.contextRoles ?? user.roles);
     setError(null);
   };
@@ -427,13 +425,6 @@ export default function UsersPage() {
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder={t("common.placeholder.name")}
-              className={inputCls}
-            />
-            <input
-              type="tel"
-              value={editPhone}
-              onChange={(e) => setEditPhone(e.target.value)}
-              placeholder={t("common.placeholder.phone")}
               className={inputCls}
             />
             <MultiBadgeField

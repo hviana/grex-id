@@ -201,7 +201,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         "http://localhost:3000";
       const confirmationLink =
         `${baseUrl}/verify?token=${guardResult.token}&system=${
-          encodeURIComponent(systemSlug)
+          encodeURIComponent(systemSlug ?? "")
         }`;
 
       const channelOrder = [...new Set(channels.map((c) => c.type))];

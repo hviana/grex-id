@@ -47,20 +47,13 @@ export async function communicationGuard(params: {
 
   const db = await getDb();
 
-  const result = await db.query<
-    [
-      unknown[],
-      unknown[],
-      unknown[],
-      unknown[],
-      unknown[],
-      {
-        blockedByPrevious: boolean;
-        blockedByRateLimit: boolean;
-        allowed: boolean;
-      }[],
-    ]
-  >(
+  type GuardStatus = {
+    blockedByPrevious: boolean;
+    blockedByRateLimit: boolean;
+    allowed: boolean;
+  };
+
+  const result = await db.query<unknown[]>(
     `LET $lastActive = (
       SELECT id, createdAt FROM verification_request
       WHERE ownerId = $ownerId
@@ -122,7 +115,7 @@ export async function communicationGuard(params: {
     },
   );
 
-  const status = result[4]?.[0];
+  const status = (result[4] as GuardStatus[] | undefined)?.[0];
 
   if (!status) {
     return { allowed: false };

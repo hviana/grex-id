@@ -130,63 +130,6 @@ export async function createUserWithChannels(params: {
 }): Promise<{ user: User; channelIds: string[] }> {
   const db = await getDb();
 
-  const result = await db.query<[
-    null,
-    null,
-    Array<{ id: string; type: string; value: string }>,
-    null,
-    User[],
-  ]>(
-    `LET $prof = CREATE profile SET
-       name = $name,
-       locale = $locale,
-       channels = [];
-     LET $usr  = CREATE user SET
-       passwordHash = crypto::argon2::generate($password),
-       profile = $prof[0].id,
-       roles = ["viewer"],
-       twoFactorEnabled = false,
-       stayLoggedIn = false;
-     LET $channels = INSERT INTO entity_channel (
-       SELECT ownerId, ownerType, type, value, verified FROM $channelInputs
-     ) RETURN AFTER;
-     UPDATE $prof[0].id SET channels = $channels.id, updatedAt = time::now();
-     SELECT * FROM $usr[0].id FETCH profile, profile.channels;`,
-    {
-      name: params.name,
-      locale: params.locale ?? undefined,
-      password: params.password,
-      channelInputs: params.channels.map((c) => ({
-        ownerId: undefined, // filled by subquery trick below
-        ownerType: "user",
-        type: c.type,
-        value: c.value,
-        verified: false,
-      })),
-    },
-  );
-
-  // SurrealDB doesn't support INSERT from a variable that references another
-  // LET directly; fall back to per-channel CREATE.
-  // We redo this as a simpler sequential-but-batched query below.
-  if (!result[2] || result[2].length === 0) {
-    return createUserWithChannelsFallback(params);
-  }
-
-  const user = result[4]?.[0] as User;
-  const channelIds = (result[2] ?? []).map((c) => String(c.id));
-  return { user, channelIds };
-}
-
-async function createUserWithChannelsFallback(params: {
-  password: string;
-  name: string;
-  locale?: string;
-  channels: { type: string; value: string }[];
-}): Promise<{ user: User; channelIds: string[] }> {
-  const db = await getDb();
-
-  // Build batched CREATE statements for each channel referencing $usr[0].id
   const channelStatements = params.channels
     .map(
       (_, i) => `
@@ -229,9 +172,7 @@ async function createUserWithChannelsFallback(params: {
   const result = await db.query<unknown[]>(query, bindings);
   const last = result[result.length - 1] as User[];
   const user = last[0];
-  const channels = (user?.profile?.channels ?? []) as {
-    id: string;
-  }[];
+  const channels = (user?.profile?.channels ?? []) as { id: string }[];
   return {
     user,
     channelIds: channels.map((c) => String(c.id)),

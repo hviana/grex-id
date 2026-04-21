@@ -12,7 +12,7 @@ export async function publish(
   const db = await getDb();
   const available = availableAt ?? new Date();
 
-  const result = await db.query<[{ id: string }[]]>(
+  const result = await db.query<[null, unknown[], { id: string }[]]>(
     `LET $event = (CREATE queue_event SET
       name = $name,
       payload = $payload,

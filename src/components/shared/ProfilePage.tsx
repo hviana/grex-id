@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
@@ -9,7 +9,6 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import PasswordChangeSubform from "@/src/components/subforms/PasswordChangeSubform";
-import type { SubformRef } from "@/src/components/shared/GenericList";
 
 export default function ProfilePage() {
   const { user, systemToken, refresh } = useAuth();
@@ -22,8 +21,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  const channelsRef = useRef<SubformRef>(null);
 
   useEffect(() => {
     if (user) {
@@ -191,7 +188,6 @@ export default function ProfilePage() {
           {t("common.entityChannels.title")}
         </h2>
         <EntityChannelsSubform
-          ref={channelsRef}
           channelTypes={["email", "phone"]}
           requiredTypes={["email"]}
           systemToken={systemToken ?? undefined}
