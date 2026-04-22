@@ -14,8 +14,11 @@ export async function GET() {
     const settingsMap: Record<string, { value: string; description: string }> =
       {};
 
+    // Only expose core-scoped front settings here; per-system overrides are
+    // opaque to the public endpoint (the frontend resolves per-system keys on
+    // demand via its own helpers).
     for (const [, setting] of data.settings) {
-      if (setting.systemSlug) continue;
+      if (setting.systemSlug !== "core") continue;
       settingsMap[setting.key] = {
         value: setting.value,
         description: setting.description ?? "",

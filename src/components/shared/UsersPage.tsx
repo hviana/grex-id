@@ -9,6 +9,7 @@ import SearchField from "@/src/components/shared/SearchField";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 interface ChannelRow {
   id: string;
@@ -45,7 +46,8 @@ function primaryPhone(user: UserItem): string {
 export default function UsersPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const { companyId, systemId, roles: myRoles } = useSystemContext();
+  const { companyId, systemId, systemSlug, roles: myRoles } =
+    useSystemContext();
 
   const isAdmin = myRoles.includes("admin") || myRoles.includes("superuser");
 
@@ -308,14 +310,14 @@ export default function UsersPage() {
                       {primaryEmail(user)}
                     </p>
                   </div>
-                  <div className="flex gap-1 flex-wrap shrink-0">
+                  <div className="flex gap-1.5 flex-wrap shrink-0">
                     {(user.contextRoles ?? user.roles).map((role) => (
-                      <span
+                      <TranslatedBadge
                         key={role}
-                        className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
-                      >
-                        {role}
-                      </span>
+                        kind="role"
+                        token={role}
+                        systemSlug={systemSlug ?? undefined}
+                      />
                     ))}
                   </div>
                   {isAdmin && (
@@ -384,6 +386,14 @@ export default function UsersPage() {
               onChange={(vals) => setNewRoles(vals as string[])}
               fetchFn={fetchSystemRoles}
               formatHint={t("common.users.rolesHint")}
+              renderBadge={(item, remove) => (
+                <TranslatedBadge
+                  kind="role"
+                  token={typeof item === "string" ? item : item.name}
+                  systemSlug={systemSlug ?? undefined}
+                  onRemove={remove}
+                />
+              )}
             />
             <p className="text-xs text-[var(--color-light-text)]/60">
               {t("common.users.inviteHint")}
@@ -434,6 +444,14 @@ export default function UsersPage() {
               onChange={(vals) => setEditRoles(vals as string[])}
               fetchFn={fetchSystemRoles}
               formatHint={t("common.users.rolesHint")}
+              renderBadge={(item, remove) => (
+                <TranslatedBadge
+                  kind="role"
+                  token={typeof item === "string" ? item : item.name}
+                  systemSlug={systemSlug ?? undefined}
+                  onRemove={remove}
+                />
+              )}
             />
             <button
               onClick={handleEdit}

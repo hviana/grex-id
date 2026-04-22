@@ -11,6 +11,7 @@ import DeleteButton from "@/src/components/shared/DeleteButton";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
@@ -445,27 +446,27 @@ export default function VouchersPage() {
                 {voucher.permissions.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {voucher.permissions.map((perm) => (
-                      <span
+                      <TranslatedBadge
                         key={perm}
-                        className="rounded-full bg-[var(--color-primary-green)]/15 px-2.5 py-0.5 text-xs text-[var(--color-primary-green)]"
-                      >
-                        {perm}
-                      </span>
+                        kind="permission"
+                        token={perm}
+                      />
                     ))}
                   </div>
                 )}
 
                 {voucher.entityLimitModifiers &&
                   Object.keys(voucher.entityLimitModifiers).length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {Object.entries(voucher.entityLimitModifiers).map((
                       [key, val],
                     ) => (
                       <span
                         key={key}
-                        className="rounded-full bg-[var(--color-secondary-blue)]/15 px-2.5 py-0.5 text-xs text-[var(--color-secondary-blue)]"
+                        className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary-blue)]/15 px-2.5 py-0.5 text-xs text-[var(--color-secondary-blue)]"
                       >
-                        {key}: {val > 0 ? "+" : ""}
+                        <TranslatedBadge kind="entity" token={key} />
+                        {val > 0 ? "+" : ""}
                         {val}
                       </span>
                     ))}
@@ -535,6 +536,13 @@ export default function VouchersPage() {
             mode="custom"
             value={formPermissions}
             onChange={(vals) => setFormPermissions(vals as string[])}
+            renderBadge={(item, remove) => (
+              <TranslatedBadge
+                kind="permission"
+                token={typeof item === "string" ? item : item.name}
+                onRemove={remove}
+              />
+            )}
           />
 
           <div>

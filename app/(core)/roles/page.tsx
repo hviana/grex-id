@@ -11,6 +11,7 @@ import DeleteButton from "@/src/components/shared/DeleteButton";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 interface RoleItem {
   id: string;
@@ -23,6 +24,7 @@ interface RoleItem {
 
 interface SystemOption {
   id: string;
+  slug: string;
   name: string;
 }
 
@@ -160,6 +162,11 @@ export default function RolesPage() {
     return sys?.name ?? sysId;
   };
 
+  const getSystemSlug = (sysId: string): string | undefined => {
+    const sys = systems.find((s) => s.id === sysId);
+    return sys?.slug;
+  };
+
   const inputCls =
     "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
@@ -190,49 +197,54 @@ export default function RolesPage() {
         )
         : (
           <div className="space-y-3">
-            {roles.map((role) => (
-              <div
-                key={role.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">🛡️</span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white truncate">
-                          {role.name}
-                        </h3>
-                        {role.isBuiltIn && (
-                          <span className="shrink-0 rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-                            {t("core.roles.builtIn")}
-                          </span>
-                        )}
+            {roles.map((role) => {
+              const sysSlug = getSystemSlug(role.systemId);
+              return (
+                <div
+                  key={role.id}
+                  className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">🛡️</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <TranslatedBadge
+                            kind="role"
+                            token={role.name}
+                            systemSlug={sysSlug}
+                          />
+                          {role.isBuiltIn && (
+                            <span className="shrink-0 rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
+                              {t("core.roles.builtIn")}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-[var(--color-light-text)]">
+                          {getSystemName(role.systemId)}
+                        </p>
                       </div>
-                      <p className="text-sm text-[var(--color-light-text)]">
-                        {getSystemName(role.systemId)}
-                      </p>
                     </div>
+                    {role.permissions.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {role.permissions.map((perm) => (
+                          <TranslatedBadge
+                            key={perm}
+                            kind="permission"
+                            token={perm}
+                            systemSlug={sysSlug}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {role.permissions.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {role.permissions.map((perm) => (
-                        <span
-                          key={perm}
-                          className="rounded-full bg-[var(--color-primary-green)]/15 px-2.5 py-0.5 text-xs text-[var(--color-primary-green)]"
-                        >
-                          {perm}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex gap-2 ml-3 shrink-0">
+                    <EditButton onClick={() => openEdit(role)} />
+                    <DeleteButton onConfirm={() => handleDelete(role.id)} />
+                  </div>
                 </div>
-                <div className="flex gap-2 ml-3 shrink-0">
-                  <EditButton onClick={() => openEdit(role)} />
-                  <DeleteButton onConfirm={() => handleDelete(role.id)} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -294,6 +306,14 @@ export default function RolesPage() {
             value={formPermissions}
             onChange={(vals) => setFormPermissions(vals as string[])}
             formatHint={t("core.roles.permissionsHint")}
+            renderBadge={(item, remove) => (
+              <TranslatedBadge
+                kind="permission"
+                token={typeof item === "string" ? item : item.name}
+                systemSlug={getSystemSlug(formSystemId)}
+                onRemove={remove}
+              />
+            )}
           />
           <div className="flex items-center gap-3">
             <input

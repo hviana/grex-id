@@ -1,0 +1,14 @@
+{
+  "core.users.read": "Read users",
+  "core.users.write": "Create / edit users",
+  "core.users.delete": "Remove users",
+  "core.billing.read": "Read billing data",
+  "core.billing.write": "Manage billing",
+  "core.tokens.read": "Read API tokens",
+  "core.tokens.write": "Create / revoke API tokens",
+  "core.connectedApps.read": "Read connected apps",
+  "core.connectedApps.write": "Revoke connected apps",
+  "core.files.upload.logos": "Upload company logos",
+  "core.files.upload.avatars": "Upload user avatars",
+  "core.files.upload.leadAvatars": "Upload lead avatars"
+}

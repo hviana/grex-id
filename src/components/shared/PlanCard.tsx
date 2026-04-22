@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "@/src/hooks/useLocale";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -57,9 +58,18 @@ export interface PlanCardProps {
   voucherPrice?: { original: number; effective: number; currency: string };
   onClick?: () => void;
   systemName?: string;
+  /**
+   * System slug used to scope entity/resource token translations (§5.6.1).
+   * Under `variant === "core"` (operator surface) both the raw token and its
+   * translation render. Under `variant === "billing" | "onboarding"`
+   * (end-user surface) only the translation renders — see §18.1.2 rules.
+   */
+  systemSlug?: string;
 }
 
-function LimitsFull({ plan }: { plan: PlanData }) {
+function LimitsFull(
+  { plan, systemSlug }: { plan: PlanData; systemSlug?: string },
+) {
   const { t } = useLocale();
   return (
     <div className="mb-4">
@@ -94,11 +104,15 @@ function LimitsFull({ plan }: { plan: PlanData }) {
           : null}
         {plan.entityLimits &&
           Object.entries(plan.entityLimits).map(([key, val]) => (
-            <p key={key}>
-              {limitEmoji(key)}{" "}
-              {t(`billing.limits.${key}`) !== `billing.limits.${key}`
-                ? t(`billing.limits.${key}`)
-                : key}: {val.toLocaleString()}
+            <p key={key} className="flex items-center gap-2">
+              {limitEmoji(key)}
+              <TranslatedBadge
+                kind="entity"
+                token={key}
+                systemSlug={systemSlug}
+                compact
+              />
+              <span>: {val.toLocaleString()}</span>
             </p>
           ))}
         <p>
@@ -128,10 +142,15 @@ function LimitsFull({ plan }: { plan: PlanData }) {
         {plan.maxOperationCount &&
             Object.keys(plan.maxOperationCount).length > 0
           ? Object.entries(plan.maxOperationCount).map(([key, val]) => (
-            <p key={key}>
-              🔢 {t("billing.limits." + key) !== `billing.limits.${key}`
-                ? t("billing.limits." + key)
-                : key}: {val.toLocaleString()}
+            <p key={key} className="flex items-center gap-2">
+              🔢
+              <TranslatedBadge
+                kind="resource"
+                token={key}
+                systemSlug={systemSlug}
+                compact
+              />
+              <span>: {val.toLocaleString()}</span>
             </p>
           ))
           : (
@@ -145,7 +164,9 @@ function LimitsFull({ plan }: { plan: PlanData }) {
   );
 }
 
-function LimitsCompact({ plan }: { plan: PlanData }) {
+function LimitsCompact(
+  { plan, systemSlug }: { plan: PlanData; systemSlug?: string },
+) {
   const { t } = useLocale();
   return (
     <div className="mt-auto pt-3 border-t border-[var(--color-dark-gray)]/50 space-y-1 text-xs text-[var(--color-light-text)]">
@@ -197,11 +218,14 @@ function LimitsCompact({ plan }: { plan: PlanData }) {
       </div>
       {plan.maxOperationCount && Object.keys(plan.maxOperationCount).length > 0
         ? Object.entries(plan.maxOperationCount).map(([key, val]) => (
-          <div key={key} className="flex justify-between">
-            <span>
-              🔢 {t(`billing.limits.${key}`) !== `billing.limits.${key}`
-                ? t(`billing.limits.${key}`)
-                : key}
+          <div key={key} className="flex justify-between items-center gap-2">
+            <span className="flex items-center gap-1">
+              🔢
+              <TranslatedBadge
+                kind="resource"
+                token={key}
+                systemSlug={systemSlug}
+              />
             </span>
             <span className="text-white">{val.toLocaleString()}</span>
           </div>
@@ -214,6 +238,23 @@ function LimitsCompact({ plan }: { plan: PlanData }) {
             </span>
           </div>
         )}
+      {plan.entityLimits && Object.keys(plan.entityLimits).length > 0 &&
+        Object.entries(plan.entityLimits).map(([key, val]) => (
+          <div
+            key={`el-${key}`}
+            className="flex justify-between items-center gap-2"
+          >
+            <span className="flex items-center gap-1">
+              📦
+              <TranslatedBadge
+                kind="entity"
+                token={key}
+                systemSlug={systemSlug}
+              />
+            </span>
+            <span className="text-white">{val.toLocaleString()}</span>
+          </div>
+        ))}
     </div>
   );
 }
@@ -227,6 +268,7 @@ export default function PlanCard({
   voucherPrice,
   onClick,
   systemName,
+  systemSlug,
 }: PlanCardProps) {
   const { t } = useLocale();
 
@@ -322,19 +364,19 @@ export default function PlanCard({
 
       {/* Limits */}
       {variant === "core"
-        ? <LimitsCompact plan={plan} />
-        : <LimitsFull plan={plan} />}
+        ? <LimitsCompact plan={plan} systemSlug={systemSlug} />
+        : <LimitsFull plan={plan} systemSlug={systemSlug} />}
 
-      {/* Permissions (core only) */}
+      {/* Permissions (core only — operator surface, shows both lines) */}
       {variant === "core" && (plan.permissions?.length ?? 0) > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
           {(plan.permissions ?? []).map((perm) => (
-            <span
+            <TranslatedBadge
               key={perm}
-              className="rounded-full bg-[var(--color-secondary-blue)]/15 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]"
-            >
-              {perm}
-            </span>
+              kind="permission"
+              token={perm}
+              systemSlug={systemSlug}
+            />
           ))}
         </div>
       )}

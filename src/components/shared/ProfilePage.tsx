@@ -9,6 +9,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import PasswordChangeSubform from "@/src/components/subforms/PasswordChangeSubform";
+import TwoFactorSubform from "@/src/components/subforms/TwoFactorSubform";
 
 export default function ProfilePage() {
   const { user, systemToken, refresh } = useAuth();
@@ -199,6 +200,18 @@ export default function ProfilePage() {
           {t("auth.passwordChange.title")}
         </h2>
         <PasswordChangeSubform />
+      </div>
+
+      <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300">
+        <h2 className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
+          {t("common.twoFactor.title")}
+        </h2>
+        <TwoFactorSubform
+          twoFactorEnabled={user.twoFactorEnabled ?? false}
+          onRequested={() => {
+            void refresh();
+          }}
+        />
       </div>
     </div>
   );

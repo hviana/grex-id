@@ -4,6 +4,7 @@ import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import {
   applyPasswordHash,
+  findUserByVerifiedChannel,
   findVerificationRequest,
   markVerificationUsed,
 } from "@/server/db/queries/auth";
@@ -16,6 +17,7 @@ import {
 } from "@/server/db/queries/leads";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { getDb, rid } from "@/server/db/connection";
+import { createTenantToken } from "@/server/utils/token";
 
 interface LeadUpdatePayload {
   name?: string;
@@ -177,6 +179,125 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     if (hash) {
       await applyPasswordHash(request.ownerId, hash);
     }
+  } else if (actionKey === "auth.action.twoFactorEnable") {
+    const secret = typeof payload?.twoFactorSecret === "string"
+      ? payload!.twoFactorSecret
+      : "";
+    if (secret) {
+      const db = await getDb();
+      await db.query(
+        `UPDATE $userId SET
+          twoFactorEnabled = true,
+          twoFactorSecret = $secret,
+          updatedAt = time::now()`,
+        { userId: rid(request.ownerId), secret },
+      );
+    }
+  } else if (actionKey === "auth.action.twoFactorDisable") {
+    const db = await getDb();
+    await db.query(
+      `UPDATE $userId SET
+        twoFactorEnabled = false,
+        twoFactorSecret = NONE,
+        updatedAt = time::now()`,
+      { userId: rid(request.ownerId) },
+    );
+  } else if (actionKey === "auth.action.loginFallback") {
+    // Issue a System API Token for the user, bypassing TOTP since the click
+    // on a time-bound single-use confirmation link already proved control of
+    // a verified channel (§19.15.3).
+    const identifier = typeof payload?.identifier === "string"
+      ? (payload!.identifier as string)
+      : "";
+    const stayLoggedIn = typeof payload?.stayLoggedIn === "boolean"
+      ? (payload!.stayLoggedIn as boolean)
+      : false;
+
+    const user = identifier
+      ? await findUserByVerifiedChannel(identifier)
+      : null;
+    if (user && String(user.id) === String(request.ownerId)) {
+      await markVerificationUsed(request.id);
+
+      const db = await getDb();
+      const membership = await db.query<
+        [{
+          companyId: string;
+          systemId: string;
+          systemSlug: string;
+          roles: string[];
+          permissions: string[];
+        }[]]
+      >(
+        `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
+         IF array::len($ucs) > 0 {
+           LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
+           LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
+           SELECT
+             $ucs[0].companyId AS companyId,
+             $ucs[0].systemId AS systemId,
+             $sys[0].slug AS systemSlug,
+             (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
+             array::flatten($roleRecs[*].permissions) AS permissions
+           FROM system WHERE id = $ucs[0].systemId LIMIT 1;
+         } ELSE {
+           RETURN [];
+         };`,
+        { userId: rid(String(user.id)) },
+      );
+
+      const mem = membership[0]?.[0];
+      const tenant = mem
+        ? {
+          systemId: String(mem.systemId),
+          companyId: String(mem.companyId),
+          systemSlug: mem.systemSlug ?? "core",
+          roles: (mem.roles ?? []) as string[],
+          permissions: (mem.permissions ?? []) as string[],
+        }
+        : {
+          systemId: "0",
+          companyId: "0",
+          systemSlug: "core",
+          roles: [] as string[],
+          permissions: [] as string[],
+        };
+
+      const isSuperuser = (user.roles ?? []).includes("superuser");
+      if (isSuperuser) {
+        tenant.roles = ["superuser"];
+        tenant.permissions = ["*"];
+      }
+
+      const systemToken = await createTenantToken(
+        {
+          ...tenant,
+          actorType: "user",
+          actorId: String(user.id),
+          jti: crypto.randomUUID(),
+          exchangeable: true,
+        },
+        stayLoggedIn,
+      );
+
+      return Response.json({
+        success: true,
+        data: {
+          message: "auth.verify.success",
+          actionKey,
+          systemToken,
+          user: {
+            id: user.id,
+            profile: user.profile,
+            roles: user.roles,
+            twoFactorEnabled: user.twoFactorEnabled ?? false,
+          },
+        },
+      });
+    }
+    // If we fall through, markVerificationUsed still runs at the end, but the
+    // user object will be missing — the frontend falls back to showing a
+    // failure state.
   } else if (actionKey === "auth.action.leadUpdate") {
     const leadPayload = parseLeadUpdatePayload(payload);
     const leadId = request.ownerId;

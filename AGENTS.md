@@ -266,6 +266,55 @@ system slugs, permission tokens, file category path patterns. These are
 structural identifiers used for lookup, authorization, and routing; they are
 never shown as-is to users and are outside the scope of the i18n rule.
 
+#### 5.6.1 Standard translation structure for roles, permissions, entities, resources
+
+Role names, granular permission tokens, entity names (used in plan
+`entityLimits`), and resource keys (used in `maxOperationCount`, credit
+expenses) are all machine-readable identifiers that nonetheless need to be
+displayed in the UI. The project imposes a **single deterministic translation
+structure** so `TranslatedBadge` (§18.1.2) can resolve every token by name,
+regardless of whether the token belongs to the core, a system, or a framework.
+
+| Identifier class | Core domain       | System domain                    | Framework domain                    |
+| ---------------- | ----------------- | -------------------------------- | ----------------------------------- |
+| Role name        | `roles.<name>`    | `systems.<slug>.roles.<name>`    | `frameworks.<name>.roles.<role>`    |
+| Permission token | `permissions.<p>` | `systems.<slug>.permissions.<p>` | `frameworks.<name>.permissions.<p>` |
+| Entity name      | `entities.<e>`    | `systems.<slug>.entities.<e>`    | `frameworks.<name>.entities.<e>`    |
+| Resource key     | `resources.<k>`   | `systems.<slug>.resources.<k>`   | `frameworks.<name>.resources.<k>`   |
+
+**File layout.**
+
+- Core translations live at
+  `src/i18n/{en,pt-BR}/{roles,permissions,entities,resources}.json` — one file
+  per identifier class, flat key/value (e.g. `"superuser": "Superuser"` inside
+  `roles.json`).
+- System translations live at `src/i18n/{en,pt-BR}/systems/<slug>.json` and hold
+  their role/permission/entity/resource strings under top-level `roles.*`,
+  `permissions.*`, `entities.*`, `resources.*` dotted keys (the same file hosts
+  the system's `menu.*`, `home.*`, etc.).
+- Framework translations live at
+  `frameworks/<name>/src/i18n/{en,pt-BR}/<name>.json` with the same `roles.*` /
+  `permissions.*` / `entities.*` / `resources.*` sections.
+
+**Dynamic key assembly.** `TranslatedBadge` builds its i18n key at render time
+from `(kind, token, systemSlug?, frameworkName?)`. When `systemSlug` is present
+the badge tries `systems.<slug>.<kind>s.<token>` first and falls back to
+`<kind>s.<token>`. When `frameworkName` is present the first lookup is
+`frameworks.<name>.<kind>s.<token>`. Consumers never hand-build these keys —
+passing `{ kind: "resource", token, systemSlug }` is the only supported entry
+point. (`kind` uses the singular form; the i18n segment uses the plural form:
+`role` → `roles.*`, `permission` → `permissions.*`, `entity` → `entities.*`,
+`resource` → `resources.*`.)
+
+**Where both the key and the translation are shown.** Forms, administration
+lists, token/connected-app cards, and anywhere an operator picks or edits
+identifiers must render both the raw token and its translation via
+`TranslatedBadge` (§18.1.2). The raw token is mandatory so the operator knows
+what to type when referencing the identifier in code or config. The exception is
+**user-facing surfaces where the identifier is informational only** — plan cards
+(§18.10), the usage panel (§21.5), and the OAuth consent page (§24) — which
+render the translation alone.
+
 #### 5.7 Backend-never-returns-text rule
 
 See §1.1.8. API error shapes:
@@ -552,7 +601,7 @@ this table.
 | `0017_create_usage_record.surql`           | `usage_record`            | `actorType ∈ user                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `0018_create_queue_event.surql`            | `queue_event`             | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `0019_create_delivery.surql`               | `delivery`                | Status ∈ `pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `0020_create_core_setting.surql`           | `setting`                 | Unique `(key, systemSlug)`. `systemSlug option<string>` — `NONE` = core-level default; non-null = per-system override.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `0020_create_core_setting.surql`           | `setting`                 | Unique `(key, systemSlug)`. `systemSlug string` — the literal `"core"` is the core-level default; any other non-empty value is a per-system override. `systemSlug` MUST NOT be empty (`ASSERT $value != ""`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `0021_create_verification_request.surql`   | `verification_request`    | `actionKey` i18n string (e.g. `"auth.action.register"`). `ownerId` `record<user\|lead>` for the entity being confirmed. `payload` `object FLEXIBLE` (no sensitive data — never passwords, card numbers, tokens). `companyId`/`systemId`/`systemSlug`/`actorId`/`actorType` capture tenant context. Unique `token`. Index on `(ownerId, actionKey, createdAt)`.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `0022_create_live_query_permissions.surql` | various                   | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `0023_create_lead.surql`                   | `lead`                    | `profile` is `record<profile>`. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. `companyIds` array of record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -562,7 +611,7 @@ this table.
 | `0030_create_profile.surql`                | `profile`                 | Composable. Fields: name, avatarUri, age, locale, channels (`array<record<entity_channel>>`). FULLTEXT `name`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `0031_create_address.surql`                | `address`                 | Composable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0032_create_credit_expense.surql`         | `credit_expense`          | Daily container. Unique `(companyId, systemId, resourceKey, day)`. Fields: `amount` (total cents consumed), `count` (number of individual consumptions), `actorId` `option<string>`. Both increment atomically via UPSERT.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `0033_create_front_core_setting.surql`     | `front_setting`           | Unique `(key, systemSlug)`. Same `systemSlug` override pattern as `setting`. Physically separated from `setting` (§10.2.8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `0033_create_front_core_setting.surql`     | `front_setting`           | Unique `(key, systemSlug)`. `systemSlug string` — same rule as `setting`: the literal `"core"` is the core-level default, any other non-empty value is a per-system override, and `systemSlug` MUST NOT be empty (`ASSERT $value != ""`). Physically separated from `setting` (§10.2.8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `0034_create_token_revocation.surql`       | `token_revocation`        | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `0035_create_entity_channel.surql`         | `entity_channel`          | Composable, generalized communication channel. `ownerId` `record<user\|lead>`. `ownerType` ∈ `["user","lead"]` — denormalized for cheap filtering. `type` open string identifying the channel (seeded defaults `"email"`, `"phone"`; subframeworks may register their own). `value` string. `verified` bool default false. Unique `(ownerId, type, value)`. Index on `(type, value)` and on `(ownerId, verified)`. Max per owner enforced at the query layer via `auth.entityChannel.maxPerOwner`.                                                                                                                                                                                                                                                                                              |
 | `0038_create_payment.surql`                | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"\|"expired"`), paymentMethodId, transactionId, invoiceUrl, failureReason, continuityData (`option<object> FLEXIBLE`), expiresAt (`option<datetime>`), createdAt. Indexes on (companyId, systemId), createdAt, kind, (status, expiresAt). Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                         |
@@ -680,7 +729,7 @@ class Core {
   // All data backed by cache registry (§12.11) under "core"::"data".
 
   // When systemSlug is provided, returns the system-specific value if it exists,
-  // otherwise falls back to the core-level default (systemSlug = NONE).
+  // otherwise falls back to the core-level default (systemSlug = "core").
   // When omitted, returns the core-level default directly.
   async getSetting(
     key: string,
@@ -791,9 +840,7 @@ systemSlug)`. If a key is missing,
 | `auth.communication.expiry.minutes`       | `"15"`                      | Unified verification/communication token expiry (min)                                                                         |
 | `auth.communication.maxCount`             | `"5"`                       | Max sends per (owner, actionKey) in rolling window                                                                            |
 | `auth.communication.windowHours`          | `"1"`                       | Rolling window for communication rate limit (hours)                                                                           |
-| `auth.twoFactor.enabled`                  | `"true"`                    | Global 2FA toggle                                                                                                             |
-| `auth.oauth.enabled`                      | `"false"`                   | Global OAuth (login) toggle                                                                                                   |
-| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled providers                                                                                               |
+| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled OAuth providers. Empty = OAuth login disabled (no redundant flag needed).                               |
 | `terms.generic`                           | `""`                        | Generic LGPD fallback HTML                                                                                                    |
 | `billing.autoRecharge.minAmount`          | `"500"`                     | Min auto-recharge (cents)                                                                                                     |
 | `billing.autoRecharge.maxAmount`          | `"50000"`                   | Max auto-recharge per subscription (cents)                                                                                    |
@@ -853,14 +900,15 @@ class FrontCore {
 
 ##### 10.2.6 FrontCore settings (seeded by `003_default_front_settings.ts` into `front_setting` table)
 
-| Key                           | Seed value           | Used by                             |
-| ----------------------------- | -------------------- | ----------------------------------- |
-| `front.app.name`              | `"Core"`             | Tab title, public page headers      |
-| `front.app.brandPrimaryColor` | `"#02d07d"`          | Runtime theming                     |
-| `front.support.email`         | `"support@core.com"` | Footer support link                 |
-| `front.support.helpUrl`       | `""`                 | Help Center link                    |
-| `front.botProtection.siteKey` | `""`                 | CAPTCHA / bot-protection client key |
-| `front.payment.publicKey`     | `""`                 | Payment gateway publishable key     |
+| Key                                         | Seed value           | Used by                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `front.app.name`                            | `"Core"`             | Tab title, public page headers                                                                                                                                                                                                                                                                                                                                                      |
+| `front.app.brandPrimaryColor`               | `"#02d07d"`          | Runtime theming                                                                                                                                                                                                                                                                                                                                                                     |
+| `front.support.email`                       | `"support@core.com"` | Footer support link                                                                                                                                                                                                                                                                                                                                                                 |
+| `front.support.helpUrl`                     | `""`                 | Help Center link                                                                                                                                                                                                                                                                                                                                                                    |
+| `front.botProtection.siteKey`               | `""`                 | CAPTCHA / bot-protection client key                                                                                                                                                                                                                                                                                                                                                 |
+| `front.payment.publicKey`                   | `""`                 | Payment gateway publishable key                                                                                                                                                                                                                                                                                                                                                     |
+| `front.dataTracking.trackedCharacteristics` | `"[]"`               | JSON array of user characteristics that MUST NOT be tracked unless the data-tracking consent popup (§18.1.3) has been accepted. Seeded empty; the frontend reads it at runtime and only collects the listed characteristics once consent is recorded in the `core_data_tracking_consent` cookie. Additive — frameworks may introduce new characteristic names without core changes. |
 
 ##### 10.2.7 Admin panel
 
@@ -870,9 +918,9 @@ The superuser panel has **two separate pages**:
 - `(core)/front-settings` → `front_setting` editor.
 
 Both include a **system selector dropdown** at the top. Selecting "Core
-(default)" shows core-level settings (`systemSlug = NONE`). Selecting a specific
-system shows only that system's overrides. Adding a setting while a system is
-selected scopes it to that system. Both use `DynamicKeyValueField` +
+(default)" shows core-level settings (`systemSlug = "core"`). Selecting a
+specific system shows only that system's overrides. Adding a setting while a
+system is selected scopes it to that system. Both use `DynamicKeyValueField` +
 missing-keys banner + "Add all missing" button (identical UX). A badge in each
 header names which table is being edited (`t("core.settings.title")` vs
 `t("core.frontSettings.title")`).
@@ -2524,25 +2572,27 @@ enforcement point that keeps the frontend free of scattered tenant state.
 
 #### 18.1 Generic primitives (all in `src/components/shared/`)
 
-| Component                                          | Notes                                                                                                                           |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `Spinner`                                          | Tailwind `animate-spin` on a circular border. Props: `size?: "sm" \| "md" \| "lg"`. Rendered on every async action (§1.1.3).    |
-| `Modal`                                            | Standard modal chrome.                                                                                                          |
-| `LocaleSelector`                                   | §5.5.                                                                                                                           |
-| `SearchField`                                      | Debounced (`useDebounce`).                                                                                                      |
-| `CreateButton` / `EditButton` / `DeleteButton`     | Standard entity-row controls.                                                                                                   |
-| `FormModal`                                        | See §18.2.                                                                                                                      |
-| `GenericFormButton`                                | Submit with embedded Spinner.                                                                                                   |
-| `ErrorDisplay`                                     | Surfaces server-side error i18n keys.                                                                                           |
-| `FilterDropdown`, `DateRangeFilter`, `FilterBadge` | See §18.2.                                                                                                                      |
-| `DownloadData`                                     | Exports rows as XLSX (see §18.1.1).                                                                                             |
-| `BotProtection`                                    | CAPTCHA / challenge widget (§19.9). Backend verifies `botToken`.                                                                |
-| `SystemBranding`                                   | Logo + name block used on auth pages.                                                                                           |
-| `Sidebar`, `SidebarMenuItem`, `SidebarSearch`      | §18.6.                                                                                                                          |
-| `ProfileMenu`                                      | §18.7.                                                                                                                          |
-| `TagSearch`                                        | §18.4.                                                                                                                          |
-| `PlanCard`                                         | §18.10. Shared plan card used in billing, onboarding, and core plans. Exports `formatBytes()`, `formatPrice()`, `limitEmoji()`. |
-| `UsagePage`                                        | §21.5. Dual-mode (`tenant`                                                                                                      |
+| Component                                          | Notes                                                                                                                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Spinner`                                          | Tailwind `animate-spin` on a circular border. Props: `size?: "sm" \| "md" \| "lg"`. Rendered on every async action (§1.1.3).                                                                                 |
+| `Modal`                                            | Standard modal chrome.                                                                                                                                                                                       |
+| `LocaleSelector`                                   | §5.5.                                                                                                                                                                                                        |
+| `SearchField`                                      | Debounced (`useDebounce`).                                                                                                                                                                                   |
+| `CreateButton` / `EditButton` / `DeleteButton`     | Standard entity-row controls.                                                                                                                                                                                |
+| `FormModal`                                        | See §18.2.                                                                                                                                                                                                   |
+| `GenericFormButton`                                | Submit with embedded Spinner.                                                                                                                                                                                |
+| `ErrorDisplay`                                     | Surfaces server-side error i18n keys.                                                                                                                                                                        |
+| `FilterDropdown`, `DateRangeFilter`, `FilterBadge` | See §18.2.                                                                                                                                                                                                   |
+| `DownloadData`                                     | Exports rows as XLSX (see §18.1.1).                                                                                                                                                                          |
+| `BotProtection`                                    | CAPTCHA / challenge widget (§19.9). Backend verifies `botToken`.                                                                                                                                             |
+| `SystemBranding`                                   | Logo + name block used on auth pages.                                                                                                                                                                        |
+| `Sidebar`, `SidebarMenuItem`, `SidebarSearch`      | §18.6.                                                                                                                                                                                                       |
+| `ProfileMenu`                                      | §18.7.                                                                                                                                                                                                       |
+| `TagSearch`                                        | §18.4.                                                                                                                                                                                                       |
+| `PlanCard`                                         | §18.10. Shared plan card used in billing, onboarding, and core plans. Exports `formatBytes()`, `formatPrice()`, `limitEmoji()`.                                                                              |
+| `UsagePage`                                        | §21.5. Dual-mode (`tenant`                                                                                                                                                                                   |
+| `TranslatedBadge`                                  | §18.1.2. Compact badge that resolves a role/permission/entity/resource token into its translation via the standard structure (§5.6.1). Shows both the raw token and its translated label stacked vertically. |
+| `CookieConsent`                                    | §18.1.3. Global data-tracking consent popup.                                                                                                                                                                 |
 
 ##### 18.1.1 `DownloadData`
 
@@ -2560,6 +2610,100 @@ button. Uses `xlsx` to build the workbook, writes a compressed array buffer, and
 triggers a browser download via a temporary `<a>` + `URL.createObjectURL`. Empty
 results or thrown errors leave the button in idle state. Follows the
 glassmorphism standard.
+
+##### 18.1.2 `TranslatedBadge`
+
+Compact badge that resolves a machine-readable token (role, permission, entity,
+resource) into its translation via the standard i18n structure (§5.6.1) and
+renders the token and its translation stacked vertically so operators can see
+both at a glance.
+
+```typescript
+interface TranslatedBadgeProps {
+  kind: "role" | "permission" | "entity" | "resource";
+  token: string; // raw identifier — e.g. "admin", "faceDetection"
+  systemSlug?: string; // scope override; when set, tries system-scoped key first
+  frameworkName?: string; // scope override; when set, tries framework-scoped key first
+  color?: string; // optional badge accent; defaults to kind-based palette
+  onRemove?: () => void; // when provided, renders an "x" to remove
+  compact?: boolean; // when true, shows ONLY the translation (human mode)
+}
+```
+
+**Key resolution** (first non-literal wins — if the lookup returns the key
+itself, it is treated as "not found" and the next candidate is tried):
+
+1. `systems.<systemSlug>.<kind>s.<token>` (when `systemSlug` provided).
+2. `frameworks.<frameworkName>.<kind>s.<token>` (when `frameworkName` provided).
+3. `<kind>s.<token>` (core default — `roles.admin`,
+   `permissions.core.users.read`, …).
+4. Falls back to the raw `token` when no translation exists.
+
+**Visual layout.**
+
+- **Default (both lines).** Rounded pill; raw token in
+  `font-mono text-xs text-white`; translated label below it in
+  `text-[10px] text-[var(--color-light-text)]`. When no translation exists, the
+  badge collapses to the raw token only.
+- **`compact` (translation only).** The pill renders a single line with just the
+  translated label. The raw token is hidden because the reader has no technical
+  context for it. When no translation exists, the raw `token` is rendered as the
+  single line — it is the only label available.
+
+**Usage rules:**
+
+- Forms, admin lists, token/connected-app cards, menu editors, and any operator
+  surface where the identifier is being authored or audited MUST render
+  `TranslatedBadge` with `compact` **omitted** (default). The operator needs the
+  raw token for code / config references in addition to the translated label.
+- User-facing informational surfaces (plan cards §18.10, usage panel §21.5,
+  OAuth consent page §24) that use `TranslatedBadge` MUST pass `compact = true`
+  so the raw identifier is never shown to end users. The equivalent is calling
+  `t()` and rendering the result — `compact` simply lets those surfaces reuse
+  the badge's key-resolution fallback chain.
+- `MultiBadgeField` (§18.4) accepts an optional `renderBadge` prop; consumers
+  pass a function that returns a `TranslatedBadge` (default, non-compact) to
+  replace the default chip for roles/permissions/entities/resources.
+
+##### 18.1.3 `CookieConsent`
+
+Global data-tracking consent popup that appears on **every page** — public and
+authenticated alike — until the user records a decision.
+
+**Behavior:**
+
+1. Reads the `core_data_tracking_consent` cookie. Values: `"accepted"`,
+   `"declined"`, or missing.
+2. When the cookie is missing, renders a fixed bottom-of-screen card with the
+   consent message, the "Terms of Service & LGPD Privacy Policy" link, an Accept
+   button, and a Decline button.
+3. Clicking either button writes the cookie with a **6-month lifetime**
+   (`days = 180`) and dismisses the popup.
+4. The message itself uses the i18n key `common.cookieConsent.message` (EN:
+   "This website uses data tracking technology.", PT-BR: "Este site usa
+   tecnologia de rastreamento de dados.").
+5. The Terms link opens `/terms?system=<slug>` in a new tab (same slug resolved
+   for the current page; falls back to `app.defaultSystem` on public pages).
+6. While no decision is recorded, any frontend code that captures or records
+   characteristics listed in `front.dataTracking.trackedCharacteristics` MUST
+   bail out. The hook `useDataTrackingConsent()` exposes
+   `{ accepted: boolean, decided: boolean }` for consumers to gate their capture
+   logic.
+
+**Contract:**
+
+```typescript
+export interface DataTrackingConsentState {
+  accepted: boolean; // true only when the cookie equals "accepted"
+  decided: boolean; // true once either button is clicked
+  trackedCharacteristics: string[]; // resolved from FrontCore at render time
+}
+```
+
+`CookieConsent` is mounted once in `app/layout.tsx` (above every route group)
+and never removed from the tree — it handles its own visibility via the cookie
+check and a React state transition. The mount is outside the `AuthProvider` so
+anonymous visitors see it on their first page view.
 
 #### 18.2 List / CRUD system
 
@@ -3128,7 +3272,21 @@ Approval gates:
    `auth.error.notVerified`. (Step 3's verified-only lookup already prevents
    this, but the check also covers edge cases where the identifier matched a row
    that was un-verified between steps.)
-6. `twoFactorEnabled = true` → require TOTP before issuing tokens.
+6. **Second-factor gate (user-level, §19.15).**
+   - If `user.twoFactorEnabled = false`: proceed to step 7.
+   - If `user.twoFactorEnabled = true`:
+     - If the request body includes a `twoFactorCode` and `user.twoFactorSecret`
+       is set, verify TOTP. Success → step 7. Invalid → reject with
+       `auth.error.twoFactorInvalid`.
+     - If the request body includes a `twoFactorToken`, resolve the verification
+       request (`actionKey = "auth.action.loginFallback"`) and confirm it points
+       at this user. Success → step 7.
+     - Otherwise reject with `auth.error.twoFactorRequired` to prompt the client
+       to either collect a TOTP code OR call
+       `POST /api/auth/two-factor/login-link` to receive a human-confirmation
+       link on one of the user's verified channels (§19.15.3). The fallback is
+       always available — even when TOTP is configured — so losing the
+       authenticator app never locks the user out.
 7. Issue System API Token (short-lived from `auth.token.expiry.minutes`;
    extended by `auth.token.expiry.stayLoggedIn.hours` when `stayLoggedIn`).
 8. Return the System API Token to the client.
@@ -3185,7 +3343,12 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 The `/account-recovery` page is the **same** flow — there is no longer a
 separate "recovery channel reset". Any verified channel is accepted uniformly.
 
-#### 19.8 OAuth login flow (if `auth.oauth.enabled = "true"`)
+#### 19.8 OAuth login flow (when `auth.oauth.providers` is a non-empty JSON array)
+
+The only OAuth configuration key is `auth.oauth.providers`. A non-empty JSON
+array enables OAuth login and lists the providers to render on the login page;
+an empty array (the seeded default) disables it entirely — there is no redundant
+`auth.oauth.enabled` flag.
 
 1. Redirect to provider.
 2. Callback: verify OAuth token, extract email.
@@ -3196,14 +3359,14 @@ separate "recovery channel reset". Any verified channel is accepted uniformly.
 
 #### 19.9 Security measures
 
-| Measure               | Setting / implementation                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Rate limiting         | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP).                                             |
-| Bot protection        | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token.                                        |
-| Verification cooldown | `communicationGuard()` (§12.13): previous-not-expired + `auth.communication.maxCount` within `auth.communication.windowHours`.      |
-| Token expiration      | Verification tokens (`auth.communication.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime. |
-| 2FA                   | Per user. `auth.twoFactor.enabled` global toggle. TOTP after password on login.                                                     |
-| OAuth                 | `auth.oauth.enabled` global toggle; shows provider buttons on login.                                                                |
+| Measure               | Setting / implementation                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rate limiting         | Auth routes tighter than general routes (`auth.rateLimit.perMinute`, default 5/min/IP).                                                                                                       |
+| Bot protection        | `BotProtection.tsx` on login/register/forgot-password. Backend verifies the challenge token.                                                                                                  |
+| Verification cooldown | `communicationGuard()` (§12.13): previous-not-expired + `auth.communication.maxCount` within `auth.communication.windowHours`.                                                                |
+| Token expiration      | Verification tokens (`auth.communication.expiry.minutes`). System tokens short-lived. `stayLoggedIn` extends system-token lifetime.                                                           |
+| 2FA                   | **Per user only** (§19.15). Each user toggles TOTP in the profile page with human confirmation. There is no global 2FA toggle. Users can always use the verified-channel fallback (§19.15.3). |
+| OAuth                 | Enabled implicitly by `auth.oauth.providers` — a non-empty JSON array lists the providers to show on login. Empty array = disabled (no separate flag).                                        |
 
 #### 19.10 Tenant embedding in JWT
 
@@ -3395,6 +3558,90 @@ forgot-password flow. The endpoint is `POST /api/auth/password-change` with
 
 The new password never takes effect until the user clicks the confirmation link
 — same as channel changes (§19.13).
+
+#### 19.15 Two-factor authentication (user-level)
+
+Two-factor authentication is **always a per-user decision**. There is no global
+2FA toggle (the previously-documented `auth.twoFactor.enabled` setting has been
+removed). Any user can enable or disable TOTP at any time from the ProfilePage;
+the change only takes effect after the user clicks the human-confirmation link
+sent through one of their verified channels. Users without a TOTP authenticator
+app still get a second factor via the **verified-channel fallback** (§19.15.3) —
+so losing the authenticator never locks the user out.
+
+##### 19.15.1 Contract changes
+
+`user.twoFactorEnabled` and `user.twoFactorSecret` remain the source of truth.
+Only the **user themselves** (authenticated as actorType `"user"`) can flip the
+flag; superusers impersonating a company (§19.11.1) MUST NOT mutate these fields
+on the impersonated user's behalf.
+
+##### 19.15.2 Enable / disable flow
+
+Endpoint: `POST /api/auth/two-factor`.
+
+- **`action: "setup-totp"`.** Server generates a TOTP secret inside SurrealDB
+  (never leaves the backend verbatim — the secret travels only through the
+  verification_request payload, which is always server-side). Response:
+  `{ provisioningUri, qrPayload }` (the URI the authenticator app consumes; the
+  provisioning string does **not** include PII). The user scans the QR and
+  submits the first TOTP code back to the same endpoint as
+  `action: "confirm-totp"` with `{ code }`; the server verifies the code against
+  the pending secret, then calls `communicationGuard()` with
+  `actionKey = "auth.action.twoFactorEnable"` and
+  `payload = { twoFactorSecret }`. The request publishes `send_communication`
+  with `template = "human-confirmation"` across the user's verified channels
+  (respecting `auth.communication.defaultChannels`). The actual flip of
+  `twoFactorEnabled = true` + `twoFactorSecret = <secret>` happens in the verify
+  handler when the user clicks the link.
+
+- **`action: "disable"`.** No payload beyond the action. Server calls
+  `communicationGuard()` with `actionKey = "auth.action.twoFactorDisable"` and
+  an empty payload; the verify handler sets `twoFactorEnabled = false`,
+  `twoFactorSecret = NONE` atomically when the link is clicked.
+
+Rate limits and cooldowns use `communicationGuard()` (§12.13). Both actions
+require `withAuth({ requireAuthenticated: true })`.
+
+##### 19.15.3 Verified-channel fallback at login
+
+`POST /api/auth/two-factor/login-link` is a dedicated, unauthenticated endpoint
+that authenticates by `(identifier, password)`, not by a session token. It is
+the recovery path for users who enabled TOTP but no longer have access to their
+authenticator (or who simply prefer the channel path). Flow:
+
+1. Rate-limit + bot-protection.
+2. Resolve the user by verified channel + password (same primitives as §19.5
+   steps 3–4). Reject with `auth.error.invalidCredentials` on failure.
+3. Require `user.twoFactorEnabled = true`. If false, respond with a generic
+   success (anti-enumeration); the normal login flow already handles this case.
+4. `communicationGuard()` with `actionKey = "auth.action.loginFallback"` and
+   `payload = { identifier, stayLoggedIn }`. No password or hash is ever placed
+   in the payload — the verify handler re-authenticates by identifier on
+   confirmation.
+5. Publish `send_communication` with `template = "human-confirmation"` on the
+   user's verified channels.
+
+The confirmation link points at the same `/verify?token=…` page. The verify
+handler recognizes `auth.action.loginFallback`, marks the request used, and
+returns a fresh System API Token in the response (the verify page then stores
+the token via `useAuth().login(...)`-equivalent logic and redirects to
+`/entry`). Because the verification token is single-use and expiry-capped by
+`auth.communication.expiry.minutes`, the link is as time-bound as a TOTP code.
+
+##### 19.15.4 UI surface
+
+- ProfilePage renders a "Two-Factor Authentication" card. When
+  `twoFactorEnabled = false`, the card shows a primary button "Enable 2FA" which
+  opens a modal: QR code (from `provisioningUri`), input for the first TOTP
+  code, and a small paragraph explaining that a confirmation link will arrive
+  after the code is submitted. When `twoFactorEnabled = true`, the card shows a
+  "Disable 2FA" button with a confirmation dialog.
+- Login page: when the backend returns `2FA_REQUIRED`, a second form appears
+  with two options — "Enter code from your authenticator" (TOTP input) or "Send
+  me a login link" (calls `/api/auth/two-factor/login-link`). The login link
+  button remains available even when TOTP is configured, so the user always has
+  both paths.
 
 ### 20. Superuser Core Admin Panel `(core)`
 
@@ -4651,6 +4898,32 @@ Renders the full terms for a system at `/terms?system=<slug>` (no auth):
 6. Include `LocaleSelector` for language switching.
 
 Admin management is covered in §20.5 (`TermsEditor`).
+
+#### 25.6 Data-tracking consent popup
+
+A global `CookieConsent` popup (§18.1.3) appears on every page — public and
+authenticated alike — until the user records a decision. It carries:
+
+1. A message rendered via the i18n key `common.cookieConsent.message` (EN: "This
+   website uses data tracking technology.", PT-BR: "Este site usa tecnologia de
+   rastreamento de dados.").
+2. A link to the full **Terms of Service & LGPD Privacy Policy** (opens
+   `/terms?system=<slug>` in a new tab — same slug as the page's branding
+   resolution, falling back to `app.defaultSystem` on public pages).
+3. An **Accept** button and a **Decline** button.
+
+The decision is stored in the `core_data_tracking_consent` cookie with a
+**6-month lifetime** (`days = 180`). Values are `"accepted"` or `"declined"`.
+While the cookie is missing or set to `"declined"`, any frontend code that
+captures or records a characteristic listed in
+`front.dataTracking.trackedCharacteristics` (§10.2.6) MUST short-circuit — the
+hook `useDataTrackingConsent()` exposes this state and is the only supported
+gate.
+
+`front.dataTracking.trackedCharacteristics` starts as an empty JSON array and is
+expanded additively as new tracked characteristics are introduced by Core or
+subframeworks. No code writes directly to the list — the superuser manages it in
+the Front Settings editor.
 
 ---
 

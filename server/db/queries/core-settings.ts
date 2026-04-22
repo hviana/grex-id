@@ -1,19 +1,20 @@
 import { getDb } from "../connection.ts";
 import type { CoreSetting } from "@/src/contracts/core-settings";
 
+function resolveScope(systemSlug?: string): string {
+  // systemSlug is NEVER empty at rest (DB ASSERT). "core" is the default scope;
+  // any non-"core" value is a per-system override.
+  return systemSlug && systemSlug.length > 0 ? systemSlug : "core";
+}
+
 export async function listSettings(
   systemSlug?: string,
 ): Promise<CoreSetting[]> {
   const db = await getDb();
-  if (systemSlug) {
-    const result = await db.query<[CoreSetting[]]>(
-      "SELECT * FROM setting WHERE systemSlug = $systemSlug ORDER BY key ASC",
-      { systemSlug },
-    );
-    return result[0] ?? [];
-  }
+  const scope = resolveScope(systemSlug);
   const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM setting WHERE systemSlug IS NONE ORDER BY key ASC",
+    "SELECT * FROM setting WHERE systemSlug = $systemSlug ORDER BY key ASC",
+    { systemSlug: scope },
   );
   return result[0] ?? [];
 }
@@ -23,16 +24,10 @@ export async function getSetting(
   systemSlug?: string,
 ): Promise<CoreSetting | null> {
   const db = await getDb();
-  if (systemSlug) {
-    const result = await db.query<[CoreSetting[]]>(
-      "SELECT * FROM setting WHERE key = $key AND systemSlug = $systemSlug LIMIT 1",
-      { key, systemSlug },
-    );
-    return result[0]?.[0] ?? null;
-  }
+  const scope = resolveScope(systemSlug);
   const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM setting WHERE key = $key AND systemSlug IS NONE LIMIT 1",
-    { key },
+    "SELECT * FROM setting WHERE key = $key AND systemSlug = $systemSlug LIMIT 1",
+    { key, systemSlug: scope },
   );
   return result[0]?.[0] ?? null;
 }
@@ -44,28 +39,21 @@ export async function upsertSetting(data: {
   systemSlug?: string;
 }): Promise<CoreSetting> {
   const db = await getDb();
-  if (data.systemSlug) {
-    const result = await db.query<[CoreSetting[]]>(
-      `UPSERT setting SET
-        key = $key,
-        value = $value,
-        description = $description,
-        systemSlug = $systemSlug,
-        updatedAt = time::now()
-      WHERE key = $key AND systemSlug = $systemSlug`,
-      data,
-    );
-    return result[0][0];
-  }
+  const scope = resolveScope(data.systemSlug);
   const result = await db.query<[CoreSetting[]]>(
     `UPSERT setting SET
       key = $key,
       value = $value,
       description = $description,
-      systemSlug = NONE,
+      systemSlug = $systemSlug,
       updatedAt = time::now()
-    WHERE key = $key AND systemSlug IS NONE`,
-    { key: data.key, value: data.value, description: data.description },
+    WHERE key = $key AND systemSlug = $systemSlug`,
+    {
+      key: data.key,
+      value: data.value,
+      description: data.description,
+      systemSlug: scope,
+    },
   );
   return result[0][0];
 }
@@ -75,16 +63,10 @@ export async function deleteSetting(
   systemSlug?: string,
 ): Promise<void> {
   const db = await getDb();
-  if (systemSlug) {
-    await db.query(
-      "DELETE setting WHERE key = $key AND systemSlug = $systemSlug",
-      { key, systemSlug },
-    );
-    return;
-  }
+  const scope = resolveScope(systemSlug);
   await db.query(
-    "DELETE setting WHERE key = $key AND systemSlug IS NONE",
-    { key },
+    "DELETE setting WHERE key = $key AND systemSlug = $systemSlug",
+    { key, systemSlug: scope },
   );
 }
 
@@ -98,18 +80,16 @@ export async function batchUpsertSettings(
 ): Promise<void> {
   if (items.length === 0) return;
   const db = await getDb();
-  const stmts = items.map((_, i) => {
-    if (_.systemSlug) {
-      return `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, systemSlug = $s${i}, updatedAt = time::now() WHERE key = $k${i} AND systemSlug = $s${i}`;
-    }
-    return `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, systemSlug = NONE, updatedAt = time::now() WHERE key = $k${i} AND systemSlug IS NONE`;
-  });
+  const stmts = items.map(
+    (_, i) =>
+      `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, systemSlug = $s${i}, updatedAt = time::now() WHERE key = $k${i} AND systemSlug = $s${i}`,
+  );
   const bindings: Record<string, string> = {};
   items.forEach((item, i) => {
     bindings[`k${i}`] = item.key;
     bindings[`v${i}`] = item.value;
     bindings[`d${i}`] = item.description;
-    if (item.systemSlug) bindings[`s${i}`] = item.systemSlug;
+    bindings[`s${i}`] = resolveScope(item.systemSlug);
   });
   await db.query(stmts.join("; "), bindings);
 }

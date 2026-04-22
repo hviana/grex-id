@@ -1,0 +1,14 @@
+{
+  "core.users.read": "Ler usuários",
+  "core.users.write": "Criar / editar usuários",
+  "core.users.delete": "Remover usuários",
+  "core.billing.read": "Ler dados de cobrança",
+  "core.billing.write": "Gerenciar cobrança",
+  "core.tokens.read": "Ler tokens de API",
+  "core.tokens.write": "Criar / revogar tokens de API",
+  "core.connectedApps.read": "Ler aplicativos conectados",
+  "core.connectedApps.write": "Revogar aplicativos conectados",
+  "core.files.upload.logos": "Enviar logotipos de empresa",
+  "core.files.upload.avatars": "Enviar avatares de usuário",
+  "core.files.upload.leadAvatars": "Enviar avatares de leads"
+}

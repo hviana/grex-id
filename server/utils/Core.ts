@@ -168,12 +168,12 @@ class Core {
   ): Promise<string | undefined> {
     const data = await getCache<CoreData>(CORE_SLUG, "data");
 
-    if (systemSlug) {
+    if (systemSlug && systemSlug !== "core") {
       const specific = data.settings.get(`${systemSlug}:${key}`);
       if (specific) return specific.value;
     }
 
-    const core = data.settings.get(`:${key}`);
+    const core = data.settings.get(`core:${key}`);
     if (core) return core.value;
 
     if (!this.missingSettings.has(key)) {

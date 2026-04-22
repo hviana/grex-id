@@ -7,6 +7,7 @@ import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 function OAuthAuthorizeContent() {
   const router = useRouter();
@@ -176,7 +177,12 @@ function OAuthAuthorizeContent() {
               : permissions.map((perm) => (
                 <div key={perm} className="flex items-center gap-2">
                   <span className="text-[var(--color-primary-green)]">✓</span>
-                  <span className="font-mono text-sm text-white">{perm}</span>
+                  <TranslatedBadge
+                    kind="permission"
+                    token={perm}
+                    systemSlug={systemSlug || undefined}
+                    compact
+                  />
                 </div>
               ))}
           </div>

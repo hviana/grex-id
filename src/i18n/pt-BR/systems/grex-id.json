@@ -142,5 +142,14 @@
   "home.footer": "Plataforma Inteligente de Reconhecimento Facial",
   "home.footerTagline": "Usando tecnologia para pastorear pessoas com cuidado e propósito.",
   "plans.grexId.standard.name": "PADRÃO",
-  "plans.grexId.standard.description": "Plano padrão com funcionalidades básicas."
+  "plans.grexId.standard.description": "Plano padrão com funcionalidades básicas.",
+  "roles.operator": "Operador",
+  "roles.reviewer": "Revisor",
+  "permissions.faces.detect": "Executar detecção facial",
+  "permissions.faces.review": "Revisar detecções",
+  "permissions.leads.export": "Exportar leads",
+  "entities.faces": "Faces",
+  "entities.detections": "Detecções",
+  "resources.faceDetection": "Detecção facial",
+  "resources.reportGeneration": "Geração de relatórios"
 }

@@ -56,19 +56,10 @@ const defaults: DefaultSetting[] = [
     description: "Rolling window in hours for the communication rate limit",
   },
   {
-    key: "auth.twoFactor.enabled",
-    value: "true",
-    description: "Allow users to enable two-factor authentication",
-  },
-  {
-    key: "auth.oauth.enabled",
-    value: "false",
-    description: "Enable OAuth login providers",
-  },
-  {
     key: "auth.oauth.providers",
     value: "[]",
-    description: "JSON array of enabled OAuth provider names",
+    description:
+      "JSON array of enabled OAuth provider names. Empty = OAuth login disabled (no redundant flag needed).",
   },
   {
     key: "communication.email.mailgun_apikey",
@@ -205,7 +196,7 @@ const defaults: DefaultSetting[] = [
 export async function seed(db: Surreal): Promise<void> {
   for (const setting of defaults) {
     const existing = await db.query<[{ id: string }[]]>(
-      `SELECT id FROM setting WHERE key = $key AND systemSlug IS NONE LIMIT 1`,
+      `SELECT id FROM setting WHERE key = $key AND systemSlug = "core" LIMIT 1`,
       { key: setting.key },
     );
     if ((existing[0] ?? []).length > 0) continue;
@@ -213,7 +204,8 @@ export async function seed(db: Surreal): Promise<void> {
       `CREATE setting SET
         key = $key,
         value = $value,
-        description = $description`,
+        description = $description,
+        systemSlug = "core"`,
       {
         key: setting.key,
         value: setting.value,

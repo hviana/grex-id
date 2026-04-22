@@ -55,9 +55,18 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     // Always fetch user first
     const userResult = await db.query<
-      [{ id: string; email: string; stayLoggedIn: boolean; roles: string[] }[]]
+      [{
+        id: string;
+        email: string;
+        stayLoggedIn: boolean;
+        roles: string[];
+        twoFactorEnabled: boolean;
+        profile?: unknown;
+      }[]]
     >(
-      `SELECT id, email, stayLoggedIn, roles FROM user WHERE id = $userId LIMIT 1;`,
+      `SELECT id, email, stayLoggedIn, roles, twoFactorEnabled, profile
+         FROM user WHERE id = $userId LIMIT 1
+         FETCH profile, profile.channels;`,
       { userId: rid(claims.actorId) },
     );
 
@@ -115,6 +124,12 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       success: true,
       data: {
         systemToken: newToken,
+        user: {
+          id: user.id,
+          profile: user.profile,
+          roles: user.roles,
+          twoFactorEnabled: user.twoFactorEnabled ?? false,
+        },
       },
     });
   } catch {

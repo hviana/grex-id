@@ -13,6 +13,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import PlanCard from "@/src/components/shared/PlanCard";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 interface PlanItem {
   id: string;
@@ -40,6 +41,7 @@ interface PlanItem {
 
 interface SystemOption {
   id: string;
+  slug: string;
   name: string;
 }
 
@@ -318,6 +320,7 @@ export default function PlansPage() {
                 key={plan.id}
                 plan={plan}
                 variant="core"
+                systemSlug={systems.find((s) => s.id === plan.systemId)?.slug}
                 badges={
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -468,6 +471,14 @@ export default function PlansPage() {
             mode="custom"
             value={formPermissions}
             onChange={(vals) => setFormPermissions(vals as string[])}
+            renderBadge={(item, remove) => (
+              <TranslatedBadge
+                kind="permission"
+                token={typeof item === "string" ? item : item.name}
+                systemSlug={systems.find((s) => s.id === formSystemId)?.slug}
+                onRemove={remove}
+              />
+            )}
           />
 
           <div>

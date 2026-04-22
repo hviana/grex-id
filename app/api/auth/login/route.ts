@@ -41,12 +41,12 @@ async function handler(
   req: Request,
   _ctx: RequestContext,
 ): Promise<Response> {
-  const core = Core.getInstance();
   const body = await req.json();
-  const { password, stayLoggedIn, identifier } = body as {
+  const { password, stayLoggedIn, identifier, twoFactorCode } = body as {
     password?: string;
     stayLoggedIn?: boolean;
     identifier?: string;
+    twoFactorCode?: string;
   };
   // Backwards-compat: older frontends send `email` instead of `identifier`.
   const raw = identifier ?? (body as { email?: string }).email;
@@ -111,12 +111,11 @@ async function handler(
     );
   }
 
-  const twoFactorGloballyEnabled =
-    (await core.getSetting("auth.twoFactor.enabled")) === "true";
-
-  if (twoFactorGloballyEnabled && user.twoFactorEnabled) {
-    const { twoFactorCode } = body as { twoFactorCode?: string };
+  // Second-factor gate — per-user only (§19.15). No global toggle.
+  if (user.twoFactorEnabled) {
     if (!twoFactorCode) {
+      // Client should either collect a TOTP code or call
+      // POST /api/auth/two-factor/login-link to receive the channel fallback.
       return Response.json(
         {
           success: false,
@@ -135,7 +134,7 @@ async function handler(
         crypto: new NobleCryptoPlugin(),
         base32: new ScureBase32Plugin(),
       });
-      const result = await totp.verify(twoFactorCode ?? "");
+      const result = await totp.verify(twoFactorCode);
       if (!result.valid) {
         return Response.json(
           {
@@ -148,6 +147,19 @@ async function handler(
           { status: 401 },
         );
       }
+    } else {
+      // twoFactorEnabled without a stored secret is an inconsistent state.
+      // Reject instead of silently letting the user in.
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "2FA_INVALID",
+            message: "auth.error.twoFactorInvalid",
+          },
+        },
+        { status: 401 },
+      );
     }
   }
 
@@ -220,6 +232,7 @@ async function handler(
         id: user.id,
         profile: user.profile,
         roles: user.roles,
+        twoFactorEnabled: user.twoFactorEnabled ?? false,
       },
     },
   });

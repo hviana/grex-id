@@ -32,6 +32,8 @@ function LoginContent() {
   const [show2FA, setShow2FA] = useState(false);
   const [botToken, setBotToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loginLinkLoading, setLoginLinkLoading] = useState(false);
+  const [loginLinkSent, setLoginLinkSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const systemParam = systemSlug
@@ -47,6 +49,28 @@ function LoginContent() {
   const verifyHref = `/verify${
     verifyParams.toString() ? `?${verifyParams.toString()}` : ""
   }`;
+
+  const handleLoginLink = async () => {
+    if (!email || !password) return;
+    setLoginLinkLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/two-factor/login-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: email,
+          password,
+          stayLoggedIn,
+        }),
+      });
+      // Always generic success by design (anti-enumeration).
+      await res.json().catch(() => ({}));
+      setLoginLinkSent(true);
+    } finally {
+      setLoginLinkLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,21 +188,40 @@ function LoginContent() {
             </div>
 
             {show2FA && (
-              <div>
-                <label
-                  htmlFor="twoFactor"
-                  className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
-                >
-                  {t("auth.login.twoFactor")}
-                </label>
-                <input
-                  id="twoFactor"
-                  type="text"
-                  value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-                  placeholder={t("auth.login.twoFactor.placeholder")}
-                />
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="twoFactor"
+                    className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
+                  >
+                    {t("auth.login.twoFactor")}
+                  </label>
+                  <input
+                    id="twoFactor"
+                    type="text"
+                    value={twoFactorCode}
+                    onChange={(e) => setTwoFactorCode(e.target.value)}
+                    className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+                    placeholder={t("auth.login.twoFactor.placeholder")}
+                  />
+                </div>
+                {loginLinkSent
+                  ? (
+                    <p className="text-sm text-[var(--color-primary-green)]">
+                      {t("common.twoFactor.loginLink.sent")}
+                    </p>
+                  )
+                  : (
+                    <button
+                      type="button"
+                      onClick={handleLoginLink}
+                      disabled={loginLinkLoading || !email || !password}
+                      className="text-sm text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {loginLinkLoading && <Spinner size="sm" />}
+                      {t("common.twoFactor.loginLink.cta")}
+                    </button>
+                  )}
               </div>
             )}
 

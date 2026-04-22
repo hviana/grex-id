@@ -37,15 +37,27 @@ const defaults: DefaultFrontSetting[] = [
     value: "",
     description: "Payment gateway publishable key",
   },
+  {
+    key: "front.dataTracking.trackedCharacteristics",
+    value: "[]",
+    description:
+      "JSON array of user characteristics that MUST NOT be tracked unless the data-tracking consent popup has been accepted. Seeded empty; additive — frameworks may introduce new characteristic names without core changes.",
+  },
 ];
 
 export async function seed(db: Surreal): Promise<void> {
   for (const setting of defaults) {
+    const existing = await db.query<[{ id: string }[]]>(
+      `SELECT id FROM front_setting WHERE key = $key AND systemSlug = "core" LIMIT 1`,
+      { key: setting.key },
+    );
+    if ((existing[0] ?? []).length > 0) continue;
     await db.query(
       `CREATE front_setting SET
         key = $key,
         value = $value,
-        description = $description`,
+        description = $description,
+        systemSlug = "core"`,
       {
         key: setting.key,
         value: setting.value,

@@ -5,6 +5,10 @@ import enBilling from "./en/billing.json";
 import enHomepage from "./en/homepage.json";
 import enTemplates from "./en/templates.json";
 import enValidation from "./en/validation.json";
+import enRoles from "./en/roles.json";
+import enPermissions from "./en/permissions.json";
+import enEntities from "./en/entities.json";
+import enResources from "./en/resources.json";
 import ptBRCommon from "./pt-BR/common.json";
 import ptBRAuth from "./pt-BR/auth.json";
 import ptBRCore from "./pt-BR/core.json";
@@ -12,6 +16,10 @@ import ptBRBilling from "./pt-BR/billing.json";
 import ptBRHomepage from "./pt-BR/homepage.json";
 import ptBRTemplates from "./pt-BR/templates.json";
 import ptBRValidation from "./pt-BR/validation.json";
+import ptBRRoles from "./pt-BR/roles.json";
+import ptBRPermissions from "./pt-BR/permissions.json";
+import ptBREntities from "./pt-BR/entities.json";
+import ptBRResources from "./pt-BR/resources.json";
 
 type TranslationMap = Record<string, string>;
 
@@ -24,6 +32,10 @@ const translations: Record<string, Record<string, TranslationMap>> = {
     homepage: enHomepage,
     templates: enTemplates,
     validation: enValidation,
+    roles: enRoles,
+    permissions: enPermissions,
+    entities: enEntities,
+    resources: enResources,
   },
   "pt-BR": {
     common: ptBRCommon,
@@ -33,10 +45,16 @@ const translations: Record<string, Record<string, TranslationMap>> = {
     homepage: ptBRHomepage,
     templates: ptBRTemplates,
     validation: ptBRValidation,
+    roles: ptBRRoles,
+    permissions: ptBRPermissions,
+    entities: ptBREntities,
+    resources: ptBRResources,
   },
 };
 
 const systemTranslations: Record<string, Record<string, TranslationMap>> = {};
+const frameworkTranslations: Record<string, Record<string, TranslationMap>> =
+  {};
 
 export function registerSystemI18n(
   systemSlug: string,
@@ -47,6 +65,17 @@ export function registerSystemI18n(
     systemTranslations[locale] = {};
   }
   systemTranslations[locale][systemSlug] = data;
+}
+
+export function registerFrameworkI18n(
+  frameworkName: string,
+  locale: string,
+  data: TranslationMap,
+): void {
+  if (!frameworkTranslations[locale]) {
+    frameworkTranslations[locale] = {};
+  }
+  frameworkTranslations[locale][frameworkName] = data;
 }
 
 export function t(
@@ -66,6 +95,11 @@ export function t(
     const systemKey = parts.slice(2).join(".");
     value = systemTranslations[locale]?.[systemSlug]?.[systemKey] ??
       systemTranslations["en"]?.[systemSlug]?.[systemKey];
+  } else if (domain === "frameworks" && parts.length >= 3) {
+    const frameworkName = parts[1];
+    const frameworkKey = parts.slice(2).join(".");
+    value = frameworkTranslations[locale]?.[frameworkName]?.[frameworkKey] ??
+      frameworkTranslations["en"]?.[frameworkName]?.[frameworkKey];
   } else {
     const domainData = localeData?.[domain] ?? translations["en"]?.[domain];
     value = domainData?.[rest];

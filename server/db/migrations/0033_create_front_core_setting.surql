@@ -4,7 +4,7 @@ DEFINE TABLE front_setting SCHEMAFULL;
 DEFINE FIELD key         ON front_setting TYPE string;
 DEFINE FIELD value       ON front_setting TYPE string;
 DEFINE FIELD description ON front_setting TYPE option<string>;
-DEFINE FIELD systemSlug  ON front_setting TYPE option<string>;
+DEFINE FIELD systemSlug  ON front_setting TYPE string ASSERT $value != "";
 DEFINE FIELD createdAt   ON front_setting TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt   ON front_setting TYPE datetime DEFAULT time::now();
 

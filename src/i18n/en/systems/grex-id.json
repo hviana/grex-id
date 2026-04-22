@@ -142,5 +142,14 @@
   "home.footer": "Intelligent Facial Recognition Platform",
   "home.footerTagline": "Using technology to shepherd people with care and purpose.",
   "plans.grexId.standard.name": "STANDARD",
-  "plans.grexId.standard.description": "Standard plan with basic features."
+  "plans.grexId.standard.description": "Standard plan with basic features.",
+  "roles.operator": "Operator",
+  "roles.reviewer": "Reviewer",
+  "permissions.faces.detect": "Run face detection",
+  "permissions.faces.review": "Review detections",
+  "permissions.leads.export": "Export leads",
+  "entities.faces": "Faces",
+  "entities.detections": "Detections",
+  "resources.faceDetection": "Face detection",
+  "resources.reportGeneration": "Report generation"
 }

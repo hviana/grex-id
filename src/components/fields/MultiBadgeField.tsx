@@ -15,6 +15,14 @@ interface MultiBadgeFieldProps {
   staticOptions?: BadgeValue[];
   formatHint?: string;
   debounceMs?: number;
+  /**
+   * Optional custom renderer for each selected badge — enables consumers
+   * (roles/permissions/entities/resources forms) to swap the default chip
+   * for `TranslatedBadge` so both the raw token and its translation appear
+   * (§5.6.1, §18.1.2). Receives the badge value and a remove callback; the
+   * default chip is used when this prop is omitted.
+   */
+  renderBadge?: (item: BadgeValue, remove: () => void) => React.ReactNode;
 }
 
 function getBadgeLabel(item: BadgeValue): string {
@@ -34,6 +42,7 @@ export default function MultiBadgeField({
   staticOptions,
   formatHint,
   debounceMs = 300,
+  renderBadge,
 }: MultiBadgeFieldProps) {
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState<BadgeValue[]>([]);
@@ -209,6 +218,13 @@ export default function MultiBadgeField({
           {value.map((item, idx) => {
             const label = getBadgeLabel(item);
             const color = getBadgeColor(item);
+            if (renderBadge) {
+              return (
+                <span key={`${label}-${idx}`}>
+                  {renderBadge(item, () => removeValue(idx))}
+                </span>
+              );
+            }
             return (
               <span
                 key={`${label}-${idx}`}

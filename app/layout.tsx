@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LocaleProvider } from "@/src/hooks/LocaleProvider";
 import { AuthProvider } from "@/src/hooks/useAuth";
 import { FrontCoreProvider } from "@/src/hooks/useFrontCore";
+import CookieConsent from "@/src/components/shared/CookieConsent";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +37,9 @@ export default function RootLayout({
           <AuthProvider>
             <FrontCoreProvider>
               {children}
+              <Suspense fallback={null}>
+                <CookieConsent />
+              </Suspense>
             </FrontCoreProvider>
           </AuthProvider>
         </LocaleProvider>

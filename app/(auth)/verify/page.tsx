@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/src/hooks/useLocale";
+import { useAuth } from "@/src/hooks/useAuth";
 import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
@@ -13,6 +14,8 @@ import Link from "next/link";
 
 function VerifyContent() {
   const { t } = useLocale();
+  const router = useRouter();
+  const { refresh } = useAuth();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("system");
@@ -52,6 +55,20 @@ function VerifyContent() {
 
         if (json.success) {
           setSuccess(true);
+          // Login-link fallback (§19.15.3) — a fresh System API Token arrives
+          // in the response. Store it via useAuth so the user is seamlessly
+          // signed in, then route to the normal post-login landing.
+          if (
+            json.data?.actionKey === "auth.action.loginFallback" &&
+            typeof json.data?.systemToken === "string"
+          ) {
+            await refresh(json.data.systemToken);
+            router.push(
+              json.data.user?.roles?.includes("superuser")
+                ? "/systems"
+                : "/entry",
+            );
+          }
         } else {
           setError(
             json.error?.code === "EXPIRED"
@@ -65,7 +82,7 @@ function VerifyContent() {
         setVerifying(false);
       }
     })();
-  }, [token]);
+  }, [token, refresh, router]);
 
   const handleResend = async (e: React.FormEvent) => {
     e.preventDefault();

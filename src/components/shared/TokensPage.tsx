@@ -8,6 +8,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 
 interface OpCountEntry {
@@ -53,7 +54,7 @@ interface ApiToken {
 export default function TokensPage() {
   const { t } = useLocale();
   const { systemToken, user } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { companyId, systemId, systemSlug } = useSystemContext();
 
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [loading, setLoading] = useState(true);
@@ -270,19 +271,19 @@ export default function TokensPage() {
                     {token.description}
                   </p>
                 )}
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1.5 flex-wrap">
                   {token.permissions.map((perm) => (
-                    <span
+                    <TranslatedBadge
                       key={perm}
-                      className="text-xs bg-[var(--color-secondary-blue)]/20 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full"
-                    >
-                      {perm}
-                    </span>
+                      kind="permission"
+                      token={perm}
+                      systemSlug={systemSlug ?? undefined}
+                    />
                   ))}
                 </div>
                 {token.maxOperationCount &&
                   Object.keys(token.maxOperationCount).length > 0 && (
-                  <div className="mt-2 flex gap-1 flex-wrap">
+                  <div className="mt-2 flex gap-1.5 flex-wrap items-center">
                     <span className="text-xs text-[var(--color-light-text)] mr-1">
                       🔢
                     </span>
@@ -291,9 +292,16 @@ export default function TokensPage() {
                     ) => (
                       <span
                         key={key}
-                        className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
+                        className="inline-flex items-center gap-1"
                       >
-                        {key}: {val}
+                        <TranslatedBadge
+                          kind="resource"
+                          token={key}
+                          systemSlug={systemSlug ?? undefined}
+                        />
+                        <span className="text-xs text-[var(--color-light-text)]">
+                          : {val}
+                        </span>
                       </span>
                     ))}
                   </div>
@@ -335,6 +343,14 @@ export default function TokensPage() {
             onChange={(vals) => setNewPerms(vals as string[])}
             fetchFn={fetchSystemPermissions}
             formatHint={t("common.tokens.permissionsHint")}
+            renderBadge={(item, remove) => (
+              <TranslatedBadge
+                kind="permission"
+                token={typeof item === "string" ? item : item.name}
+                systemSlug={systemSlug ?? undefined}
+                onRemove={remove}
+              />
+            )}
           />
           <input
             type="number"
