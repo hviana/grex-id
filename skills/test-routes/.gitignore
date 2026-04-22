@@ -1,0 +1,4 @@
+.server.pid
+.server.port
+.server.log
+.superuser-token

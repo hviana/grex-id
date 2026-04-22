@@ -5608,3 +5608,16 @@ integration with UI.
 | Token embeds the full Tenant                       | Single source of context for frontend + backend. Eliminates scattered `companyId`/`systemId`. Token exchange is the only context switch.                                                                                  |
 | Split Core vs FrontCore settings tables            | Physical separation guarantees the frontend bundle cannot leak server-only secrets.                                                                                                                                       |
 | Subframeworks use separate namespaces              | Physical isolation under `frameworks/<name>/` prevents route collisions, import entanglement, and accidental scope leakage between frameworks and Core. Each framework is a self-contained module with its own AGENTS.md. |
+
+## Required workflow
+
+Before completing any task, follow every item in
+[docs/agent-checklist.md](docs/agent-checklist.md).
+
+## Skills
+
+Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
+
+- Writing database query tests → `skills/test-db-queries/SKILL.md`
+- Writing route tests → `skills/test-routes/SKILL.md`
+- Checking for dependency updates → `skills/check-library-updates/SKILL.md`
