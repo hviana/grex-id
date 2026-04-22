@@ -3480,8 +3480,7 @@ separate "recovery channel reset". Any verified channel is accepted uniformly.
 
 The only OAuth configuration key is `auth.oauth.providers`. A non-empty JSON
 array enables OAuth login and lists the providers to render on the login page;
-an empty array (the seeded default) disables it entirely — there is no redundant
-`auth.oauth.enabled` flag.
+an empty array (the seeded default) disables it entirely.
 
 **Identity model.** OAuth linkage is stored in the dedicated `oauth_identity`
 table (§8), **never as a scalar field on `user`**. Each row represents one
