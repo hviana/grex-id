@@ -32,7 +32,7 @@ export {
   registerCache,
   updateCache,
 } from "./utils/cache.ts";
-import { assertServerOnly } from "utils/server-only.ts";
+import { assertServerOnly } from "./utils/server-only.ts";
 
 assertServerOnly("module-registry");
 
