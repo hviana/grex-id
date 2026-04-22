@@ -174,6 +174,10 @@ the `SKILL.md` before running anything. Current skills:
   Works even without real provider credentials (email, SMS, payment gateway, …)
   — validation is done on the queue rows.
 - `skills/check-library-updates/` — audit and apply dependency bumps.
+- `skills/review-code/` — run a full, iterative review of Core, every subsystem,
+  and every framework against `AGENTS.md` + `docs/agent-checklist.md`,
+  exercising DB operations, endpoints, frontend pages, and events via the test-*
+  skills, restarting until no findings remain.
 
 Each skill enforces its own guardrails (e.g. `test-db-queries` refuses to run
 unless `database.json` has `"test": true`).

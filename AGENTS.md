@@ -5654,3 +5654,5 @@ Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
   `verification_request` + human-confirmation link delivery →
   `skills/test-events/SKILL.md`
 - Checking for dependency updates → `skills/check-library-updates/SKILL.md`
+- Running a full, iterative review of Core, every subsystem, and every framework
+  until no errors remain → `skills/review-code/SKILL.md`

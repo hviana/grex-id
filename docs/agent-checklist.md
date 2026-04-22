@@ -490,7 +490,8 @@ must stay isolated.
 - [ ] Use the project skills — see `skills/isolation-guard/SKILL.md` (PRIORITY
       1, runs first), `skills/test-db-queries/SKILL.md`,
       `skills/test-routes/SKILL.md`, `skills/test-frontend/SKILL.md`,
-      `skills/test-events/SKILL.md`, `skills/check-library-updates/SKILL.md`.
+      `skills/test-events/SKILL.md`, `skills/check-library-updates/SKILL.md`,
+      `skills/review-code/SKILL.md`.
 - [ ] For UI or frontend changes, exercise the feature in a real browser; state
       explicitly if you couldn't.
 - [ ] Type-check and run tests where available; don't claim success on un-run
