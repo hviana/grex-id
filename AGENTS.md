@@ -5644,7 +5644,9 @@ Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
   `skills/test-frontend/SKILL.md` — works on project-local pages and any
   absolute external URL (OAuth consent pages, payment-provider redirects,
   third-party callback URLs).
-- Verifying the event queue + communication flow (send_communication,
-  verification_request, human-confirmation link delivery) →
+- Debugging or verifying any event in the project's queue — any handler, not
+  just communications (process_payment, auto_recharge, send_communication,
+  subsystem handlers, …). Includes a communication-specific convenience path for
+  `verification_request` + human-confirmation link delivery →
   `skills/test-events/SKILL.md`
 - Checking for dependency updates → `skills/check-library-updates/SKILL.md`

@@ -1,43 +1,68 @@
 ---
 name: test-events
-description: Use whenever the user wants to verify that the project's event queue fires — that an action published a `send_communication`, that a `verification_request` was created, that a confirmation link arrived, that a `notification` fanned out across channels. Trigger on phrases like "did the email get sent", "check the queue", "wait for the confirmation event", "grab the verification link and click it", "was a verification_request created", "test the confirmation flow", "check delivery status". The skill polls `delivery` + `queue_event` + `verification_request` rows, waits the reasonable time for the worker to pick things up, extracts payload data (recipients, confirmationLink, templateData), and can delegate to `test-frontend` to actually click the link. It works even when the underlying channel (email, SMS, push) has no real provider configured — all validation is done on the queue + verification rows, not on external providers. Refuses to start unless `database.json` carries `"test": true`.
+description: Use whenever the user wants to debug or verify the project's event queue — any handler, not just communications. Trigger on phrases like "did the event fire", "check the queue", "wait for the <handler> event", "inspect the payload of <event>", "did process_payment run", "what did auto_recharge pass along", "grab the verification link and click it", "was a verification_request created", "test the confirmation flow", "check delivery status", "any dead letters lately", "inspect the last <handler> payload". The skill polls `delivery` + `queue_event` + `verification_request` rows, waits the reasonable time for the worker to pick them up, and extracts the full payload so the caller can assert whatever they need (recipients, confirmationLink, transactionId, subscriptionId, resourceKey, or any custom field a subsystem / framework handler puts there). For human-confirmation flows it can also delegate to `test-frontend` to actually click the link. It works even when the underlying channel or provider (email, SMS, push, payment gateway) has no real credentials configured — all validation is done on the queue rows, not on external providers. Refuses to start unless `database.json` carries `"test": true`.
 ---
 
 # Test Events
 
-Exercise the project's event queue and communication flow end-to-end against the
-configured test database. The skill never talks to an email/SMS provider — it
-reads the `delivery`, `queue_event`, and `verification_request` rows that the
-application publishes, waits for the worker loop to pick them up, extracts the
-payload data (links, recipients, actionKey, etc.), and can delegate the final
-"click the confirmation link" step to the `test-frontend` skill.
+Exercise **any** handler in the project's event queue end-to-end against the
+configured test database. The skill reads the `delivery`, `queue_event`, and
+`verification_request` rows that the application publishes, waits for the worker
+loop to pick them up, and surfaces the full payload so the caller can assert
+whatever matters for the event they care about — a recipient list on
+`send_email`, a `transactionId` on `process_payment`, a custom field a subsystem
+handler put into `queue_event.payload`, anything.
+
+**Every event handler is in scope — not just communications.** Examples of
+handlers you can wait on and inspect today:
+
+- `send_communication` / `send_email` / `send_sms` (and any framework-registered
+  channel handler like `send_push`, `send_phone`) — communication dispatch.
+- `process_payment` — synchronous payment attempts (recurring billing, credit
+  purchases, retries).
+- `resolve_async_payment` — deferred-payment webhook resolution.
+- `auto_recharge` — auto top-up credit flow.
+- Any subsystem handler registered via `systems/<slug>/register.ts`
+  (`registerHandler(…)`), e.g. a subsystem's `grexid_process_detection`.
+- Any framework handler registered via `frameworks/<name>/register.ts`.
+
+The skill does not care which handler it is. You pass `--handler <name>`,
+`--event-name <name>`, and/or a `--payload-contains` JSON filter, and it waits
+for a matching `delivery` row and prints it.
 
 This is the single most important thing to understand about the skill: **you do
-not need working email / SMS / push credentials to test communication flows**.
-The application always goes queue → delivery → channel handler → provider.
+not need working external credentials (SMTP, SMS provider, payment gateway, push
+service, any third party) to test an event flow**. The application always goes
+publisher → `queue_event` → `delivery` → handler → (optional external call).
 Reading the delivery and its payload is enough to verify every step up to the
-provider, and the `verification_request` row carries the confirmation token the
-user would click on in their inbox — so you can click it yourself with
-`test-frontend`.
+external call. For human-confirmation flows specifically, the
+`verification_request` row carries the one-time token the user would click on in
+their inbox — so you can click it yourself with `test-frontend`.
 
 ## When to use
 
-- Verify that an action (register, forgot-password, channel add, password
-  change, payment success, …) actually **published** a communication event.
-- Extract the confirmation link from a fresh `verification_request` so the test
-  can drive `/verify?token=…` to completion.
+- Verify that an action (register, forgot-password, subscribe, purchase_credits,
+  retry_payment, a custom subsystem action, …) actually **published** an event —
+  and that the payload shape is what you expected.
+- Inspect the payload of any handler: recipients, transactionId, subscriptionId,
+  resourceKey, continuityData, or any custom field a subsystem / framework
+  added.
 - Confirm that a delivery reached `status = done` (handler ran) or `dead` (max
   attempts exhausted) — proof that the worker loop picked it up.
-- Check that `templateData.actionKey` / `recipients` / `systemSlug` are what you
-  expect before debugging the template itself.
-- Seed-and-replay a flow: publish → wait → inspect → click.
+- Debug a failing handler: filter by `--status dead` and read `lastError` on the
+  matched deliveries.
+- For communication events specifically: extract the `confirmationLink` from a
+  fresh `verification_request` so the test can drive `/verify?token=…` to
+  completion.
+- Seed-and-replay a flow: publish → wait → inspect → (optionally) click.
 
 ## When NOT to use
 
 - Production traffic. The skill refuses to start unless `database.json` carries
   `"test": true`.
-- Sending a real email/SMS to an external address — the skill does not provision
-  provider credentials and never tries to.
+- Making a real external call (send an email, charge a card, push a
+  notification) — the skill does not provision provider credentials and never
+  tries to.
 - Unit-testing a pure query. Use `test-db-queries` for raw SurrealQL.
 - Driving UI flows by themselves. Use `test-frontend` for clicks/forms; pair it
   with this skill when an action requires a confirmation link.
@@ -55,19 +80,52 @@ user would click on in their inbox — so you can click it yourself with
 
 ## How events flow in this project (one paragraph)
 
-Actions call `publish("send_communication", …)` (or publish a custom handler
-name). That writes one row to `queue_event` and one row to `delivery` with
-`status = "pending"`. The worker loop (started by `instrumentation.ts` when the
-dev server boots) claims pending rows, sets `status = "processing"`, runs the
-handler, and sets `status = "done"` on success or `status = "pending"` with
-backoff on retryable failures. After `maxAttempts`, rows move to
-`status = "dead"`. For human-confirmation flows, the handler first creates a
-`verification_request` with a one-time token; clicking the link calls
-`POST /api/auth/verify` which flips `usedAt = time::now()` and performs the
-actual state change. This skill surfaces all of those rows as one JSON envelope
-per verb.
+Any publisher — a route handler, another event handler, a job — calls
+`publish(<name>, <payload>)`. That writes one row to `queue_event` and one row
+to `delivery` per registered handler for that name, with `status = "pending"`.
+The worker loop (started by `instrumentation.ts` when the dev server boots)
+claims pending rows, sets `status = "processing"`, runs the handler, and sets
+`status = "done"` on success or `status = "pending"` with backoff on retryable
+failures. After `maxAttempts`, rows move to `status = "dead"` and `lastError` is
+stored on the delivery. For human-confirmation flows specifically, the
+publishing path additionally creates a `verification_request` row with a
+one-time token; clicking the link calls `POST /api/auth/verify` which flips
+`usedAt = time::now()` and performs the actual state change. This skill surfaces
+all of those rows as one JSON envelope per verb — the communication case is just
+one common instance.
 
-## Typical session
+## Typical sessions
+
+### Debug any event — the generic flow
+
+```bash
+# 1. Trigger whatever action publishes the event you care about — could be
+#    an HTTP call, a DB write, a cron tick, anything.
+tsx skills/test-routes/run.ts POST /api/billing \
+  --as-superuser \
+  --body '{"action":"purchase_credits","companyId":"company:...","systemId":"system:...","amount":1000,"paymentMethodId":"payment_method:..."}'
+
+# 2. Wait for the delivery row matching the handler you want. Any filter that
+#    makes the match unique works: --handler, --event-name, --payload-contains,
+#    --since. On match, the full payload is printed.
+tsx skills/test-events/run.ts wait \
+  --handler process_payment \
+  --payload-contains '{"kind":"credits"}' \
+  --timeout 30000
+
+# 3. Inspect later if needed — or list all recent deliveries for a handler.
+tsx skills/test-events/run.ts list --handler process_payment --since 10m
+tsx skills/test-events/run.ts stats --minutes 30
+```
+
+For dead-letter debugging:
+
+```bash
+tsx skills/test-events/run.ts list --status dead --since 1h
+#  → includes `lastError` on every row so you can see why the handler failed
+```
+
+### Communication + confirmation (the specific case)
 
 ```bash
 # 1. Kick off an action that publishes a communication (via any path).
@@ -120,26 +178,48 @@ List recent deliveries (the queue rows the workers actually pull from).
 | `--limit N`                                | Default 50, cap 500.                                                            |
 | `--compact`                                | Single-line JSON.                                                               |
 
-Each row includes the resolved event name + the full payload — `recipients`,
-`template`, `templateData`, `channels`, everything the handler would see.
+Each row includes the resolved event name + the full payload. For communication
+events that means `recipients` / `template` / `templateData` / `channels`; for
+any other handler it's whatever the publisher passed in — the skill prints the
+payload verbatim.
 
 ### `wait`
 
-Block until a delivery matches all the filters below, then print it (with its
-extracted `confirmationLink` and `templateData` for convenience). Returns
-non-zero when the timeout elapses without a match.
+Block until a delivery matches all the filters below, then print it. When the
+matched delivery is a communication (`templateData` is present) the skill also
+surfaces `confirmationLink` and `templateData` at the top level for convenience;
+for any other handler those fields are simply `null` and the full payload is in
+`matched.payload`. Returns non-zero when the timeout elapses without a match.
 
-| Flag                                                     | Meaning                                                                                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `--handler NAME`                                         | Handler name (e.g. `send_email`, `send_communication`).                                              |
-| `--event-name NAME`                                      | Underlying `queue_event.name`.                                                                       |
-| `--recipient user:…\|lead:…`                             | Require `payload.recipients` to contain this id.                                                     |
-| `--action-key auth.action.register`                      | Require `payload.templateData.actionKey` to equal this.                                              |
-| `--status pending\|processing\|done\|dead`               | Require the delivery to be in this status. Omit for "any".                                           |
-| `--payload-contains '{"templateData":{"eventKey":"x"}}'` | Deep-equality match against payload. Strings match by substring inclusion OR equality.               |
-| `--since <dur>`                                          | Lower time bound (default: `2m` ago). Use this to ignore older noise when the test DB isn't cleaned. |
-| `--timeout <ms>`                                         | Total wait time (default: `60000`).                                                                  |
-| `--poll <ms>`                                            | Poll interval (default: `500`).                                                                      |
+| Flag                                                    | Meaning                                                                                                                                                           |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--handler NAME`                                        | Handler name. Works for every registered handler — `send_email`, `send_communication`, `process_payment`, `auto_recharge`, subsystem / framework names, whatever. |
+| `--event-name NAME`                                     | Underlying `queue_event.name`.                                                                                                                                    |
+| `--recipient user:…\|lead:…`                            | Communication convenience: require `payload.recipients` to contain this id.                                                                                       |
+| `--action-key auth.action.register`                     | Communication convenience: require `payload.templateData.actionKey` to equal this.                                                                                |
+| `--status pending\|processing\|done\|dead`              | Require the delivery to be in this status. Omit for "any".                                                                                                        |
+| `--payload-contains '{"kind":"credits","amount":1000}'` | **The generic filter — works for any handler.** Deep-equality match against payload. Strings match by substring inclusion OR equality. Nested objects descend.    |
+| `--since <dur>`                                         | Lower time bound (default: `2m` ago). Use this to ignore older noise when the test DB isn't cleaned.                                                              |
+| `--timeout <ms>`                                        | Total wait time (default: `60000`).                                                                                                                               |
+| `--poll <ms>`                                           | Poll interval (default: `500`).                                                                                                                                   |
+
+For non-communication handlers, combine `--handler` with `--payload-contains` to
+uniquely identify the delivery you want:
+
+```bash
+# Wait for the process_payment call that targets a specific subscription.
+tsx skills/test-events/run.ts wait \
+  --handler process_payment \
+  --payload-contains '{"subscriptionId":"subscription:abc","kind":"recurring"}' \
+  --status done \
+  --timeout 45000
+
+# Wait for an arbitrary subsystem handler.
+tsx skills/test-events/run.ts wait \
+  --handler grexid_process_detection \
+  --payload-contains '{"leadId":"lead:xyz"}' \
+  --timeout 60000
+```
 
 On the first `wait` call, the skill ensures a dev server is running (the worker
 loop lives inside the dev server). If nothing is reachable, it starts one via
@@ -189,7 +269,12 @@ points at `https://provider.example.com/callback?…` is also clickable.
 
 ## Output format
 
-Every command prints a JSON envelope on stdout:
+Every command prints a JSON envelope on stdout. The `matched.payload` shape
+varies by handler — the skill always surfaces it verbatim so you can assert
+whatever the publisher put there.
+
+Example: a `send_email` delivery (communication event, so `confirmationLink` and
+`templateData` are additionally surfaced at the top level):
 
 ```json
 {
@@ -226,6 +311,38 @@ Every command prints a JSON envelope on stdout:
 }
 ```
 
+Example: a non-communication event (e.g. `process_payment`). The payload is
+whatever the publisher passed in; `confirmationLink` and `templateData` are
+`null` because the event doesn't carry them:
+
+```json
+{
+  "ok": true,
+  "matched": {
+    "id": "delivery:def",
+    "handler": "process_payment",
+    "status": "done",
+    "eventId": "queue_event:ghi",
+    "eventName": "process_payment",
+    "payload": {
+      "subscriptionId": "subscription:abc",
+      "kind": "credits",
+      "amount": 1000,
+      "currency": "BRL",
+      "paymentMethodId": "payment_method:xyz",
+      "creditPurchaseId": "credit_purchase:mno"
+    },
+    "attempts": 1,
+    "maxAttempts": 5,
+    "finishedAt": "…",
+    "createdAt": "…"
+  },
+  "confirmationLink": null,
+  "templateData": null,
+  "waitedMs": 842
+}
+```
+
 Record ids are flattened to `"table:id"` strings so they can be copied directly
 into `test-db-queries` / `test-routes` / `test-events` follow-up calls.
 
@@ -236,9 +353,12 @@ asynchronous — it only runs while the worker loop inside the dev server is up.
 So after you publish, the delivery sits in `status = "pending"` until:
 
 1. The worker's next cycle picks it up (default poll: hundreds of ms).
-2. The handler runs (template render + channel call).
+2. The handler runs — whatever it happens to do (template render + provider call
+   for communications, gateway charge for `process_payment`, a custom subsystem
+   step, …).
 3. The handler returns and the delivery flips to `status = "done"` (or fails and
-   backs off).
+   backs off; after `maxAttempts` it moves to `status = "dead"` with `lastError`
+   set).
 
 `wait` polls every `--poll ms` (default 500) until a row matches all the
 filters. Set `--timeout` generously — on a cold dev server the first cycle can

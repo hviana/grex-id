@@ -663,7 +663,7 @@ function parseSince(value: unknown): Date | undefined {
 function printHelp(): void {
   console.log(
     [
-      "test-events — exercise the project's event queue + verification flow against the test DB.",
+      "test-events — debug/verify any handler in the project's event queue (communications are one case among many).",
       "",
       "USAGE",
       "  tsx skills/test-events/run.ts <command> [args]",

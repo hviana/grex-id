@@ -161,10 +161,13 @@ the `SKILL.md` before running anything. Current skills:
 - `skills/test-frontend/` — drive the UI in a real browser via Playwright. Also
   handles absolute external URLs (OAuth consent pages, payment-provider
   redirects, third-party callback URLs).
-- `skills/test-events/` — verify the event queue + communication flow
-  (`send_communication`, `verification_request`, human-confirmation links).
-  Works even when the underlying channel (email, SMS, …) has no real provider
-  configured — validation is done on the queue rows.
+- `skills/test-events/` — debug or verify **any** handler in the event queue
+  (not just communications): wait on a `delivery`, inspect the payload
+  (transactionId, subscriptionId, recipients, any custom field a subsystem or
+  framework handler put there). For communication events specifically, also
+  extracts the `verification_request` link and can click it via `test-frontend`.
+  Works even without real provider credentials (email, SMS, payment gateway, …)
+  — validation is done on the queue rows.
 - `skills/check-library-updates/` — audit and apply dependency bumps.
 
 Each skill enforces its own guardrails (e.g. `test-db-queries` refuses to run
