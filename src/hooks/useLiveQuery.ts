@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { connectFrontendDb } from "@/client/db/connection";
+import { connectFrontendDb } from "@/src/lib/db/connection";
 
 interface UseLiveQueryOptions<T> {
   query: string;

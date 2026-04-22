@@ -376,7 +376,10 @@ permission errors, and status messages.
 │   │                  location, entity-channel, file-access, common)
 │   ├── i18n/         (§5.1)
 │   ├── hooks/        (§17.3)
-│   └── lib/          (formatters, validators — isomorphic, no secrets)
+│   └── lib/          (formatters, validators — isomorphic, no secrets;
+│                      db/connection.ts — frontend WebSocket for LIVE SELECT;
+│                      payment/{interface,credit-card}.ts — client-side
+│                      payment tokenization; queries/.gitkeep)
 ├── server/                           # Backend-only; NEVER imported by frontend
 │   ├── db/
 │   │   ├── connection.ts             # §7.8
@@ -397,10 +400,6 @@ permission errors, and status messages.
 │   ├── module-registry.ts            # §11.1 — central registration API
 │   ├── core-register.ts              # Core self-registration (handlers + jobs)
 │   └── jobs/         (index, start-event-queue, recurring-billing, token-cleanup, expire-pending-payments)
-├── client/                           # Frontend-only; NEVER imported by server
-│   ├── db/connection.ts              # WebSocket for LIVE SELECT
-│   ├── queries/.gitkeep
-│   └── utils/payment/{interface,credit-card}.ts
 ├── public/systems/[slug]/logo.svg
 ├── systems/                            # Subsystem boot (§12.9)
 │   ├── index.ts                        # System boot entry — registers all systems
@@ -570,7 +569,7 @@ export async function getDb(): Promise<Surreal> {
 }
 ```
 
-#### 7.5 Frontend connection (`client/db/connection.ts`)
+#### 7.5 Frontend connection (`src/lib/db/connection.ts`)
 
 WebSocket using SurrealDB user/password authentication. Exclusively for
 `LIVE
@@ -2567,7 +2566,7 @@ dispatcher.
 
 ### 17. Frontend Architecture
 
-#### 17.1 SurrealDB frontend connection (`client/db/connection.ts`)
+#### 17.1 SurrealDB frontend connection (`src/lib/db/connection.ts`)
 
 WebSocket via SurrealDB user/password authentication. Exclusively for
 `LIVE
@@ -2579,7 +2578,7 @@ export async function connectFrontendDb(): Promise<Surreal>;
 
 #### 17.2 Payment contracts
 
-**Client-side** (`client/utils/payment/interface.ts`):
+**Client-side** (`src/lib/payment/interface.ts`):
 
 ```typescript
 export interface IClientPaymentProvider {
@@ -2602,7 +2601,7 @@ export interface TokenizationResult {
 }
 ```
 
-`client/utils/payment/credit-card.ts` implements this. Details depend on the
+`src/lib/payment/credit-card.ts` implements this. Details depend on the
 gateway's client SDK.
 
 **Server-side** (`server/utils/payment/interface.ts`):
@@ -5314,7 +5313,7 @@ flow; `TokensPage` (neverExpires/expiresAt exclusivity, frontendUse +
 frontendDomains, raw token once); `ConnectedAppsPage` (OAuth-only creation,
 revoke sets `revokedAt`); OAuth popup flow; spend-limit enforcement.
 
-**Phase 9 — Live Queries & Real-Time.** `client/db/connection.ts` (WebSocket);
+**Phase 9 — Live Queries & Real-Time.** `src/lib/db/connection.ts` (WebSocket);
 `useLiveQuery`; frontend query files with `LIVE SELECT` + proper `PERMISSIONS`;
 integration with UI.
 
