@@ -79,13 +79,9 @@ export async function findUserByVerifiedChannel(
     ? `type = $type AND value = $value AND verified = true`
     : `value = $value AND verified = true`;
   const query = `
-    LET $ch   = (SELECT id FROM entity_channel WHERE ${filter} LIMIT 1)[0];
-    LET $chId = IF $ch = NONE THEN NONE ELSE $ch.id END;
-    IF $chId = NONE
-      THEN []
-      ELSE (SELECT * FROM user WHERE channels CONTAINS $chId LIMIT 1
-              FETCH profile, channels)
-    END;`;
+    LET $ch = (SELECT id FROM entity_channel WHERE ${filter} LIMIT 1)[0];
+    SELECT * FROM user WHERE channels CONTAINS $ch.id LIMIT 1
+      FETCH profile, channels;`;
   const result = await db.query<unknown[]>(query, {
     value,
     type: channelType ?? undefined,
