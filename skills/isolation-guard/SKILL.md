@@ -1,58 +1,49 @@
 ---
 name: isolation-guard
-description: PRIORITY 1 — run BEFORE every other skill and before writing, editing, creating, deleting, or planning any code, file, migration, query, route, component, handler, template, seed, test, or doc. The project has three strictly isolated layers (Core, subsystems, frameworks) and every change must belong to exactly one. Trigger this skill at the very start of ANY development request (even single-word ones like "fix", "add", "refactor", "implement", "create a system", "add a framework") unless the user's prompt already explicitly names the target layer ("in Core", "in the grex-id subsystem", "in the agents framework", "create a new subsystem called X", "create a new framework called Y"). When the layer is not explicit, this skill lists the existing frameworks and subsystems dynamically, explains the difference, and HARD-BLOCKS further work until the user answers. When the user confirms a new subsystem or framework should be created, this same skill also scaffolds the mandatory folder structure from the root AGENTS.md (all required subfolders, stub register.ts / AGENTS.md / i18n JSON files) and drops `.gitkeep` into every directory that would otherwise be empty.
+description: PRIORITY 1 — run BEFORE every other skill and before writing, editing, creating, deleting, or planning any code. The project has three strictly isolated layers (Core, subsystems, frameworks) and every change must belong to exactly one. Trigger this skill at the start of ANY development request (even single-word ones like "fix", "add", "refactor", "create a system") unless the prompt already names the target layer ("in Core", "in the grex-id subsystem", "in the agents framework", "create a new subsystem called X", "create a new framework called Y"). When the layer is unclear, this skill lists existing subsystems and frameworks dynamically, explains the three layers, and HARD-BLOCKS further work until the user answers. **Subsystem creation is mandatory-interactive: both a `slug` (the systemSlug — identifier used as folder name, `system.slug` column, URL segment, i18n namespace, `tenant.systemSlug`) AND a human-readable `--name "<Display Name>"` MUST be collected from the user; without either value the skill blocks (exit 2) and you MUST NOT proceed.** The skill scaffolds the folder structure mandated by the root AGENTS.md (subfolders, stub register.ts / AGENTS.md / i18n JSON files, `.gitkeep` in empty dirs) and wires the entry into systems/index.ts or frameworks/index.ts. On subsystem create it INSERTS a `system` row; on subsystem remove it DELETES it. Remove mode is dry-run by default; `--yes` is required for actual deletion.
 ---
 
 # Isolation Guard
 
 **Priority 1. Runs first. Blocks everything else.**
 
-Nothing in this project is layer-agnostic. Every file belongs to exactly one of
-three namespaces (Core, one subsystem, or one framework) and mixing them is
-forbidden by the root `AGENTS.md` (§6, §26). This skill is the gate that keeps
-that invariant alive: before you touch any file, you confirm which layer the
-work belongs to.
+Every file in this project belongs to exactly one namespace — Core, one
+subsystem, or one framework. Mixing them is forbidden by the root `AGENTS.md`
+(§6, §26). This skill is the gate that keeps that invariant alive.
 
-## When to invoke
+## Decision tree
 
-Invoke this skill at the VERY START of the conversation, before any other skill,
-any Read/Edit/Write/Bash call, and any planning, when the user asks you to do
-any of the following and has NOT already named the target layer:
+```
+Did the user's prompt name the target layer?
+├── YES ("in Core" / "in the <slug> subsystem" / "in the <name> framework")
+│   └── Proceed with the work in that scope. Do NOT run this skill.
+│
+└── NO (anything ambiguous: "add X", "fix Y", "refactor Z", "make a new app")
+    └── Run this skill in list-block mode:
+        tsx skills/isolation-guard/run.ts
+        Relay the printed message. Wait for the user's answer. Then:
+        ├── "in Core"                                 → Proceed in Core.
+        ├── "in the <slug> subsystem"                 → Proceed in that subsystem.
+        ├── "in the <name> framework"                 → Proceed in that framework.
+        ├── "create a new subsystem called <slug>"    → Ask for the display name,
+        │                                               then scaffold (see below).
+        └── "create a new framework called <name>"    → Scaffold (see below).
+```
 
-- Write, edit, create, delete, rename, or refactor code / files.
-- Add a new feature, route, component, query, migration, seed, handler, job,
-  template, contract, i18n key, or setting.
-- Fix a bug, investigate a failure, or reproduce an issue that requires a code
-  change.
-- Create a new subsystem or a new framework (this skill also covers the "create
-  a new one" branch — the user must still declare intent explicitly).
-- Plan an implementation, write a design note, or break a task into steps.
+Skip this skill when:
 
-Skip this skill ONLY when one of the following is true:
+1. The prompt already explicitly names the target layer (see the patterns above
+   — case-insensitive).
+2. The request is read-only — answering a question, summarizing code, running
+   `skills/test-*`, or listing files. No files will be written.
+3. The user has just answered the guard in the same conversation.
 
-1. The user's prompt already explicitly names the target layer using one of
-   these patterns (case-insensitive):
-   - "in Core" / "for Core" / "at the Core" / "Core-level" / "the root AGENTS"
-   - "in the `<slug>` subsystem" / "for subsystem `<slug>`" / "in
-     `systems/<slug>/`"
-   - "in the `<name>` framework" / "for framework `<name>`" / "in
-     `frameworks/<name>/`"
-   - "create a new subsystem called `<slug>`" / "add a subsystem `<slug>`"
-   - "create a new framework called `<name>`" / "add a framework `<name>`"
-2. The request is read-only (answering a question, summarizing code, running a
-   test with `skills/test-*`, listing files). No files will be created or
-   edited.
-3. The user has JUST answered this skill in the same conversation — don't loop.
+**When in doubt, run it.** A false positive costs one short answer; a false
+negative writes code in the wrong namespace.
 
-When in doubt, invoke it. A false positive costs one short answer; a false
-negative lets you write code in the wrong namespace.
+## Three modes
 
-## Usage
-
-The skill has two modes — a default "list + block" mode, and a scaffold mode for
-creating the mandatory folder structure of a new subsystem or framework.
-
-### 1. Default mode — list and block
+### 1. List-block — confirm the target layer
 
 Run with no arguments:
 
@@ -60,118 +51,175 @@ Run with no arguments:
 tsx skills/isolation-guard/run.ts
 ```
 
-The script scans `frameworks/*/` and `systems/*/` at runtime (never a hardcoded
-list), prints the current inventory, explains the three layers, and exits with
-code `2` to signal "blocked — awaiting user clarification".
+The script scans `systems/*/` and `frameworks/*/` at runtime, prints the current
+inventory plus the three-layer explanation, and exits with code `2` meaning
+"blocked — awaiting user clarification".
 
-When the command finishes:
+After running it:
 
-1. Show the printed message to the user verbatim — or summarize it, but keep the
-   list of existing subsystems and frameworks intact.
-2. **Stop.** Do not read files, do not plan, do not call another skill, do not
-   propose code. Wait for the user to reply with the target layer.
-3. Once the user answers ("do this in Core", "add it to the grex-id subsystem",
-   "create a new framework called foo", etc.), continue with the original
-   request under that scope. Do not re-run the guard in the same conversation.
+1. Relay the printed message to the user (verbatim or summarized, but keep the
+   dynamic list of subsystems and frameworks intact).
+2. **Stop.** Do not read files, plan, invoke another skill, or write code until
+   the user answers.
+3. Once answered, proceed in that scope. Do not re-run the guard in the same
+   conversation.
 
-### 2. Scaffold mode — create a new subsystem or framework
+### 2. Scaffold — create a new subsystem or framework
 
-When the user confirms they want a new subsystem or framework, run the skill
-with the appropriate flag **before** writing any other code. The scaffolder
-creates every folder mandated by the root `AGENTS.md` (§6 for subsystems, §26.1
-for frameworks), drops a `.gitkeep` into any directory that would otherwise be
-empty, writes stub `register.ts` / `AGENTS.md` / empty i18n JSON files, and
-wires the new entry into the matching aggregator (`systems/index.ts` or
-`frameworks/index.ts`).
+#### Subsystem
+
+**Subsystem creation is mandatory-interactive.** Before running the command you
+MUST collect TWO values from the user:
+
+1. **slug** (positional argument after `--create-subsystem`) — the `systemSlug`.
+   The same string is used as the folder name under every Core root
+   (`systems/<slug>/`, `src/components/systems/<slug>/`,
+   `app/api/systems/<slug>/`, `server/db/queries/systems/<slug>/`, etc.), as the
+   `system.slug` column in the database, as the URL segment in
+   `/api/systems/<slug>/…`, as the i18n namespace `systems.<slug>.*`, and as the
+   `tenant.systemSlug` embedded in every JWT. Lowercase letters, digits,
+   hyphens; must start with a letter. Chosen once — renaming later means a
+   migration.
+2. **name** (passed via `--name "<Display Name>"`) — the human-readable display
+   name shown on the system card, in the ProfileMenu system selector, and on
+   public pages. Free-form string with spaces allowed (e.g. `"Grex ID"`,
+   `"My Cool App"`).
+
+If you run the command without one of these, the skill prints an explainer and
+exits with code `2`. **Do not invent, guess, or default a value** — ask the user
+and re-run.
 
 ```bash
-# New subsystem (lowercase slug, hyphens allowed, must start with a letter)
-tsx skills/isolation-guard/run.ts --create-subsystem <slug>
+tsx skills/isolation-guard/run.ts --create-subsystem <slug> --name "<Display Name>"
 
-# New framework (same identifier rules)
+# Example
+tsx skills/isolation-guard/run.ts --create-subsystem grex-id --name "Grex ID"
+```
+
+What the command does (in order):
+
+1. Validates the slug (`^[a-z][a-z0-9-]*$`).
+2. Refuses if `"test": true` is not set in `database.json` (exit `2`).
+3. Refuses if `systems/<slug>/` already exists or a `system` row with that slug
+   already exists in the DB (exit `1`).
+4. Writes `systems/<slug>/register.ts` (i18n-pre-wired stub) and
+   `systems/<slug>/AGENTS.md` (inheriting stub, §26.2).
+5. Writes empty `src/i18n/{en,pt-BR}/systems/<slug>.json` placeholders.
+6. Creates every scoped subfolder mandated by AGENTS.md §6 and drops a
+   `.gitkeep` into any that would otherwise be empty:
+   `src/components/systems/<slug>/`, `server/db/migrations/systems/<slug>/`,
+   `server/db/queries/systems/<slug>/`,
+   `server/db/frontend-queries/systems/<slug>/`,
+   `server/event-queue/handlers/systems/<slug>/`, `app/api/systems/<slug>/`,
+   `public/systems/<slug>/`.
+7. Adds an import and a call to `register<Slug>()` inside `registerAllSystems()`
+   in `systems/index.ts`.
+8. INSERTs a `system` row: `name = <display name>`, `slug = <slug>`,
+   `logoUri = ""`, `termsOfService = NONE`.
+
+#### Framework
+
+Frameworks have no DB row, no display name, and no interactive prompt — just the
+identifier:
+
+```bash
 tsx skills/isolation-guard/run.ts --create-framework <name>
 ```
 
-What gets created for a subsystem `<slug>`:
+What the command does:
 
-- `systems/<slug>/register.ts` — stub with i18n registration pre-wired.
-- `systems/<slug>/AGENTS.md` — inheriting-root stub (§26.2).
-- `src/i18n/{en,pt-BR}/systems/<slug>.json` — empty `{}` placeholders.
-- `.gitkeep` inside every empty directory: `src/components/systems/<slug>/`,
-  `server/db/migrations/systems/<slug>/`, `server/db/queries/systems/<slug>/`,
-  `server/db/frontend-queries/systems/<slug>/`,
-  `server/event-queue/handlers/systems/<slug>/`, `app/api/systems/<slug>/`,
-  `public/systems/<slug>/`.
-- `systems/index.ts` gets a new import and a call to `register()`.
+1. Validates the name (same regex as slug).
+2. Refuses if `frameworks/<name>/` already exists and is non-empty (exit `1`).
+3. Writes `frameworks/<name>/AGENTS.md` (inheriting stub) and
+   `frameworks/<name>/register.ts` (empty stub).
+4. Writes empty `frameworks/<name>/src/i18n/{en,pt-BR}/<name>.json`
+   placeholders.
+5. Creates every scoped subfolder mandated by AGENTS.md §26.1 and drops a
+   `.gitkeep` into any that would otherwise be empty:
+   `frameworks/<name>/app/api/<name>/`,
+   `frameworks/<name>/src/components/<name>/`,
+   `frameworks/<name>/src/contracts/`,
+   `frameworks/<name>/server/db/migrations/`,
+   `frameworks/<name>/server/db/queries/`, `frameworks/<name>/server/db/seeds/`,
+   `frameworks/<name>/server/utils/`, `frameworks/<name>/public/<name>/`.
+6. Adds an import and a call to `register<Name>Framework()` inside
+   `registerAllFrameworks()` in `frameworks/index.ts`.
 
-What gets created for a framework `<name>`:
+### 3. Remove — delete an existing subsystem or framework
 
-- `frameworks/<name>/AGENTS.md` — inheriting-root stub (§26.2).
-- `frameworks/<name>/register.ts` — empty stub (§26.4).
-- `frameworks/<name>/src/i18n/{en,pt-BR}/<name>.json` — empty `{}` placeholders.
-- `.gitkeep` inside every empty directory: `frameworks/<name>/app/api/<name>/`,
-  `frameworks/<name>/src/components/<name>/`,
-  `frameworks/<name>/src/contracts/`, `frameworks/<name>/server/db/migrations/`,
-  `frameworks/<name>/server/db/queries/`, `frameworks/<name>/server/db/seeds/`,
-  `frameworks/<name>/server/utils/`, `frameworks/<name>/public/<name>/`.
-- `frameworks/index.ts` gets a new import and a call to `register()`.
+**Removal is destructive.** Default mode is dry-run; pass `--yes` to actually
+delete.
 
-Safety:
+```bash
+# Dry run — prints the plan, touches nothing (exit 2).
+tsx skills/isolation-guard/run.ts --remove-subsystem <slug>
+tsx skills/isolation-guard/run.ts --remove-framework <name>
 
-- The scaffolder refuses if the target directory already exists (subsystem) or
-  already exists and is non-empty (framework). It never overwrites files.
-- Identifier validation: lowercase letters, digits, hyphens; must start with a
-  letter. Anything else exits with a clear error.
-- After scaffolding, proceed with the actual feature work under the new
-  namespace — fill in the register stub, add migrations, queries, routes,
-  components, etc., following the root `AGENTS.md`.
+# Confirmed — deletes everything (exit 0).
+tsx skills/isolation-guard/run.ts --remove-subsystem <slug> --yes
+tsx skills/isolation-guard/run.ts --remove-framework <name> --yes
+```
 
-## What the user must say
+Subsystem removal (dry-run lists each item, `--yes` deletes):
+
+- Every folder the scaffolder created (all eight scoped roots).
+- The `src/i18n/{en,pt-BR}/systems/<slug>.json` files.
+- The import and `register<Slug>();` call in `systems/index.ts`.
+- The `system` row in the DB (`DELETE system WHERE slug = <slug>`). Requires
+  `"test": true`. Silently skipped when no matching row exists.
+
+Framework removal:
+
+- `frameworks/<name>/` and everything inside it.
+- The import and `register<Name>Framework();` call in `frameworks/index.ts`.
+
+## Exit codes
+
+| Code | Meaning                                                                                                                                             |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Scaffold or confirmed removal completed.                                                                                                            |
+| `1`  | Validation error (missing/invalid identifier, target already exists, DB conflict, target to remove does not exist). Fix the input and re-run.       |
+| `2`  | Blocking signal. List-block mode, missing required `--name`, missing `"test": true`, or a dry-run awaiting `--yes`. **Stop and relay the message.** |
+
+## What the user must say (list-block mode replies)
 
 One of these is enough:
 
-| Target                      | Example user reply                                                |
-| --------------------------- | ----------------------------------------------------------------- |
-| Core (the platform itself)  | "in Core"                                                         |
-| Existing subsystem          | "in the `grex-id` subsystem"                                      |
-| Existing framework          | "in the `agents` framework"                                       |
-| Brand-new subsystem         | "create a new subsystem called `my-slug`"                         |
-| Brand-new framework         | "create a new framework called `my-name`"                         |
-| Both (Core change + tenant) | "Core change needed first, then apply in the `grex-id` subsystem" |
+| Target                  | Example user reply                                                |
+| ----------------------- | ----------------------------------------------------------------- |
+| Core                    | "in Core"                                                         |
+| Existing subsystem      | "in the `grex-id` subsystem"                                      |
+| Existing framework      | "in the `agents` framework"                                       |
+| Brand-new subsystem     | "create a new subsystem called `my-slug`" (then ask for the name) |
+| Brand-new framework     | "create a new framework called `my-name`"                         |
+| Core first, then tenant | "Core change first, then apply in the `grex-id` subsystem"        |
 
-If the user answers ambiguously ("the backend", "the API", "the app"), run the
-skill again — those labels cross layer boundaries.
+Ambiguous answers ("the backend", "the API", "the app") cross layer boundaries —
+run the skill again.
 
 ## Layer cheat-sheet (mirror of AGENTS.md §6 + §26)
 
-- **Core** — the platform foundation. Lives at the project root (`app/`, `src/`,
+- **Core** — platform foundation at the project root (`app/`, `src/`,
   `server/`). Knows nothing about specific subsystems or frameworks.
-- **Subsystems** — runtime tenants. One `[slug]` folder per product under every
-  relevant root (`app/api/systems/<slug>/`, `src/components/systems/<slug>/`,
-  `server/db/queries/systems/<slug>/`, `src/i18n/<locale>/systems/<slug>.json`,
-  `systems/<slug>/register.ts`, …). Consume from Core and from declared
-  frameworks; never extend Core, never reach into another subsystem.
-- **Frameworks** — reusable, design-time extensions of Core, each under
-  `frameworks/<name>/` with its own `AGENTS.md`, routes at `/api/<name>/…`,
-  components under `frameworks/<name>/src/components/<name>/`, migrations /
-  queries / utilities under `frameworks/<name>/server/…`, and a
-  `frameworks/<name>/register.ts`. Consumed by zero or more subsystems; never
-  import from Core internals, another framework, or any subsystem.
+- **Subsystems** — runtime tenants. One `<slug>` folder per product under every
+  relevant root. Consume from Core and declared frameworks; never extend Core,
+  never reach into another subsystem.
+- **Frameworks** — reusable, design-time extensions of Core under
+  `frameworks/<name>/`. Consumed by zero or more subsystems; never import from
+  Core internals, another framework, or any subsystem.
 
 Layering is one-way: **Core ⇐ Frameworks ⇐ Subsystems**.
 
 ## Rules
 
-- Never skip this skill because "the answer seems obvious". The project has been
-  burned by Core files created inside framework folders and vice-versa.
-- Never hardcode the inventory in your answer. Always use the run-time listing
-  from `run.ts` — new subsystems and frameworks appear / disappear between
-  conversations.
-- Never proceed after running the skill without the user's explicit answer.
-  Silence is not consent; an empty reply is not consent.
-- Never invoke any other skill (`test-db-queries`, `test-routes`,
-  `test-frontend`, `test-events`, `check-library-updates`) before this one when
-  the triggers above apply.
-- Uses Node built-ins via `node:*` specifiers (`node:fs`, `node:path`,
-  `node:process`) so the script stays runtime-agnostic — same shape Deno
-  accepts.
+- Never skip this skill because "the answer seems obvious". New subsystems and
+  frameworks appear between conversations — always check live.
+- Never hardcode the inventory in your answer. Use the output of `run.ts`, not
+  training data.
+- Never proceed after list-block mode without an explicit user answer. Silence
+  is not consent.
+- Never invoke another skill (`test-db-queries`, `test-routes`, `test-frontend`,
+  `test-events`, `check-library-updates`) before this one when the triggers
+  above apply.
+- Runtime-agnostic: uses `node:*` built-ins only (`node:fs`, `node:path`,
+  `node:process`) — same shape Deno accepts.
