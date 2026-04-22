@@ -7,6 +7,7 @@ import { communicationGuard } from "@/server/utils/verification-guard";
 import { publish } from "@/server/event-queue/publisher";
 import { getDb, rid } from "@/server/db/connection";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
+import { decryptField, encryptField } from "@/server/utils/crypto";
 import {
   generateSecret,
   generateURI,
@@ -72,8 +73,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const db = await getDb();
 
   if (action === "setup-totp") {
-    // Generate a fresh TOTP secret client-side (the browser never sees it
-    // again after this response — it only shows the QR code / URI).
+    // Generate a fresh TOTP secret and stash it on the user row as
+    // `pendingTwoFactorSecret`. The secret never travels through
+    // `verification_request.payload` (§15.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
     const userProfile = await db.query<
       [{ profile: { name: string; channels: { value: string }[] } }[]]
@@ -84,7 +86,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     const accountLabel = userProfile[0]?.[0]?.profile?.channels?.[0]?.value ??
       userProfile[0]?.[0]?.profile?.name ?? "user";
 
-    const secret = await generateSecret({
+    const secret = generateSecret({
       length: 20,
       crypto: new NobleCryptoPlugin(),
       base32: new ScureBase32Plugin(),
@@ -96,21 +98,68 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       secret,
     });
 
+    // Store the AES-256-GCM envelope, never the raw base32 secret (§7.1.1).
+    const secretEnvelope = await encryptField(secret);
+    await db.query(
+      `UPDATE $userId SET pendingTwoFactorSecret = $secret, updatedAt = time::now()`,
+      { userId: rid(userId), secret: secretEnvelope },
+    );
+
+    // Return only the provisioning URI to the browser. The raw secret is
+    // embedded in that URI by design (otpauth:// format) so the authenticator
+    // app can consume it — but the browser does not need to echo it back.
     return Response.json({
       success: true,
-      data: { provisioningUri: uri, secret },
+      data: { provisioningUri: uri },
     });
   }
 
   if (action === "confirm-totp") {
-    const { code, secret } = body as { code?: string; secret?: string };
-    if (!code || !secret) {
+    const { code } = body as { code?: string };
+    if (!code) {
       return Response.json(
         {
           success: false,
           error: {
             code: "VALIDATION",
             errors: ["validation.code.required"],
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    // Load the pending secret envelope we stashed on `setup-totp` and
+    // decrypt once (§12.15) for the TOTP comparison. The plaintext stays
+    // in request scope.
+    const pending = await db.query<[{ pendingTwoFactorSecret?: string }[]]>(
+      `SELECT pendingTwoFactorSecret FROM $userId LIMIT 1`,
+      { userId: rid(userId) },
+    );
+    const envelope = pending[0]?.[0]?.pendingTwoFactorSecret;
+    if (!envelope) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: ["common.twoFactor.error.invalidCode"],
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    let secret: string;
+    try {
+      secret = await decryptField(envelope);
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "2FA_INVALID",
+            message: "common.twoFactor.error.invalidCode",
           },
         },
         { status: 400 },
@@ -136,11 +185,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
+    // Fire the confirmation link. The pending secret stays on the user row;
+    // the verify handler promotes it to `twoFactorSecret` and clears the
+    // pending field when the link is clicked.
     const guard = await communicationGuard({
       ownerId: userId,
       ownerType: "user",
       actionKey: "auth.action.twoFactorEnable",
-      payload: { twoFactorSecret: secret },
+      payload: {},
       tenant: {
         companyId: ctx.tenant.companyId,
         systemId: ctx.tenant.systemId,

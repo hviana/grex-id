@@ -180,25 +180,30 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await applyPasswordHash(request.ownerId, hash);
     }
   } else if (actionKey === "auth.action.twoFactorEnable") {
-    const secret = typeof payload?.twoFactorSecret === "string"
-      ? payload!.twoFactorSecret
-      : "";
-    if (secret) {
-      const db = await getDb();
-      await db.query(
-        `UPDATE $userId SET
-          twoFactorEnabled = true,
-          twoFactorSecret = $secret,
-          updatedAt = time::now()`,
-        { userId: rid(request.ownerId), secret },
-      );
-    }
+    // Promote the user's pendingTwoFactorSecret (set by `setup-totp` and
+    // validated by `confirm-totp`) to twoFactorSecret. The secret never
+    // travels through the verification_request payload (§15.1 rule 5).
+    // The entire read-then-conditional-write is a single batched query per
+    // §7.2 so the user can't slip in between.
+    const db = await getDb();
+    await db.query(
+      `LET $u = (SELECT pendingTwoFactorSecret FROM $userId LIMIT 1);
+       IF array::len($u) > 0 AND $u[0].pendingTwoFactorSecret != NONE {
+         UPDATE $userId SET
+           twoFactorEnabled = true,
+           twoFactorSecret = $u[0].pendingTwoFactorSecret,
+           pendingTwoFactorSecret = NONE,
+           updatedAt = time::now();
+       };`,
+      { userId: rid(request.ownerId) },
+    );
   } else if (actionKey === "auth.action.twoFactorDisable") {
     const db = await getDb();
     await db.query(
       `UPDATE $userId SET
         twoFactorEnabled = false,
         twoFactorSecret = NONE,
+        pendingTwoFactorSecret = NONE,
         updatedAt = time::now()`,
       { userId: rid(request.ownerId) },
     );

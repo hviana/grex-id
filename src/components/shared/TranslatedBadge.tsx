@@ -15,11 +15,33 @@ const KIND_SEGMENT: Record<TranslatedBadgeKind, string> = {
   resource: "resources",
 };
 
-const KIND_PALETTE: Record<TranslatedBadgeKind, string> = {
-  role: "var(--color-primary-green)",
-  permission: "var(--color-secondary-blue)",
-  entity: "var(--color-light-green)",
-  resource: "var(--color-secondary-blue)",
+// Tailwind-only palette per kind, using the project's CSS variables (§4) as
+// the color source. Each entry is a set of utility classes that combine into
+// a tinted-glassmorphism pill consistent with the visual standard.
+const KIND_CLASSES: Record<
+  TranslatedBadgeKind,
+  { container: string; translation: string }
+> = {
+  role: {
+    container:
+      "border-[var(--color-primary-green)]/40 bg-[var(--color-primary-green)]/10 text-[var(--color-primary-green)]",
+    translation: "text-[var(--color-primary-green)]",
+  },
+  permission: {
+    container:
+      "border-[var(--color-secondary-blue)]/40 bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)]",
+    translation: "text-[var(--color-secondary-blue)]",
+  },
+  entity: {
+    container:
+      "border-[var(--color-light-green)]/40 bg-[var(--color-light-green)]/10 text-[var(--color-light-green)]",
+    translation: "text-[var(--color-light-green)]",
+  },
+  resource: {
+    container:
+      "border-[var(--color-secondary-blue)]/40 bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)]",
+    translation: "text-[var(--color-secondary-blue)]",
+  },
 };
 
 interface TranslatedBadgeProps {
@@ -27,7 +49,6 @@ interface TranslatedBadgeProps {
   token: string;
   systemSlug?: string;
   frameworkName?: string;
-  color?: string;
   onRemove?: () => void;
   /**
    * Human mode — renders ONLY the translation, hiding the raw token. Use on
@@ -42,20 +63,20 @@ interface TranslatedBadgeProps {
  * Compact badge that resolves a role / permission / entity / resource token
  * into its translation via the standard i18n structure (§5.6.1). Default mode
  * renders the raw token and its translation stacked vertically so operators
- * see both. `compact` mode collapses to the translation alone — for
- * surfaces read by end users who lack technical context.
+ * see both. `compact` mode collapses to the translation alone — for surfaces
+ * read by end users who lack technical context.
  */
 export default function TranslatedBadge({
   kind,
   token,
   systemSlug,
   frameworkName,
-  color,
   onRemove,
   compact = false,
 }: TranslatedBadgeProps) {
   const { t } = useLocale();
   const segment = KIND_SEGMENT[kind];
+  const palette = KIND_CLASSES[kind];
 
   function resolve(prefix: string): string | null {
     const key = `${prefix}.${token}`;
@@ -75,22 +96,14 @@ export default function TranslatedBadge({
     if (translated) break;
   }
 
-  const accent = color ?? KIND_PALETTE[kind];
-  const swatchBg = `${accent}1a`; // ~10% alpha
-  const swatchBorder = `${accent}55`;
+  const baseContainer =
+    `inline-flex items-center gap-2 rounded-full border px-3 py-1 ${palette.container}`;
 
   // Human mode: show the translation only. If no translation exists the raw
   // token is the only available label, so we render that instead.
   if (compact) {
     return (
-      <span
-        className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs"
-        style={{
-          backgroundColor: swatchBg,
-          borderColor: swatchBorder,
-          color: accent,
-        }}
-      >
+      <span className={`${baseContainer} text-xs`}>
         <span className="text-white">{translated ?? token}</span>
         {onRemove && (
           <button
@@ -108,21 +121,11 @@ export default function TranslatedBadge({
 
   // Default: raw token + translated label stacked vertically.
   return (
-    <span
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1"
-      style={{
-        backgroundColor: swatchBg,
-        borderColor: swatchBorder,
-        color: accent,
-      }}
-    >
+    <span className={baseContainer}>
       <span className="flex flex-col leading-tight">
         <span className="font-mono text-xs text-white">{token}</span>
         {translated && (
-          <span
-            className="text-[10px]"
-            style={{ color: "var(--color-light-text)" }}
-          >
+          <span className={`text-[10px] ${palette.translation}`}>
             {translated}
           </span>
         )}

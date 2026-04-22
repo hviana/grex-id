@@ -10,6 +10,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField, {
   type BadgeValue,
 } from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 interface MenuItemData {
   id: string;
@@ -30,6 +31,7 @@ interface TreeNode extends MenuItemData {
 
 interface MenuTreeEditorProps {
   systemId: string;
+  systemSlug?: string;
 }
 
 function buildTree(items: MenuItemData[]): TreeNode[] {
@@ -63,7 +65,9 @@ function isIncomplete(node: TreeNode): boolean {
   return false;
 }
 
-export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
+export default function MenuTreeEditor(
+  { systemId, systemSlug }: MenuTreeEditorProps,
+) {
   const { t } = useLocale();
   const { systemToken } = useAuth();
   const [items, setItems] = useState<MenuItemData[]>([]);
@@ -610,6 +614,14 @@ export default function MenuTreeEditor({ systemId }: MenuTreeEditorProps) {
             value={formRequiredRoles}
             onChange={(vals) => setFormRequiredRoles(vals)}
             fetchFn={fetchRoles}
+            renderBadge={(item, remove) => (
+              <TranslatedBadge
+                kind="role"
+                token={typeof item === "string" ? item : item.name}
+                systemSlug={systemSlug}
+                onRemove={remove}
+              />
+            )}
           />
 
           <MultiBadgeField

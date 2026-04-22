@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/src/hooks/useLocale";
-import { useFrontCore } from "@/src/hooks/useFrontCore";
 import { getCookie, setCookie } from "@/src/lib/cookies";
 
 const CONSENT_COOKIE = "core_data_tracking_consent";
@@ -16,34 +15,29 @@ const SIX_MONTHS_DAYS = 180;
  */
 export default function CookieConsent() {
   const { t } = useLocale();
-  const frontCore = useFrontCore();
   const searchParams = useSearchParams();
 
-  const [visible, setVisible] = useState(false);
+  // SSR: document is undefined, cookie is unknown → treat as decided so the
+  // popup doesn't flash in the server shell. On first client render the lazy
+  // initializer reads the real cookie, and visibility is derived from there.
+  const [cookieAtMount] = useState<string | undefined>(() => {
+    if (typeof document === "undefined") return "ssr";
+    return getCookie(CONSENT_COOKIE);
+  });
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    // Defer until after hydration so the server-rendered shell matches.
-    const existing = getCookie(CONSENT_COOKIE);
-    if (!existing) setVisible(true);
-  }, []);
+  const visible = cookieAtMount === undefined && !dismissed;
 
   // Resolve the terms link target. Prefer the ?system= query param (present
-  // on auth pages + public homepage), fall back to FrontCore's
-  // `front.app.defaultSystem` when eventually exposed; otherwise leave the
-  // slug empty and let `/terms` show the core fallback.
+  // on auth pages + public homepage). When absent, hit `/terms` without a
+  // slug — the page will show the core generic terms (§25.1 resolution
+  // order). `app.defaultSystem` is a server-only setting and is not
+  // consumable here; if the superuser wants the popup to point at a specific
+  // system by default, they should set `?system=` on the relevant links.
   const systemFromUrl = searchParams.get("system");
   const termsHref = systemFromUrl
     ? `/terms?system=${encodeURIComponent(systemFromUrl)}`
     : "/terms";
-
-  // Ensure FrontCore is loaded (silent no-op when it already is). We don't
-  // block the popup on the response — the list of tracked characteristics is
-  // only consulted by consumers of the consent state, not by the popup itself.
-  useEffect(() => {
-    if (!frontCore.loaded) {
-      frontCore.reload().catch(() => {});
-    }
-  }, [frontCore]);
 
   const decide = (accepted: boolean) => {
     setCookie(
@@ -51,7 +45,7 @@ export default function CookieConsent() {
       accepted ? "accepted" : "declined",
       SIX_MONTHS_DAYS,
     );
-    setVisible(false);
+    setDismissed(true);
   };
 
   if (!visible) return null;

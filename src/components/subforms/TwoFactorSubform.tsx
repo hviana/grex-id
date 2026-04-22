@@ -25,7 +25,6 @@ export default function TwoFactorSubform({
 
   const [setupOpen, setSetupOpen] = useState(false);
   const [provisioningUri, setProvisioningUri] = useState<string | null>(null);
-  const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -52,7 +51,6 @@ export default function TwoFactorSubform({
         return;
       }
       setProvisioningUri(json.data.provisioningUri);
-      setSecret(json.data.secret);
       setSetupOpen(true);
     } catch {
       setError("common.error.network");
@@ -62,7 +60,7 @@ export default function TwoFactorSubform({
   };
 
   const confirmSetup = async () => {
-    if (!systemToken || !secret) return;
+    if (!systemToken) return;
     setError(null);
     setLoading(true);
     try {
@@ -75,17 +73,17 @@ export default function TwoFactorSubform({
         body: JSON.stringify({
           action: "confirm-totp",
           code,
-          secret,
         }),
       });
       const json = await res.json();
       if (!json.success) {
-        setError(json.error?.message ?? "common.error.generic");
+        const msg = json.error?.errors?.[0] ?? json.error?.message ??
+          "common.error.generic";
+        setError(msg);
         return;
       }
       setSetupOpen(false);
       setCode("");
-      setSecret(null);
       setProvisioningUri(null);
       setSuccess("common.twoFactor.setup.confirmationSent");
       onRequested?.();
@@ -250,7 +248,6 @@ export default function TwoFactorSubform({
               onClick={() => {
                 setSetupOpen(false);
                 setCode("");
-                setSecret(null);
                 setProvisioningUri(null);
               }}
               className="rounded-lg border border-[var(--color-dark-gray)] px-4 py-2 text-sm text-[var(--color-light-text)] hover:bg-white/5"

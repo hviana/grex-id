@@ -8,6 +8,7 @@ import type {
   FileAccessUploadSection,
 } from "@/src/contracts/file-access";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
@@ -102,6 +103,13 @@ function SectionEditor({
         onChange={(vals) =>
           onChange({ ...section, permissions: vals as string[] })}
         formatHint={t("core.fileAccess.permissionsHint")}
+        renderBadge={(item, remove) => (
+          <TranslatedBadge
+            kind="permission"
+            token={typeof item === "string" ? item : item.name}
+            onRemove={remove}
+          />
+        )}
       />
     </div>
   );
@@ -158,6 +166,13 @@ function UploadSectionEditor({
         onChange={(vals) =>
           onChange({ ...section, permissions: vals as string[] })}
         formatHint={t("core.fileAccess.permissionsHint")}
+        renderBadge={(item, remove) => (
+          <TranslatedBadge
+            kind="permission"
+            token={typeof item === "string" ? item : item.name}
+            onRemove={remove}
+          />
+        )}
       />
 
       <div>

@@ -462,6 +462,53 @@ permission errors, and status messages.
   `FULLTEXT ANALYZER general_analyzer_fts BM25` indexes on names).
 - **Queries live in `server/db/queries/`**, never inlined in route handlers.
 
+#### 7.1.1 Sensitive data must never be stored plainly
+
+**Sensitive information is never written to the database as plaintext — at rest,
+ever.** This rule applies to every table, every field, every migration, every
+seed, every framework, and every subsystem. The options, in order of preference:
+
+1. **Do not store it at all.** Passwords are the canonical example — we store an
+   argon2 hash (§7.1) and verify on demand; the plaintext is discarded after the
+   argon2 call and never touches a column.
+2. **External tokenization.** Card numbers, API secrets that belong to a third
+   party, payment instruments — push to a gateway / secret manager / vault, and
+   store only the opaque token or id it returns. The token carries no sensitive
+   data on its own.
+3. **Encryption at rest (last resort).** When the runtime genuinely needs the
+   plaintext later (e.g. symmetric shared secrets like TOTP keys that must be
+   re-derived at verify time) and no external vault is available, the value is
+   stored as AES-256-GCM ciphertext produced by the shared wrapper (§12.15).
+   Plaintext lives in memory only for the duration of a single request and is
+   never logged, cached to disk, or placed in another column.
+
+**What counts as sensitive:** passwords, card / PAN / CVV data, raw API tokens
+and refresh tokens (the wrapper uses hashes + `jti` revocation — §12.8 — not
+plaintext), OAuth client secrets, TOTP shared secrets (`twoFactorSecret`,
+`pendingTwoFactorSecret` — §19.15), private keys, PII that regulation flags as
+restricted. When in doubt, treat it as sensitive.
+
+**What this rule forbids:**
+
+- Migrations that add a `string` field holding plaintext password / card / token
+  / key material.
+- Seeds or queries that INSERT such plaintext. Use the §12.15 wrapper or a
+  tokenization call.
+- Debug logs, error messages, `console.log`, or any other egress path that
+  prints the plaintext after decryption.
+- Copying ciphertext into `verification_request.payload`, `send_communication`
+  `templateData`, live-query-readable tables, or any other surface listed in
+  §15.1 rule 5.
+
+**What this rule requires in practice.** Every field that holds encrypted
+sensitive data uses `server/utils/crypto.ts` (§12.15) on every write and every
+read; the DB column stays `TYPE option<string>` storing the `iv:tag:ciphertext`
+triplet base64-encoded. The column name makes the encryption explicit (e.g. a
+future codebase rename of `twoFactorSecret` to `twoFactorSecretEnc` is
+encouraged but not required for backwards compatibility). The key used by the
+wrapper is sourced from a Core setting that is loaded at boot and clearable only
+by redeploy — it is NOT editable by the superuser panel.
+
 #### 7.2 Single-call rule (transaction safety)
 
 The backend uses a single shared SurrealDB connection. **Every query function
@@ -829,35 +876,36 @@ systemSlug)`. If a key is missing,
 
 ##### 10.1.4 Core settings (seeded by `002_default_settings.ts` into `setting` table)
 
-| Key                                       | Seed value                  | Used by                                                                                                                       |
-| ----------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `app.name`                                | `"Core"`                    | Email templates (`appName`)                                                                                                   |
-| `app.baseUrl`                             | `"http://localhost:3000"`   | Verification/reset links                                                                                                      |
-| `app.defaultSystem`                       | `""`                        | Homepage fallback system slug                                                                                                 |
-| `auth.token.expiry.minutes`               | `"15"`                      | System API token lifetime                                                                                                     |
-| `auth.token.expiry.stayLoggedIn.hours`    | `"168"`                     | Stay-logged-in lifetime (7 days)                                                                                              |
-| `auth.rateLimit.perMinute`                | `"5"`                       | Auth route rate limit                                                                                                         |
-| `auth.communication.expiry.minutes`       | `"15"`                      | Unified verification/communication token expiry (min)                                                                         |
-| `auth.communication.maxCount`             | `"5"`                       | Max sends per (owner, actionKey) in rolling window                                                                            |
-| `auth.communication.windowHours`          | `"1"`                       | Rolling window for communication rate limit (hours)                                                                           |
-| `auth.oauth.providers`                    | `"[]"`                      | JSON array of enabled OAuth providers. Empty = OAuth login disabled (no redundant flag needed).                               |
-| `terms.generic`                           | `""`                        | Generic LGPD fallback HTML                                                                                                    |
-| `billing.autoRecharge.minAmount`          | `"500"`                     | Min auto-recharge (cents)                                                                                                     |
-| `billing.autoRecharge.maxAmount`          | `"50000"`                   | Max auto-recharge per subscription (cents)                                                                                    |
-| `auth.entityChannel.maxPerOwner`          | `"10"`                      | Max entity channels per owner (user or lead)                                                                                  |
-| `auth.entityChannel.defaultTypes`         | `"[\"email\",\"phone\"]"`   | JSON array of seeded channel types                                                                                            |
-| `auth.communication.defaultChannels`      | `"[\"email\",\"sms\"]"`     | JSON array of channels used by system-wide communications when the caller omits `channels`; order defines fallback precedence |
-| `db.frontend.url`                         | `"ws://127.0.0.1:8000/rpc"` | Frontend WebSocket endpoint (§7.5)                                                                                            |
-| `db.frontend.namespace`                   | `"main"`                    | Frontend SurrealDB namespace (§7.5)                                                                                           |
-| `db.frontend.database`                    | `"grex-id"`                 | Frontend SurrealDB database (§7.5)                                                                                            |
-| `db.frontend.user`                        | `""`                        | SurrealDB auth user for frontend WebSocket                                                                                    |
-| `db.frontend.pass`                        | `""`                        | SurrealDB auth pass for frontend WebSocket                                                                                    |
-| `cache.core.size`                         | `"20"`                      | Core file cache size (MB)                                                                                                     |
-| `cache.file.hitWindowHours`               | `"1"`                       | Sliding window for cache hit counting (hours)                                                                                 |
-| `transfer.default.maxConcurrentDownloads` | `"0"`                       | Default max concurrent downloads (0 = unlimited)                                                                              |
-| `transfer.default.maxConcurrentUploads`   | `"0"`                       | Default max concurrent uploads (0 = unlimited)                                                                                |
-| `transfer.default.maxDownloadBandwidthMB` | `"0"`                       | Default max download bandwidth MB/s (0 = unlimited)                                                                           |
-| `transfer.default.maxUploadBandwidthMB`   | `"0"`                       | Default max upload bandwidth MB/s (0 = unlimited)                                                                             |
+| Key                                       | Seed value                        | Used by                                                                                                                                            |
+| ----------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.name`                                | `"Core"`                          | Email templates (`appName`)                                                                                                                        |
+| `app.baseUrl`                             | `"http://localhost:3000"`         | Verification/reset links                                                                                                                           |
+| `app.defaultSystem`                       | `""`                              | Homepage fallback system slug                                                                                                                      |
+| `auth.token.expiry.minutes`               | `"15"`                            | System API token lifetime                                                                                                                          |
+| `auth.token.expiry.stayLoggedIn.hours`    | `"168"`                           | Stay-logged-in lifetime (7 days)                                                                                                                   |
+| `auth.rateLimit.perMinute`                | `"5"`                             | Auth route rate limit                                                                                                                              |
+| `auth.communication.expiry.minutes`       | `"15"`                            | Unified verification/communication token expiry (min)                                                                                              |
+| `auth.communication.maxCount`             | `"5"`                             | Max sends per (owner, actionKey) in rolling window                                                                                                 |
+| `auth.communication.windowHours`          | `"1"`                             | Rolling window for communication rate limit (hours)                                                                                                |
+| `auth.oauth.providers`                    | `"[]"`                            | JSON array of enabled OAuth providers. Empty = OAuth login disabled (no redundant flag needed).                                                    |
+| `auth.encryption.key`                     | `"dev-only-change-in-production"` | 32-byte AES-256-GCM key (base64) used by the field encryption wrapper (§12.15). MUST be overridden per deploy — the seeded value is a placeholder. |
+| `terms.generic`                           | `""`                              | Generic LGPD fallback HTML                                                                                                                         |
+| `billing.autoRecharge.minAmount`          | `"500"`                           | Min auto-recharge (cents)                                                                                                                          |
+| `billing.autoRecharge.maxAmount`          | `"50000"`                         | Max auto-recharge per subscription (cents)                                                                                                         |
+| `auth.entityChannel.maxPerOwner`          | `"10"`                            | Max entity channels per owner (user or lead)                                                                                                       |
+| `auth.entityChannel.defaultTypes`         | `"[\"email\",\"phone\"]"`         | JSON array of seeded channel types                                                                                                                 |
+| `auth.communication.defaultChannels`      | `"[\"email\",\"sms\"]"`           | JSON array of channels used by system-wide communications when the caller omits `channels`; order defines fallback precedence                      |
+| `db.frontend.url`                         | `"ws://127.0.0.1:8000/rpc"`       | Frontend WebSocket endpoint (§7.5)                                                                                                                 |
+| `db.frontend.namespace`                   | `"main"`                          | Frontend SurrealDB namespace (§7.5)                                                                                                                |
+| `db.frontend.database`                    | `"grex-id"`                       | Frontend SurrealDB database (§7.5)                                                                                                                 |
+| `db.frontend.user`                        | `""`                              | SurrealDB auth user for frontend WebSocket                                                                                                         |
+| `db.frontend.pass`                        | `""`                              | SurrealDB auth pass for frontend WebSocket                                                                                                         |
+| `cache.core.size`                         | `"20"`                            | Core file cache size (MB)                                                                                                                          |
+| `cache.file.hitWindowHours`               | `"1"`                             | Sliding window for cache hit counting (hours)                                                                                                      |
+| `transfer.default.maxConcurrentDownloads` | `"0"`                             | Default max concurrent downloads (0 = unlimited)                                                                                                   |
+| `transfer.default.maxConcurrentUploads`   | `"0"`                             | Default max concurrent uploads (0 = unlimited)                                                                                                     |
+| `transfer.default.maxDownloadBandwidthMB` | `"0"`                             | Default max download bandwidth MB/s (0 = unlimited)                                                                                                |
+| `transfer.default.maxUploadBandwidthMB`   | `"0"`                             | Default max upload bandwidth MB/s (0 = unlimited)                                                                                                  |
 
 **Missing settings log.** Keys requested via `getSetting()` that aren't in the
 DB are recorded with a timestamp. `reload()` clears any that have since been
@@ -1039,7 +1087,7 @@ successful chargeable operations.
 ```typescript
 // Records one expense (daily container, UPSERT increments amount and count)
 async function trackCreditExpense(params: {
-  resourceKey: string; // i18n key, e.g. "billing.credits.resource.faceDetection"
+  resourceKey: string; // i18n key, e.g. "faceDetection"
   amount: number; // cents
   companyId: string;
   systemId: string;
@@ -1662,6 +1710,84 @@ assertServerOnly("Core");
 3. The guard itself lives in `server/utils/server-only.ts` and is the only file
    in the project that references `typeof window` for this purpose.
 
+#### 12.15 Field encryption wrapper (`server/utils/crypto.ts`)
+
+Single shared AES-256-GCM helper for every "encryption at rest" path required by
+§7.1.1. Every sensitive field (currently: `user.twoFactorSecret`,
+`user.pendingTwoFactorSecret` — others to follow) uses this wrapper on every
+write and every read.
+
+**Algorithm:**
+
+- **AES-256-GCM** via the Web Crypto API (`crypto.subtle` — serverless
+  runtime-compatible, §1.1.1).
+- **12-byte IV**, generated fresh per encryption call with
+  `crypto.getRandomValues`.
+- **16-byte authentication tag**, produced by the GCM construction and included
+  in the ciphertext envelope.
+- **32-byte (256-bit) key**, loaded from the `auth.encryption.key` Core setting.
+  The setting stores the key as base64; the wrapper decodes it once at boot into
+  a `CryptoKey`. The key is NOT editable from the superuser panel — rotation
+  requires a deploy and a re-encryption migration.
+
+**Wire format.** Every ciphertext is a single base64 string shaped as
+`<iv_b64>:<ciphertext_with_tag_b64>`. The tag is appended to the ciphertext by
+GCM (16-byte trailer), so a single base64 decode recovers both. The DB column
+stays `TYPE option<string>`.
+
+**Contract:**
+
+```typescript
+/**
+ * Encrypt a plaintext string. Returns a base64 envelope safe to store in a
+ * `TYPE option<string>` SurrealDB column. Uses a fresh 12-byte IV per call.
+ */
+export async function encryptField(plaintext: string): Promise<string>;
+
+/**
+ * Decrypt a base64 envelope produced by `encryptField`. Throws on tag
+ * mismatch (tampering, wrong key) — callers treat the throw as a
+ * cryptographic failure, not a missing value.
+ */
+export async function decryptField(envelope: string): Promise<string>;
+
+/**
+ * Convenience: returns `undefined` when `envelope` is `undefined | null | ""`,
+ * otherwise delegates to `decryptField`. Use at read-path boundaries where
+ * the optional column may be absent.
+ */
+export async function decryptFieldOptional(
+  envelope: string | null | undefined,
+): Promise<string | undefined>;
+```
+
+**Rules:**
+
+1. **All writes** to an encrypted field go through `encryptField()`; the DB
+   receives only the envelope. Never `UPDATE … SET field = $plaintext`.
+2. **All reads** that need the plaintext go through `decryptField()` /
+   `decryptFieldOptional()`. Never expose the envelope to the frontend; it has
+   no meaning outside the server.
+3. **The plaintext never leaves request scope.** No logging, no caching, no copy
+   into another column, no write into `verification_request.payload` (§15.1 rule
+   5).
+4. **`auth.encryption.key` boot check.** The wrapper verifies, at first use,
+   that the setting is a valid 32-byte base64 key. A missing or malformed key
+   throws a loud error so the process fails closed rather than silently storing
+   ciphertext decryptable with a dev-only fallback.
+5. **Key rotation** is an explicit migration: decrypt every encrypted field with
+   the old key, re-encrypt with the new key, update `auth.encryption.key`. The
+   wrapper does not support envelope versioning beyond this — the assumption is
+   that rotations are infrequent and done as coordinated deploys.
+6. Only `server/utils/crypto.ts` calls `crypto.subtle.encrypt` /
+   `crypto.subtle.decrypt` for at-rest data. Other callsites use the public
+   helpers.
+
+**Seeded defaults.** `002_default_settings.ts` seeds `auth.encryption.key` with
+a clearly dev-only placeholder. Production deployments MUST overwrite this via
+their secret-management pipeline before any sensitive write happens. The seed
+description warns explicitly.
+
 ### 13. File Storage
 
 Uses `@hviana/surreal-fs` exclusively. All file data **and** metadata are stored
@@ -2182,7 +2308,8 @@ await publish("send_communication", {
    payload`.** No passwords, card numbers, raw tokens,
    secrets. Only i18n keys, display names, action identifiers, and non-sensitive
    context (occurredAt, companyName, systemName, actorName, resource keys, URLs,
-   etc.).
+   etc.). This is a companion to the broader §7.1.1 rule — sensitive data also
+   never lands in any DB column as plaintext.
 
 #### 15.2 `TemplateBuilder` — dynamic templates
 
@@ -2624,11 +2751,16 @@ interface TranslatedBadgeProps {
   token: string; // raw identifier — e.g. "admin", "faceDetection"
   systemSlug?: string; // scope override; when set, tries system-scoped key first
   frameworkName?: string; // scope override; when set, tries framework-scoped key first
-  color?: string; // optional badge accent; defaults to kind-based palette
   onRemove?: () => void; // when provided, renders an "x" to remove
   compact?: boolean; // when true, shows ONLY the translation (human mode)
 }
 ```
+
+**Palette.** Each `kind` has a fixed Tailwind palette — `role` →
+`--color-primary-green`, `permission` / `resource` → `--color-secondary-blue`,
+`entity` → `--color-light-green`. The badge renders as a tinted pill (10%
+background, 40% border). No per-call color override exists; the palette is
+structural so consumers stay consistent across the app.
 
 **Key resolution** (first non-literal wins — if the lookup returns the key
 itself, it is treated as "not found" and the next candidate is tried):
@@ -2700,10 +2832,12 @@ export interface DataTrackingConsentState {
 }
 ```
 
-`CookieConsent` is mounted once in `app/layout.tsx` (above every route group)
-and never removed from the tree — it handles its own visibility via the cookie
-check and a React state transition. The mount is outside the `AuthProvider` so
-anonymous visitors see it on their first page view.
+`CookieConsent` is mounted once in `app/layout.tsx` inside `FrontCoreProvider`
+(so the settings hook is available) and above every route group so it spans
+public and authenticated pages alike. It never leaves the tree — visibility is
+controlled by the cookie check and a React state transition, and auth state is
+irrelevant: anonymous visitors see the same popup as logged-in users on their
+first page view.
 
 #### 18.2 List / CRUD system
 
@@ -3575,6 +3709,13 @@ so losing the authenticator never locks the user out.
 Only the **user themselves** (authenticated as actorType `"user"`) can flip the
 flag; superusers impersonating a company (§19.11.1) MUST NOT mutate these fields
 on the impersonated user's behalf.
+
+**Encryption at rest.** TOTP shared secrets are sensitive data under §7.1.1.
+`user.twoFactorSecret` and `user.pendingTwoFactorSecret` always store the
+AES-256-GCM envelope produced by `encryptField()` (§12.15), never the raw base32
+secret. Every write (setup-totp staging, verify-handler promotion) encrypts
+first; every read (login TOTP verification) decrypts at the boundary and drops
+the plaintext before the handler returns.
 
 ##### 19.15.2 Enable / disable flow
 

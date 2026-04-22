@@ -253,6 +253,7 @@ export default function OnboardingSystemPage() {
                         key={plan.id}
                         plan={plan}
                         variant="onboarding"
+                        systemSlug={selectedSystem?.slug}
                         highlighted={selectedPlan === plan.id}
                         onClick={() => setSelectedPlan(plan.id)}
                       />

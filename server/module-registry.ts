@@ -17,7 +17,10 @@ export {
   registerHomePage,
 } from "../src/components/systems/registry.ts";
 
-export { registerSystemI18n } from "../src/i18n/index.ts";
+export {
+  registerFrameworkI18n,
+  registerSystemI18n,
+} from "../src/i18n/index.ts";
 
 // ── Cache ─────────────────────────────────────────────────
 

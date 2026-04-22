@@ -7,6 +7,7 @@ import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 
 interface ConnectedApp {
   id: string;
@@ -145,14 +146,14 @@ export default function ConnectedAppsPage() {
                         {t("common.connectedApps.authorized")}
                       </span>
                     </div>
-                    <div className="flex gap-1 flex-wrap mt-2">
+                    <div className="flex gap-1.5 flex-wrap mt-2">
                       {app.permissions.map((perm) => (
-                        <span
+                        <TranslatedBadge
                           key={perm}
-                          className="text-xs bg-[var(--color-secondary-blue)]/20 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full"
-                        >
-                          {perm}
-                        </span>
+                          kind="permission"
+                          token={perm}
+                          systemSlug={systemSlug ?? undefined}
+                        />
                       ))}
                     </div>
                     {app.monthlySpendLimit != null && (

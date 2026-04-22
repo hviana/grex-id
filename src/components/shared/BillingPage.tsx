@@ -234,7 +234,7 @@ function PaymentHistoryList({
 export default function BillingPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { companyId, systemId, systemSlug } = useSystemContext();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -979,6 +979,7 @@ export default function BillingPage() {
                     key={plan.id}
                     plan={plan}
                     variant="billing"
+                    systemSlug={systemSlug ?? undefined}
                     highlighted={isCurrent}
                     badges={isCurrent
                       ? (

@@ -8,6 +8,7 @@ import {
 } from "@/server/db/queries/auth";
 import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
+import { decryptField } from "@/server/utils/crypto";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { getDb, rid } from "@/server/db/connection";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
@@ -129,8 +130,25 @@ async function handler(
     }
 
     if (user.twoFactorSecret) {
+      // `twoFactorSecret` is stored as an AES-256-GCM envelope (§7.1.1).
+      // Decrypt at the verify boundary; plaintext stays in request scope.
+      let plainSecret: string;
+      try {
+        plainSecret = await decryptField(user.twoFactorSecret);
+      } catch {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "2FA_INVALID",
+              message: "auth.error.twoFactorInvalid",
+            },
+          },
+          { status: 401 },
+        );
+      }
       const totp = new TOTP({
-        secret: user.twoFactorSecret,
+        secret: plainSecret,
         crypto: new NobleCryptoPlugin(),
         base32: new ScureBase32Plugin(),
       });

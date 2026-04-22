@@ -4,6 +4,7 @@ import React from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
+import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
@@ -135,14 +136,13 @@ export default function FileAccessPage() {
                     </span>
                   )}
                 {sec.permissions.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     {sec.permissions.map((p) => (
-                      <span
+                      <TranslatedBadge
                         key={p}
-                        className="rounded-full bg-[var(--color-primary-green)]/15 px-2 py-0.5 text-xs text-[var(--color-primary-green)]"
-                      >
-                        {p}
-                      </span>
+                        kind="permission"
+                        token={p}
+                      />
                     ))}
                   </div>
                 )}

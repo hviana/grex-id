@@ -14,6 +14,16 @@ const defaults: DefaultSetting[] = [
       "Secret key for signing JWT tokens (must be changed in production)",
   },
   {
+    key: "auth.encryption.key",
+    // 32-byte (AES-256) key, base64-encoded. SEEDED VALUE IS DEV-ONLY and
+    // MUST be overridden per deployment via the secret-management pipeline
+    // BEFORE any sensitive write happens (§7.1.1, §12.15). Rotation is a
+    // migration (decrypt-with-old + re-encrypt-with-new + swap the setting).
+    value: "JX9nKHJd4rIOmW6HH0HYhBmta6NQepyUtxiaS3rnoX8=",
+    description:
+      "AES-256-GCM key (base64, 32 bytes) for the field encryption wrapper. DEV ONLY — override per deployment.",
+  },
+  {
     key: "auth.twoFactor.issuer",
     value: "Core",
     description: "Issuer name shown in authenticator apps for TOTP 2FA",

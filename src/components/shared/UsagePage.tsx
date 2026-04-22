@@ -92,6 +92,24 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
   const tenant = isCore ? null : useSystemContext();
   const companyId = isCore ? "0" : tenant?.companyId;
   const systemId = isCore ? "0" : tenant?.systemId;
+  const tenantSystemSlug = isCore ? undefined : tenant?.systemSlug ?? undefined;
+
+  // Resolve a resource token to its human label using the standard
+  // translation chain (§5.6.1): `systems.<slug>.resources.<token>` first,
+  // then `resources.<token>`, falling back to the raw token. Used for chart
+  // labels and summary rows — usage is a user-facing surface (§21.5) where
+  // only the translated form is shown.
+  function resourceLabel(token: string): string {
+    if (tenantSystemSlug) {
+      const key = `systems.${tenantSystemSlug}.resources.${token}`;
+      const v = t(key);
+      if (v !== key) return v;
+    }
+    const coreKey = `resources.${token}`;
+    const v2 = t(coreKey);
+    if (v2 !== coreKey) return v2;
+    return token;
+  }
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -366,12 +384,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
 
   const tenantExpenseData = data && data.creditExpenses.length > 0
     ? {
-      labels: data.creditExpenses.map((e) => {
-        const translated = t(e.resourceKey);
-        return translated !== e.resourceKey
-          ? translated
-          : e.resourceKey.split(".").pop() ?? e.resourceKey;
-      }),
+      labels: data.creditExpenses.map((e) => resourceLabel(e.resourceKey)),
       datasets: [
         {
           label: t("billing.usage.totalExpenses"),
@@ -398,12 +411,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
 
   const coreChartData = coreExpenses.length > 0
     ? {
-      labels: coreExpenses.map((e) => {
-        const translated = t(e.resourceKey);
-        return translated !== e.resourceKey
-          ? translated
-          : e.resourceKey.split(".").pop() ?? e.resourceKey;
-      }),
+      labels: coreExpenses.map((e) => resourceLabel(e.resourceKey)),
       datasets: [
         {
           label: t("core.usage.chart.amount"),
@@ -437,9 +445,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
         </h3>
         <div className="space-y-2">
           {expenses.map((e, i) => {
-            const label = t(e.resourceKey) !== e.resourceKey
-              ? t(e.resourceKey)
-              : e.resourceKey.split(".").pop() ?? e.resourceKey;
+            const label = resourceLabel(e.resourceKey);
             const avgCost = e.totalCount > 0
               ? ((e.totalAmount / e.totalCount) / 100).toFixed(
                 isCore ? 4 : 2,

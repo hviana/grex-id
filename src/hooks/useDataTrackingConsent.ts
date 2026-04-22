@@ -23,15 +23,16 @@ export interface DataTrackingConsentState {
  */
 export function useDataTrackingConsent(): DataTrackingConsentState {
   const frontCore = useFrontCore();
-  const [cookieValue, setCookieValue] = useState<string | undefined>(
-    undefined,
-  );
+  // On the very first render (SSR or client hydration) `document` is either
+  // absent or the cookie hasn't been read yet — treat that as "undecided"
+  // and read the cookie on mount. Subsequent cross-tab changes are picked up
+  // via the `storage` event.
+  const [cookieValue, setCookieValue] = useState<string | undefined>(() => {
+    if (typeof document === "undefined") return undefined;
+    return getCookie(CONSENT_COOKIE);
+  });
 
   useEffect(() => {
-    setCookieValue(getCookie(CONSENT_COOKIE));
-    // Cookies are not observable — re-read on storage events as a best-effort
-    // broadcast channel; consumers that need instant re-evaluation can also
-    // call `location.reload()` after the user decides.
     const onStorage = () => setCookieValue(getCookie(CONSENT_COOKIE));
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);

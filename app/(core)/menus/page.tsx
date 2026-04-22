@@ -7,6 +7,7 @@ import MenuTreeEditor from "@/src/components/core/MenuTreeEditor";
 
 interface SystemOption {
   id: string;
+  slug: string;
   name: string;
 }
 
@@ -76,6 +77,8 @@ export default function MenusPage() {
               <MenuTreeEditor
                 key={selectedSystemId}
                 systemId={selectedSystemId}
+                systemSlug={systems.find((s) => s.id === selectedSystemId)
+                  ?.slug}
               />
             )}
           </>
