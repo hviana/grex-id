@@ -487,7 +487,8 @@ must stay isolated.
 
 ## 20. Tests & Verification
 
-- [ ] Use the project skills — see `skills/test-db-queries/SKILL.md`,
+- [ ] Use the project skills — see `skills/isolation-guard/SKILL.md` (PRIORITY
+      1, runs first), `skills/test-db-queries/SKILL.md`,
       `skills/test-routes/SKILL.md`, `skills/test-frontend/SKILL.md`,
       `skills/test-events/SKILL.md`, `skills/check-library-updates/SKILL.md`.
 - [ ] For UI or frontend changes, exercise the feature in a real browser; state

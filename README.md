@@ -156,6 +156,11 @@ deliberately, never by default.
 Repeatable operations have their own skill under `skills/<name>/SKILL.md`. Read
 the `SKILL.md` before running anything. Current skills:
 
+- `skills/isolation-guard/` — **PRIORITY 1, runs before every other skill.**
+  Confirms which layer (Core, subsystem, or framework) a development request
+  belongs to, lists the currently existing subsystems and frameworks
+  dynamically, and blocks further work until the user declares the target layer
+  explicitly. Also covers the "create a new subsystem / framework" branch.
 - `skills/test-db-queries/` — run ad-hoc SurrealQL against the test DB.
 - `skills/test-routes/` — exercise API routes end-to-end.
 - `skills/test-frontend/` — drive the UI in a real browser via Playwright. Also
@@ -175,10 +180,12 @@ unless `database.json` has `"test": true`).
 
 ### Typical workflow
 
-1. Read the AGENTS.md section(s) covering the area you're changing.
-2. If a framework is involved, read its nested `AGENTS.md` too.
-3. Implement the change, reusing shared components / queries / utilities
+1. Run `skills/isolation-guard/` **first** to pin down the target layer (Core, a
+   subsystem, or a framework) unless the user already named it explicitly.
+2. Read the AGENTS.md section(s) covering the area you're changing.
+3. If a framework is involved, read its nested `AGENTS.md` too.
+4. Implement the change, reusing shared components / queries / utilities
    (generic-first, see §3.1).
-4. Verify with the matching skill (DB queries, routes, or browser).
-5. Walk through [docs/agent-checklist.md](docs/agent-checklist.md) before
+5. Verify with the matching skill (DB queries, routes, or browser).
+6. Walk through [docs/agent-checklist.md](docs/agent-checklist.md) before
    calling the task done.

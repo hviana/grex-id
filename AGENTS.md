@@ -5638,6 +5638,10 @@ Before completing any task, follow every item in
 
 Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
 
+- **PRIORITY 1 — runs before every other skill.** Confirming which layer (Core,
+  subsystem, or framework) a development request belongs to, and listing the
+  existing subsystems and frameworks dynamically →
+  `skills/isolation-guard/SKILL.md`
 - Writing database query tests → `skills/test-db-queries/SKILL.md`
 - Writing route tests → `skills/test-routes/SKILL.md`
 - Driving the frontend in a real browser (Playwright) →
