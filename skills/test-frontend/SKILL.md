@@ -99,6 +99,7 @@ verb you run.
 | `stop`   | Stop the driver. `--all` also stops the dev server.                                                                                                                                               |
 | `status` | Print JSON describing driver pid/port/reachability and dev-server state. Exit `0` when both are reachable.                                                                                        |
 | `logs`   | Tail the driver log. `--server` switches to the dev-server log. `--tail N` / `--all`.                                                                                                             |
+| `doctor` | Diagnose the environment: `database.json` test flag, project-local `tsx`, Playwright, Chromium binary, orphan pid/port files. Prints JSON and exits 0 when everything is usable.                  |
 | `reset`  | Clear cookies + localStorage + sessionStorage, navigate to `about:blank`, clear captured console/network logs.                                                                                    |
 
 The driver **auto-starts on first use** of any verb below — you do not need to
@@ -168,10 +169,49 @@ call `start` explicitly unless you want `--headed` or a custom port.
 
 ### Escape hatches
 
-| Verb    | Args                                | Description                                                                                                                          |
-| ------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `eval`  | `<js>`                              | Run JS in the page context. Expressions are auto-wrapped; include `return` for multi-statement blocks. Returns the serialized value. |
-| `login` | `[--identifier X]` `[--password Y]` | Drives `/login` with the seeded superuser (`core@admin.com` / `core1234` per `001_superuser.ts`). Overrides are optional.            |
+| Verb                 | Args                                | Description                                                                                                                                                                                                                                         |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eval`               | `<js>`                              | Run JS in the page context. Expressions are auto-wrapped; include `return` for multi-statement blocks. Returns the serialized value.                                                                                                                |
+| `login`              | `[--identifier X]` `[--password Y]` | Drives `/login` with the seeded superuser (`core@admin.com` / `core1234`). Calls `resolve-challenges` before and after submit; escalates with a clear error if a challenge blocks the flow (e.g. real CAPTCHA, MFA gate).                           |
+| `resolve-challenges` | `[--skip <id>]…`                    | Scans the active page for known blockers (cookie-consent banner, bot-protection stub, Next.js dev-error overlay, native alert/confirm/prompt) and auto-dismisses them. Returns `{ resolved: [...], unresolved: [...], humanActionRequired: bool }`. |
+
+### Challenge resolver — general rule
+
+**Whenever a verb could encounter a transient overlay, stub, or gate that is not
+part of the feature being tested, the skill tries to resolve it automatically
+first and only escalates to the caller when it can't.** This applies to login,
+but it is not specific to login — the same resolver runs for any high-level flow
+you build on top of the skill.
+
+Recognised challenges today:
+
+- `cookie-consent` — LGPD / cookie banner blocking clicks (§25.6). Auto-accept.
+- `bot-protection` — "Não sou um robô" / "I'm not a robot" stub button.
+  Auto-click. If a real reCAPTCHA / hCaptcha iframe opens after the click, the
+  resolver reports `humanActionRequired: true` with a hint pointing at
+  `start --headed`.
+- `nextjs-error-overlay` — Next.js dev-error overlay. **Never auto-dismissed.**
+  The resolver extracts the error message and escalates with
+  `humanActionRequired: true` so the operator fixes the real bug instead of
+  clicking past it.
+- Native dialogs (`alert` / `confirm` / `prompt`) — handled by a page-level
+  listener that auto-accepts and logs the message into the `console` buffer, so
+  they never silently hang.
+
+When an unresolvable challenge appears, the CLI prints a concrete `hint`
+explaining what to do next — typically one of:
+
+1. Drive the remaining step manually with individual verbs (`click`, `fill`,
+   `press Enter`, …).
+2. Re-run with `start --headed` so a human can complete the challenge in a
+   visible browser window.
+3. Turn off the feature in the test environment (e.g. unset
+   `front.botProtection.siteKey`).
+
+Any new gate the platform introduces (e.g. MFA prompt, consent checkbox on a
+subframework page) can be taught to the resolver by adding a detector + resolver
+pair to the `CHALLENGES` array in `run.ts` — no change to existing callers. The
+`login` verb is just the first consumer.
 
 ## Common flags
 
@@ -223,6 +263,40 @@ All state lives under `skills/test-frontend/` and is listed in `.gitignore`:
 
 Delete any of them freely when things look stuck; `stop` does the same cleanup
 automatically.
+
+## Troubleshooting
+
+When anything misbehaves, the first call is **`doctor`**:
+
+```bash
+tsx skills/test-frontend/run.ts doctor
+```
+
+It prints a JSON report with a pass/fail line per precondition (test-mode flag,
+project-local `tsx`, Playwright package, Chromium binary, orphan pid/port files)
+and a `fix` suggestion for each failing check. Exit code is `0` when the
+environment is fully usable.
+
+Other common failure modes:
+
+- **"driver did not become ready within 120s"** — the error message now includes
+  the tail of `.driver.log`. The most common cause is Playwright failing to
+  launch Chromium (missing OS libs on fresh Linux containers). Run
+  `cd skills/test-frontend && npx playwright install-deps` to install the system
+  deps (requires `sudo` on most distros).
+- **Silent driver exits** — always tail `.driver.log`:
+  ```bash
+  tsx skills/test-frontend/run.ts logs --tail 80
+  ```
+- **Port 3000 already in use by something unrelated** — pass `--port` to
+  `start`, or stop the conflicting process. `status` shows whether the port is
+  reachable and who owns it via the pid file.
+- **Stale pid/port files after a force-kill** — `doctor` flags inconsistent
+  state. Either run `stop --all` or delete `.driver.pid` / `.driver.port` /
+  `.server.pid` / `.server.port` under `skills/test-frontend/`.
+- **First run is slow** — Playwright + Chromium install takes ~1–2 minutes.
+  Subsequent runs are cached. The skill's `package.json` and `node_modules/`
+  live inside the skill folder; they do not touch the project's root deps.
 
 ## Interop with other skills
 

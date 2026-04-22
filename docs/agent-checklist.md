@@ -400,6 +400,10 @@ from Core and frameworks. Frameworks are design-time extensions of Core that can
 be consumed by many subsystems. They are not interchangeable and their folders
 must stay isolated.
 
+- [ ] Framework and subsystem `AGENTS.md` files never contradict or override the
+      root `AGENTS.md` — they only inherit from it and expand it with new
+      functionality (§26.2).
+
 ### Subsystems (one `[slug]` per product)
 
 - [ ] Every subsystem file sits in a `[slug]` subfolder under the Core roots it

@@ -53,7 +53,6 @@ const SERVER_PID_FILE = resolve(SKILL_DIR, ".server.pid");
 const SERVER_PORT_FILE = resolve(SKILL_DIR, ".server.port");
 const SERVER_LOG_FILE = resolve(SKILL_DIR, ".server.log");
 const SCREENSHOT_DIR = resolve(SKILL_DIR, "screenshots");
-const STATE_FILE = resolve(SKILL_DIR, ".driver.state.json");
 
 // Seeded superuser credentials from server/db/seeds/001_superuser.ts.
 const DEFAULT_SUPERUSER_EMAIL = "core@admin.com";
@@ -243,8 +242,28 @@ function resolvePlaywrightPackage(): string | null {
   }
 }
 
+function hasChromiumBinary(): boolean {
+  // `playwright install --dry-run` prints an "Install location:" for each
+  // browser; we extract those paths and check whether they exist on disk.
+  // This also honors PLAYWRIGHT_BROWSERS_PATH (relevant in CI) without
+  // hard-coding ~/.cache/ms-playwright.
+  const probe = spawnSync(
+    "npx",
+    ["playwright", "install", "--dry-run", "chromium"],
+    { cwd: SKILL_DIR, encoding: "utf-8" },
+  );
+  if (probe.status !== 0) return false;
+  const out = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
+  const matches = Array.from(out.matchAll(/Install location:\s+(\S+)/g));
+  if (matches.length === 0) return false;
+  // Require every advertised install location to exist. A half-installed
+  // state (e.g. chromium present but ffmpeg missing) is just as broken
+  // as nothing being installed at all.
+  return matches.every(([, dir]) => existsSync(dir));
+}
+
 function installPlaywrightIfNeeded(): void {
-  if (resolvePlaywrightPackage()) return;
+  const packagePresent = !!resolvePlaywrightPackage();
 
   // Ensure the skill has its own package.json so npm install writes into
   // skills/test-frontend/node_modules rather than the project root.
@@ -264,31 +283,54 @@ function installPlaywrightIfNeeded(): void {
     );
   }
 
-  console.error(
-    "[test-frontend] installing Playwright (one-time, ~1–2 min)…",
-  );
-  const install = spawnSync(
-    "npm",
-    ["install", "--no-audit", "--no-fund", "--loglevel=error", "playwright"],
-    { cwd: SKILL_DIR, stdio: "inherit" },
-  );
-  if (install.status !== 0) {
-    throw new Error(
-      `playwright install failed (exit ${install.status}). See stderr above.`,
+  if (!packagePresent) {
+    console.error(
+      "[test-frontend] installing Playwright (one-time, ~1–2 min)…",
     );
+    const install = spawnSync(
+      "npm",
+      ["install", "--no-audit", "--no-fund", "--loglevel=error", "playwright"],
+      { cwd: SKILL_DIR, stdio: "inherit" },
+    );
+    if (install.status !== 0) {
+      throw new Error(
+        `playwright install failed (exit ${install.status}). See stderr above.`,
+      );
+    }
   }
 
-  console.error("[test-frontend] installing chromium browser…");
-  const browser = spawnSync(
-    "npx",
-    ["playwright", "install", "chromium"],
-    { cwd: SKILL_DIR, stdio: "inherit" },
-  );
-  if (browser.status !== 0) {
-    throw new Error(
-      `chromium install failed (exit ${browser.status}). See stderr above.`,
+  // Always check for the chromium binary — a user may have cleared
+  // ~/.cache/ms-playwright without touching the skill's node_modules.
+  if (!hasChromiumBinary()) {
+    console.error("[test-frontend] installing chromium browser…");
+    const browser = spawnSync(
+      "npx",
+      ["playwright", "install", "chromium"],
+      { cwd: SKILL_DIR, stdio: "inherit" },
     );
+    if (browser.status !== 0) {
+      throw new Error(
+        `chromium install failed (exit ${browser.status}). See stderr above.`,
+      );
+    }
   }
+}
+
+function assertProjectTsxAvailable(): void {
+  // The detached driver is spawned via `npx tsx …`. If the project hasn't
+  // installed its own devDependencies (notably `tsx`), the spawned child
+  // fails silently because npx downloads tsx into a throwaway cache — which
+  // is slow and, in some CI setups, blocked by network policies. Detect
+  // missing tsx up front so the error is actionable.
+  const localBin = resolve(PROJECT_ROOT, "node_modules", ".bin", "tsx");
+  if (existsSync(localBin)) return;
+  throw new Error(
+    [
+      "`tsx` is not installed in the project.",
+      "Run `npm install` in the project root before using this skill.",
+      `(expected to find ${localBin})`,
+    ].join(" "),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -386,19 +428,27 @@ async function ensureDriverRunning(opts: {
   }
 
   installPlaywrightIfNeeded();
+  assertProjectTsxAvailable();
 
   writeFileSync(DRIVER_LOG_FILE, "");
-  writeFileSync(
-    STATE_FILE,
-    JSON.stringify({ headed: opts.headed, baseUrl }, null, 2),
-  );
+
+  // Clear any stale port/pid files from a previous run so the polling loop
+  // below only unblocks when the newly-spawned driver writes its own.
+  if (existsSync(DRIVER_PORT_FILE)) rmSync(DRIVER_PORT_FILE);
+  if (existsSync(DRIVER_PID_FILE)) rmSync(DRIVER_PID_FILE);
 
   const logPath = DRIVER_LOG_FILE.replace(/"/g, '\\"');
   const runScript = resolve(SKILL_DIR, "run.ts").replace(/"/g, '\\"');
-  // Launch the driver as a detached child. We re-invoke this same script with
-  // the internal `__driver` verb so only one file ships with the skill.
-  const cmd = `npx tsx "${runScript}" __driver > "${logPath}" 2>&1`;
-  const child = spawn(cmd, {
+  const tsxBin = resolve(PROJECT_ROOT, "node_modules", ".bin", "tsx")
+    .replace(/"/g, '\\"');
+  // Launch the driver as a detached child. We re-invoke this same script
+  // with the internal `__driver` verb so only one file ships with the skill.
+  // The `(… &)` subshell lets the parent shell exit immediately after
+  // forking, so we never confuse the shell's pid with the driver's. We use
+  // the project-local tsx binary directly (instead of `npx tsx`) so there
+  // is no npm lookup layer that could silently fail.
+  const cmd = `("${tsxBin}" "${runScript}" __driver > "${logPath}" 2>&1 &)`;
+  spawn(cmd, {
     cwd: SKILL_DIR,
     shell: true,
     detached: true,
@@ -409,28 +459,37 @@ async function ensureDriverRunning(opts: {
       TEST_FRONTEND_HEADED: opts.headed ? "1" : "",
     },
   });
-  child.unref();
-  if (!child.pid) {
-    throw new Error("failed to spawn Playwright driver");
-  }
-  writeFileSync(DRIVER_PID_FILE, String(child.pid));
 
-  const deadline = Date.now() + 90_000;
+  // Wait for the driver itself to write its pid + port file and to answer
+  // /health. tsx cold-start + playwright bootstrap can take a while on the
+  // first run, so we give it a generous window.
+  const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const port = readDriverPort();
     if (port && (await pingDriver(port))) {
       return { alreadyRunning: false, port };
     }
-    if (!isPidAlive(child.pid)) {
-      throw new Error(
-        `driver exited before becoming ready. See ${DRIVER_LOG_FILE}`,
-      );
-    }
     await sleep(300);
   }
+
+  // Readiness failed — surface the driver's own stderr so the operator can
+  // diagnose without reading the log file manually.
+  const tail = tailLogForError(DRIVER_LOG_FILE, 30);
   throw new Error(
-    `driver did not become ready within 90s. See ${DRIVER_LOG_FILE}`,
+    [
+      `driver did not become ready within 120s.`,
+      tail ? `\n--- tail of ${DRIVER_LOG_FILE} ---\n${tail}\n--- end ---` : "",
+      `\nFull log: ${DRIVER_LOG_FILE}`,
+    ].join(""),
   );
+}
+
+function tailLogForError(file: string, lines: number): string {
+  if (!existsSync(file)) return "";
+  const raw = readFileSync(file, "utf-8");
+  const all = raw.split("\n");
+  const sliced = all.slice(-Math.max(1, lines));
+  return sliced.join("\n").trim();
 }
 
 async function stopDriver(): Promise<{ stopped: boolean; pid: number | null }> {
@@ -555,6 +614,27 @@ async function runDriver(): Promise<void> {
         e.url === url && e.status === undefined
       );
       if (entry) entry.status = res.status();
+    });
+    // Native alert/confirm/prompt dialogs block Playwright indefinitely
+    // if left unhandled. Auto-accept + record so the caller can see them
+    // via the `console` verb and decide whether they matter.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    p.on("dialog", async (dialog: any) => {
+      const type = dialog.type();
+      const message = dialog.message();
+      consoleLog.push({
+        type: `dialog:${type}`,
+        text: message,
+        at: new Date().toISOString(),
+      });
+      if (consoleLog.length > MAX_LOG) consoleLog.shift();
+      try {
+        if (type === "prompt") {
+          await dialog.accept(dialog.defaultValue() ?? "");
+        } else {
+          await dialog.accept();
+        }
+      } catch { /* dialog may already be dismissed */ }
     });
   }
 
@@ -978,9 +1058,28 @@ async function runDriver(): Promise<void> {
       return { ok: true };
     },
 
+    "resolve-challenges": async (args) => {
+      const result = await resolveChallenges(
+        page(),
+        typeof args.skip === "string"
+          ? [args.skip]
+          : Array.isArray(args.skip)
+          ? (args.skip as string[])
+          : [],
+      );
+      return {
+        ok: result.unresolved.length === 0,
+        ...result,
+        humanActionRequired: result.unresolved.length > 0,
+      };
+    },
+
     login: async (args) => {
       // Convenience verb: the seeded superuser login flow. Handy because it
       // is the single most common starting point for any authenticated test.
+      // The flow is: goto /login → fill identifier → fill password →
+      // resolveChallenges (bot-protection stub, cookie consent, dialogs) →
+      // submit → wait for redirect off /login.
       const identifier = String(args.identifier ?? DEFAULT_SUPERUSER_EMAIL);
       const password = String(args.password ?? DEFAULT_SUPERUSER_PASSWORD);
       const target = `${baseUrl.replace(/\/$/, "")}/login`;
@@ -989,26 +1088,54 @@ async function runDriver(): Promise<void> {
         waitUntil: "load",
         timeout: DEFAULT_NAV_TIMEOUT_MS,
       });
+      // Resolve any challenge that appears BEFORE the form (e.g. cookie
+      // consent banner covering the submit button).
+      await resolveChallenges(p, []);
       const filledIdentifier = await fillFirst(p, [
+        "#identifier",
         'input[name="identifier"]',
         'input[name="email"]',
         'input[type="email"]',
-        'input[type="text"]',
+        'input[autocomplete="username"]',
       ], identifier);
       if (!filledIdentifier) {
         throw new Error("login: could not find identifier input on /login");
       }
       const filledPassword = await fillFirst(p, [
+        "#password",
         'input[name="password"]',
         'input[type="password"]',
       ], password);
       if (!filledPassword) {
         throw new Error("login: could not find password input on /login");
       }
+      // Resolve any challenge that appears AFTER filling the form but
+      // BEFORE submit (bot-protection stubs, "verify you are human" gates).
+      const pre = await resolveChallenges(p, []);
+      if (pre.unresolved.length > 0) {
+        throw new Error(
+          `login: unresolved challenge(s) on /login require human action — ${
+            formatUnresolved(pre.unresolved)
+          }. ` +
+            `Drive the flow manually (see skill docs) or finish the challenge in a headed session (\`start --headed\`).`,
+        );
+      }
       const submit = p.locator(
         'button[type="submit"], button:has-text("Entrar"), button:has-text("Sign In"), button:has-text("Login")',
       ).first();
       await submit.click({ timeout: DEFAULT_ACTION_TIMEOUT_MS });
+      // Some challenges (e.g. MFA) only appear AFTER submit. Check once more
+      // before waiting for the happy-path redirect.
+      await sleep(500);
+      const post = await resolveChallenges(p, []);
+      if (post.unresolved.length > 0) {
+        throw new Error(
+          `login: unresolved challenge(s) appeared after submit — ${
+            formatUnresolved(post.unresolved)
+          }. ` +
+            `The form was submitted but a follow-up gate (MFA, CAPTCHA, …) requires human action.`,
+        );
+      }
       await p.waitForURL((u: URL) => !String(u).includes("/login"), {
         timeout: DEFAULT_NAV_TIMEOUT_MS,
       });
@@ -1072,34 +1199,43 @@ async function runDriver(): Promise<void> {
   });
 
   // Bind to a random free port and write it to the port file so the CLI
-  // can find us.
+  // can find us. We also write our own pid — the parent shell pid is
+  // unreliable because the launch chain goes through `npm run ... &`.
   await new Promise<void>((resolvePromise, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       const addr = server.address();
       const port = typeof addr === "object" && addr ? addr.port : 0;
+      writeFileSync(DRIVER_PID_FILE, String(process.pid));
       writeFileSync(DRIVER_PORT_FILE, String(port));
       resolvePromise();
     });
   });
 
-  // Keep the process alive. Cleanup on signals.
-  const shutdown = () => {
-    void (async () => {
-      try {
-        server.close();
-      } catch { /* ignore */ }
-      try {
-        await context.close();
-      } catch { /* ignore */ }
-      try {
-        await browser.close();
-      } catch { /* ignore */ }
-      process.exit(0);
-    })();
-  };
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+  // Keep the process alive forever. The HTTP server's open listener should
+  // be enough to prevent Node from exiting — but we also await a promise
+  // that only settles on a signal, so the caller of runDriver() has nothing
+  // to resolve back into the CLI flow (which would otherwise call
+  // process.exit(0) and kill the driver immediately after boot).
+  await new Promise<void>((resolvePromise) => {
+    const shutdown = () => {
+      void (async () => {
+        try {
+          server.close();
+        } catch { /* ignore */ }
+        try {
+          await context.close();
+        } catch { /* ignore */ }
+        try {
+          await browser.close();
+        } catch { /* ignore */ }
+        resolvePromise();
+        process.exit(0);
+      })();
+    };
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+  });
 }
 
 function requireSelector(args: Record<string, unknown>): string {
@@ -1129,6 +1265,210 @@ async function fillFirst(
 }
 
 // ---------------------------------------------------------------------------
+// Challenge resolver
+//
+// Any workflow that interacts with a page can get blocked by transient
+// overlays, stubs, or gates that are not part of the feature being tested —
+// cookie-consent banners, "I'm not a robot" stubs, dev-only error overlays,
+// dismissible dialogs, MFA prompts, etc. The CLI should *attempt to resolve
+// them automatically* first and only escalate to the caller when it can't.
+//
+// A `Challenge` has a `detect` function that returns `true` iff the
+// challenge is currently present on the page, and a `resolve` function that
+// tries to dismiss it. `resolve` returns:
+//   "resolved"      — the challenge was handled, continue.
+//   "needs-human"   — the challenge was detected but cannot be resolved
+//                     headlessly (real CAPTCHA, 2FA code, file picker, …).
+//   "not-present"   — the challenge disappeared between detect and resolve.
+//
+// Challenges are intentionally declarative and project-agnostic. Adding a
+// new one means appending to the `CHALLENGES` array — no changes to
+// callers. Specific examples (login bot button, cookie consent) are just
+// instances; the resolver treats them uniformly with any future gate.
+// ---------------------------------------------------------------------------
+
+export interface ChallengeReport {
+  id: string;
+  status: "resolved" | "needs-human" | "not-present";
+  hint?: string;
+}
+
+export interface ChallengeResult {
+  resolved: ChallengeReport[];
+  unresolved: ChallengeReport[];
+  skipped: string[];
+}
+
+interface Challenge {
+  id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  detect: (page: any) => Promise<boolean>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  resolve: (page: any) => Promise<
+    ChallengeReport["status"] | {
+      status: "needs-human";
+      hint: string;
+    }
+  >;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function firstVisible(page: any, selector: string): Promise<any | null> {
+  const loc = page.locator(selector).first();
+  try {
+    if ((await loc.count()) > 0 && (await loc.isVisible())) return loc;
+  } catch {
+    // locator evaluation failures treated as "not present"
+  }
+  return null;
+}
+
+const CHALLENGES: Challenge[] = [
+  // Cookie / LGPD consent banner — this project mounts <CookieConsent/>
+  // globally (§25.6). The banner can cover submit buttons on any page.
+  {
+    id: "cookie-consent",
+    detect: async (page) => {
+      return (await firstVisible(
+        page,
+        'button:has-text("Aceitar"), button:has-text("Accept")',
+      )) !== null;
+    },
+    resolve: async (page) => {
+      const loc = await firstVisible(
+        page,
+        'button:has-text("Aceitar"), button:has-text("Accept")',
+      );
+      if (!loc) return "not-present";
+      await loc.click({ timeout: 5_000 });
+      return "resolved";
+    },
+  },
+  // Bot-protection stub — the project's <BotProtection/> renders a plain
+  // button ("Não sou um robô" / "I'm not a robot") until a real CAPTCHA
+  // site key is configured. When a site key IS present, clicking the
+  // button opens an external challenge which we cannot solve headlessly.
+  {
+    id: "bot-protection",
+    detect: async (page) => {
+      return (await firstVisible(
+        page,
+        'button:has-text("Não sou um robô"), button:has-text("I\'m not a robot")',
+      )) !== null;
+    },
+    resolve: async (page) => {
+      const loc = await firstVisible(
+        page,
+        'button:has-text("Não sou um robô"), button:has-text("I\'m not a robot")',
+      );
+      if (!loc) return "not-present";
+      await loc.click({ timeout: 5_000 });
+      // Real CAPTCHAs open a visible challenge (reCAPTCHA iframe, hCaptcha
+      // dialog). Detect those and escalate to the caller.
+      await sleep(300);
+      const captchaFrame = page.locator(
+        'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[title*="captcha" i]',
+      ).first();
+      if (await captchaFrame.count() > 0) {
+        return {
+          status: "needs-human",
+          hint:
+            "A real CAPTCHA challenge appeared after clicking the bot-protection button. " +
+            "Solve it in a headed session (`start --headed`) or disable the site key on the test environment.",
+        };
+      }
+      return "resolved";
+    },
+  },
+  // Next.js / React dev error overlay — blocks every subsequent click when
+  // a rendered component throws. The user wants the underlying error, not
+  // a silent click-through, so we escalate with the message.
+  {
+    id: "nextjs-error-overlay",
+    detect: async (page) => {
+      return (await firstVisible(page, "nextjs-portal")) !== null ||
+        (await firstVisible(page, "[data-nextjs-dialog-overlay]")) !== null;
+    },
+    resolve: async (page) => {
+      const message = await page.evaluate(() => {
+        const body = document.querySelector("nextjs-portal")?.shadowRoot
+          ?.querySelector("[data-nextjs-dialog-body]")?.textContent;
+        return body?.trim() ?? "";
+      }).catch(() => "");
+      return {
+        status: "needs-human",
+        hint: `Next.js dev-error overlay is blocking the page. ` +
+          (message
+            ? `Error: ${message.slice(0, 300)}${
+              message.length > 300 ? "…" : ""
+            }`
+            : "Fix the server/client error (check `logs --server`) before continuing."),
+      };
+    },
+  },
+];
+
+async function resolveChallenges(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  page: any,
+  skip: string[],
+): Promise<ChallengeResult> {
+  const skipSet = new Set(skip);
+  const resolved: ChallengeReport[] = [];
+  const unresolved: ChallengeReport[] = [];
+
+  // Multi-pass: resolving one challenge can uncover another layered
+  // underneath (e.g. consent banner → bot-protection stub).
+  const MAX_PASSES = 4;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let progressed = false;
+    for (const ch of CHALLENGES) {
+      if (skipSet.has(ch.id)) continue;
+      let present = false;
+      try {
+        present = await ch.detect(page);
+      } catch {
+        present = false;
+      }
+      if (!present) continue;
+      try {
+        const outcome = await ch.resolve(page);
+        if (typeof outcome === "string") {
+          if (outcome === "resolved") {
+            resolved.push({ id: ch.id, status: "resolved" });
+            progressed = true;
+          } else if (outcome === "needs-human") {
+            unresolved.push({ id: ch.id, status: "needs-human" });
+          }
+          // "not-present" — challenge disappeared between detect/resolve, skip.
+        } else {
+          unresolved.push({
+            id: ch.id,
+            status: "needs-human",
+            hint: outcome.hint,
+          });
+        }
+      } catch (err) {
+        unresolved.push({
+          id: ch.id,
+          status: "needs-human",
+          hint: (err as Error).message,
+        });
+      }
+    }
+    if (!progressed) break;
+  }
+
+  return { resolved, unresolved, skipped: skip };
+}
+
+function formatUnresolved(reports: ChallengeReport[]): string {
+  return reports
+    .map((r) => r.hint ? `${r.id} (${r.hint})` : r.id)
+    .join("; ");
+}
+
+// ---------------------------------------------------------------------------
 // CLI argument parsing — every verb is a thin wrapper over a driver action.
 // ---------------------------------------------------------------------------
 
@@ -1146,6 +1486,7 @@ function printHelp(): void {
       "  stop --all                          (stops browser AND dev server)",
       "  status                              (prints JSON with driver + server state)",
       "  logs [--tail N] [--server]          (driver log by default; --server for dev log)",
+      "  doctor                              (diagnose environment: tsx, Playwright, Chromium, state files)",
       "  reset                               (clears cookies, storage, navigates to about:blank)",
       "",
       "NAVIGATION",
@@ -1186,6 +1527,8 @@ function printHelp(): void {
       "",
       "CONVENIENCE",
       "  login [--identifier EMAIL] [--password PWD]  (seeded superuser: core@admin.com / core1234)",
+      "  resolve-challenges [--skip id]                (auto-dismiss consent/bot/overlay/dialog;",
+      "                                                 reports `humanActionRequired: true` when stuck)",
       "  eval <js-expression>                          (escape hatch; runs in page context)",
       "  new-page                                      (opens a new tab; becomes active)",
       "  close-page                                    (closes active tab)",
@@ -1285,6 +1628,9 @@ async function runCli(argv: string[]): Promise<number> {
 
     case "logs":
       return cmdLogs(rest);
+
+    case "doctor":
+      return cmdDoctor();
   }
 
   // Any remaining verb is routed to the driver. Validate the verb FIRST so
@@ -1430,6 +1776,86 @@ async function cmdLogs(rest: string[]): Promise<number> {
   const sliced = flags.all === true ? lines : lines.slice(-tail);
   console.log(sliced.join("\n"));
   return 0;
+}
+
+async function cmdDoctor(): Promise<number> {
+  // Self-diagnostic: checks every precondition the skill needs so a new
+  // developer hitting a problem can pinpoint the cause without reading the
+  // source. Returns exit 0 only when the environment is fully usable.
+  const checks: Array<{
+    name: string;
+    ok: boolean;
+    detail?: string;
+    fix?: string;
+  }> = [];
+
+  checks.push({
+    name: 'database.json has `"test": true`',
+    ok: (dbConfig as { test?: unknown }).test === true,
+    fix: 'Edit database.json and set "test": true before running the skill.',
+  });
+
+  const tsxBin = resolve(PROJECT_ROOT, "node_modules", ".bin", "tsx");
+  checks.push({
+    name: "project-local tsx exists",
+    ok: existsSync(tsxBin),
+    detail: tsxBin,
+    fix: "Run `npm install` in the project root.",
+  });
+
+  const playwrightPath = resolvePlaywrightPackage();
+  checks.push({
+    name: "Playwright package is installed in the skill folder",
+    ok: !!playwrightPath,
+    detail: playwrightPath ?? undefined,
+    fix: "First `start`/`goto`/etc. call will auto-install. Or run: " +
+      "cd skills/test-frontend && npm install playwright",
+  });
+
+  if (playwrightPath) {
+    checks.push({
+      name: "Chromium browser binary is cached",
+      ok: hasChromiumBinary(),
+      fix: "Run: cd skills/test-frontend && npx playwright install chromium",
+    });
+  }
+
+  // State files — informative only, not failures.
+  const driverPid = readPid(DRIVER_PID_FILE);
+  const driverPort = readDriverPort();
+  const driverAlive = driverPid ? isPidAlive(driverPid) : false;
+  const driverReachable = driverPort ? await pingDriver(driverPort) : false;
+  checks.push({
+    name: "driver state is consistent",
+    ok: (!driverPid && !driverPort) || (driverAlive && driverReachable),
+    detail: `pid=${driverPid ?? "null"} port=${
+      driverPort ?? "null"
+    } alive=${driverAlive} reachable=${driverReachable}`,
+    fix: "If stale, run `tsx skills/test-frontend/run.ts stop --all` or " +
+      `delete .driver.pid / .driver.port under ${SKILL_DIR}.`,
+  });
+
+  const serverPid = readPid(SERVER_PID_FILE);
+  const serverReachable = await pingDevServer(getDevBaseUrl());
+  checks.push({
+    name: "dev server state is consistent",
+    ok: (!serverPid && !serverReachable) ||
+      (serverPid ? isPidAlive(serverPid) : true) || serverReachable,
+    detail: `pid=${
+      serverPid ?? "null"
+    } baseUrl=${getDevBaseUrl()} reachable=${serverReachable}`,
+  });
+
+  const report = {
+    ok: checks.every((c) => c.ok),
+    nodeVersion: process.version,
+    platform: process.platform,
+    projectRoot: PROJECT_ROOT,
+    skillDir: SKILL_DIR,
+    checks,
+  };
+  console.log(JSON.stringify(report, null, 2));
+  return report.ok ? 0 : 1;
 }
 
 function mapVerbToAction(
@@ -1663,6 +2089,18 @@ function mapVerbToAction(
         args: {
           identifier: flags.identifier,
           password: flags.password,
+        },
+      };
+
+    case "resolve-challenges":
+      return {
+        action: "resolve-challenges",
+        args: {
+          skip: Array.isArray(flags.skip)
+            ? flags.skip
+            : typeof flags.skip === "string"
+            ? [flags.skip]
+            : [],
         },
       };
 
