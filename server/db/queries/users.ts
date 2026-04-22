@@ -129,16 +129,17 @@ export async function updateUserLocale(
 export async function deleteUser(id: string): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $usr = (SELECT profile, channels FROM $id)[0];
-     LET $prof = IF $usr = NONE THEN NONE ELSE (SELECT recovery_channels FROM $usr.profile)[0] END;
+    `LET $usr  = (SELECT profile, channels FROM $id)[0];
+     LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channels END;
+     LET $prof  = IF $usr = NONE OR $usr.profile = NONE
+                  THEN NONE
+                  ELSE (SELECT recovery_channels FROM $usr.profile)[0]
+                  END;
+     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recovery_channels END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE $id;
-     IF $usr != NONE {
-       FOR $cid IN $usr.channels { DELETE $cid; };
-     };
-     IF $prof != NONE {
-       FOR $rid IN $prof.recovery_channels { DELETE $rid; };
-     };
+     FOR $cid IN $chIds { DELETE $cid; };
+     FOR $rid IN $recIds { DELETE $rid; };
      IF $usr != NONE AND $usr.profile != NONE {
        DELETE $usr.profile;
      };`,

@@ -6,9 +6,7 @@ import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
 import { updateUserLocale } from "@/server/db/queries/users";
 import { createUserWithChannels } from "@/server/db/queries/auth";
-import {
-  findChannelsByTypeAndValue,
-} from "@/server/db/queries/entity-channels";
+import { findChannelOwners } from "@/server/db/queries/entity-channels";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
@@ -156,10 +154,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const stdName = standardizeField("name", name ?? "", "user");
 
-  const errors: string[] = [
-    ...validateField("password", password, "user"),
-    ...validateField("name", stdName, "user"),
-  ];
+  const errors: string[] = [...validateField("name", stdName, "user")];
   if (channels.length === 0) {
     errors.push("validation.channel.required");
   }
@@ -182,24 +177,26 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Try to find an existing user by any submitted channel value. Resolve the
-  // owner via `user.channels CONTAINS <channelId>` — entity_channel rows
-  // carry no back-pointer (§1.1.10).
-  let existingUserId: string | null = null;
-  for (const ch of channels) {
-    const rows = await findChannelsByTypeAndValue(ch.type, ch.value);
-    for (const row of rows) {
-      const owner = await db.query<[{ id: string }[]]>(
-        `SELECT id FROM user WHERE channels CONTAINS $cid LIMIT 1`,
-        { cid: rid(String(row.id)) },
+  // Try to find an existing user by any submitted channel value. Resolved
+  // in a single batched query (§7.2). entity_channel rows carry no back-
+  // pointer (§1.1.10) — the query returns (channel, owner) pairs where the
+  // owner's `channels` array references the matching channel id.
+  const matches = await findChannelOwners(channels, "user");
+  const existingUserId = matches[0]?.ownerId ?? null;
+
+  // Password is only validated for the new-user path. Per AGENTS.md §21.1,
+  // the password is silently ignored when inviting an existing user.
+  if (!existingUserId) {
+    const passwordErrors = validateField("password", password, "user");
+    if (passwordErrors.length > 0) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: passwordErrors },
+        },
+        { status: 400 },
       );
-      const hit = owner[0]?.[0];
-      if (hit) {
-        existingUserId = String(hit.id);
-        break;
-      }
     }
-    if (existingUserId) break;
   }
 
   if (existingUserId) {

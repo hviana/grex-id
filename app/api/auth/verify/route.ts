@@ -317,25 +317,30 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     // live on `lead.channels` (composable rows — no back-pointer). Each
     // update: if the lead already references a matching (type, value) row,
     // flip it to verified; otherwise create a new verified channel and
-    // append its id to `lead.channels`.
+    // append its id to `lead.channels`. One batched query per channel.
     if (leadPayload.channels && leadPayload.channels.length > 0) {
       const db = await getDb();
       for (const ch of leadPayload.channels) {
         await db.query(
           `LET $lead = (SELECT channels FROM lead WHERE id = $owner)[0];
-           IF $lead = NONE { RETURN; };
+           LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channels END;
            LET $existing = (SELECT id FROM entity_channel
-             WHERE id IN $lead.channels
-               AND type = $type AND value = $value
+             WHERE id IN $ids AND type = $type AND value = $value
              LIMIT 1);
-           IF array::len($existing) = 0 {
-             LET $new = CREATE entity_channel SET
-               type = $type, value = $value, verified = true;
-             UPDATE $owner
-               SET channels += $new[0].id, updatedAt = time::now();
-           } ELSE {
-             UPDATE $existing[0].id SET verified = true, updatedAt = time::now();
-           };`,
+           LET $new = IF $lead != NONE AND array::len($existing) = 0 THEN (
+             CREATE entity_channel SET
+               type = $type, value = $value, verified = true
+           ) ELSE [] END;
+           LET $appended = IF array::len($new) > 0 THEN (
+             UPDATE $owner SET
+               channels += $new[0].id,
+               updatedAt = time::now()
+           ) ELSE [] END;
+           LET $flipped = IF array::len($existing) > 0 THEN (
+             UPDATE $existing[0].id SET
+               verified = true,
+               updatedAt = time::now()
+           ) ELSE [] END;`,
           {
             owner: rid(leadId),
             type: ch.type,

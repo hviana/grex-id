@@ -79,28 +79,33 @@ export async function findUserByVerifiedChannel(
     ? `type = $type AND value = $value AND verified = true`
     : `value = $value AND verified = true`;
   const query = `
-    LET $ch = (SELECT id FROM entity_channel WHERE ${filter} LIMIT 1)[0];
-    IF $ch = NONE { RETURN []; };
-    SELECT * FROM user WHERE channels CONTAINS $ch.id LIMIT 1
-      FETCH profile, channels;`;
-  const result = await db.query<[User[]]>(query, {
+    LET $ch   = (SELECT id FROM entity_channel WHERE ${filter} LIMIT 1)[0];
+    LET $chId = IF $ch = NONE THEN NONE ELSE $ch.id END;
+    IF $chId = NONE
+      THEN []
+      ELSE (SELECT * FROM user WHERE channels CONTAINS $chId LIMIT 1
+              FETCH profile, channels)
+    END;`;
+  const result = await db.query<unknown[]>(query, {
     value,
     type: channelType ?? undefined,
   });
-  return result[0]?.[0] ?? null;
+  const last = result[result.length - 1] as User[] | undefined;
+  return last?.[0] ?? null;
 }
 
 export async function userHasVerifiedChannel(userId: string): Promise<boolean> {
   const db = await getDb();
-  const result = await db.query<[{ c: number }[]]>(
-    `LET $u = (SELECT channels FROM user WHERE id = $userId)[0];
-     IF $u = NONE { RETURN [{ c: 0 }]; };
+  const result = await db.query<unknown[]>(
+    `LET $u   = (SELECT channels FROM user WHERE id = $userId)[0];
+     LET $ids = IF $u = NONE THEN [] ELSE $u.channels END;
      SELECT count() AS c FROM entity_channel
-     WHERE id IN $u.channels AND verified = true
+     WHERE id IN $ids AND verified = true
      GROUP ALL;`,
     { userId: rid(userId) },
   );
-  return (result[0]?.[0]?.c ?? 0) > 0;
+  const last = result[result.length - 1] as { c: number }[] | undefined;
+  return (last?.[0]?.c ?? 0) > 0;
 }
 
 export async function verifyPassword(
@@ -266,7 +271,7 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
   await db.query(
     `LET $targets = $userIds;
      LET $users = (SELECT id, profile, channels FROM user WHERE id IN $targets);
-     LET $profileIds = array::distinct(array::flatten($users.profile));
+     LET $profileIds = array::distinct($users.profile);
      LET $channelIds = array::distinct(array::flatten($users.channels));
      DELETE verification_request WHERE ownerId IN $targets;
      DELETE user WHERE id IN $targets;

@@ -167,15 +167,15 @@ export async function findLeadByChannelValues(
 ): Promise<Lead | null> {
   if (values.length === 0) return null;
   const db = await getDb();
-  const result = await db.query<[Lead[]]>(
-    `LET $chIds = (SELECT id FROM entity_channel WHERE value IN $values).id;
-     IF array::len($chIds) = 0 { RETURN []; };
+  const result = await db.query<unknown[]>(
+    `LET $chIds = (SELECT VALUE id FROM entity_channel WHERE value IN $values);
      SELECT * FROM lead
      WHERE channels ANYINSIDE $chIds
      LIMIT 1 FETCH profile, channels;`,
     { values },
   );
-  return normalizeLead(result[0]?.[0] ?? null);
+  const last = result[result.length - 1] as Lead[] | undefined;
+  return normalizeLead(last?.[0] ?? null);
 }
 
 export async function createLead(data: {
@@ -323,16 +323,17 @@ export async function deleteLead(id: string): Promise<void> {
   const leadId = requireRecordId(id, "leadId");
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
-    `LET $ld = (SELECT profile, channels FROM lead WHERE id = $id)[0];
-     LET $prof = IF $ld = NONE THEN NONE ELSE (SELECT recovery_channels FROM $ld.profile)[0] END;
+    `LET $ld    = (SELECT profile, channels FROM lead WHERE id = $id)[0];
+     LET $chIds = IF $ld = NONE THEN [] ELSE $ld.channels END;
+     LET $prof  = IF $ld = NONE OR $ld.profile = NONE
+                  THEN NONE
+                  ELSE (SELECT recovery_channels FROM $ld.profile)[0]
+                  END;
+     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recovery_channels END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE FROM lead WHERE id = $id;
-     IF $ld != NONE {
-       FOR $cid IN $ld.channels { DELETE $cid; };
-     };
-     IF $prof != NONE {
-       FOR $rid IN $prof.recovery_channels { DELETE $rid; };
-     };
+     FOR $cid IN $chIds { DELETE $cid; };
+     FOR $rid IN $recIds { DELETE $rid; };
      IF $ld != NONE AND $ld.profile != NONE {
        DELETE $ld.profile;
      };`,

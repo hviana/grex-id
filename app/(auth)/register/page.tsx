@@ -91,9 +91,13 @@ function RegisterContent() {
       if (systemSlug) {
         verifyParams.set("system", systemSlug);
       }
-      const primaryEmail = channels.find((c) => c.type === "email")?.value;
-      if (primaryEmail) {
-        verifyParams.set("email", primaryEmail);
+      // Prefill the verify/resend form with any channel value submitted —
+      // prefer email for convenience, else the first channel regardless.
+      const primaryIdentifier = channels.find((c) =>
+        c.type === "email"
+      )?.value ?? channels[0]?.value;
+      if (primaryIdentifier) {
+        verifyParams.set("identifier", primaryIdentifier);
       }
       router.push(
         `/verify${

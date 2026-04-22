@@ -5,8 +5,10 @@ import {
   createUserWithChannels,
   purgeAbandonedUsers,
 } from "@/server/db/queries/auth";
-import { findChannelsByTypeAndValue } from "@/server/db/queries/entity-channels";
-import { getDb, rid } from "@/server/db/connection";
+import {
+  findChannelOwners,
+  findUsersWithPendingVerification,
+} from "@/server/db/queries/entity-channels";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -117,61 +119,48 @@ async function handler(
   // Conflict check: reject if any channel value matches an existing user
   // channel that is either verified OR pending a non-expired registration
   // confirmation. Purge abandoned accounts before reusing their values.
-  const db = await getDb();
-  const abandonedOwnerIds = new Set<string>();
-  for (const ch of channels) {
-    const existing = await findChannelsByTypeAndValue(ch.type, ch.value);
-    for (const row of existing) {
-      // Resolve the owning user by scanning user.channels (composable rows
-      // have no back-pointer — §1.1.10). Only `user`-owned channels conflict
-      // with user registration; lead-owned rows are ignored here.
-      const ownerResult = await db.query<[{ id: string }[]]>(
-        `SELECT id FROM user WHERE channels CONTAINS $cid LIMIT 1`,
-        { cid: rid(String(row.id)) },
-      );
-      const owner = ownerResult[0]?.[0];
-      if (!owner) continue;
-      if (row.verified) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "CONFLICT",
-              errors: ["validation.channel.conflict"],
-            },
-          },
-          { status: 409 },
-        );
-      }
-      const ownerId = String(owner.id);
-      const pendingResult = await db.query<[{ c: number }[]]>(
-        `SELECT count() AS c FROM verification_request
-         WHERE ownerId = $ownerId
-           AND actionKey = "auth.action.register"
-           AND usedAt IS NONE
-           AND expiresAt > time::now()
-         GROUP ALL`,
-        { ownerId: rid(ownerId) },
-      );
-      const pending = pendingResult[0]?.[0]?.c ?? 0;
-      if (pending > 0) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "CONFLICT",
-              errors: ["validation.channel.conflict"],
-            },
-          },
-          { status: 409 },
-        );
-      }
-      abandonedOwnerIds.add(ownerId);
-    }
+  // All resolution runs in two batched queries (§7.2):
+  //   1. findChannelOwners — (type, value) pairs → matching user-owned channels
+  //   2. findUsersWithPendingVerification — those users' pending registrations
+  const matches = await findChannelOwners(channels, "user");
+
+  if (matches.some((m) => m.verified)) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "CONFLICT",
+          errors: ["validation.channel.conflict"],
+        },
+      },
+      { status: 409 },
+    );
   }
 
-  if (abandonedOwnerIds.size > 0) {
-    await purgeAbandonedUsers([...abandonedOwnerIds]);
+  const candidateUserIds = Array.from(new Set(matches.map((m) => m.ownerId)));
+  const pendingUserIds = await findUsersWithPendingVerification(
+    candidateUserIds,
+    "auth.action.register",
+  );
+
+  if (pendingUserIds.size > 0) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "CONFLICT",
+          errors: ["validation.channel.conflict"],
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // All remaining candidates are abandoned accounts (no verified channel
+  // and no pending registration confirmation) — hard-delete them before
+  // reusing their channel values.
+  if (candidateUserIds.length > 0) {
+    await purgeAbandonedUsers(candidateUserIds);
   }
 
   const locale = body.locale as string | undefined;

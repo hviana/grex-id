@@ -59,25 +59,31 @@ async function handler(
   // identifier. entity_channel rows have no back-pointer — resolve the owner
   // by checking which user references the matching channel id.
   const db = await getDb();
-  const rowResult = await db.query<[
-    { id: string; ownerId: string; verified: boolean }[],
-  ]>(
-    `LET $chs = (SELECT id, verified FROM entity_channel
-                 WHERE type = $type AND value = $value);
-     IF array::len($chs) = 0 { RETURN []; };
-     LET $users = (SELECT id, channels FROM user
-                   WHERE channels ANYINSIDE $chs.id);
-     IF array::len($users) = 0 { RETURN []; };
+  const rowResult = await db.query<unknown[]>(
+    `LET $chIds = (SELECT VALUE id FROM entity_channel
+                    WHERE type = $type AND value = $value);
+     LET $users = IF array::len($chIds) = 0
+                  THEN []
+                  ELSE (SELECT id, channels FROM user
+                        WHERE channels ANYINSIDE $chIds)
+                  END;
      LET $u = $users[0];
-     LET $match = (SELECT id, verified FROM entity_channel
-                   WHERE id IN $u.channels
-                     AND type = $type AND value = $value
-                   LIMIT 1)[0];
-     IF $match = NONE { RETURN []; };
-     RETURN [{ id: $match.id, ownerId: $u.id, verified: $match.verified }];`,
+     LET $match = IF $u = NONE
+                  THEN NONE
+                  ELSE (SELECT id, verified FROM entity_channel
+                        WHERE id IN $u.channels
+                          AND type = $type AND value = $value
+                        LIMIT 1)[0]
+                  END;
+     IF $match = NONE
+       THEN []
+       ELSE [{ id: $match.id, ownerId: $u.id, verified: $match.verified }]
+     END;`,
     { type, value },
   );
-  const row = rowResult[0]?.[0];
+  const row = (rowResult[rowResult.length - 1] as
+    | { id: string; ownerId: string; verified: boolean }[]
+    | undefined)?.[0];
   if (!row) return successResponse;
 
   if (row.verified) {

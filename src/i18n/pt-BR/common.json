@@ -109,7 +109,6 @@
   "placeholder.search": "Buscar...",
   "users.create": "Adicionar Usuário",
   "users.edit": "Editar Usuário",
-  "users.delete": "Remover Usuário",
   "users.deleteConfirm": "Remover este usuário da empresa e sistema atuais? A conta do usuário não será excluída.",
   "users.roles": "Funções",
   "users.password": "Senha",

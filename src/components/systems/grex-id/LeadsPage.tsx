@@ -162,7 +162,13 @@ export default function LeadsPage() {
       | { name?: string; avatarUri?: string; age?: number }
       | null;
     const avatarUri = profile?.avatarUri || (item.avatarUri as string) || null;
-    const phone = item.phone as string | undefined;
+    const channels = (Array.isArray(item.channels) ? item.channels : []) as {
+      type: string;
+      value: string;
+    }[];
+    const primaryChannel = channels.find((c) => c.type === "email") ??
+      channels[0];
+    const secondaryChannels = channels.filter((c) => c !== primaryChannel);
     const tags = (Array.isArray(item.tags) ? item.tags : []) as {
       id: string;
       name: string;
@@ -193,14 +199,19 @@ export default function LeadsPage() {
             <h3 className="text-white font-semibold text-sm truncate">
               {item.name as string}
             </h3>
-            <p className="text-[var(--color-light-text)] text-xs truncate">
-              {item.email as string}
-            </p>
-            {phone && (
-              <p className="text-[var(--color-light-text)] text-xs">
-                {phone}
+            {primaryChannel && (
+              <p className="text-[var(--color-light-text)] text-xs truncate">
+                {primaryChannel.value}
               </p>
             )}
+            {secondaryChannels.map((c) => (
+              <p
+                key={c.value}
+                className="text-[var(--color-light-text)] text-xs"
+              >
+                {c.value}
+              </p>
+            ))}
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {tags.map((tag) => (

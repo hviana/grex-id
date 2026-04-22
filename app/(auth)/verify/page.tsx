@@ -19,8 +19,7 @@ function VerifyContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("system");
-  const identifierParam = searchParams.get("identifier") ??
-    searchParams.get("email") ?? "";
+  const identifierParam = searchParams.get("identifier") ?? "";
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
   const [identifier, setIdentifier] = useState(identifierParam);
