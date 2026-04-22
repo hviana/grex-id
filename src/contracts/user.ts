@@ -12,7 +12,6 @@ export interface User {
    * clicks the `auth.action.twoFactorEnable` confirmation link (§19.15).
    */
   pendingTwoFactorSecret?: string;
-  oauthProvider?: string;
   stayLoggedIn: boolean;
   createdAt: string;
   updatedAt: string;

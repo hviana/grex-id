@@ -368,8 +368,8 @@ permission errors, and status messages.
 │   │   ├── fields/   (§18.4)
 │   │   ├── core/     (§20)
 │   │   └── systems/registry.ts + [slug]/HomePage.tsx
-│   ├── contracts/    (auth, tenant, profile, address, user, company,
-│   │                  system, role, plan, voucher, menu, billing,
+│   ├── contracts/    (auth, tenant, profile, address, user, oauth-identity,
+│   │                  company, system, role, plan, voucher, menu, billing,
 │   │                  connected-app, token, file, event-queue,
 │   │                  communication, payment-provider, usage,
 │   │                  core-settings, front-core-settings, tag, lead,
@@ -629,7 +629,7 @@ this table.
 | Migration file                             | Table                     | Key rules                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0000_db_generals.surql`                   | `_migrations`, analyzers  | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `0001_create_user.surql`                   | `user`                    | `profile` is `record<profile>`. `passwordHash` via argon2. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. Fields: passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, oauthProvider, stayLoggedIn.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `0001_create_user.surql`                   | `user`, `oauth_identity`  | **`user`**: `profile` is `record<profile>`. `passwordHash` via argon2. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. OAuth linkage lives on `oauth_identity` rows (same migration). Fields: passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, stayLoggedIn. **`oauth_identity`**: one row per (provider, provider-user-id) link to a `user`. Fields: userId `record<user>`, provider `string`, providerUserId `string`, linkedAt `datetime`. Unique composite index `(provider, providerUserId)` and secondary index `userId`. A single user may have many rows (one per linked provider); one provider account may link to exactly one platform user. See §19.8.                                                          |
 | `0002_create_company.surql`                | `company`                 | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `0003_create_company_user.surql`           | `company_user`            | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `0004_create_system.surql`                 | `system`                  | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -3483,12 +3483,50 @@ array enables OAuth login and lists the providers to render on the login page;
 an empty array (the seeded default) disables it entirely — there is no redundant
 `auth.oauth.enabled` flag.
 
+**Identity model.** OAuth linkage is stored in the dedicated `oauth_identity`
+table (§8), **never as a scalar field on `user`**. Each row represents one
+external account attached to one platform user, keyed by
+`(provider, providerUserId)`. A single user may have any number of linked
+providers (Google, GitHub, Facebook, …) simultaneously; an external account may
+link to exactly one platform user. Re-identification at callback time always
+matches on the provider's stable `sub` / user id — never on email, since
+external emails may change, be re-assigned, or conflict with a locally
+registered user who never consented to the link.
+
+**Flow:**
+
 1. Redirect to provider.
-2. Callback: verify OAuth token, extract email.
-3. If user exists → link OAuth provider, issue tokens.
-4. If not → create the user, then create a verified `entity_channel` of type
-   `"email"` and the matching `verification_request` marked
-   `usedAt = time::now()`, all in the same batched query (§7.2). Issue tokens.
+2. Callback: verify the OAuth id/access token; extract `providerUserId` (the
+   provider's stable subject identifier) and, when available, `email`.
+3. **Match by `(provider, providerUserId)`** in `oauth_identity`:
+   - **Hit** — load the linked `user` and issue tokens.
+   - **Miss** — check whether a `user` already owns a **verified**
+     `entity_channel` of type `"email"` with `value = <provider email>`:
+     - **Verified-email match** — create an `oauth_identity` row linking that
+       provider account to the existing user (atomic with the token issuance in
+       one batched query, §7.2). Issue tokens. No new user is created and no
+       existing entity channels are modified.
+     - **No match** — create a new `user` with a verified `entity_channel` of
+       type `"email"`, a `verification_request` marked `usedAt = time::now()`,
+       and an `oauth_identity` row linking the provider account to the new user,
+       all in the same batched query. Issue tokens.
+4. **Linking a new provider to an authenticated session** uses the same route
+   under an authenticated context: when the callback runs with a live System API
+   Token, steps 3a/3b still apply but if the resolved user differs from the
+   authenticated user, the request is rejected with
+   `auth.error.oauthAccountLinkedElsewhere`. This prevents an attacker who
+   controls a provider account from silently attaching it to someone else's
+   session.
+5. **Unlinking** a provider is a single `DELETE oauth_identity` scoped by
+   `(userId, provider)`. A user may unlink any provider at any time as long as
+   at least one authentication path remains (password + verified channel, or
+   another linked provider) — otherwise the request is rejected with
+   `auth.error.lastAuthenticationMethod`.
+
+**Invariants.** The `user` row carries no provider column. Provider metadata
+(access/refresh tokens, scopes) is out of scope for this table — if a future
+feature needs it, it goes on `oauth_identity` rows, AES-256-GCM-encrypted per
+§7.1.1 and §12.15.
 
 #### 19.9 Security measures
 

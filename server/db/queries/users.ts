@@ -7,7 +7,7 @@ export async function listUsers(
   params: CursorParams & { search?: string; companyId?: string },
 ): Promise<
   PaginatedResult<
-    Omit<User, "twoFactorEnabled" | "oauthProvider" | "stayLoggedIn">
+    Omit<User, "twoFactorEnabled" | "stayLoggedIn">
   >
 > {
   const conditions: string[] = [];
@@ -25,7 +25,7 @@ export async function listUsers(
   }
 
   return paginatedQuery<
-    Omit<User, "twoFactorEnabled" | "oauthProvider" | "stayLoggedIn">
+    Omit<User, "twoFactorEnabled" | "stayLoggedIn">
   >({
     table: "user",
     select: "id, profile, roles, createdAt, updatedAt",
