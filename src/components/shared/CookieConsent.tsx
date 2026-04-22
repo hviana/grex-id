@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale } from "@/src/hooks/useLocale";
 import { getCookie, setCookie } from "@/src/lib/cookies";
@@ -17,16 +17,13 @@ export default function CookieConsent() {
   const { t } = useLocale();
   const searchParams = useSearchParams();
 
-  // SSR: document is undefined, cookie is unknown → treat as decided so the
-  // popup doesn't flash in the server shell. On first client render the lazy
-  // initializer reads the real cookie, and visibility is derived from there.
-  const [cookieAtMount] = useState<string | undefined>(() => {
-    if (typeof document === "undefined") return "ssr";
-    return getCookie(CONSENT_COOKIE);
-  });
-  const [dismissed, setDismissed] = useState(false);
+  // Server and first client render must match → start hidden. After mount,
+  // read the cookie and reveal the popup only when no decision was recorded.
+  const [visible, setVisible] = useState(false);
 
-  const visible = cookieAtMount === undefined && !dismissed;
+  useEffect(() => {
+    if (getCookie(CONSENT_COOKIE) === undefined) setVisible(true);
+  }, []);
 
   // Resolve the terms link target. Prefer the ?system= query param (present
   // on auth pages + public homepage). When absent, hit `/terms` without a
@@ -45,7 +42,7 @@ export default function CookieConsent() {
       accepted ? "accepted" : "declined",
       SIX_MONTHS_DAYS,
     );
-    setDismissed(true);
+    setVisible(false);
   };
 
   if (!visible) return null;

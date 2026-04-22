@@ -18,7 +18,7 @@
     "@hviana/surreal-fs": "npm:@jsr/hviana__surreal-fs@^1.0.3",
     "@panva/jose": "npm:@jsr/panva__jose@^6.2.2",
     "chart.js": "^4.5.1",
-    "next": "^16.2.3",
+    "next": "^16.2.4",
     "nitro": "^3.0.260311-beta",
     "otplib": "^13.4.0",
     "react": "^19.2.5",
@@ -28,22 +28,22 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.31.2",
-    "@tailwindcss/postcss": "^4.2.2",
-    "@types/node": "^20",
+    "@cloudflare/vite-plugin": "^1.33.1",
+    "@tailwindcss/postcss": "^4.2.4",
+    "@types/node": "^25.6.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitejs/plugin-rsc": "^0.5.21",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.1",
+    "@vitejs/plugin-rsc": "^0.5.24",
+    "eslint": "^10.2.1",
+    "eslint-config-next": "^16.2.4",
     "react-server-dom-webpack": "^19.2.4",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.2.4",
     "tsx": "^4.21.0",
-    "typescript": "^5",
-    "vinext": "^0.0.41",
-    "vite": "^8.0.8",
-    "wrangler": "^4.81.1"
+    "typescript": "^5.9.3",
+    "vinext": "^0.0.43",
+    "vite": "^8.0.9",
+    "wrangler": "^4.84.1"
   },
   "type": "module"
 }
