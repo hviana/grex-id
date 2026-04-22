@@ -158,7 +158,13 @@ the `SKILL.md` before running anything. Current skills:
 
 - `skills/test-db-queries/` — run ad-hoc SurrealQL against the test DB.
 - `skills/test-routes/` — exercise API routes end-to-end.
-- `skills/test-frontend/` — drive the UI in a real browser via Playwright.
+- `skills/test-frontend/` — drive the UI in a real browser via Playwright. Also
+  handles absolute external URLs (OAuth consent pages, payment-provider
+  redirects, third-party callback URLs).
+- `skills/test-events/` — verify the event queue + communication flow
+  (`send_communication`, `verification_request`, human-confirmation links).
+  Works even when the underlying channel (email, SMS, …) has no real provider
+  configured — validation is done on the queue rows.
 - `skills/check-library-updates/` — audit and apply dependency bumps.
 
 Each skill enforces its own guardrails (e.g. `test-db-queries` refuses to run

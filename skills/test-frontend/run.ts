@@ -1645,7 +1645,8 @@ async function runCli(argv: string[]): Promise<number> {
   }
 
   try {
-    await ensureDriverRunningFromCli();
+    const needsServer = !commandWantsExternalUrl(cmd, mapped);
+    await ensureDriverRunningFromCli(needsServer);
   } catch (err) {
     console.error(`[test-frontend] ${(err as Error).message}`);
     return 1;
@@ -1667,7 +1668,28 @@ async function runCli(argv: string[]): Promise<number> {
   }
 }
 
-async function ensureDriverRunningFromCli(): Promise<void> {
+function isExternalUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  // http/https + a host means "external to our dev server". Relative paths
+  // (e.g. "/login") and bare strings are treated as in-project navigation.
+  return /^https?:\/\//i.test(value);
+}
+
+function commandWantsExternalUrl(
+  verb: string,
+  mapped: { args: Record<string, unknown> },
+): boolean {
+  // Only `goto` is allowed to bypass the auto-server — it's the only verb
+  // where the URL argument fully determines the destination. `wait-for-url`
+  // and friends still need the dev server because the *current page* is
+  // where the waiting happens.
+  if (verb !== "goto") return false;
+  return isExternalUrl(mapped.args.url);
+}
+
+async function ensureDriverRunningFromCli(
+  autoServer: boolean = true,
+): Promise<void> {
   const existing = readPid(DRIVER_PID_FILE);
   const port = readDriverPort();
   if (existing && isPidAlive(existing) && port && (await pingDriver(port))) {
@@ -1677,7 +1699,7 @@ async function ensureDriverRunningFromCli(): Promise<void> {
     headed: false,
     devPort: DEFAULT_DEV_PORT,
     devTimeoutMs: 180_000,
-    autoServer: true,
+    autoServer,
   });
 }
 

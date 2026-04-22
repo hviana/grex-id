@@ -5641,5 +5641,10 @@ Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
 - Writing database query tests → `skills/test-db-queries/SKILL.md`
 - Writing route tests → `skills/test-routes/SKILL.md`
 - Driving the frontend in a real browser (Playwright) →
-  `skills/test-frontend/SKILL.md`
+  `skills/test-frontend/SKILL.md` — works on project-local pages and any
+  absolute external URL (OAuth consent pages, payment-provider redirects,
+  third-party callback URLs).
+- Verifying the event queue + communication flow (send_communication,
+  verification_request, human-confirmation link delivery) →
+  `skills/test-events/SKILL.md`
 - Checking for dependency updates → `skills/check-library-updates/SKILL.md`

@@ -1,6 +1,6 @@
 ---
 name: test-frontend
-description: Use whenever the user wants to drive the project's frontend in a real browser — open a page, click a button, fill a form, read the DOM, take a screenshot, inspect the console, reproduce a UI flow end-to-end, verify that a React change actually renders. Trigger on phrases like "open the browser", "click this button", "test the login UI", "fill the register form", "see what happens on /billing", "screenshot the page", "check for console errors", "does the button actually work". The skill launches Playwright (Chromium), owns a single browser session across commands, auto-starts the Next.js dev server, and exposes simple verbs (`goto`, `click`, `fill`, `screenshot`, `console`, …). First run auto-installs Playwright + Chromium into the skill's own folder — no project dependency is added. It refuses to start unless `database.json` explicitly carries `"test": true`.
+description: Use whenever the user wants to drive a web page in a real browser — open a page, click a button, fill a form, read the DOM, take a screenshot, inspect the console, reproduce a UI flow end-to-end, verify that a React change actually renders. The skill defaults to the project's own dev server, but every navigation verb (`goto`, `wait-for-url`, `screenshot`, etc.) accepts **absolute external URLs** too — so it can drive third-party pages like OAuth consent screens, payment-provider redirects, email-provider web UIs, webhook callback URLs, or any http/https page. Trigger on phrases like "open the browser", "click this button", "test the login UI", "fill the register form", "see what happens on /billing", "screenshot the page", "check for console errors", "open this external URL", "follow the redirect to the provider page". The skill launches Playwright (Chromium), owns a single browser session across commands, auto-starts the Next.js dev server when a relative path is navigated to, and exposes simple verbs (`goto`, `click`, `fill`, `screenshot`, `console`, …). First run auto-installs Playwright + Chromium into the skill's own folder — no project dependency is added. It refuses to start unless `database.json` explicitly carries `"test": true`.
 ---
 
 # Test Frontend
@@ -22,6 +22,34 @@ a test flow is just a sequence of one-line invocations.
 - Capture screenshots for bug reports.
 - Run a quick click-through after editing a component — the driver stays alive
   between commands so iteration is fast.
+
+## External URLs
+
+Every verb that takes a URL argument (`goto`, `wait-for-url`, pages opened via
+`window.open`, …) accepts **any absolute http/https URL** — not just paths on
+the project's dev server. The skill keeps one persistent browser context, so you
+can start on a local page, follow a redirect out to a third-party domain (OAuth
+consent, payment provider, email-inbox preview), interact there, and come back —
+cookies for each origin are retained per Playwright's normal isolation rules.
+
+When the **first** navigation verb of a session is an absolute external URL, the
+skill skips the auto-start of the Next.js dev server (it would be wasted — the
+test doesn't need it). Relative paths always auto-start the server as before.
+Example:
+
+```bash
+# No local dev server needed here — external URL only.
+tsx skills/test-frontend/run.ts goto https://example.com/pricing
+tsx skills/test-frontend/run.ts text 'h1'
+tsx skills/test-frontend/run.ts screenshot external.png --full-page
+
+# Mixed: start on the app, follow the external OAuth hop, come back.
+tsx skills/test-frontend/run.ts goto /login
+tsx skills/test-frontend/run.ts click 'button:has-text("Sign in with Google")'
+tsx skills/test-frontend/run.ts wait-for-url 'accounts.google.com/**'
+# … drive the external form …
+tsx skills/test-frontend/run.ts wait-for-url '**/entry'
+```
 
 ## When NOT to use
 
@@ -107,15 +135,15 @@ call `start` explicitly unless you want `--headed` or a custom port.
 
 ### Navigation
 
-| Verb               | Args                                          | Description                                       |
-| ------------------ | --------------------------------------------- | ------------------------------------------------- |
-| `goto`             | `<path-or-url>`                               | Navigate to `/foo` or an absolute URL.            |
-| `reload`           | —                                             | Reload the current page.                          |
-| `back` / `forward` | —                                             | Navigate history.                                 |
-| `url`              | —                                             | Print the current URL.                            |
-| `title`            | —                                             | Print the document title.                         |
-| `wait-for-url`     | `<glob-or-regex>`                             | Wait until the URL matches (Playwright patterns). |
-| `wait-for-load`    | `--state load\|domcontentloaded\|networkidle` | Wait for a load state (default `networkidle`).    |
+| Verb               | Args                                          | Description                                                                                                                                                                                                                                                             |
+| ------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goto`             | `<path-or-url>`                               | Navigate to a relative path like `/foo` (resolved against the dev server) **or any absolute URL** — `https://provider.example.com/oauth/authorize`, a Gmail web link, a payment-provider callback, etc. External URLs skip the dev-server auto-start and open directly. |
+| `reload`           | —                                             | Reload the current page.                                                                                                                                                                                                                                                |
+| `back` / `forward` | —                                             | Navigate history.                                                                                                                                                                                                                                                       |
+| `url`              | —                                             | Print the current URL.                                                                                                                                                                                                                                                  |
+| `title`            | —                                             | Print the document title.                                                                                                                                                                                                                                               |
+| `wait-for-url`     | `<glob-or-regex>`                             | Wait until the URL matches (Playwright patterns).                                                                                                                                                                                                                       |
+| `wait-for-load`    | `--state load\|domcontentloaded\|networkidle` | Wait for a load state (default `networkidle`).                                                                                                                                                                                                                          |
 
 ### Interaction
 
