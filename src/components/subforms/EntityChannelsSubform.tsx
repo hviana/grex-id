@@ -143,10 +143,25 @@ const EntityChannelsSubform = forwardRef<
     }, [systemToken]);
 
     useEffect(() => {
-      if (mode === "authenticated" && systemToken) {
-        void fetchChannels();
-      }
-    }, [mode, systemToken, fetchChannels]);
+      if (mode !== "authenticated" || !systemToken) return;
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch("/api/entity-channels", {
+            headers: { Authorization: `Bearer ${systemToken}` },
+          });
+          const json = await res.json();
+          if (!cancelled && json.success) setChannels(json.data ?? []);
+        } catch {
+          // silently fail
+        } finally {
+          if (!cancelled) setChannelsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [mode, systemToken]);
 
     const isFormValid = useCallback((): boolean => {
       if (mode !== "local") return true;

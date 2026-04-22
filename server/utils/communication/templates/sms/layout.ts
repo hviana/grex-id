@@ -1,3 +1,5 @@
+import { assertServerOnly } from "../../../server-only.ts";
+assertServerOnly("layout");
 export interface SmsLayoutBanner {
   actorName?: string;
   companyName?: string;

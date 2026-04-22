@@ -4,6 +4,9 @@ import type {
   PaymentMethod,
   Subscription,
 } from "@/src/contracts/billing";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("billing");
 
 export async function getActiveSubscription(
   companyId: string,

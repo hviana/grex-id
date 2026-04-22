@@ -1,5 +1,8 @@
 import type { RequestContext } from "@/src/contracts/auth";
 import { getAnonymousTenant } from "@/server/utils/tenant";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("compose");
 
 export type Middleware = (
   req: Request,

@@ -1,6 +1,9 @@
 import { getDb } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("data-deletion");
 
 /**
  * Deletes all data scoped to a company+system pair.

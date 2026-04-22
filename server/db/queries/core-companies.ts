@@ -1,6 +1,9 @@
 import { getDb, rid } from "../connection.ts";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("core-companies");
 
 export interface CoreCompanySystem {
   systemId: string;

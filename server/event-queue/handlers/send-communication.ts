@@ -2,6 +2,9 @@ import Core from "../../utils/Core.ts";
 import { publish } from "../publisher.ts";
 import { channelHandlerName, hasChannel } from "../../module-registry.ts";
 import type { HandlerFn } from "../worker.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("send-communication");
 
 /**
  * Dispatcher for `send_communication` (§15.9).

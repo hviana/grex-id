@@ -1,5 +1,8 @@
 import { getDb } from "../db/connection.ts";
 import { publish } from "../event-queue/publisher.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("recurring-billing");
 
 const BILLING_CHECK_INTERVAL_MS = 3_600_000; // 1 hour
 

@@ -23,6 +23,9 @@ import { loadFrontCoreData } from "./utils/FrontCore.ts";
 import { loadJwtSecret } from "./utils/token.ts";
 import { loadFileAccessData } from "./utils/file-access-cache.ts";
 import FileCacheManager from "./utils/file-cache.ts";
+import { assertServerOnly } from "utils/server-only.ts";
+
+assertServerOnly("core-register");
 
 export function registerCore(): void {
   // Caches

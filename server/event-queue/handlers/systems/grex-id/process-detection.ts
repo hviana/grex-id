@@ -2,6 +2,9 @@ import { getDb, rid } from "@/server/db/connection";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
 import { getLocationById } from "@/server/db/queries/locations";
 import type { HandlerFn } from "@/server/event-queue/worker";
+import { assertServerOnly } from "../../../../utils/server-only.ts";
+
+assertServerOnly("process-detection");
 
 export const processDetection: HandlerFn = async (payload) => {
   const locationId = payload.locationId as string;

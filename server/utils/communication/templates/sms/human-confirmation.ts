@@ -1,6 +1,9 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
 import { smsLayout } from "./layout.ts";
+import { assertServerOnly } from "../../../server-only.ts";
+
+assertServerOnly("human-confirmation");
 
 interface HumanConfirmationData {
   actionKey: string;

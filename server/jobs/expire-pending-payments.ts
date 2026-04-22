@@ -1,6 +1,9 @@
 import { getDb, rid } from "../db/connection.ts";
 import { publish } from "../event-queue/publisher.ts";
 import Core from "../utils/Core.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("expire-pending-payments");
 
 const EXPIRY_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 

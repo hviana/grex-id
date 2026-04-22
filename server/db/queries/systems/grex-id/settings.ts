@@ -5,6 +5,9 @@ import {
   registerCache,
   updateCache,
 } from "@/server/utils/cache";
+import { assertServerOnly } from "../../../../utils/server-only.ts";
+
+assertServerOnly("settings");
 
 export interface GrexIdSetting {
   id: string;

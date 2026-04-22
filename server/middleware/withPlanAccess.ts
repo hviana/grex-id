@@ -1,5 +1,8 @@
 import type { Middleware } from "./compose.ts";
 import { checkPlanAccess } from "../utils/guards.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("withPlanAccess");
 
 export function withPlanAccess(featureNames: string[]): Middleware {
   return async (_req, ctx, next) => {

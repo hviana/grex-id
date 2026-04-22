@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { Tag } from "@/src/contracts/tag";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("tags");
 
 export async function searchTags(
   companyId: string,

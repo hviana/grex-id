@@ -1,6 +1,9 @@
 import type { Middleware } from "./compose.ts";
 import { getDb, rid } from "../db/connection.ts";
 import { resolveEntityLimit } from "../utils/guards.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("withEntityLimit");
 
 export function withEntityLimit(
   entityName: string,

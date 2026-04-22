@@ -1,4 +1,7 @@
 import type { IPaymentProvider, PaymentResult } from "./interface.ts";
+import { assertServerOnly } from "../server-only.ts";
+
+assertServerOnly("credit-card");
 
 /**
  * Stub payment provider.

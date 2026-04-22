@@ -3,6 +3,9 @@ import { registerAllSystems } from "../../systems/index.ts";
 import { registerAllFrameworks } from "../../frameworks/index.ts";
 import { getAllJobs } from "../module-registry.ts";
 import { startEventQueue } from "./start-event-queue.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("index");
 
 export async function startAllJobs(): Promise<void> {
   registerCore();

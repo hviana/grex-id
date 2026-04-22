@@ -2,6 +2,9 @@ import { getDb, rid } from "../connection.ts";
 import type { Role } from "@/src/contracts/role";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("roles");
 
 export async function listRoles(
   params: CursorParams & { search?: string; systemId?: string },

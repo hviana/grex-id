@@ -10,6 +10,10 @@ export type {
   VerificationActorType,
   VerificationOwnerType,
 } from "@/src/contracts/verification-request";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("auth");
+
 export type VerificationRequestRecord = VerificationRequest;
 
 function isRecordId(value: string): boolean {

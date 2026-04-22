@@ -1,5 +1,8 @@
 import { getDb } from "../db/connection.ts";
 import type { WorkerConfig } from "@/src/contracts/event-queue";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("worker");
 
 export type HandlerFn = (payload: Record<string, unknown>) => Promise<void>;
 

@@ -1,4 +1,7 @@
 import type { Surreal } from "surrealdb";
+import { assertServerOnly } from "../../../../utils/server-only.ts";
+
+assertServerOnly("001_grex_id");
 
 export async function seed(db: Surreal): Promise<void> {
   // 1. Create the GrexID system

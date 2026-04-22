@@ -1,5 +1,8 @@
 import { getDb } from "../connection.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("front-settings");
 
 function resolveScope(systemSlug?: string): string {
   return systemSlug && systemSlug.length > 0 ? systemSlug : "core";

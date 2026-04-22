@@ -2,6 +2,9 @@ import { getDb, rid } from "../connection.ts";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { paginatedQuery } from "./pagination.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("vouchers");
 
 export async function listVouchers(
   params: CursorParams & { search?: string },

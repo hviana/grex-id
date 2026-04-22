@@ -3,6 +3,9 @@ import type { Lead, LeadCompanySystem } from "@/src/contracts/lead";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
 import { runLifecycleHooks } from "@/server/module-registry";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("leads");
 
 function normalizeRecordId(value: unknown): string | null {
   if (!value) return null;

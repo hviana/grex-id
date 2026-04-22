@@ -1,3 +1,5 @@
+import { assertServerOnly } from "../../utils/server-only.ts";
+assertServerOnly("notifications");
 // Live query definition for real-time notifications
 // Used by the frontend via useLiveQuery hook
 export const LIVE_NOTIFICATIONS_QUERY =

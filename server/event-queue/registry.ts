@@ -1,4 +1,7 @@
 import type { HandlerFn } from "./worker.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("registry");
 
 /**
  * One name per handler. The name is both the event (what `publish()` accepts)

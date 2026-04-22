@@ -1,5 +1,8 @@
 import { getDb } from "../connection.ts";
 import type { CoreSetting } from "@/src/contracts/core-settings";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("core-settings");
 
 function resolveScope(systemSlug?: string): string {
   // systemSlug is NEVER empty at rest (DB ASSERT). "core" is the default scope;

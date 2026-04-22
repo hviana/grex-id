@@ -1,6 +1,9 @@
 import type { Middleware } from "./compose.ts";
 import { checkRateLimit, type RateLimitConfig } from "../utils/rate-limiter.ts";
 import { resolveRateLimitConfig } from "../utils/guards.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("withRateLimit");
 
 export function withRateLimit(config: RateLimitConfig): Middleware {
   return async (req, ctx, next) => {

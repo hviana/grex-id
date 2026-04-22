@@ -1,4 +1,7 @@
 import type { Surreal } from "surrealdb";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("001_superuser");
 
 export async function seed(db: Surreal): Promise<void> {
   const existing = await db.query<[{ id: string }[]]>(

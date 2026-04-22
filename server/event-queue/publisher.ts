@@ -1,4 +1,7 @@
 import { getDb } from "../db/connection.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("publisher");
 
 /**
  * Publish an event to the queue. The event name is also the handler name

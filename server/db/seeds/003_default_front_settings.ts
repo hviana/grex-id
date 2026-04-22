@@ -1,4 +1,7 @@
 import type { Surreal } from "surrealdb";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("003_default_front_settings");
 
 interface DefaultFrontSetting {
   key: string;

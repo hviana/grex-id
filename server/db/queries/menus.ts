@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { MenuItem } from "@/src/contracts/menu";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("menus");
 
 export async function listMenuItems(systemId?: string): Promise<MenuItem[]> {
   const db = await getDb();

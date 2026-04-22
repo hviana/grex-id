@@ -1,4 +1,7 @@
 import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
+import { assertServerOnly } from "../../../../utils/server-only.ts";
+
+assertServerOnly("faces");
 
 export interface Face {
   id: string;

@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { Delivery, QueueEvent } from "@/src/contracts/event-queue";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("event-queue");
 
 export async function getEventById(id: string): Promise<QueueEvent | null> {
   const db = await getDb();

@@ -1,6 +1,9 @@
 import { getDb, rid } from "@/server/db/connection";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("locations");
 
 export interface Location {
   id: string;

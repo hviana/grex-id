@@ -2,6 +2,9 @@ import { getDb, rid } from "../connection.ts";
 import type { User } from "@/src/contracts/user";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { paginatedQuery } from "./pagination.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("users");
 
 export async function listUsers(
   params: CursorParams & { search?: string; companyId?: string },

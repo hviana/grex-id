@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { ConnectedApp } from "@/src/contracts/connected-app";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("connected-apps");
 
 export async function listConnectedApps(
   companyId: string,

@@ -2,6 +2,9 @@ import { getDb, rid } from "../connection.ts";
 import type { FileMetadata } from "@/src/contracts/file";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("files");
 
 export async function listFiles(
   params: CursorParams & {

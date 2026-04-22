@@ -1,4 +1,7 @@
 import type { Surreal } from "surrealdb";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("004_default_file_access");
 
 interface FileAccessSeed {
   name: string;

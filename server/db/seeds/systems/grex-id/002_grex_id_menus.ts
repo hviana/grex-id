@@ -1,4 +1,7 @@
 import type { Surreal } from "surrealdb";
+import { assertServerOnly } from "../../../../utils/server-only.ts";
+
+assertServerOnly("002_grex_id_menus");
 
 export async function seed(db: Surreal): Promise<void> {
   const sysResult = await db.query<[{ id: string }[]]>(

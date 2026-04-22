@@ -1,6 +1,9 @@
 import { t } from "@/src/i18n";
 import Core from "../../../Core.ts";
 import FrontCore from "../../../FrontCore.ts";
+import { assertServerOnly } from "../../../server-only.ts";
+
+assertServerOnly("layout");
 
 export function escapeHtml(str: string): string {
   return str

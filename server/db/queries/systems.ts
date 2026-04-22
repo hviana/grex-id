@@ -2,6 +2,9 @@ import { getDb, rid } from "../connection.ts";
 import type { System } from "@/src/contracts/system";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { paginatedQuery } from "./pagination.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("systems");
 
 export async function listSystems(
   params: CursorParams & { search?: string },

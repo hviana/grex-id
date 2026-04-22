@@ -1,5 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { ApiToken } from "@/src/contracts/token";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("tokens");
 
 /**
  * Lists live api_tokens (revokedAt IS NONE) owned by `userId`, optionally

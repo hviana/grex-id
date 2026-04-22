@@ -6,6 +6,9 @@ import {
   ensureActorValidityLoaded,
   isActorValid,
 } from "../utils/actor-validity.ts";
+import { assertServerOnly } from "../utils/server-only.ts";
+
+assertServerOnly("withAuth");
 
 /**
  * Authenticates a request without touching the database (§12.8).

@@ -1,6 +1,9 @@
 import { getDb, rid } from "../connection.ts";
 import type { UsageRecord } from "@/src/contracts/usage";
 import { resolveAllOperationCounts } from "@/server/utils/guards";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("usage");
 
 export async function getUsageForPeriod(
   companyId: string,

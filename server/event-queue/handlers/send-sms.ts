@@ -12,6 +12,9 @@ import type {
   TemplateBuilder,
   TemplateResult,
 } from "@/src/contracts/communication";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("send-sms");
 
 const CHANNEL = "sms";
 
