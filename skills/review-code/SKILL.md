@@ -128,7 +128,7 @@ For every page in `app/` (auth pages, core admin, app panel, public pages):
 
 Run the dependency check and record any stale or vulnerable dependencies.
 
-### Phase 3 — Checklist sweep (secondary)
+### Phase 3 — Checklist sweep
 
 While the test results are the primary source of findings, also walk the
 checklist in `docs/agent-checklist.md` to catch rule violations that don't
