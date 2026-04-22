@@ -1,4 +1,4 @@
-# grex-id
+# Overview
 
 Serverless multi-tenant platform built on Next.js 16, SurrealDB 3, and
 TailwindCSS 4. Runs on Node (via Next or Vinext) and on Deno.
