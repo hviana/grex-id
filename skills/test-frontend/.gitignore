@@ -1,0 +1,11 @@
+.driver.pid
+.driver.port
+.driver.log
+.driver.state.json
+.server.pid
+.server.port
+.server.log
+.superuser-token
+screenshots/
+node_modules/
+package-lock.json

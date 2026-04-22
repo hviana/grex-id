@@ -418,6 +418,7 @@ permission errors, and status messages.
 ├── systems/                            # Subsystem boot (§12.9)
 │   ├── index.ts                        # System boot entry — registers all systems
 │   └── [slug]/
+│       ├── AGENTS.md                   # Optional per-subsystem specification
 │       └── register.ts                 # Per-system self-registration
 ├── frameworks/                       # §26 — each subframework is self-contained
 │   ├── index.ts                      # Framework boot entry (§26.4)
@@ -447,6 +448,12 @@ permission errors, and status messages.
   the project root) that calls the module-registry registration functions
   (§12.9). The subsystem's `register()` function is imported only by
   `systems/index.ts` — never by core files.
+- Each subsystem **may ship its own `AGENTS.md`** at `systems/[slug]/AGENTS.md`.
+  It inherits the root `AGENTS.md` verbatim and documents only what is
+  subsystem-specific (owned entities, API routes under `/api/systems/<slug>/…`,
+  i18n namespace, resource keys, consumed frameworks, etc.). Same inheritance
+  rules as framework AGENTS.md (§26.2). The root AGENTS.md is the source of
+  truth — a subsystem AGENTS.md never overrides Core rules, only adds to them.
 - **System-specific migrations** live in
   `server/db/migrations/systems/[slug]/*.surql` and use the same numeric prefix
   convention (e.g. `0026_create_foo.surql`). The runner scans the root
@@ -5417,24 +5424,37 @@ frameworks/
 
 #### 26.2 AGENTS.md inheritance
 
-Every framework ships its own `frameworks/<name>/AGENTS.md` that **inherits the
-Core AGENTS by reference**. It describes only what is framework-specific:
+Every framework ships its own `frameworks/<name>/AGENTS.md`, and every subsystem
+**may** ship its own `systems/<slug>/AGENTS.md`. Both **inherit the Core AGENTS
+by reference** and describe only what is specific to their namespace:
 
-- Contracts, routes, queries, handlers, components the framework adds.
+- Contracts, routes, queries, handlers, components the framework or subsystem
+  adds.
 - New Core / FrontCore settings required (added through its own seeds).
-- System-slug-like markers the framework uses for scoping.
-- Framework-specific i18n namespaces (e.g. `foo.*` in `foo.json`).
+- Namespace markers (framework name, subsystem slug) used for scoping.
+- Namespace-specific i18n keys (e.g. `foo.*` for a framework, or
+  `systems.<slug>.*` for a subsystem).
+- For subsystems only: the list of frameworks the subsystem consumes and how it
+  uses them.
 
 Everything else — visual standard, i18n rules, tenant handling, middleware,
 single-call rule, deduplicator/standardizer/validator use, event-queue
 conventions, email template design, security/revocation rules — is inherited
-verbatim from Core.
+verbatim from Core. A framework or subsystem AGENTS.md **never overrides** a
+Core rule; it only extends it.
 
 Every framework AGENTS.md starts with:
 
 > This framework extends the Core. It inherits every rule, convention,
 > structure, naming policy, and architectural decision from the root
 > `AGENTS.md`. This document lists only what is framework-specific.
+
+Every subsystem AGENTS.md starts with:
+
+> This subsystem runs on top of the Core and consumes resources from it (and
+> from the frameworks listed below). It inherits every rule, convention,
+> structure, naming policy, and architectural decision from the root
+> `AGENTS.md`. This document lists only what is subsystem-specific.
 
 #### 26.3 Interaction with Systems
 
@@ -5620,4 +5640,6 @@ Project-specific skills live in `skills/`. Read the matching `SKILL.md` before:
 
 - Writing database query tests → `skills/test-db-queries/SKILL.md`
 - Writing route tests → `skills/test-routes/SKILL.md`
+- Driving the frontend in a real browser (Playwright) →
+  `skills/test-frontend/SKILL.md`
 - Checking for dependency updates → `skills/check-library-updates/SKILL.md`

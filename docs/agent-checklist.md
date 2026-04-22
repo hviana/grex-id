@@ -29,15 +29,39 @@ it — but skip deliberately, not by default.
 
 ## 2. File Structure & Namespacing
 
+**Three distinct layers — never mix them:**
+
+- **Core** is the platform foundation. Lives at the project root (`app/`,
+  `src/`, `server/`). Knows nothing about specific subsystems or frameworks.
+- **Subsystems** are separate runtime tenants (one per product / slug). They
+  live in `[slug]` subfolders under every relevant root and **consume**
+  resources from Core and from frameworks. They do not extend Core.
+- **Frameworks** are reusable code bundles under `frameworks/<name>/` that
+  **extend** Core behavior. They are consumed by zero or more subsystems. They
+  do not belong to any single subsystem.
+
+Core ⇐ Frameworks ⇐ Subsystems. A framework never imports from a subsystem. A
+subsystem never imports from another subsystem. A framework never imports from
+another framework. Core never imports from either.
+
 - [ ] New UI goes to the correct shared dir
       (`src/components/shared|fields|subforms|core`) (§6, §18).
-- [ ] System-scoped code lives under `[slug]` subfolders of every relevant root
-      (§6).
-- [ ] Adding a new system creates `[slug]` subfolders in ALL required roots
-      (components, migrations, queries, frontend-queries, event-queue handlers,
-      api, public, i18n per locale) (§6).
-- [ ] Framework code is confined to `frameworks/<name>/`; no mixing with Core or
-      other frameworks (§26.1).
+- [ ] Subsystem-scoped code lives under `[slug]` subfolders of every relevant
+      root — components, migrations, queries, frontend-queries, event-queue
+      handlers, api, public, i18n per locale (§6).
+- [ ] Adding a new subsystem creates `[slug]` subfolders in ALL required roots
+      AND a `systems/<slug>/register.ts` wired into `systems/index.ts` (§6,
+      §12.9).
+- [ ] Subsystems never place files outside their `[slug]` folders and never
+      import from another subsystem or from Core internals — only from exported
+      Core utilities and from frameworks they explicitly depend on.
+- [ ] Framework code is confined to `frameworks/<name>/`; a framework never
+      imports from Core internals, from another framework, or from any subsystem
+      (§26.1, §26.3).
+- [ ] Frameworks keep their own self-contained subtree (own `AGENTS.md`, own
+      routes at `/api/<name>/…`, own components, contracts, migrations, queries,
+      i18n, seeds). No file is ever shared, symlinked, or aliased across the
+      Core ↔ framework ↔ subsystem boundary (§26.1).
 - [ ] Empty structural folders contain `.gitkeep` (§6).
 - [ ] Server-only files call `assertServerOnly(fileName)` as their first
       post-import statement (§12.14).
@@ -369,18 +393,51 @@ For any new entity or resource, decide the right cap:
 
 ---
 
-## 17. Subframeworks
+## 17. Subsystems & Frameworks
 
-- [ ] Every file sits under `frameworks/<name>/` — no mixing with Core or other
-      frameworks (§26.1).
-- [ ] Routes at `/api/<name>/…`; components under
+**Remember the layering.** Subsystems are runtime tenants that _use_ resources
+from Core and frameworks. Frameworks are design-time extensions of Core that can
+be consumed by many subsystems. They are not interchangeable and their folders
+must stay isolated.
+
+### Subsystems (one `[slug]` per product)
+
+- [ ] Every subsystem file sits in a `[slug]` subfolder under the Core roots it
+      extends — never at the Core root, never inside `frameworks/`, never inside
+      another subsystem (§6).
+- [ ] Subsystem routes at `/api/systems/<slug>/…`; components under
+      `src/components/systems/<slug>/`; i18n under
+      `src/i18n/<locale>/systems/<slug>.json`; migrations under
+      `server/db/migrations/systems/<slug>/`; queries under
+      `server/db/queries/systems/<slug>/` (§6).
+- [ ] Subsystem registers via `systems/<slug>/register.ts`, wired into
+      `systems/index.ts` (§12.9).
+- [ ] Subsystem MAY ship its own `systems/<slug>/AGENTS.md` that inherits the
+      root `AGENTS.md` verbatim and documents only subsystem-specific contracts,
+      routes, i18n namespace, resource keys, and consumed frameworks — never
+      overrides Core rules (§26.2).
+- [ ] Subsystem consumes from Core and from declared frameworks only. It never
+      reaches into another subsystem's folder, and it never pulls private
+      framework internals (§26.3).
+
+### Frameworks (one `<name>` per extension)
+
+- [ ] Every framework file sits under `frameworks/<name>/` — no mixing with Core
+      or with any other framework (§26.1).
+- [ ] Framework routes at `/api/<name>/…`; components under
       `frameworks/<name>/src/components/<name>/`; i18n under
-      `frameworks/<name>/src/i18n/<locale>/<name>.json` (§26.1).
+      `frameworks/<name>/src/i18n/<locale>/<name>.json`; migrations / queries /
+      utilities under `frameworks/<name>/server/…` (§26.1).
 - [ ] Framework has its own `AGENTS.md` inheriting Core verbatim (§26.2).
 - [ ] Framework registers via `frameworks/<name>/register.ts`, wired in
       `frameworks/index.ts` (§26.4, §12.9).
 - [ ] New Core / FrontCore settings are added through the framework's own seed —
       additive only (§26.3).
+- [ ] Framework exposes capabilities for subsystems to consume (contracts,
+      events, registered handlers/templates, components). It does **not** import
+      from any subsystem, and it does not depend on another framework directly —
+      cross-framework interactions go through Core events or shared Core
+      contracts (§26.3).
 
 ---
 
@@ -427,7 +484,8 @@ For any new entity or resource, decide the right cap:
 ## 20. Tests & Verification
 
 - [ ] Use the project skills — see `skills/test-db-queries/SKILL.md`,
-      `skills/test-routes/SKILL.md`, `skills/check-library-updates/SKILL.md`.
+      `skills/test-routes/SKILL.md`, `skills/test-frontend/SKILL.md`,
+      `skills/check-library-updates/SKILL.md`.
 - [ ] For UI or frontend changes, exercise the feature in a real browser; state
       explicitly if you couldn't.
 - [ ] Type-check and run tests where available; don't claim success on un-run

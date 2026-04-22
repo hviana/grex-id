@@ -1,0 +1,260 @@
+---
+name: test-frontend
+description: Use whenever the user wants to drive the project's frontend in a real browser — open a page, click a button, fill a form, read the DOM, take a screenshot, inspect the console, reproduce a UI flow end-to-end, verify that a React change actually renders. Trigger on phrases like "open the browser", "click this button", "test the login UI", "fill the register form", "see what happens on /billing", "screenshot the page", "check for console errors", "does the button actually work". The skill launches Playwright (Chromium), owns a single browser session across commands, auto-starts the Next.js dev server, and exposes simple verbs (`goto`, `click`, `fill`, `screenshot`, `console`, …). First run auto-installs Playwright + Chromium into the skill's own folder — no project dependency is added. It refuses to start unless `database.json` explicitly carries `"test": true`.
+---
+
+# Test Frontend
+
+Drive the project's frontend in a real Chromium browser. Every action a user can
+take — navigating, clicking, typing, submitting, uploading, reading rendered
+text, watching console/network — is exposed as a tiny CLI verb. State persists
+across commands (the browser, cookies, localStorage, the currently open page) so
+a test flow is just a sequence of one-line invocations.
+
+## When to use
+
+- Exercise a UI change in a real browser instead of guessing at renderer
+  behaviour.
+- Reproduce a user flow end-to-end: login → onboarding → feature → sign out.
+- Verify a form actually submits, a modal actually opens, a spinner actually
+  renders, a redirect actually fires.
+- Inspect console errors or network calls that a change introduced.
+- Capture screenshots for bug reports.
+- Run a quick click-through after editing a component — the driver stays alive
+  between commands so iteration is fast.
+
+## When NOT to use
+
+- Production traffic. The skill refuses to start unless `database.json` has
+  `"test": true`.
+- Pure API testing. Use **test-routes** for direct HTTP calls without a browser.
+- Pure DB inspection. Use **test-db-queries**.
+- Visual regression / snapshot suites. This is an interactive driver, not a test
+  runner.
+- Load or performance testing.
+
+## Prerequisites
+
+1. Open `database.json` and confirm the `url` / `user` / `pass` / `namespace` /
+   `database` point at a **test** database — never production.
+2. Set `"test": true` in `database.json`. The skill hard-exits with a loud error
+   message otherwise.
+3. When finished, flip `"test"` back to `false` so future runs refuse until
+   someone re-confirms.
+4. That's it. `npm`, `npx`, and `node` are the only host binaries needed — the
+   skill installs Playwright + Chromium into `skills/test-frontend/node_modules`
+   on first run (takes ~1–2 minutes). The project's own `package.json` is never
+   modified.
+
+## Typical session
+
+```bash
+# Any command auto-starts the driver + dev server on first use.
+# You can also start explicitly to control the port or run headed:
+tsx skills/test-frontend/run.ts start --headed
+
+# One-shot superuser login (the single most common starting point)
+tsx skills/test-frontend/run.ts login
+
+# Navigate
+tsx skills/test-frontend/run.ts goto /billing
+
+# Interact
+tsx skills/test-frontend/run.ts click 'button:has-text("Add Payment Method")'
+tsx skills/test-frontend/run.ts fill 'input[name="number"]' 4111111111111111
+
+# Read state
+tsx skills/test-frontend/run.ts text 'h1'
+tsx skills/test-frontend/run.ts console --tail 50
+tsx skills/test-frontend/run.ts network --tail 50
+
+# Capture
+tsx skills/test-frontend/run.ts screenshot billing.png --full-page
+
+# Shut down when done
+tsx skills/test-frontend/run.ts stop --all
+```
+
+Output is always a small JSON envelope on stdout (so downstream tooling can
+parse it); any action that fails exits non-zero with a concise error on stderr.
+
+## How it works (one paragraph)
+
+A long-lived **driver** process hosts Playwright and owns one Chromium browser
+with one persistent context. The CLI is a thin wrapper that sends JSON
+`{action, args}` to the driver over a loopback HTTP socket. State — cookies,
+localStorage, the currently active tab, buffered console/network logs — lives
+inside the driver, so a sequence of unrelated-looking commands composes into a
+coherent test flow. The dev server is started separately (reusing any server
+already started by `test-routes`) and the driver is auto-spawned on the first
+verb you run.
+
+## Subcommands
+
+### Lifecycle
+
+| Verb     | Description                                                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start`  | Start driver + dev server. Idempotent. `--headed` opens a visible window; `--port N` picks a dev port; `--no-auto-server` skips the Next.js spawn (useful when `test-routes` already started it). |
+| `stop`   | Stop the driver. `--all` also stops the dev server.                                                                                                                                               |
+| `status` | Print JSON describing driver pid/port/reachability and dev-server state. Exit `0` when both are reachable.                                                                                        |
+| `logs`   | Tail the driver log. `--server` switches to the dev-server log. `--tail N` / `--all`.                                                                                                             |
+| `reset`  | Clear cookies + localStorage + sessionStorage, navigate to `about:blank`, clear captured console/network logs.                                                                                    |
+
+The driver **auto-starts on first use** of any verb below — you do not need to
+call `start` explicitly unless you want `--headed` or a custom port.
+
+### Navigation
+
+| Verb               | Args                                          | Description                                       |
+| ------------------ | --------------------------------------------- | ------------------------------------------------- |
+| `goto`             | `<path-or-url>`                               | Navigate to `/foo` or an absolute URL.            |
+| `reload`           | —                                             | Reload the current page.                          |
+| `back` / `forward` | —                                             | Navigate history.                                 |
+| `url`              | —                                             | Print the current URL.                            |
+| `title`            | —                                             | Print the document title.                         |
+| `wait-for-url`     | `<glob-or-regex>`                             | Wait until the URL matches (Playwright patterns). |
+| `wait-for-load`    | `--state load\|domcontentloaded\|networkidle` | Wait for a load state (default `networkidle`).    |
+
+### Interaction
+
+| Verb        | Args                                  | Description                                                   |
+| ----------- | ------------------------------------- | ------------------------------------------------------------- |
+| `click`     | `<selector>` `[--force]`              | Click the first match. Waits for it to be clickable.          |
+| `dblclick`  | `<selector>`                          | Double-click.                                                 |
+| `fill`      | `<selector>` `<value>`                | Clear the input and fill it. Use for text inputs / textareas. |
+| `type`      | `<selector>` `<value>` `[--delay ms]` | Type key by key (useful for inputs with per-key listeners).   |
+| `press`     | `<key>` `[--selector CSS]`            | Press a key (e.g. `Enter`, `Escape`, `Tab`, `ArrowDown`).     |
+| `select`    | `<selector>` `<value>…`               | Select option(s) on a `<select>`.                             |
+| `check`     | `<selector>`                          | Check a checkbox / radio.                                     |
+| `uncheck`   | `<selector>`                          | Uncheck a checkbox.                                           |
+| `hover`     | `<selector>`                          | Hover over an element.                                        |
+| `focus`     | `<selector>`                          | Focus an element.                                             |
+| `set-files` | `<selector>` `<path>…`                | Attach file(s) to an `<input type="file">`.                   |
+
+### Read / assert
+
+| Verb            | Args                                                         | Description                                          |
+| --------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| `text`          | `<selector>`                                                 | `textContent` of the first match.                    |
+| `html`          | `<selector>`                                                 | `innerHTML` of the first match.                      |
+| `page-html`     | —                                                            | `document.documentElement.outerHTML`.                |
+| `value`         | `<selector>`                                                 | `.value` of an input / textarea / select.            |
+| `attribute`     | `<selector>` `<name>`                                        | Value of an HTML attribute.                          |
+| `exists`        | `<selector>`                                                 | `{ exists: bool, count: n }`.                        |
+| `count`         | `<selector>`                                                 | Number of matching nodes.                            |
+| `visible`       | `<selector>`                                                 | Whether the first match is currently visible.        |
+| `wait-for`      | `<selector>` `[--state attached\|detached\|visible\|hidden]` | Wait until the selector reaches a state.             |
+| `wait-for-text` | `<substring>`                                                | Wait until the document body contains the substring. |
+
+### Capture / inspect
+
+| Verb            | Args                                                   | Description                                                                                                                |
+| --------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `screenshot`    | `[path]` `[--full-page]`                               | Save a PNG. Default path: `skills/test-frontend/screenshots/<ts>.png`. Relative paths resolve from your working directory. |
+| `console`       | `[--tail N]`                                           | Recent console messages (default 100). Includes `pageerror` entries.                                                       |
+| `network`       | `[--tail N]`                                           | Recent HTTP requests issued by the page. Response status is stitched in when available.                                    |
+| `cookies`       | —                                                      | Print all cookies in the current context.                                                                                  |
+| `set-cookie`    | `<json>`                                               | Add a cookie, e.g. `'{"name":"foo","value":"bar","url":"http://localhost:3000"}'`.                                         |
+| `clear-cookies` | —                                                      | Clear all cookies.                                                                                                         |
+| `local-storage` | `get\|set\|remove\|clear\|keys\|all` `[key]` `[value]` | Interact with `localStorage` of the active page.                                                                           |
+
+### Tabs
+
+| Verb         | Description                                    |
+| ------------ | ---------------------------------------------- |
+| `new-page`   | Open a new tab; it becomes the active page.    |
+| `close-page` | Close the active tab; reverts to the last one. |
+
+### Escape hatches
+
+| Verb    | Args                                | Description                                                                                                                          |
+| ------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `eval`  | `<js>`                              | Run JS in the page context. Expressions are auto-wrapped; include `return` for multi-statement blocks. Returns the serialized value. |
+| `login` | `[--identifier X]` `[--password Y]` | Drives `/login` with the seeded superuser (`core@admin.com` / `core1234` per `001_superuser.ts`). Overrides are optional.            |
+
+## Common flags
+
+- `--timeout <ms>` — per-action timeout (default 30 000 for actions, 60 000 for
+  navigation).
+- `--headed` — only valid on `start`; opens a visible Chromium window (handy
+  when you want to watch the flow live).
+
+## Output
+
+Every command prints a JSON envelope, e.g.:
+
+```json
+{
+  "ok": true,
+  "status": 200,
+  "url": "http://localhost:3000/login",
+  "title": "Login — Core"
+}
+```
+
+`screenshot` returns the absolute path:
+
+```json
+{
+  "ok": true,
+  "path": "/home/.../skills/test-frontend/screenshots/1700000000.png"
+}
+```
+
+Errors from the skill itself (driver not reachable, unknown command, Playwright
+install failure) go to **stderr** prefixed with `[test-frontend]` and exit
+non-zero. The normal command output always goes to **stdout**.
+
+## State files
+
+All state lives under `skills/test-frontend/` and is listed in `.gitignore`:
+
+| File            | Purpose                                           |
+| --------------- | ------------------------------------------------- |
+| `.driver.pid`   | PID of the detached Playwright driver.            |
+| `.driver.port`  | Loopback port the driver's IPC server listens on. |
+| `.driver.log`   | stdout + stderr of the driver since start.        |
+| `.server.pid`   | PID of the detached `npm run dev` process.        |
+| `.server.port`  | Port the dev server is bound to.                  |
+| `.server.log`   | stdout + stderr of the dev server since start.    |
+| `screenshots/`  | Default screenshot output directory.              |
+| `node_modules/` | Isolated Playwright install (auto-managed).       |
+
+Delete any of them freely when things look stuck; `stop` does the same cleanup
+automatically.
+
+## Interop with other skills
+
+- `test-routes` — starts its own dev server at
+  `skills/test-routes/.server.port`. This skill will **reuse** that port if it
+  is reachable, avoiding a duplicate server. Either skill can start the server;
+  either can stop it (`stop --all`).
+- `test-db-queries` — use it to set up or clean state before/after a flow:
+  ```bash
+  tsx skills/test-db-queries/run.ts 'DELETE user WHERE email = "test@foo"'
+  tsx skills/test-frontend/run.ts goto /register
+  # … drive the registration form …
+  tsx skills/test-db-queries/run.ts 'SELECT * FROM user WHERE email = "test@foo"'
+  ```
+
+## Rules
+
+- **Refuses to run** unless `database.json` carries `"test": true`.
+- **First run installs Playwright + Chromium** into
+  `skills/test-frontend/node_modules` (~1–2 min). The project's `package.json`
+  is never modified.
+- **Uses Node built-ins via `node:*` specifiers** (`node:fs`, `node:path`,
+  `node:child_process`, `node:http`, `node:timers/promises`, `node:module`,
+  `node:process`) so the shape is runtime-agnostic — the same style Deno
+  accepts.
+- **One browser, one context, one tab at a time by default.** `new-page` adds
+  tabs; the most recently opened is always the active one.
+- **Cookies and localStorage persist across commands** until the driver stops or
+  `reset` is called. That is the whole point — the skill is designed to be
+  composed command-by-command.
+- **Never seeds or mutates data on its own** beyond what the browser flow
+  produces. For explicit setup/teardown, use `test-db-queries`.
+- **Credentials are not masked.** Any token / password you type via `fill` or
+  `type` ends up in `.driver.log`. Delete the log or `stop` the driver when you
+  are done.

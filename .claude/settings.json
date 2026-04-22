@@ -49,6 +49,8 @@
       "Bash(gh repo view:*)",
       "Bash(npx tsx skills/test-db-queries/run.ts:*)",
       "Bash(npx tsx skills/test-routes/run.ts:*)",
+      "Bash(npx tsx skills/test-frontend/run.ts:*)",
+      "Bash(npx playwright install:*)",
       "Bash(node_modules/.bin/tsc:*)",
       "Bash(node_modules/.bin/eslint:*)",
       "Bash(npx eslint:*)"
