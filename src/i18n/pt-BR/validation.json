@@ -25,6 +25,7 @@
   "channel.value.required": "Valor do canal é obrigatório",
   "channel.value.invalid": "Formato inválido para o canal",
   "channel.required": "Ao menos um canal é obrigatório",
+  "channel.requiredTypes": "Ao menos um canal de cada tipo obrigatório é necessário",
   "channel.conflict": "Um dos valores informados já está em uso",
   "identifier.required": "Informe um canal para fazer login",
   "verification.previousNotExpired": "Uma solicitação de verificação anterior ainda está ativa. Verifique seu e-mail ou aguarde a expiração.",

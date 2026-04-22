@@ -116,7 +116,7 @@ async function handler(
     "http://localhost:3000";
   const confirmationLink = `${baseUrl}/verify?token=${guard.token}`;
 
-  const verifiedTypes = await listVerifiedChannelTypes(String(user.id));
+  const verifiedTypes = await listVerifiedChannelTypes(String(user.id), "user");
   const defaultChannels = await core.getSetting(
     "auth.communication.defaultChannels",
   );

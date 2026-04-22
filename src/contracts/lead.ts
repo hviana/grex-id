@@ -1,9 +1,11 @@
+import type { EntityChannel } from "./entity-channel.ts";
 import type { Profile } from "./profile.ts";
 
 export interface Lead {
   id: string;
   name: string;
   profile: Profile;
+  channels: EntityChannel[];
   companyIds: string[];
   tags: string[];
   createdAt: string;

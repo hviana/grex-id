@@ -224,7 +224,7 @@ function OAuthAuthorizeContent() {
             {t("common.connectedApps.authorizedAs")}{" "}
             <span className="text-white font-medium">
               {user.profile?.name ??
-                (user.profile?.channels?.find((c) => c.type === "email")
+                (user.channels?.find((c) => c.type === "email")
                   ?.value ??
                   "")}
             </span>

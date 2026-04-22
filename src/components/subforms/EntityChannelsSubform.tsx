@@ -1,6 +1,12 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
@@ -9,6 +15,23 @@ import type { EntityChannel } from "@/src/contracts/entity-channel";
 
 const DEFAULT_MAX = 10;
 
+/**
+ * EntityChannelsSubform
+ *
+ * Shared UI for collecting entity_channel rows (§19.13, §18.5). Two modes:
+ *
+ * - `"authenticated"` (default): talks to `/api/entity-channels` for an
+ *   authenticated user — fetches, adds, removes, resends confirmation. Used
+ *   in ProfilePage, lead editors, etc.
+ * - `"local"`: holds channels in component state only. Used by
+ *   unauthenticated forms (register, public lead submission) where channels
+ *   are submitted as part of the parent request, not through
+ *   `/api/entity-channels`. Exposes the accumulated list via
+ *   `getData()`/`isValid()` so the parent form can collect them.
+ */
+
+export type EntityChannelsSubformMode = "authenticated" | "local";
+
 export interface EntityChannelsSubformProps {
   /**
    * Channel types that should appear in the add dropdown. Order defines the
@@ -16,11 +39,22 @@ export interface EntityChannelsSubformProps {
    */
   channelTypes: string[];
   /**
-   * Channel types the owner must always have at least one verified row for.
-   * Enforced server-side on delete — clients should still prevent the UI
-   * action to match behavior.
+   * Channel types the owner must always have at least one entry for. In
+   * `"authenticated"` mode a verified entry is required; in `"local"` mode
+   * at least one entry of each required type must be present before the
+   * parent form can submit.
    */
   requiredTypes?: string[];
+  /**
+   * `"authenticated"` (default) talks to `/api/entity-channels`.
+   * `"local"` keeps channels in memory; the parent form collects them via
+   * `getData()`.
+   */
+  mode?: EntityChannelsSubformMode;
+  /**
+   * Prefill for local mode — channels entered on an earlier render that the
+   * parent wants to restore.
+   */
   initialData?: Record<string, unknown>;
   systemToken?: string;
 }
@@ -58,12 +92,31 @@ const EntityChannelsSubform = forwardRef<
   SubformRef,
   EntityChannelsSubformProps
 >(
-  ({ systemToken, channelTypes, requiredTypes }, ref) => {
+  (
+    {
+      systemToken,
+      channelTypes,
+      requiredTypes,
+      mode = "authenticated",
+      initialData,
+    },
+    ref,
+  ) => {
     const { t } = useLocale();
 
     const initialType = channelTypes[0] ?? "email";
-    const [channels, setChannels] = useState<EntityChannel[]>([]);
-    const [channelsLoading, setChannelsLoading] = useState(true);
+    const [channels, setChannels] = useState<EntityChannel[]>(() => {
+      const seed = initialData?.channels;
+      return Array.isArray(seed)
+        ? (seed as EntityChannel[]).filter((c) =>
+          c && typeof c === "object" && typeof c.type === "string" &&
+          typeof c.value === "string"
+        )
+        : [];
+    });
+    const [channelsLoading, setChannelsLoading] = useState(
+      mode === "authenticated",
+    );
     const [channelType, setChannelType] = useState<string>(initialType);
     const [channelValue, setChannelValue] = useState("");
     const [addingChannel, setAddingChannel] = useState(false);
@@ -74,7 +127,8 @@ const EntityChannelsSubform = forwardRef<
 
     const required = requiredTypes ?? [];
 
-    const fetchChannels = async () => {
+    const fetchChannels = useCallback(async () => {
+      if (!systemToken) return;
       try {
         const res = await fetch("/api/entity-channels", {
           headers: { Authorization: `Bearer ${systemToken}` },
@@ -86,16 +140,29 @@ const EntityChannelsSubform = forwardRef<
       } finally {
         setChannelsLoading(false);
       }
-    };
-
-    useEffect(() => {
-      if (systemToken) fetchChannels();
     }, [systemToken]);
 
+    useEffect(() => {
+      if (mode === "authenticated" && systemToken) {
+        void fetchChannels();
+      }
+    }, [mode, systemToken, fetchChannels]);
+
+    const isFormValid = useCallback((): boolean => {
+      if (mode !== "local") return true;
+      // Every required type must appear at least once in the collected list.
+      return required.every((type) => channels.some((c) => c.type === type));
+    }, [mode, required, channels]);
+
     useImperativeHandle(ref, () => ({
-      getData: () => ({ channels }),
-      isValid: () => true,
-    }));
+      getData: () =>
+        mode === "local"
+          ? {
+            channels: channels.map((c) => ({ type: c.type, value: c.value })),
+          }
+          : { channels },
+      isValid: () => isFormValid(),
+    }), [mode, channels, isFormValid]);
 
     const clearFeedback = () => {
       setChannelError(null);
@@ -110,9 +177,39 @@ const EntityChannelsSubform = forwardRef<
 
     const handleAddChannel = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!channelValue.trim()) return;
-      setAddingChannel(true);
+      const trimmed = channelValue.trim();
+      if (!trimmed) return;
       clearFeedback();
+
+      if (mode === "local") {
+        // Local mode: no network, no verification — we just accumulate the
+        // entry for the parent form to submit. Duplicate (type, value) guard
+        // keeps the list clean.
+        if (
+          channels.some((c) => c.type === channelType && c.value === trimmed)
+        ) {
+          setChannelError("auth.entityChannel.error.duplicate");
+          return;
+        }
+        if (channels.length >= DEFAULT_MAX) {
+          setChannelError("auth.entityChannel.error.maxReached");
+          return;
+        }
+        const localRow: EntityChannel = {
+          id: `local:${crypto.randomUUID()}`,
+          type: channelType,
+          value: trimmed,
+          verified: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setChannels((prev) => [...prev, localRow]);
+        setChannelValue("");
+        return;
+      }
+
+      // authenticated mode
+      setAddingChannel(true);
       try {
         const res = await fetch("/api/entity-channels", {
           method: "POST",
@@ -120,7 +217,7 @@ const EntityChannelsSubform = forwardRef<
             "Content-Type": "application/json",
             Authorization: `Bearer ${systemToken}`,
           },
-          body: JSON.stringify({ type: channelType, value: channelValue }),
+          body: JSON.stringify({ type: channelType, value: trimmed }),
         });
         const json = await res.json();
         if (!json.success) {
@@ -141,6 +238,7 @@ const EntityChannelsSubform = forwardRef<
     };
 
     const handleResendVerification = async (channelId: string) => {
+      if (mode !== "authenticated") return;
       setResendingId(channelId);
       clearFeedback();
       try {
@@ -171,6 +269,12 @@ const EntityChannelsSubform = forwardRef<
     };
 
     const canRemove = (ch: EntityChannel): boolean => {
+      if (mode === "local") {
+        // Required invariant: at least one entry of each required type.
+        if (!required.includes(ch.type)) return true;
+        const sameTypeCount = channels.filter((c) => c.type === ch.type).length;
+        return sameTypeCount > 1;
+      }
       if (!ch.verified) return true;
       if (!required.includes(ch.type)) return true;
       const sameTypeVerifiedCount = channels.filter(
@@ -180,9 +284,13 @@ const EntityChannelsSubform = forwardRef<
     };
 
     const handleRemoveChannel = async (channelId: string) => {
+      clearFeedback();
+      if (mode === "local") {
+        setChannels((prev) => prev.filter((c) => String(c.id) !== channelId));
+        return;
+      }
       if (!confirm(t("common.entityChannels.removeConfirm"))) return;
       setDeletingId(channelId);
-      clearFeedback();
       try {
         const res = await fetch("/api/entity-channels", {
           method: "DELETE",
@@ -210,7 +318,9 @@ const EntityChannelsSubform = forwardRef<
     return (
       <div className="space-y-3">
         <p className="text-sm text-[var(--color-light-text)]">
-          {t("common.entityChannels.description")}
+          {mode === "local"
+            ? t("common.entityChannels.description.local")
+            : t("common.entityChannels.description")}
         </p>
 
         <ErrorDisplay message={channelError} />
@@ -252,10 +362,10 @@ const EntityChannelsSubform = forwardRef<
                       <span className="text-sm text-white truncate">
                         {displayValue(ch)}
                       </span>
-                      {channelBadge(ch, t)}
+                      {mode === "authenticated" && channelBadge(ch, t)}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {!ch.verified && (
+                      {mode === "authenticated" && !ch.verified && (
                         <button
                           type="button"
                           onClick={() => handleResendVerification(id)}

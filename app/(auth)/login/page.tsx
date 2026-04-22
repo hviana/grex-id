@@ -25,7 +25,7 @@ function LoginContent() {
   const { t } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -43,15 +43,15 @@ function LoginContent() {
   if (systemSlug) {
     verifyParams.set("system", systemSlug);
   }
-  if (email) {
-    verifyParams.set("email", email);
+  if (identifier) {
+    verifyParams.set("identifier", identifier);
   }
   const verifyHref = `/verify${
     verifyParams.toString() ? `?${verifyParams.toString()}` : ""
   }`;
 
   const handleLoginLink = async () => {
-    if (!email || !password) return;
+    if (!identifier || !password) return;
     setLoginLinkLoading(true);
     setError(null);
     try {
@@ -59,7 +59,7 @@ function LoginContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier: email,
+          identifier,
           password,
           stayLoggedIn,
         }),
@@ -80,7 +80,7 @@ function LoginContent() {
 
     try {
       const result = await login(
-        email,
+        identifier,
         password,
         stayLoggedIn,
         twoFactorCode || undefined,
@@ -153,19 +153,20 @@ function LoginContent() {
           <form onSubmit={handleSubmit} className="mt-6 space-y-5">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="identifier"
                 className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
               >
-                {t("auth.login.email")}
+                {t("auth.login.identifier")}
               </label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-                placeholder={t("common.placeholder.email")}
+                placeholder={t("common.placeholder.entityChannel")}
               />
             </div>
 
@@ -215,7 +216,7 @@ function LoginContent() {
                     <button
                       type="button"
                       onClick={handleLoginLink}
-                      disabled={loginLinkLoading || !email || !password}
+                      disabled={loginLinkLoading || !identifier || !password}
                       className="text-sm text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors inline-flex items-center gap-2 disabled:opacity-50"
                     >
                       {loginLinkLoading && <Spinner size="sm" />}

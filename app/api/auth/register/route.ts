@@ -122,7 +122,15 @@ async function handler(
   for (const ch of channels) {
     const existing = await findChannelsByTypeAndValue(ch.type, ch.value);
     for (const row of existing) {
-      if (row.ownerType !== "user") continue;
+      // Resolve the owning user by scanning user.channels (composable rows
+      // have no back-pointer — §1.1.10). Only `user`-owned channels conflict
+      // with user registration; lead-owned rows are ignored here.
+      const ownerResult = await db.query<[{ id: string }[]]>(
+        `SELECT id FROM user WHERE channels CONTAINS $cid LIMIT 1`,
+        { cid: rid(String(row.id)) },
+      );
+      const owner = ownerResult[0]?.[0];
+      if (!owner) continue;
       if (row.verified) {
         return Response.json(
           {
@@ -135,7 +143,7 @@ async function handler(
           { status: 409 },
         );
       }
-      const ownerId = String(row.ownerId);
+      const ownerId = String(owner.id);
       const pendingResult = await db.query<[{ c: number }[]]>(
         `SELECT count() AS c FROM verification_request
          WHERE ownerId = $ownerId

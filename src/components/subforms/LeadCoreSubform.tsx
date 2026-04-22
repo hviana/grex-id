@@ -10,10 +10,11 @@ import {
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import ContactSubform from "./ContactSubform.tsx";
+import EntityChannelsSubform from "./EntityChannelsSubform.tsx";
 import ProfileSubform from "./ProfileSubform.tsx";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
+import type { EntityChannel } from "@/src/contracts/entity-channel";
 
 interface LeadCoreSubformProps {
   initialData?: Record<string, unknown>;
@@ -28,8 +29,19 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
   ({ initialData, hideTags, companyId, systemId, systemSlug, userId }, ref) => {
     const { t } = useLocale();
     const { systemToken } = useAuth();
-    const contactRef = useRef<SubformRef>(null);
+    const channelsRef = useRef<SubformRef>(null);
     const profileRef = useRef<SubformRef>(null);
+
+    // Seed entity channels from the existing lead (if any). `initialData` may
+    // carry a hydrated `channels` array (from the leads API FETCH) — pass it
+    // through as-is so the subform can prefill in `local` mode.
+    const initialChannels: Record<string, unknown> = {
+      channels: Array.isArray(
+          (initialData as { channels?: unknown })?.channels,
+        )
+        ? ((initialData as { channels?: EntityChannel[] }).channels ?? [])
+        : [],
+    };
 
     const [tags, setTags] = useState<BadgeValue[]>(() => {
       const initial = initialData?.tags;
@@ -68,7 +80,7 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
 
     useImperativeHandle(ref, () => ({
       getData: () => {
-        const contactData = contactRef.current?.getData() ?? {};
+        const channelsData = channelsRef.current?.getData() ?? {};
         const profileData = profileRef.current?.getData() ?? {};
         const profile =
           (profileData as { profile?: { name?: string } }).profile;
@@ -80,7 +92,7 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
         });
         return {
           name: profile?.name ?? "",
-          ...contactData,
+          ...channelsData,
           ...profileData,
           tags: tagIds,
           companyId,
@@ -89,7 +101,7 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
       },
       isValid: () => {
         return (
-          (contactRef.current?.isValid() ?? false) &&
+          (channelsRef.current?.isValid() ?? false) &&
           (profileRef.current?.isValid() ?? false)
         );
       },
@@ -101,7 +113,13 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
           <h3 className="text-sm font-semibold text-[var(--color-secondary-blue)] mb-3 flex items-center gap-2">
             <span>📞</span> {t("systems.grex-id.lead.contact")}
           </h3>
-          <ContactSubform ref={contactRef} initialData={initialData} />
+          <EntityChannelsSubform
+            ref={channelsRef}
+            mode="local"
+            channelTypes={["email", "phone"]}
+            requiredTypes={["email"]}
+            initialData={initialChannels}
+          />
         </div>
 
         <div>

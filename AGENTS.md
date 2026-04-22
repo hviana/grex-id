@@ -48,11 +48,16 @@ are design-time code bundles.
    `{ code: "ERROR", message: "common.error.generic" }`.
 9. **Communication templates use i18n keys.** Email/SMS templates call `t()` —
    never hardcode English.
-10. **Compositional DB model.** Reusable structures (profile, address) are
-    separate tables referenced via `record<>` links, never embedded. To create:
-    `CREATE` the composable first, then the parent with the link. To update:
-    update the composable directly. To delete: delete both parent and
-    composable.
+10. **Compositional DB model.** Reusable structures (profile, address,
+    entity_channel) are separate tables referenced via `record<>` links, never
+    embedded. Composable rows carry **no back-pointer** to their parent — the
+    parent holds the link (scalar `record<>` for single composables like
+    `user.profile`, `array<record<>>` for collections like `user.channels` /
+    `lead.channels` / `profile.recovery_channels`). To create: `CREATE` the
+    composable first, then the parent with the link (or UPDATE the parent's
+    array in the same batched query). To update: update the composable directly.
+    To delete: delete both parent and composable (and when the composable lives
+    in an array field, remove its id from the array in the same batched query).
 
 ### 2. Tech Stack
 
@@ -115,11 +120,16 @@ must be consulted before creating any new UI element:
 - **Generic form modals** (`FormModal` — §18.2): creation and editing go through
   a shared modal that orchestrates subform collection, validation, submission,
   error display, and spinner state.
-- **Shared subforms** (`ProfileSubform`, `ContactSubform`, `AddressSubform`,
-  `CreditCardSubform`, `NameDescSubform` — §18.5): composable form sections that
-  expose `getData()` + `isValid()` via `useImperativeHandle`. Any form that
-  needs a profile, address, or credit card reuses the same subform — never
-  duplicates its fields.
+- **Shared subforms** (`ProfileSubform`, `EntityChannelsSubform`,
+  `AddressSubform`, `CreditCardSubform`, `NameDescSubform` — §18.5): composable
+  form sections that expose `getData()` + `isValid()` via `useImperativeHandle`.
+  Any form that needs a profile, channel list, address, or credit card reuses
+  the same subform — never duplicates its fields. In particular, **every form
+  that collects user/lead communication channels (email, phone, any
+  subframework-registered type) uses `EntityChannelsSubform`** — its
+  `mode="authenticated"` variant talks to `/api/entity-channels`, and
+  `mode="local"` accumulates channels in memory for register, admin user create,
+  and public lead submission. Hard-coded email/phone inputs are forbidden.
 - **Compositional DB model** (§1.1.10, §7.1): reusable structures (`profile`,
   `address`) are separate tables linked via `record<>`, not embedded. Frontend
   responses resolve them via `FETCH`. This mirrors the component-level
@@ -525,15 +535,14 @@ part of the same batched query.
 `entity_channel`, then return the fully resolved row in one call:**
 
 ```surql
-LET $prof = CREATE profile SET name = $name, locale = $locale, channels = [];
+LET $ch   = CREATE entity_channel SET
+              type = "email", value = $email, verified = false;
+LET $prof = CREATE profile SET name = $name, locale = $locale, recovery_channels = [];
 LET $u    = CREATE user    SET passwordHash = crypto::argon2::generate($password),
                                profile = $prof[0].id,
+                               channels = [$ch[0].id],
                                roles = [];
-LET $ch   = CREATE entity_channel SET
-              ownerId = $u[0].id, ownerType = "user",
-              type = "email", value = $email, verified = false;
-UPDATE $prof[0].id SET channels = [$ch[0].id];
-SELECT * FROM user WHERE id = $u[0].id FETCH profile, profile.channels;
+SELECT * FROM user WHERE id = $u[0].id FETCH profile, channels;
 ```
 
 #### 7.3 Mandatory query-layer helpers
@@ -629,7 +638,7 @@ this table.
 | Migration file                             | Table                     | Key rules                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0000_db_generals.surql`                   | `_migrations`, analyzers  | Analyzer `general_analyzer_fts` used by FULLTEXT indexes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `0001_create_user.surql`                   | `user`, `oauth_identity`  | **`user`**: `profile` is `record<profile>`. `passwordHash` via argon2. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. OAuth linkage lives on `oauth_identity` rows (same migration). Fields: passwordHash, profile, roles, twoFactorEnabled, twoFactorSecret, stayLoggedIn. **`oauth_identity`**: one row per (provider, provider-user-id) link to a `user`. Fields: userId `record<user>`, provider `string`, providerUserId `string`, linkedAt `datetime`. Unique composite index `(provider, providerUserId)` and secondary index `userId`. A single user may have many rows (one per linked provider); one provider account may link to exactly one platform user. See §19.8.                                                          |
+| `0001_create_user.surql`                   | `user`, `oauth_identity`  | **`user`**: `profile` is `record<profile>`. `channels` is `array<record<entity_channel>> DEFAULT []` — the user's communication and authentication channels. `passwordHash` via argon2. OAuth linkage lives on `oauth_identity` rows (same migration). Fields: passwordHash, profile, channels, roles, twoFactorEnabled, twoFactorSecret, stayLoggedIn. **`oauth_identity`**: one row per (provider, provider-user-id) link to a `user`. Fields: userId `record<user>`, provider `string`, providerUserId `string`, linkedAt `datetime`. Unique composite index `(provider, providerUserId)` and secondary index `userId`. A single user may have many rows (one per linked provider); one provider account may link to exactly one platform user. See §19.8.                                   |
 | `0002_create_company.surql`                | `company`                 | `billingAddress` is `option<record<address>>`. Unique `document`. `ownerId` → user.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `0003_create_company_user.surql`           | `company_user`            | Unique `(companyId, userId)`. Pure association.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `0004_create_system.surql`                 | `system`                  | Unique `slug`. Fields: name, slug, logoUri, defaultLocale, termsOfService, createdAt, updatedAt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -650,16 +659,16 @@ this table.
 | `0020_create_core_setting.surql`           | `setting`                 | Unique `(key, systemSlug)`. `systemSlug string` — the literal `"core"` is the core-level default; any other non-empty value is a per-system override. `systemSlug` MUST NOT be empty (`ASSERT $value != ""`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `0021_create_verification_request.surql`   | `verification_request`    | `actionKey` i18n string (e.g. `"auth.action.register"`). `ownerId` `record<user\|lead>` for the entity being confirmed. `payload` `object FLEXIBLE` (no sensitive data — never passwords, card numbers, tokens). `companyId`/`systemId`/`systemSlug`/`actorId`/`actorType` capture tenant context. Unique `token`. Index on `(ownerId, actionKey, createdAt)`.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `0022_create_live_query_permissions.surql` | various                   | Applies `PERMISSIONS FOR select WHERE …` per §7.6.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `0023_create_lead.surql`                   | `lead`                    | `profile` is `record<profile>`. Identity values (email/phone/etc.) live on `entity_channel` rows linked through `profile.channels`. `companyIds` array of record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `0023_create_lead.surql`                   | `lead`                    | `profile` is `record<profile>`. `channels` is `array<record<entity_channel>> DEFAULT []` — the lead's communication channels. `companyIds` array of record.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0024_create_lead_company_system.surql`    | `lead_company_system`     | Unique `(leadId, companyId, systemId)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `0025_create_location.surql`               | `location`                | Scoped per (company, system). Embeds `address` inline.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `0029_create_tag.surql`                    | `tag`                     | Scoped per (company, system). Unique `(name, companyId, systemId)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `0030_create_profile.surql`                | `profile`                 | Composable. Fields: name, avatarUri, age, locale, channels (`array<record<entity_channel>>`). FULLTEXT `name`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `0030_create_profile.surql`                | `profile`                 | Composable. Fields: name, avatarUri, age, locale, recovery_channels (`array<record<entity_channel>> DEFAULT []` — account-recovery-only channels; see §19.7.1). FULLTEXT `name`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `0031_create_address.surql`                | `address`                 | Composable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0032_create_credit_expense.surql`         | `credit_expense`          | Daily container. Unique `(companyId, systemId, resourceKey, day)`. Fields: `amount` (total cents consumed), `count` (number of individual consumptions), `actorId` `option<string>`. Both increment atomically via UPSERT.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `0033_create_front_core_setting.surql`     | `front_setting`           | Unique `(key, systemSlug)`. `systemSlug string` — same rule as `setting`: the literal `"core"` is the core-level default, any other non-empty value is a per-system override, and `systemSlug` MUST NOT be empty (`ASSERT $value != ""`). Physically separated from `setting` (§10.2.8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `0034_create_token_revocation.surql`       | `token_revocation`        | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `0035_create_entity_channel.surql`         | `entity_channel`          | Composable, generalized communication channel. `ownerId` `record<user\|lead>`. `ownerType` ∈ `["user","lead"]` — denormalized for cheap filtering. `type` open string identifying the channel (seeded defaults `"email"`, `"phone"`; subframeworks may register their own). `value` string. `verified` bool default false. Unique `(ownerId, type, value)`. Index on `(type, value)` and on `(ownerId, verified)`. Max per owner enforced at the query layer via `auth.entityChannel.maxPerOwner`.                                                                                                                                                                                                                                                                                              |
+| `0035_create_entity_channel.surql`         | `entity_channel`          | **Composable, generalized communication channel — no back-pointer to any parent entity** (compositional pattern §1.1.10). `type` open string identifying the channel (seeded defaults `"email"`, `"phone"`; subframeworks may register their own). `value` string. `verified` bool default false. Fields: type, value, verified, createdAt, updatedAt. Index on `(type, value)` and on `verified`. Max per owner enforced at the query layer via `auth.entityChannel.maxPerOwner` when writing into a parent's `channels` array. Parents (`user.channels`, `lead.channels`, `profile.recovery_channels`) hold the `record<entity_channel>` references; entity_channel rows themselves are unaware of their owners.                                                                              |
 | `0038_create_payment.surql`                | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"\|"expired"`), paymentMethodId, transactionId, invoiceUrl, failureReason, continuityData (`option<object> FLEXIBLE`), expiresAt (`option<datetime>`), createdAt. Indexes on (companyId, systemId), createdAt, kind, (status, expiresAt). Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                         |
 | `0044_create_file_access.surql`            | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape plus maxFileSizeMB option<float> and allowedExtensions array<string>), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -670,12 +679,11 @@ separate `file_metadata` table (§13.5).
 **Seed files:**
 
 - `001_superuser.ts` — creates the superuser if none exists. Creates a `profile`
-  (display name from `app.name` or `"Super Admin"` fallback) **plus** one
-  verified `entity_channel` of type `"email"` linked to the profile, and
-  attaches the superuser `user` to that profile. The verified channel is what
-  satisfies the approval invariant (§19.3) so the superuser can log in from
-  first boot, and it also enables the recovery / profile flows that expect at
-  least one verified channel.
+  (display name from `app.name` or `"Super Admin"` fallback, `recovery_channels`
+  empty), one verified `entity_channel` of type `"email"`, and a `user` whose
+  `profile` points at the profile and whose `channels` array contains the
+  verified email channel. The verified channel is what satisfies the approval
+  invariant (§19.3) so the superuser can log in from first boot.
 - `002_default_settings.ts` — seeds the server-only Core settings table
   (§10.1.4).
 - `003_default_front_settings.ts` — seeds the FrontCore table (§10.2.6).
@@ -2272,8 +2280,10 @@ await publish("send_communication", {
                                              // (user:…, lead:…). When a
                                              // non-raw id is passed, the
                                              // dispatcher resolves channel
-                                             // values via profile.channels
-                                             // filtered by the current channel.
+                                             // values by fetching the parent's
+                                             // channels array (user.channels /
+                                             // lead.channels) filtered by the
+                                             // current channel type.
   template: string | TemplateBuilder,        // deterministic path, no channel prefix
                                              // (e.g. "human-confirmation"
                                              // resolves to
@@ -2475,15 +2485,15 @@ Each channel ships a single event handler that:
 1. Resolves the locale (§5.4) — prefer `templateData.locale` → owner profile
    locale → system default → `"en"`.
 2. Resolves recipients. If a recipient string is a record id
-   (`user:…`/`lead:…`), look up `entity_channel` rows where
-   `ownerId = <id> AND type = <current channel> AND verified = true` and use
-   their `value`. **The `entity_channel.type` always matches the delivery
-   channel name** — `send_sms` resolves rows of type `"sms"`, `send_email`
-   resolves rows of type `"email"`, `send_phone` (if a framework adds phone
-   calls) resolves rows of type `"phone"`. Phone numbers and SMS destinations
-   are stored as distinct channel rows because a phone number may or may not
-   receive SMS (VoIP, landlines), and a texting-only line is not a voice line.
-   If no recipients resolve, return
+   (`user:…`/`lead:…`), fetch the parent's `channels` array (`user.channels` or
+   `lead.channels`) FETCHed, filter entries where
+   `type = <current channel> AND verified = true`, and use their `value`. **The
+   `entity_channel.type` always matches the delivery channel name** — `send_sms`
+   resolves rows of type `"sms"`, `send_email` resolves rows of type `"email"`,
+   `send_phone` (if a framework adds phone calls) resolves rows of type
+   `"phone"`. Phone numbers and SMS destinations are stored as distinct channel
+   rows because a phone number may or may not receive SMS (VoIP, landlines), and
+   a texting-only line is not a voice line. If no recipients resolve, return
    `{ delivered: false, reason:
    "no-recipients" }` so the dispatcher tries
    the next channel.
@@ -3089,18 +3099,17 @@ interface SubformProps {
 }
 ```
 
-| Subform                        | Fields                                                                                                                                       | Used by                         |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `ProfileSubform`               | `name`, `avatarUri` (FileUploadField), `age`                                                                                                 | Users, Agents                   |
-| `ContactSubform`               | `email`, `phone`                                                                                                                             | User register/edit              |
-| `PasswordSubform`              | `password`, `confirmPassword`                                                                                                                | User register/edit              |
-| `PasswordChangeSubform`        | `currentPassword`, `newPassword`, `confirmPassword`. Submits `POST /api/auth/password-change` which requires human confirmation (§19.14)     | ProfilePage                     |
-| `AddressSubform`               | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode`                                                   | Company, PaymentMethod          |
-| `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                                                           | Company create/edit             |
-| `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform`                                     | Payment method                  |
-| `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                                                         | Tokens, Connected Apps, generic |
-| `EntityChannelsSubform`        | Entity channels (email/phone/…), verification status, add/remove/resend. Props: `channelTypes: string[]`, `requiredTypes: string[]` (§19.13) | Profile, Lead editor            |
-| `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                                                                  | Leads                           |
+| Subform                        | Fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Used by                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `ProfileSubform`               | `name`, `avatarUri` (FileUploadField), `age`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Users, Agents                                     |
+| `PasswordSubform`              | `password`, `confirmPassword`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | User register/edit                                |
+| `PasswordChangeSubform`        | `currentPassword`, `newPassword`, `confirmPassword`. Submits `POST /api/auth/password-change` which requires human confirmation (§19.14)                                                                                                                                                                                                                                                                                                                                                                                                              | ProfilePage                                       |
+| `AddressSubform`               | `street`, `number`, `complement`, `neighborhood`, `city`, `state`, `country`, `postalCode`                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Company, PaymentMethod                            |
+| `CompanyIdentificationSubform` | `name`, `document`, `documentType`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Company create/edit                               |
+| `CreditCardSubform`            | `number`, `cvv`, `expiryMonth`, `expiryYear`, `holderName`, `holderDocument` + embedded `AddressSubform`                                                                                                                                                                                                                                                                                                                                                                                                                                              | Payment method                                    |
+| `NameDescSubform`              | `name`, `description` (configurable required fields and char limits)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Tokens, Connected Apps, generic                   |
+| `EntityChannelsSubform`        | Entity channels (email/phone/…). **Single authoritative component for collecting any user/lead channel in any form** — register, login identifier resolution, public lead submission, profile edit, admin user create, lead editor. Props: `channelTypes: string[]`, `requiredTypes?: string[]`, `mode: "authenticated" \| "local"` (§19.13). `"authenticated"` talks to `/api/entity-channels` for add/verify/resend/delete; `"local"` accumulates channels in memory for unauthenticated or pre-submit forms where the parent request carries them. | Profile, Lead editor, Register, Admin user create |
+| `LeadCoreSubform`              | Lead identification, contact, profile, tags                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Leads                                             |
 
 #### 18.6 Sidebar
 
@@ -3339,15 +3348,21 @@ Without `?system=`, pages show the core app name (`app.name`) with no logo.
 
 #### 19.3 Account-approval invariant (entity-channel-based)
 
-An account (user or lead) is **"approved"** only when its profile has **at least
-one verified `entity_channel`**. The system never stores identity fields
-(email/phone) directly on `user` or `lead` — all identity values flow through
-`entity_channel` rows linked via `profile.channels` (§8). The previous boolean
+An account (user or lead) is **"approved"** only when its own `channels` array
+contains **at least one verified `entity_channel`**. The system never stores
+identity fields (email/phone) directly on `user` or `lead` — all identity values
+flow through `entity_channel` rows referenced by `user.channels` (for users) or
+`lead.channels` (for leads). The previous boolean
 `emailVerified`/`phoneVerified` flags have been removed.
+
+`profile.recovery_channels` is a **distinct** array, reserved exclusively for
+account-recovery functionality (§19.7.1); it is never read during login,
+communication dispatch, or the approval check. The two arrays are independent
+and must not be conflated.
 
 Approval gates:
 
-- Login (§19.5) requires at least one verified channel.
+- Login (§19.5) requires at least one verified channel in `user.channels`.
 - API authentication (via `withAuth`) treats accounts without a verified channel
   as "pending" and rejects non-verification routes.
 - Profile edits that change a verified channel require human confirmation
@@ -3362,43 +3377,45 @@ Approval gates:
    `validation.terms.required` if missing.
 3. Auth rate limit check (aggressive).
 4. **Conflict check.** For each submitted `{type, value}`, look up existing
-   `entity_channel` rows with the same `(type, value)` whose owner is a `user`.
-   The registration is rejected with `validation.channel.conflict` when any
-   conflicting channel is either (a) `verified = true`, or (b) unverified but
-   still within an active, non-expired confirmation window (a non-used
-   `verification_request` with `actionKey = "auth.action.register"` pointing at
-   that owner). Abandoned accounts — no verified channel and no pending
-   confirmation — are hard-deleted by the registration handler in the same
-   batched query before the new user is created.
+   `entity_channel` rows with the same `(type, value)` that are referenced by
+   some `user.channels` array. The registration is rejected with
+   `validation.channel.conflict` when any conflicting channel is either (a)
+   `verified = true`, or (b) unverified but still within an active, non-expired
+   confirmation window (a non-used `verification_request` with
+   `actionKey = "auth.action.register"` pointing at the owning user). Abandoned
+   accounts — no verified channel and no pending confirmation — are hard-deleted
+   by the registration handler in the same batched query before the new user is
+   created (the user, its profile, and any dangling `entity_channel` rows
+   previously referenced by its `channels` array are all removed).
 5. Password hashed via `crypto::argon2::generate(password)` inside SurrealDB.
-6. Create `profile` with `channels = []`, then `user` referencing the profile.
-7. Create one `entity_channel` row per submitted channel with
-   `ownerId = user.id`, `ownerType = "user"`, `verified = false`, and append
-   each channel record to `profile.channels` — all in the same batched query
-   (§7.2).
-8. For every channel of a type that appears in
+6. Create one `entity_channel` row per submitted channel with `verified = false`
+   (no parent back-pointer — §1.1.10). Create a `profile` with
+   `recovery_channels = []`. Create the `user` with `profile = <profile.id>` and
+   `channels = [<entity_channel ids>]`. All three creates happen in the same
+   batched query (§7.2).
+7. For every channel of a type that appears in
    `auth.communication.defaultChannels`, open a `verification_request` via
    `communicationGuard()` with `actionKey = "auth.action.register"` and
    `payload = { channelIds: [<channel ids verified by this confirmation>] }`.
    The confirmation link hits `/api/auth/verify` with the token and marks every
    referenced channel `verified = true` in one atomic batched update.
-9. Publish a **single** `send_communication` with:
+8. Publish a **single** `send_communication` with:
    - `channels` = the `type`s of the user's newly-created channels, ordered to
      match the user's submitted preference (falling back to the core default).
    - `recipients` = the new `user.id`.
    - `template` = `"human-confirmation"`.
    - `templateData.actionKey` = `"auth.action.register"`.
-10. Login is blocked until at least one `entity_channel` belonging to the user
-    reaches `verified = true`.
+9. Login is blocked until at least one `entity_channel` referenced by
+   `user.channels` reaches `verified = true`.
 
 #### 19.5 Login flow
 
 1. Bot protection validated.
 2. Auth rate limit check.
-3. Resolve the user: find a **verified** `entity_channel` whose `value` matches
-   the submitted identifier (email, phone, or any framework-registered channel
-   value). Reject with `auth.error.invalidCredentials` when no verified channel
-   matches.
+3. Resolve the user: find a `user` such that `user.channels` contains a
+   **verified** `entity_channel` whose `value` matches the submitted identifier
+   (email, phone, or any framework-registered channel value). Reject with
+   `auth.error.invalidCredentials` when no verified channel matches.
 4. Verify password with `crypto::argon2::compare()`. Reject with
    `auth.error.invalidCredentials` on mismatch.
 5. If the user has **no** verified channel, reject with
@@ -3455,9 +3472,10 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 
 1. Submit any verified channel value (email, phone, framework channel). Bot
    protection + auth rate limit.
-2. Resolve the owning user by looking up `entity_channel` rows with
-   `verified = true` and `value = <submitted>`. When no match, still return a
-   generic success (anti-enumeration).
+2. Resolve the owning user by looking up a `user` whose `channels` array
+   contains an `entity_channel` with `verified = true` and
+   `value = <submitted>`. When no match, still return a generic success
+   (anti-enumeration).
 3. `communicationGuard()` (§12.13) enforces previous-not-expired + rate-limit
    rules against the user + action `"auth.action.passwordReset"`. Generic
    success on block.
@@ -3475,6 +3493,34 @@ and navigates to the first menu item's component (§18.8 initial-page rule).
 
 The `/account-recovery` page is the **same** flow — there is no longer a
 separate "recovery channel reset". Any verified channel is accepted uniformly.
+
+##### 19.7.1 `profile.recovery_channels` — account-recovery-only channels
+
+`profile.recovery_channels` is a **distinct** `array<record<entity_channel>>`
+that sits on the user's (or lead's) `profile`. It is completely separate from
+`user.channels` / `lead.channels` and is **reserved exclusively for account
+recovery**:
+
+- **Scope.** These channels never participate in login identifier resolution,
+  general communication dispatch (§15), the approval invariant (§19.3), or any
+  feature beyond account recovery. No other functionality may read, write, or
+  depend on `profile.recovery_channels`.
+- **Purpose.** They are fallback destinations the account owner has pre-declared
+  as safe places to reach them if they lose access to the primary channels on
+  `user.channels` — e.g. a secondary personal email, a spouse's phone number, or
+  a secure physical-mail-capable channel registered by a subframework.
+- **Add / verify / delete.** `recovery_channels` entries are created unverified
+  and go through the same `communicationGuard()`-mediated human-confirmation
+  flow used by `user.channels` (§19.13), but they are **never** used to deliver
+  application communications. Verification uses a dedicated action key
+  (`auth.action.recoveryChannelAdd`) so recovery confirmations are never mixed
+  with regular channel-add confirmations.
+- **Use.** The `/account-recovery` page accepts a `recovery_channels` value
+  (verified) in addition to the normal `user.channels` path, delivering the
+  reset link on the recovery channel only.
+- **Do not read from it for anything else.** Dispatch code (§15.8) MUST read
+  `user.channels` / `lead.channels` exclusively. Authentication code (§19.4,
+  §19.5) MUST read `user.channels` exclusively.
 
 #### 19.8 OAuth login flow (when `auth.oauth.providers` is a non-empty JSON array)
 
@@ -3643,15 +3689,26 @@ tokens as well as persisted `api_token` / connected-app tokens.
 
 Every user and lead owns one or more `entity_channel` rows — the **single
 mechanism** the platform uses to hold identity values (email, phone, …) and to
-deliver communications. Channels double as the account-approval signal (§19.3)
-and as the account-recovery entry points.
+deliver communications. These rows are referenced from `user.channels` (for
+users) or `lead.channels` (for leads). Channels double as the account-approval
+signal (§19.3) and as login identifiers for users.
+
+`entity_channel` itself is a **composable entity** (§1.1.10): it carries only
+`type`, `value`, `verified`, and timestamps — no back-pointer to the owning user
+or lead. The owner is the parent record whose `channels` array references the
+row. This section governs only `user.channels` / `lead.channels`.
+Account-recovery fallback channels live on `profile.recovery_channels` and are
+governed by §19.7.1 — they are out of scope here.
 
 **Lifecycle:**
 
 1. **Add (authenticated).** Adding a channel goes through
-   `POST /api/entity-channels`. The channel is created with `verified = false`
-   and a `verification_request` (actionKey `"auth.action.entityChannelAdd"`) is
-   opened via `communicationGuard()`. A `send_communication` publish with
+   `POST /api/entity-channels`. In a single batched query (§7.2) the handler
+   creates the `entity_channel` row with `verified = false` and appends its
+   record id to the parent's `channels` array (`user.channels` or
+   `lead.channels`) — never leaving the row orphaned. A `verification_request`
+   (actionKey `"auth.action.entityChannelAdd"`) is opened via
+   `communicationGuard()`. A `send_communication` publish with
    `template = "human-confirmation"` is dispatched on the channel's own type
    first, falling back through the user's other verified channels if the new
    value cannot be reached (e.g. typo).
@@ -3666,10 +3723,13 @@ and as the account-recovery entry points.
    operations.
 4. **Delete.** `DELETE /api/entity-channels` is permitted **only** when (a) the
    channel is unverified **or** (b) removing it leaves at least one other
-   verified channel of a type listed in the subform's `requiredTypes`. Never
+   verified channel of a type listed in the subform's `requiredTypes`. When
+   allowed, the handler removes the record id from the parent's `channels` array
+   AND deletes the `entity_channel` row in the same batched query. It never
    marks a channel unverified in-place.
-5. **Use for recovery.** `/account-recovery` submits any verified channel value;
-   the backend path is described in §19.7 and always returns generic success to
+5. **Use for recovery.** `/account-recovery` submits any verified channel value
+   from either `user.channels` or `profile.recovery_channels` (§19.7.1); the
+   backend path is described in §19.7 and always returns generic success to
    prevent enumeration.
 6. **Resend confirmation.**
    `POST /api/entity-channels?action=resend-verification` re-sends the
@@ -4196,12 +4256,18 @@ the tenant scope.
 **Features:**
 
 - Debounced search (already present).
-- **Create / Invite** modal: name, email, phone, password,
+- **Create / Invite** modal: name, `EntityChannelsSubform mode="local"`
+  (collects the new user's channels — any combination of email/phone/…; required
+  types configured via `requiredTypes`), password, and
   `MultiBadgeField mode:"search"` for roles fetching
   `/api/core/roles?systemId=...`. Hint explains the invite flow. `password`
-  silently ignored when inviting an existing user.
-- **Edit** modal (fields): name (via profile), phone, roles. Email read-only.
-  `PUT /api/users`.
+  silently ignored when inviting an existing user (the invite is matched against
+  any submitted channel value via `user.channels`).
+- **Edit** modal (fields): name (via profile), roles. Channels are edited from
+  the user's own ProfilePage via `EntityChannelsSubform
+  mode="authenticated"`
+  — admins never mutate another user's identity values directly, since every
+  change requires human confirmation from the channel owner (§19.13).
 - **Delete** with confirmation → `DELETE /api/users`.
 - **Role badges** per row from `user_company_system`.
 

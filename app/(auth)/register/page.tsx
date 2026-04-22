@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "@/src/hooks/useLocale";
 import { usePublicSystem } from "@/src/hooks/usePublicSystem";
@@ -9,6 +9,8 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import BotProtection from "@/src/components/shared/BotProtection";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
+import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
+import type { SubformRef } from "@/src/components/shared/GenericList";
 import Link from "next/link";
 
 function RegisterContent() {
@@ -18,9 +20,9 @@ function RegisterContent() {
   const { t, locale } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
+  const channelsRef = useRef<SubformRef>(null);
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -42,15 +44,24 @@ function RegisterContent() {
       return;
     }
 
+    const collected = (channelsRef.current?.getData() ?? {}) as {
+      channels?: { type: string; value: string }[];
+    };
+    const channels = collected.channels ?? [];
+    if (channels.length === 0) {
+      setError("validation.channel.required");
+      return;
+    }
+    if (!channelsRef.current?.isValid()) {
+      setError("validation.channel.requiredTypes");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setErrors([]);
 
     try {
-      const channels: { type: string; value: string }[] = [];
-      if (email) channels.push({ type: "email", value: email });
-      if (phone) channels.push({ type: "phone", value: phone });
-
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,8 +91,9 @@ function RegisterContent() {
       if (systemSlug) {
         verifyParams.set("system", systemSlug);
       }
-      if (email) {
-        verifyParams.set("email", email);
+      const primaryEmail = channels.find((c) => c.type === "email")?.value;
+      if (primaryEmail) {
+        verifyParams.set("email", primaryEmail);
       }
       router.push(
         `/verify${
@@ -135,35 +147,14 @@ function RegisterContent() {
             </div>
 
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
-              >
-                {t("auth.register.email")}
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {t("auth.register.channels")}
               </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="phone"
-                className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
-              >
-                {t("auth.register.phone")}
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+              <EntityChannelsSubform
+                ref={channelsRef}
+                mode="local"
+                channelTypes={["email", "phone"]}
+                requiredTypes={["email"]}
               />
             </div>
 

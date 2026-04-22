@@ -313,18 +313,25 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       tags: leadPayload.tags,
     });
 
-    // Apply any verified channel updates included in the payload
+    // Apply any verified channel updates included in the payload. Channels
+    // live on `lead.channels` (composable rows — no back-pointer). Each
+    // update: if the lead already references a matching (type, value) row,
+    // flip it to verified; otherwise create a new verified channel and
+    // append its id to `lead.channels`.
     if (leadPayload.channels && leadPayload.channels.length > 0) {
       const db = await getDb();
       for (const ch of leadPayload.channels) {
         await db.query(
-          `LET $existing = (SELECT id FROM entity_channel
-             WHERE ownerId = $owner AND type = $type AND value = $value LIMIT 1);
+          `LET $lead = (SELECT channels FROM lead WHERE id = $owner)[0];
+           IF $lead = NONE { RETURN; };
+           LET $existing = (SELECT id FROM entity_channel
+             WHERE id IN $lead.channels
+               AND type = $type AND value = $value
+             LIMIT 1);
            IF array::len($existing) = 0 {
              LET $new = CREATE entity_channel SET
-               ownerId = $owner, ownerType = "lead",
                type = $type, value = $value, verified = true;
-             UPDATE (SELECT profile FROM lead WHERE id = $owner)[0].profile
+             UPDATE $owner
                SET channels += $new[0].id, updatedAt = time::now();
            } ELSE {
              UPDATE $existing[0].id SET verified = true, updatedAt = time::now();

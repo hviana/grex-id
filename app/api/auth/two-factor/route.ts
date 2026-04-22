@@ -77,14 +77,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // `pendingTwoFactorSecret`. The secret never travels through
     // `verification_request.payload` (§15.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
-    const userProfile = await db.query<
-      [{ profile: { name: string; channels: { value: string }[] } }[]]
+    const userRow = await db.query<
+      [{ profile: { name: string }; channels: { value: string }[] }[]]
     >(
-      `SELECT profile FROM $userId FETCH profile, profile.channels`,
+      `SELECT profile, channels FROM $userId FETCH profile, channels`,
       { userId: rid(userId) },
     );
-    const accountLabel = userProfile[0]?.[0]?.profile?.channels?.[0]?.value ??
-      userProfile[0]?.[0]?.profile?.name ?? "user";
+    const accountLabel = userRow[0]?.[0]?.channels?.[0]?.value ??
+      userRow[0]?.[0]?.profile?.name ?? "user";
 
     const secret = generateSecret({
       length: 20,
@@ -222,7 +222,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       "http://localhost:3000";
     const confirmationLink = `${baseUrl}/verify?token=${guard.token}`;
 
-    const verifiedTypes = await listVerifiedChannelTypes(userId);
+    const verifiedTypes = await listVerifiedChannelTypes(userId, "user");
     const defaultChannels = await core.getSetting(
       "auth.communication.defaultChannels",
       systemSlug,
@@ -282,7 +282,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       "http://localhost:3000";
     const confirmationLink = `${baseUrl}/verify?token=${guard.token}`;
 
-    const verifiedTypes = await listVerifiedChannelTypes(userId);
+    const verifiedTypes = await listVerifiedChannelTypes(userId, "user");
     const defaultChannels = await core.getSetting(
       "auth.communication.defaultChannels",
       systemSlug,

@@ -119,7 +119,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   // Channel order: the owner's verified channel types, respecting the default
   // precedence when present.
-  const verifiedTypes = await listVerifiedChannelTypes(userId);
+  const verifiedTypes = await listVerifiedChannelTypes(userId, "user");
   const defaultChannelsRaw =
     (await core.getSetting("auth.communication.defaultChannels", systemSlug)) ??
       "[]";

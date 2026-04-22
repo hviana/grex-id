@@ -49,10 +49,8 @@ async function handler(
     identifier?: string;
     twoFactorCode?: string;
   };
-  // Backwards-compat: older frontends send `email` instead of `identifier`.
-  const raw = identifier ?? (body as { email?: string }).email;
 
-  if (!raw || typeof raw !== "string" || !password) {
+  if (!identifier || typeof identifier !== "string" || !password) {
     return Response.json(
       {
         success: false,
@@ -65,10 +63,10 @@ async function handler(
     );
   }
 
-  const channelType = guessChannelType(raw);
+  const channelType = guessChannelType(identifier);
   const value = channelType
-    ? standardizeField(channelType, raw, "entity_channel")
-    : raw.trim();
+    ? standardizeField(channelType, identifier, "entity_channel")
+    : identifier.trim();
 
   const user = await findUserByVerifiedChannel(value, channelType);
   if (!user) {

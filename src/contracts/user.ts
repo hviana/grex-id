@@ -1,8 +1,10 @@
+import type { EntityChannel } from "./entity-channel.ts";
 import type { Profile } from "./profile.ts";
 
 export interface User {
   id: string;
   profile: Profile;
+  channels: EntityChannel[];
   roles: string[];
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;

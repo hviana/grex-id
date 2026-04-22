@@ -116,7 +116,7 @@ export async function listLeads(
   const query = `
     LET $lcs = (SELECT leadId, ownerId, createdAt FROM lead_company_system WHERE ${lcsWhere} ORDER BY createdAt DESC LIMIT $limit);
     LET $ids = $lcs.leadId;
-    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profile, profile.channels, tags;
+    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profile, channels, tags;
     SELECT leadId, ownerId FROM lead_company_system WHERE ${lcsWhere};`;
 
   const result = await db.query<
@@ -156,7 +156,7 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
   const result = await db.query<[Lead[]]>(
-    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profile, profile.channels",
+    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profile, channels",
     { id: rid(leadId) },
   );
   return normalizeLead(result[0]?.[0] ?? null);
@@ -168,12 +168,11 @@ export async function findLeadByChannelValues(
   if (values.length === 0) return null;
   const db = await getDb();
   const result = await db.query<[Lead[]]>(
-    `SELECT * FROM lead
-     WHERE id IN (
-       SELECT VALUE ownerId FROM entity_channel
-       WHERE value IN $values AND ownerType = "lead"
-     )
-     LIMIT 1 FETCH profile, profile.channels`,
+    `LET $chIds = (SELECT id FROM entity_channel WHERE value IN $values).id;
+     IF array::len($chIds) = 0 { RETURN []; };
+     SELECT * FROM lead
+     WHERE channels ANYINSIDE $chIds
+     LIMIT 1 FETCH profile, channels;`,
     { values },
   );
   return normalizeLead(result[0]?.[0] ?? null);
@@ -195,17 +194,15 @@ export async function createLead(data: {
     .map(
       (_, i) => `
       LET $ch${i} = CREATE entity_channel SET
-        ownerId = $ld[0].id,
-        ownerType = "lead",
         type = $ctype${i},
         value = $cvalue${i},
         verified = false;`,
     )
     .join("");
 
-  const appendStmts = data.channels
-    .map((_, i) => `UPDATE $prof[0].id SET channels += $ch${i}[0].id`)
-    .join(";\n");
+  const channelsArray = data.channels
+    .map((_, i) => `$ch${i}[0].id`)
+    .join(", ");
 
   const bindings: Record<string, unknown> = {
     profileName: data.profile.name,
@@ -221,19 +218,19 @@ export async function createLead(data: {
   });
 
   const query = `
+    ${channelStmts}
     LET $prof = CREATE profile SET
       name = $profileName,
       avatarUri = $avatarUri,
       age = $age,
-      channels = [];
+      recovery_channels = [];
     LET $ld = CREATE lead SET
       name = $name,
       profile = $prof[0].id,
+      channels = [${channelsArray}],
       companyIds = $companyIds,
       tags = $tags;
-    ${channelStmts}
-    ${appendStmts ? appendStmts + ";" : ""}
-    SELECT * FROM $ld[0].id FETCH profile, profile.channels;`;
+    SELECT * FROM $ld[0].id FETCH profile, channels;`;
 
   const result = await db.query<unknown[]>(query, bindings);
   const last = result[result.length - 1] as Lead[];
@@ -295,7 +292,7 @@ export async function updateLead(
   }
 
   statements.push(`UPDATE $id SET ${sets.join(", ")}`);
-  statements.push("SELECT * FROM $id FETCH profile, profile.channels");
+  statements.push("SELECT * FROM $id FETCH profile, channels");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
@@ -326,13 +323,19 @@ export async function deleteLead(id: string): Promise<void> {
   const leadId = requireRecordId(id, "leadId");
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
-    `LET $ld = (SELECT profile FROM lead WHERE id = $id);
-    DELETE entity_channel WHERE ownerId = $id;
-    DELETE verification_request WHERE ownerId = $id;
-    DELETE FROM lead WHERE id = $id;
-    IF $ld[0].profile != NONE {
-      DELETE $ld[0].profile;
-    };`,
+    `LET $ld = (SELECT profile, channels FROM lead WHERE id = $id)[0];
+     LET $prof = IF $ld = NONE THEN NONE ELSE (SELECT recovery_channels FROM $ld.profile)[0] END;
+     DELETE verification_request WHERE ownerId = $id;
+     DELETE FROM lead WHERE id = $id;
+     IF $ld != NONE {
+       FOR $cid IN $ld.channels { DELETE $cid; };
+     };
+     IF $prof != NONE {
+       FOR $rid IN $prof.recovery_channels { DELETE $rid; };
+     };
+     IF $ld != NONE AND $ld.profile != NONE {
+       DELETE $ld.profile;
+     };`,
     { id: rid(leadId) },
   );
 }

@@ -258,7 +258,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     }
 
     // Gather the newly-created channel ids for the confirmation payload.
-    const channelIds = (lead.profile?.channels ?? [])
+    const channelIds = (lead.channels ?? [])
       .map((c: unknown) =>
         typeof c === "string" ? c : String((c as { id?: string }).id ?? "")
       )

@@ -25,7 +25,7 @@ interface AuthContextValue extends AuthState {
   tenant: Tenant;
   claims: TenantClaims | null;
   login: (
-    email: string,
+    identifier: string,
     password: string,
     stayLoggedIn?: boolean,
     twoFactorCode?: string,
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (
-      email: string,
+      identifier: string,
       password: string,
       stayLoggedIn?: boolean,
       twoFactorCode?: string,
@@ -163,7 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, stayLoggedIn, twoFactorCode }),
+        body: JSON.stringify({
+          identifier,
+          password,
+          stayLoggedIn,
+          twoFactorCode,
+        }),
       });
       const json = await res.json();
 

@@ -5,10 +5,7 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { publish } from "@/server/event-queue/publisher";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import {
-  findVerifiedOwnerByChannelValue,
-  listVerifiedChannelTypes,
-} from "@/server/db/queries/entity-channels";
+import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { userHasVerifiedChannel } from "@/server/db/queries/auth";
 import { getDb, rid } from "@/server/db/connection";
 
@@ -44,7 +41,7 @@ async function handler(
   const core = Core.getInstance();
   const body = await req.json();
   const systemSlug = body.systemSlug as string | undefined;
-  const raw = (body.identifier ?? body.email) as string | undefined;
+  const raw = body.identifier as string | undefined;
 
   const successResponse = Response.json({
     success: true,
@@ -59,16 +56,25 @@ async function handler(
     : raw.trim();
 
   // Locate the unverified channel belonging to a user that matches the
-  // identifier — we look up by (type, value) irrespective of verified status,
-  // since the point of resend is exactly to re-verify.
+  // identifier. entity_channel rows have no back-pointer — resolve the owner
+  // by checking which user references the matching channel id.
   const db = await getDb();
   const rowResult = await db.query<[
-    { id: string; ownerId: string; ownerType: string; verified: boolean }[],
+    { id: string; ownerId: string; verified: boolean }[],
   ]>(
-    `SELECT id, ownerId, ownerType, verified FROM entity_channel
-     WHERE ownerId IN (SELECT VALUE id FROM user)
-       AND type = $type AND value = $value
-     LIMIT 1`,
+    `LET $chs = (SELECT id, verified FROM entity_channel
+                 WHERE type = $type AND value = $value);
+     IF array::len($chs) = 0 { RETURN []; };
+     LET $users = (SELECT id, channels FROM user
+                   WHERE channels ANYINSIDE $chs.id);
+     IF array::len($users) = 0 { RETURN []; };
+     LET $u = $users[0];
+     LET $match = (SELECT id, verified FROM entity_channel
+                   WHERE id IN $u.channels
+                     AND type = $type AND value = $value
+                   LIMIT 1)[0];
+     IF $match = NONE { RETURN []; };
+     RETURN [{ id: $match.id, ownerId: $u.id, verified: $match.verified }];`,
     { type, value },
   );
   const row = rowResult[0]?.[0];
@@ -106,7 +112,10 @@ async function handler(
 
   // Channel order: start with the type being confirmed, then the owner's
   // other verified types as fallback.
-  const otherVerified = await listVerifiedChannelTypes(String(row.ownerId));
+  const otherVerified = await listVerifiedChannelTypes(
+    String(row.ownerId),
+    "user",
+  );
   const channels = [
     type ?? "email",
     ...otherVerified.filter((t) => t !== type),

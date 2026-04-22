@@ -43,9 +43,7 @@ async function handler(
   const core = Core.getInstance();
   const body = await req.json();
   const systemSlug = body.systemSlug as string | undefined;
-  const raw = (body.identifier ?? body.email ?? body.channelValue) as
-    | string
-    | undefined;
+  const raw = body.identifier as string | undefined;
 
   const successResponse = Response.json({
     success: true,
@@ -60,7 +58,7 @@ async function handler(
     : raw.trim();
 
   const match = await findVerifiedOwnerByChannelValue(value);
-  if (!match || match.ownerType !== "user") return successResponse;
+  if (!match || match.ownerKind !== "user") return successResponse;
 
   const guardResult = await communicationGuard({
     ownerId: match.ownerId,
@@ -85,7 +83,7 @@ async function handler(
   // Channel preference: the matched channel type first, then the user's
   // remaining verified channels (§19.7).
   const matchedType = match.channel.type;
-  const allTypes = await listVerifiedChannelTypes(match.ownerId);
+  const allTypes = await listVerifiedChannelTypes(match.ownerId, "user");
   const channelOrder = [
     matchedType,
     ...allTypes.filter((t) => t !== matchedType),

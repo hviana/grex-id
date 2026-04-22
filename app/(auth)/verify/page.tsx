@@ -19,10 +19,11 @@ function VerifyContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("system");
-  const emailParam = searchParams.get("email") ?? "";
+  const identifierParam = searchParams.get("identifier") ??
+    searchParams.get("email") ?? "";
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
-  const [email, setEmail] = useState(emailParam);
+  const [identifier, setIdentifier] = useState(identifierParam);
   const [verifying, setVerifying] = useState(!!token);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +36,8 @@ function VerifyContent() {
   const loginHref = `/login${systemParam}`;
 
   useEffect(() => {
-    setEmail(emailParam);
-  }, [emailParam]);
+    setIdentifier(identifierParam);
+  }, [identifierParam]);
 
   useEffect(() => {
     if (!token) {
@@ -95,7 +96,7 @@ function VerifyContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          identifier,
           systemSlug: systemSlug || undefined,
         }),
       });
@@ -157,21 +158,22 @@ function VerifyContent() {
               <form onSubmit={handleResend} className="space-y-4 text-left">
                 <div>
                   <label
-                    htmlFor="email"
+                    htmlFor="identifier"
                     className="mb-1 block text-sm font-medium text-[var(--color-light-text)]"
                   >
-                    {t("auth.login.email")}
+                    {t("auth.login.identifier")}
                   </label>
                   <input
-                    id="email"
-                    type="email"
-                    value={email}
+                    id="identifier"
+                    type="text"
+                    autoComplete="username"
+                    value={identifier}
                     onChange={(e) => {
-                      setEmail(e.target.value);
+                      setIdentifier(e.target.value);
                       setResent(false);
                     }}
                     required
-                    placeholder={t("common.placeholder.email")}
+                    placeholder={t("common.placeholder.entityChannel")}
                     className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none transition-colors focus:border-[var(--color-primary-green)]"
                   />
                 </div>
@@ -179,7 +181,7 @@ function VerifyContent() {
                 <GenericFormButton
                   loading={resending}
                   label={t("auth.verify.resend")}
-                  disabled={!email.trim()}
+                  disabled={!identifier.trim()}
                 />
               </form>
 

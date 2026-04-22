@@ -77,7 +77,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const bindings: Record<string, unknown> = { limit: limit + 1 };
 
   if (companyId && systemId) {
-    let userQuery = `SELECT id, profile, roles, createdAt,
+    let userQuery = `SELECT id, profile, channels, roles, createdAt,
          (SELECT VALUE roles FROM user_company_system
            WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
        FROM user
@@ -99,7 +99,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     }
 
     userQuery +=
-      " ORDER BY createdAt DESC LIMIT $limit FETCH profile, profile.channels";
+      " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
 
     const result = await db.query<[Record<string, unknown>[]]>(
       userQuery,
@@ -118,7 +118,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  let query = "SELECT id, profile, roles, createdAt FROM user";
+  let query = "SELECT id, profile, channels, roles, createdAt FROM user";
   const conditions: string[] = [];
 
   if (search) {
@@ -131,8 +131,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query +=
-    " ORDER BY createdAt DESC LIMIT $limit FETCH profile, profile.channels";
+  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const items = result[0] ?? [];
@@ -183,15 +182,24 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
 
-  // Try to find an existing user by any submitted channel value.
+  // Try to find an existing user by any submitted channel value. Resolve the
+  // owner via `user.channels CONTAINS <channelId>` — entity_channel rows
+  // carry no back-pointer (§1.1.10).
   let existingUserId: string | null = null;
   for (const ch of channels) {
     const rows = await findChannelsByTypeAndValue(ch.type, ch.value);
-    const hit = rows.find((r) => r.ownerType === "user");
-    if (hit) {
-      existingUserId = String(hit.ownerId);
-      break;
+    for (const row of rows) {
+      const owner = await db.query<[{ id: string }[]]>(
+        `SELECT id FROM user WHERE channels CONTAINS $cid LIMIT 1`,
+        { cid: rid(String(row.id)) },
+      );
+      const hit = owner[0]?.[0];
+      if (hit) {
+        existingUserId = String(hit.id);
+        break;
+      }
     }
+    if (existingUserId) break;
   }
 
   if (existingUserId) {
@@ -391,7 +399,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       `LET $prof = (SELECT profile FROM user WHERE id = $userId)[0].profile`,
       `UPDATE $prof SET ${profileSets.join(", ")}`,
       `UPDATE $userId SET updatedAt = time::now()`,
-      `SELECT * FROM $userId FETCH profile, profile.channels`,
+      `SELECT * FROM $userId FETCH profile, channels`,
     ];
     const result = await db.query<Record<string, unknown>[][]>(
       stmts.join(";\n"),

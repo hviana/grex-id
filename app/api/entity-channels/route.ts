@@ -50,7 +50,7 @@ async function sendChannelConfirmation(
 
   // The primary channel is the one being verified; fall back to the owner's
   // other verified channels if delivery fails.
-  const otherVerified = await listVerifiedChannelTypes(userId);
+  const otherVerified = await listVerifiedChannelTypes(userId, "user");
   const channels = [
     channelType,
     ...otherVerified.filter((t) => t !== channelType),
@@ -73,9 +73,26 @@ async function sendChannelConfirmation(
   return guardResult;
 }
 
+/**
+ * Returns true when the given channel id is referenced by the user's
+ * `channels` array. Used to authorize channel-scoped actions.
+ */
+async function userOwnsChannel(
+  userId: string,
+  channelId: string,
+): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.query<[{ c: number }[]]>(
+    `SELECT count() AS c FROM user
+     WHERE id = $uid AND channels CONTAINS $cid GROUP ALL`,
+    { uid: rid(userId), cid: rid(channelId) },
+  );
+  return (result[0]?.[0]?.c ?? 0) > 0;
+}
+
 async function getHandler(_req: Request, ctx: RequestContext) {
   const userId = ctx.claims!.actorId;
-  const channels = await listChannelsByOwner(userId);
+  const channels = await listChannelsByOwner(userId, "user");
   return Response.json({ success: true, data: channels });
 }
 
@@ -100,7 +117,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const channel = await findChannelById(channelId);
-    if (!channel || String(channel.ownerId) !== String(userId)) {
+    if (!channel || !(await userOwnsChannel(userId, String(channel.id)))) {
       return Response.json(
         {
           success: false,
@@ -131,7 +148,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Pending confirmation: unverified channel still needs an initial
     // verified channel on the account to distinguish register from add.
-    const anyVerified = (await listVerifiedChannelTypes(userId)).length > 0;
+    const anyVerified =
+      (await listVerifiedChannelTypes(userId, "user")).length > 0;
     const actionKey = anyVerified
       ? "auth.action.entityChannelAdd"
       : "auth.action.register";
@@ -186,7 +204,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const existing = await findChannelByOwnerTypeAndValue(userId, type, stdValue);
+  const existing = await findChannelByOwnerTypeAndValue(
+    userId,
+    "user",
+    type,
+    stdValue,
+  );
   if (existing) {
     return Response.json(
       {
@@ -208,21 +231,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     )) || 10,
   );
 
-  const profileResult = await db.query<[{ profile: string }[]]>(
-    `SELECT profile FROM $uid`,
-    { uid: rid(userId) },
-  );
-  const profileId = profileResult[0]?.[0]?.profile
-    ? String(profileResult[0][0].profile)
-    : undefined;
-
   const channel = await createChannel({
     ownerId: userId,
-    ownerType: "user",
+    ownerKind: "user",
     type,
     value: stdValue,
     maxPerOwner,
-    appendToProfileId: profileId,
   });
 
   if (!channel) {
@@ -275,7 +289,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   const channel = await findChannelById(channelId);
-  if (!channel || String(channel.ownerId) !== String(userId)) {
+  if (!channel || !(await userOwnsChannel(userId, String(channel.id)))) {
     return Response.json(
       {
         success: false,
@@ -288,7 +302,11 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   // Required-type invariant: removing a verified channel of a required type
   // must leave at least one other verified channel of that type (§19.13).
   if (channel.verified && requiredTypes?.includes(channel.type)) {
-    const remaining = await countVerifiedChannelsOfType(userId, channel.type);
+    const remaining = await countVerifiedChannelsOfType(
+      userId,
+      "user",
+      channel.type,
+    );
     if (remaining <= 1) {
       return Response.json(
         {
@@ -303,16 +321,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     }
   }
 
-  const db = await getDb();
-  const profileResult = await db.query<[{ profile: string }[]]>(
-    `SELECT profile FROM $uid`,
-    { uid: rid(userId) },
-  );
-  const profileId = profileResult[0]?.[0]?.profile
-    ? String(profileResult[0][0].profile)
-    : undefined;
-
-  await deleteChannel({ channelId, profileId });
+  await deleteChannel({ channelId, ownerId: userId, ownerKind: "user" });
   return Response.json({ success: true });
 }
 

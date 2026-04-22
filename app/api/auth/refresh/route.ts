@@ -64,9 +64,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
         profile?: unknown;
       }[]]
     >(
-      `SELECT id, email, stayLoggedIn, roles, twoFactorEnabled, profile
+      `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profile, channels
          FROM user WHERE id = $userId LIMIT 1
-         FETCH profile, profile.channels;`,
+         FETCH profile, channels;`,
       { userId: rid(claims.actorId) },
     );
 

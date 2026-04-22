@@ -28,13 +28,17 @@ async function resolveRecipients(raw: string[]): Promise<string[]> {
       resolved.push(entry);
       continue;
     }
+    const table = entry.split(":")[0];
+    if (table !== "user" && table !== "lead") continue;
     // SMS delivery uses the dedicated "sms" entity_channel type, not "phone".
     // A phone number may refuse SMS (VoIP / landline), and a text-only line
     // is not suitable for voice calls — the two are distinct channels.
     const result = await db.query<[{ value: string }[]]>(
-      `SELECT value FROM entity_channel
-       WHERE ownerId = $ownerId AND type = $type AND verified = true
-       ORDER BY createdAt ASC`,
+      `LET $owner = (SELECT channels FROM ${table} WHERE id = $ownerId)[0];
+       IF $owner = NONE { RETURN []; };
+       SELECT value FROM entity_channel
+       WHERE id IN $owner.channels AND type = $type AND verified = true
+       ORDER BY createdAt ASC;`,
       { ownerId: rid(entry), type: CHANNEL },
     );
     for (const row of result[0] ?? []) {

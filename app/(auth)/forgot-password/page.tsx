@@ -17,7 +17,7 @@ function ForgotPasswordContent() {
   const { t } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [botToken, setBotToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ function ForgotPasswordContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          identifier,
           botToken,
           systemSlug: systemSlug || undefined,
         }),
@@ -96,17 +96,19 @@ function ForgotPasswordContent() {
                 <form onSubmit={handleSubmit} className="mt-6 space-y-5">
                   <div>
                     <label
-                      htmlFor="email"
+                      htmlFor="identifier"
                       className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
                     >
-                      {t("auth.forgotPassword.email")}
+                      {t("auth.forgotPassword.identifier")}
                     </label>
                     <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      id="identifier"
+                      type="text"
+                      autoComplete="username"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                       required
+                      placeholder={t("common.placeholder.entityChannel")}
                       className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
                     />
                   </div>

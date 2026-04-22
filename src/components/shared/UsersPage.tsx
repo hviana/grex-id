@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
@@ -10,6 +10,8 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
+import type { SubformRef } from "@/src/components/shared/GenericList";
 
 interface ChannelRow {
   id: string;
@@ -23,24 +25,27 @@ interface UserItem {
   profile?: {
     name: string;
     avatarUri?: string;
-    channels?: ChannelRow[];
   };
+  channels?: ChannelRow[];
   roles: string[];
   contextRoles?: string[];
   createdAt: string;
 }
 
 function channelOf(user: UserItem, type: string): ChannelRow | undefined {
-  const list = user.profile?.channels ?? [];
+  const list = user.channels ?? [];
   return list.find((c) => c.type === type);
 }
 
-function primaryEmail(user: UserItem): string {
-  return channelOf(user, "email")?.value ?? "";
-}
-
-function primaryPhone(user: UserItem): string {
-  return channelOf(user, "phone")?.value ?? "";
+function primaryChannelLabel(user: UserItem): string {
+  // Prefer the verified email, then any verified channel, then the first
+  // channel regardless of verification. This is only for display — the user
+  // object still drives identity via `user.channels` (§19.13).
+  const email = channelOf(user, "email");
+  if (email?.value) return email.value;
+  const verified = (user.channels ?? []).find((c) => c.verified);
+  if (verified?.value) return verified.value;
+  return (user.channels ?? [])[0]?.value ?? "";
 }
 
 export default function UsersPage() {
@@ -61,8 +66,7 @@ export default function UsersPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Create form state
-  const [newEmail, setNewEmail] = useState("");
-  const [newPhone, setNewPhone] = useState("");
+  const newChannelsRef = useRef<SubformRef>(null);
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRoles, setNewRoles] = useState<string[]>([]);
@@ -127,6 +131,18 @@ export default function UsersPage() {
 
   const handleCreate = async () => {
     if (!systemToken || !companyId || !systemId) return;
+    const collected = (newChannelsRef.current?.getData() ?? {}) as {
+      channels?: { type: string; value: string }[];
+    };
+    const channels = collected.channels ?? [];
+    if (channels.length === 0) {
+      setError("validation.channel.required");
+      return;
+    }
+    if (!newChannelsRef.current?.isValid()) {
+      setError("validation.channel.requiredTypes");
+      return;
+    }
     setActionLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -138,10 +154,7 @@ export default function UsersPage() {
           Authorization: `Bearer ${systemToken}`,
         },
         body: JSON.stringify({
-          channels: [
-            ...(newEmail ? [{ type: "email", value: newEmail }] : []),
-            ...(newPhone ? [{ type: "phone", value: newPhone }] : []),
-          ],
+          channels,
           password: newPassword,
           name: newName,
           companyId,
@@ -157,8 +170,6 @@ export default function UsersPage() {
         return;
       }
       setCreateOpen(false);
-      setNewEmail("");
-      setNewPhone("");
       setNewName("");
       setNewPassword("");
       setNewRoles([]);
@@ -298,16 +309,16 @@ export default function UsersPage() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
-                    {(user.profile?.name ?? primaryEmail(user))
+                    {(user.profile?.name ?? primaryChannelLabel(user))
                       .charAt(0)
                       .toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-white truncate">
-                      {user.profile?.name ?? primaryEmail(user)}
+                      {user.profile?.name ?? primaryChannelLabel(user)}
                     </h3>
                     <p className="text-sm text-[var(--color-light-text)] truncate">
-                      {primaryEmail(user)}
+                      {primaryChannelLabel(user)}
                     </p>
                   </div>
                   <div className="flex gap-1.5 flex-wrap shrink-0">
@@ -358,19 +369,11 @@ export default function UsersPage() {
               placeholder={t("common.placeholder.name")}
               className={inputCls}
             />
-            <input
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder={t("common.placeholder.email")}
-              className={inputCls}
-            />
-            <input
-              type="tel"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-              placeholder={t("common.placeholder.phone")}
-              className={inputCls}
+            <EntityChannelsSubform
+              ref={newChannelsRef}
+              mode="local"
+              channelTypes={["email", "phone"]}
+              requiredTypes={["email"]}
             />
             <input
               type="password"
@@ -400,7 +403,7 @@ export default function UsersPage() {
             </p>
             <button
               onClick={handleCreate}
-              disabled={actionLoading || !newEmail || !newName}
+              disabled={actionLoading || !newName}
               className="w-full rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-3 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {actionLoading && (
@@ -426,9 +429,21 @@ export default function UsersPage() {
           <div className="space-y-3">
             <div>
               <label className="block text-xs text-[var(--color-light-text)] mb-1">
-                {t("common.users.email")}
+                {t("common.entityChannels.title")}
               </label>
-              <p className="text-white text-sm">{primaryEmail(editUser)}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(editUser.channels ?? []).map((c) => (
+                  <span
+                    key={c.id}
+                    className="text-xs text-[var(--color-light-text)] bg-white/5 border border-[var(--color-dark-gray)] rounded-full px-2 py-0.5"
+                  >
+                    {c.value}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-[var(--color-light-text)]/60">
+                {t("common.users.channelsReadOnlyHint")}
+              </p>
             </div>
             <input
               type="text"
@@ -480,7 +495,7 @@ export default function UsersPage() {
           <div className="text-center space-y-4">
             <p className="text-white">{t("common.users.deleteConfirm")}</p>
             <p className="text-sm text-[var(--color-light-text)]">
-              {deleteUser.profile?.name ?? primaryEmail(deleteUser)}
+              {deleteUser.profile?.name ?? primaryChannelLabel(deleteUser)}
             </p>
             <div className="flex gap-3 justify-center">
               <button

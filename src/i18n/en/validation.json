@@ -25,6 +25,7 @@
   "channel.value.required": "Channel value is required",
   "channel.value.invalid": "Invalid channel value format",
   "channel.required": "At least one channel is required",
+  "channel.requiredTypes": "At least one channel of each required type is needed",
   "channel.conflict": "One of the provided values is already in use",
   "identifier.required": "Please provide a channel value to sign in",
   "verification.previousNotExpired": "A previous verification request is still active. Please check your email or wait for it to expire.",

@@ -31,7 +31,7 @@ export async function listUsers(
     select: "id, profile, roles, createdAt, updatedAt",
     conditions,
     bindings,
-    fetch: "profile, profile.channels",
+    fetch: "profile, channels",
     params,
   });
 }
@@ -39,7 +39,7 @@ export async function listUsers(
 export async function getUser(id: string): Promise<User | null> {
   const db = await getDb();
   const result = await db.query<[User[]]>(
-    "SELECT * FROM $id FETCH profile, profile.channels",
+    "SELECT * FROM $id FETCH profile, channels",
     { id: rid(id) },
   );
   return result[0]?.[0] ?? null;
@@ -101,7 +101,7 @@ export async function updateUser(
     statements.push(`UPDATE $id SET ${sets.join(", ")}`);
   }
 
-  statements.push("SELECT * FROM $id FETCH profile, profile.channels");
+  statements.push("SELECT * FROM $id FETCH profile, channels");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
@@ -129,13 +129,19 @@ export async function updateUserLocale(
 export async function deleteUser(id: string): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $usr = (SELECT profile FROM $id);
-    DELETE entity_channel WHERE ownerId = $id;
-    DELETE verification_request WHERE ownerId = $id;
-    DELETE $id;
-    IF $usr[0].profile != NONE {
-      DELETE $usr[0].profile;
-    };`,
+    `LET $usr = (SELECT profile, channels FROM $id)[0];
+     LET $prof = IF $usr = NONE THEN NONE ELSE (SELECT recovery_channels FROM $usr.profile)[0] END;
+     DELETE verification_request WHERE ownerId = $id;
+     DELETE $id;
+     IF $usr != NONE {
+       FOR $cid IN $usr.channels { DELETE $cid; };
+     };
+     IF $prof != NONE {
+       FOR $rid IN $prof.recovery_channels { DELETE $rid; };
+     };
+     IF $usr != NONE AND $usr.profile != NONE {
+       DELETE $usr.profile;
+     };`,
     { id: rid(id) },
   );
 }
