@@ -405,7 +405,7 @@ permission errors, and status messages.
 │   │   │            locations, data-deletion, entity-channels, systems/[slug]/)
 │   │   └── frontend-queries/ (messages, notifications, systems/[slug]/)
 │   ├── middleware/   (compose, withAuth, withRateLimit, withPlanAccess, withEntityLimit)
-│   ├── utils/        (Core, FrontCore, cache, fs, token, token-revocation, cors,
+│   ├── utils/        (Core, FrontCore, cache, fs, token, actor-validity, cors,
 │   │                  rate-limiter, usage-tracker, credit-tracker,
 │   │                  entity-deduplicator, field-standardizer,
 │   │                  field-validator, guards, tenant, verification-guard,
@@ -496,8 +496,9 @@ seed, every framework, and every subsystem. The options, in order of preference:
    never logged, cached to disk, or placed in another column.
 
 **What counts as sensitive:** passwords, card / PAN / CVV data, raw API tokens
-and refresh tokens (the wrapper uses hashes + `jti` revocation — §12.8 — not
-plaintext), OAuth client secrets, TOTP shared secrets (`twoFactorSecret`,
+and refresh tokens (the platform issues signed JWTs and relies on the
+actor-validity cache for revocation — §12.8 — so no plaintext bearer ever lands
+in a column), OAuth client secrets, TOTP shared secrets (`twoFactorSecret`,
 `pendingTwoFactorSecret` — §19.15), private keys, PII that regulation flags as
 restricted. When in doubt, treat it as sensitive.
 
@@ -656,7 +657,7 @@ this table.
 | `0012_create_payment_method.surql`         | `payment_method`          | `billingAddress` is `record<address>`. `isDefault` bool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `0013_create_credit_purchase.surql`        | `credit_purchase`         | Status ∈ `pending`, `completed`, `failed`, `expired`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `0014_create_connected_app.surql`          | `connected_app`           | Scoped per (company, system). `apiTokenId` link to underlying `api_token` for revocation cascade. `maxOperationCount` `option<object> FLEXIBLE` — per-resourceKey map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `0015_create_api_token.surql`              | `api_token`               | `tenant` (`object FLEXIBLE`), `jti` unique, `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`, `maxOperationCount` `option<object> FLEXIBLE` (per-resourceKey map). Indexes on `tokenHash` UNIQUE, `jti` UNIQUE, `revokedAt`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `0015_create_api_token.surql`              | `api_token`               | `tenant` (`object FLEXIBLE`), `neverExpires`, `frontendUse`, `frontendDomains`, `revokedAt`, `maxOperationCount` `option<object> FLEXIBLE` (per-resourceKey map). The token id itself is the universal actor id (§12.8); the bearer is a JWT embedding it. No separate hash or jti column. Indexes on `(companyId, systemId, revokedAt)` for per-tenant hydration and `revokedAt`.                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `0017_create_usage_record.surql`           | `usage_record`            | `actorType ∈ user                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `0018_create_queue_event.surql`            | `queue_event`             | `payload` `object FLEXIBLE`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `0019_create_delivery.surql`               | `delivery`                | Status ∈ `pending                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -671,7 +672,6 @@ this table.
 | `0031_create_address.surql`                | `address`                 | Composable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `0032_create_credit_expense.surql`         | `credit_expense`          | Daily container. Unique `(companyId, systemId, resourceKey, day)`. Fields: `amount` (total cents consumed), `count` (number of individual consumptions), `actorId` `option<string>`. Both increment atomically via UPSERT.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `0033_create_front_core_setting.surql`     | `front_setting`           | Unique `(key, systemSlug)`. `systemSlug string` — same rule as `setting`: the literal `"core"` is the core-level default, any other non-empty value is a per-system override, and `systemSlug` MUST NOT be empty (`ASSERT $value != ""`). Physically separated from `setting` (§10.2.8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `0034_create_token_revocation.surql`       | `token_revocation`        | JTI-based revocation. Unique `jti`. Rows TTL to original `exp` — bounded automatically.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `0035_create_entity_channel.surql`         | `entity_channel`          | **Composable, generalized communication channel — no back-pointer to any parent entity** (compositional pattern §1.1.10). `type` open string identifying the channel (seeded defaults `"email"`, `"phone"`; subframeworks may register their own). `value` string. `verified` bool default false. Fields: type, value, verified, createdAt, updatedAt. Index on `(type, value)` and on `verified`. Max per owner enforced at the query layer via `auth.entityChannel.maxPerOwner` when writing into a parent's `channels` array. Parents (`user.channels`, `lead.channels`, `profile.recovery_channels`) hold the `record<entity_channel>` references; entity_channel rows themselves are unaware of their owners.                                                                              |
 | `0038_create_payment.surql`                | `payment`, `subscription` | Unified payment ledger. `payment`: companyId, systemId, subscriptionId, amount, currency, kind (`"recurring"\|"credits"\|"auto-recharge"`), status (`"pending"\|"completed"\|"failed"\|"expired"`), paymentMethodId, transactionId, invoiceUrl, failureReason, continuityData (`option<object> FLEXIBLE`), expiresAt (`option<datetime>`), createdAt. Indexes on (companyId, systemId), createdAt, kind, (status, expiresAt). Also adds `retryPaymentInProgress: bool DEFAULT false` to `subscription`.                                                                                                                                                                                                                                                                                         |
 | `0044_create_file_access.surql`            | `file_access`             | File access control rules. Unique `name`. FULLTEXT `name`. Fields: name, categoryPattern, download (object FLEXIBLE with isolateSystem, isolateCompany, isolateUser, permissions), upload (same shape plus maxFileSizeMB option<float> and allowedExtensions array<string>), createdAt. See §13.7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -725,8 +725,8 @@ export type TenantActorType =
 
 export interface TenantClaims extends Tenant {
   actorType: TenantActorType;
-  actorId: string; // user/token/app id; "0" for anonymous
-  jti: string; // unique token id (revocation §19.12)
+  actorId: string; // universal actor id — user id or api_token id (§12.8);
+  //                  "0" for anonymous
   exchangeable: boolean; // true only for actorType="user"
 }
 ```
@@ -1015,10 +1015,19 @@ interface RequestContext {
    general routes; `{ip}` for auth routes. Reads `ctx.tenant`. Plan rate limit
    and voucher modifier from Core cache; only the actor count requires a DB
    query. Delegates to `resolveRateLimitConfig()` (§12.10).
-2. `withAuth(options?)` — verifies the JWT, checks `jti` against the revocation
-   list (§19.12), runs the CORS check (§12.7) for `frontendUse` tokens,
-   populates `ctx.tenant` + `ctx.claims`. If no token, populates the anonymous
-   Tenant.
+2. `withAuth(options?)` — verifies the JWT, runs the CORS check (§12.7) for
+   `frontendUse` tokens, checks the actor's id against the actor-validity cache
+   (§12.8) for the tenant embedded in the JWT, and populates `ctx.tenant` +
+   `ctx.claims`. If no token, populates the anonymous Tenant.
+   - **Bearer format is always a JWT**, regardless of actor type. The JWT
+     carries the full Tenant + `actorId` (§19.10); verification is uniform
+     across user sessions, API tokens, and connected-app tokens. There is no
+     opaque-token path and no token-hash lookup.
+   - **`withAuth` MUST NOT query the database on authenticated requests.**
+     Validity is a single in-memory call: `isActorValid(tenant, actorId)`
+     (§12.8). Durable state (`api_token.revokedAt`, logout intent, role edits)
+     feeds the per-tenant partition at boot (lazily) and through explicit
+     mutations.
    - Options: `{ roles?, permissions?, requireAuthenticated? }`.
    - **Superusers bypass all role/permission checks.**
    - If `roles` is provided, `ctx.tenant.roles` must contain at least one.
@@ -1033,6 +1042,19 @@ interface RequestContext {
    entity count against plan limits + voucher modifiers.
    Plan/voucher/subscription data from Core cache; only the entity count
    requires a DB query. Delegates to `resolveEntityLimit()` (§12.10).
+
+**Middleware order matters — fail fast, pay the cost last.** Compose middleware
+from cheapest to most expensive. A request rejected by an earlier middleware
+never pays the cost of the later ones, so the order above is not alphabetical —
+it is a latency budget. `withRateLimit` and `withAuth` short-circuit on
+in-memory lookups (rate counters, actor-validity cache) and come first;
+`withPlanAccess` reads from the Core cache and comes next; `withEntityLimit`
+requires a DB count and comes last. **The slower the middleware, the later it
+must appear in the composition list.** An extremely slow middleware is any that
+queries the database without a caching mechanism — placing such a middleware
+before a cheaper one means every rejected request (unauthenticated,
+rate-limited, wrong role) still pays the DB round-trip. New middleware must be
+classified on the same axis before being inserted into the chain.
 
 **Auth routes (`/api/auth/*`) only use `withRateLimit`.** They still receive the
 synthesized anonymous `ctx.tenant` so downstream utilities keep the uniform
@@ -1055,7 +1077,7 @@ All of the following MUST be used — no ad-hoc reimplementations.
 | `server/utils/field-standardizer.ts`  | §12.5                                                                     |
 | `server/utils/field-validator.ts`     | §12.6                                                                     |
 | `server/utils/cors.ts`                | §12.7                                                                     |
-| `server/utils/token-revocation.ts`    | §12.8                                                                     |
+| `server/utils/actor-validity.ts`      | §12.8 — actor-validity cache (sole authority for `withAuth`)              |
 | `server/utils/fs.ts`                  | `getFS()` — shared `SurrealFS` singleton for §13                          |
 | `server/utils/tenant.ts`              | §9.3                                                                      |
 | `server/utils/token.ts`               | JWT create/verify via `@panva/jose`, embeds Tenant                        |
@@ -1255,21 +1277,139 @@ Enforces `api_token.frontendDomains` for `frontendUse = true` tokens (only for
 Tokens with `frontendUse = false` are strictly server-to-server: any request
 carrying a browser `Origin` for such a token is rejected outright.
 
-#### 12.8 Token revocation (`server/utils/token-revocation.ts`)
+#### 12.8 Actor-validity cache (`server/utils/actor-validity.ts`)
+
+`withAuth` (§11 step 2) answers "is this actor still allowed to act?" **from
+memory only** — no database query on the authenticated request path. The source
+of truth for live actors is a per-tenant in-memory cache registered through the
+centralized cache registry (§12.11) under
+`"actor-validity"::"<companyId>:<systemId>"`.
+
+**Tenant-scoped partitioning.** The cache is sharded by tenant key
+`"<companyId>:<systemId>"` so loading, eviction, and consistency work **per
+tenant** — a mutation in tenant A never touches tenant B's set, and a cold start
+loads only the tenants that actually receive traffic.
+
+**State.** Each partition is a plain `Set<string>` of actor ids:
 
 ```typescript
-export async function revokeJti(jti: string, reason: string): Promise<void>;
-export async function isJtiRevoked(jti: string): Promise<boolean>;
+// One Set per tenant — loaded on first access for that tenant.
+// Value: the universal `actorId` (user id or api_token id).
+export type ActorValiditySet = Set<string>;
 ```
 
-Keyed by `jti`. User-session JWTs use a small `token_revocation` table where
-rows TTL to the original `exp` — stays bounded automatically. Never-expiring
-tokens (`api_token.neverExpires=true`) use `api_token.revokedAt` directly (not
-the TTL table).
+An actor id IS valid iff it appears in its tenant's `Set`. Absence IS revocation
+— there is no "revoked" marker.
 
-`withAuth` performs revocation checks on **every** authenticated request
-(cache + single-row lookup keeps the overhead negligible relative to JWT
-verification).
+**Universal actor id.** Every authenticating bearer — user-session JWT, API
+token, connected-app token — is a JWT whose `actorId` claim is the only
+identifier the validity machinery needs. There is no token hash, no `jti`, no
+opaque envelope. Verification is uniform across actor types: decode the JWT,
+read `actorId` and the embedded Tenant, consult the cache for that `actorId` in
+that Tenant's `Set`.
+
+**Loader (per-tenant, lazy).** The first request arriving for a given
+`(companyId, systemId)` pair triggers a lazy load that hydrates the live
+`api_token` rows for that tenant into the partition:
+
+```sql
+SELECT id FROM api_token
+ WHERE companyId = $companyId AND systemId = $systemId
+   AND revokedAt IS NONE
+```
+
+User ids start absent for every partition. A user session is (re)established
+only by login; logout, role changes, and tenant removal evict it. After a cold
+start every user must log in again — this is by design, because logout and
+role-change eviction would otherwise be indistinguishable from an empty cache
+and could be silently bypassed by `refresh`.
+
+**Public API — single verification function:**
+
+```typescript
+// Fast, synchronous membership check used by withAuth and any other
+// validity consumer. Accepts the Tenant + actorId and returns a boolean.
+export function isActorValid(
+  tenant: { companyId: string; systemId: string },
+  actorId: string,
+): boolean;
+
+// Hydrates the tenant's partition on first access. withAuth awaits this
+// once per request before the synchronous isActorValid check.
+export async function ensureActorValidityLoaded(
+  tenant: { companyId: string; systemId: string },
+): Promise<void>;
+
+// Mutations — called from the route handlers that change the underlying
+// durable state, in the same request that performs the DB write.
+export async function rememberActor(
+  tenant: { companyId: string; systemId: string },
+  actorId: string,
+): Promise<void>;
+
+export async function forgetActor(
+  tenant: { companyId: string; systemId: string },
+  actorId: string,
+): Promise<void>;
+
+// Reload or clear a single tenant's partition (used after bulk operations
+// scoped to that tenant, e.g. data-deletion).
+export async function reloadTenant(
+  tenant: { companyId: string; systemId: string },
+): Promise<void>;
+```
+
+**Rules.**
+
+1. **`withAuth` is the only primary consumer** and uses `isActorValid` +
+   `ensureActorValidityLoaded` exclusively. It never calls `getDb()`, never
+   issues `SELECT … FROM api_token`, and never reads `revokedAt` from the DB.
+   Other routes that need to validate a token passed as a query param (e.g.
+   signed download links) use the same pair.
+2. **Every durable change that affects validity updates the cache in the same
+   request's response path, right after the DB mutation:**
+   - Login — `rememberActor(tenant, user.id)` after the System API Token is
+     issued; `tenant` is the tenant embedded in the new JWT.
+   - Logout — `POST /api/auth/logout` calls
+     `forgetActor(tenant,
+     claims.actorId)`.
+   - Exchange — `forgetActor(oldTenant, user.id)` then
+     `rememberActor(newTenant, user.id)` atomically around the new JWT issue.
+     The user moves from one partition to another; old sessions against the
+     previous tenant fail immediately.
+   - Refresh — no cache mutation. Refresh is an **extension** path (new `exp`,
+     same actor); it requires the actor id to already be in the partition and
+     fails with `401 auth.error.tokenRevoked` otherwise. A revoked, logged-out,
+     role-changed, or cold-started session must go through `login` again.
+   - Token create / connected-app create / OAuth authorize —
+     `rememberActor(tenant, token.id)` after the `CREATE api_token` returns.
+   - Token revoke / connected-app revoke — batched query sets
+     `revokedAt = time::now()` AND the handler calls
+     `forgetActor(tenant,
+     token.id)`.
+   - Role / permission change in `user_company_system` —
+     `forgetActor(tenant, userId)` so the next request forces a refresh that
+     rehydrates with fresh roles.
+   - User removed from a tenant (`user_company_system` delete) — same.
+   - User hard-deleted — iterate the user's tenant memberships and call
+     `forgetActor` on each, then evict the user's api_tokens from each of their
+     tenants.
+   - Data-deletion (§20.6) — after the scoped batched deletion, call
+     `reloadTenant(tenant)` for the affected `(companyId, systemId)` pair.
+   - Token-cleanup job (§16) — no cache mutation. Rows hard-deleted here had
+     `revokedAt` set for >90 days; they were already evicted via `forgetActor`
+     at revocation time.
+3. **`api_token.revokedAt` is the durable boot-time filter.** Hydration reads
+   `WHERE revokedAt IS NONE`; at runtime the cache is authoritative. Naturally
+   expired JWTs (`exp`) are rejected by JWT verification before reaching the
+   cache check.
+4. **Serverless caveat.** Per-instance memory means each worker holds its own
+   partitions. A mutation in instance A is not visible to instance B until the
+   next cold start or explicit reload. For tight revocation semantics in
+   multi-instance deployments, drive a broadcast channel (pub/sub, live query on
+   a dedicated `actor_validity_signal` row) that calls `reloadTenant` on
+   receipt. The API shape is the same; the broadcast is additive and lives
+   outside this spec.
 
 #### 12.9 Module Registry (`server/module-registry.ts`)
 
@@ -1517,14 +1657,15 @@ clearAllCacheForSlug(slug: string): void;
 7. **No `require()` or Node APIs.** The cache module uses standard JS only
    (§1.1.1), since it may be imported by isomorphic code.
 
-**Core caches registered at boot:**
+**Caches owned by the core platform:**
 
-| Slug     | Name                           | Loader                        | Invalidated by                                      |
-| -------- | ------------------------------ | ----------------------------- | --------------------------------------------------- |
-| `"core"` | `"data"`                       | `loadCoreData()` (§10.1)      | `Core.reload()` after any core entity mutation      |
-| `"core"` | `"front-data"`                 | `loadFrontCoreData()` (§10.2) | `FrontCore.reload()` after front-setting writes     |
-| `"core"` | `"jwt-secret"`                 | `loadJwtSecret()` (§token)    | `Core.reload()` (derived from settings)             |
-| `"core"` | `"sub:<companyId>:<systemId>"` | `loadSubscription()`          | `Core.reloadSubscription()` after billing mutations |
+| Slug               | Name                           | Registration      | Loader                        | Invalidated by                                                                      |
+| ------------------ | ------------------------------ | ----------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| `"core"`           | `"data"`                       | boot              | `loadCoreData()` (§10.1)      | `Core.reload()` after any core entity mutation                                      |
+| `"core"`           | `"front-data"`                 | boot              | `loadFrontCoreData()` (§10.2) | `FrontCore.reload()` after front-setting writes                                     |
+| `"core"`           | `"jwt-secret"`                 | boot              | `loadJwtSecret()` (§token)    | `Core.reload()` (derived from settings)                                             |
+| `"core"`           | `"sub:<companyId>:<systemId>"` | lazy (per tenant) | `loadSubscription()`          | `Core.reloadSubscription()` after billing mutations                                 |
+| `"actor-validity"` | `"<companyId>:<systemId>"`     | lazy (per tenant) | `loadActorValidityTenant()`   | Per-tenant: login / logout / exchange / token create / revoke / role change (§12.8) |
 
 Systems and frameworks register their own caches following the same pattern.
 
@@ -3590,14 +3731,16 @@ feature needs it, it goes on `oauth_identity` rows, AES-256-GCM-encrypted per
 
 #### 19.10 Tenant embedding in JWT
 
-Every System API Token is a JWT with signed claims:
+Every bearer accepted by `withAuth` is a JWT with signed claims. The same
+envelope is used for user sessions, API tokens, and connected-app tokens — there
+is no opaque/tokenHash path (§12.8):
 
 ```typescript
 {
   tenant: { systemId, companyId, systemSlug, roles, permissions },
   actorType: "user" | "api_token" | "connected_app",
-  actorId: string,
-  jti: string,                    // crypto.randomUUID()
+  actorId: string,                // user id or api_token id — the universal
+                                  //   actor id used by isActorValid (§12.8)
   exchangeable: boolean,          // true only for user tokens
   exp: number,                    // unix seconds; absent when neverExpires=true
   iat: number
@@ -3620,21 +3763,23 @@ Response: { success: true, data: { token: string, tenant: Tenant } }
 
 Backend steps:
 
-1. Verify JWT signature; check `revokedAt IS NONE` for its `jti` (rejects 401 if
-   revoked/expired).
-2. Load `claims.actorType` — **reject with 403 if not `"user"`.** App tokens and
-   manually created tokens (`exchangeable: false`) are bound for life to their
+1. `withAuth` has already verified the JWT and confirmed the actor is live in
+   the current tenant's partition (§12.8). No additional DB probe here.
+2. Read `claims.actorType` — **reject with 403 if not `"user"`.** API tokens and
+   connected-app tokens (`exchangeable: false`) are bound for life to their
    issue-time Tenant.
 3. Verify the user still belongs to target `companyId` (via `company_user`) and
    is still associated with target `systemId` (via `user_company_system`). Fail
    → 403.
 4. Load roles + permissions from that `user_company_system` row; resolve
    `systemSlug` from `systemId`.
-5. Revoke the old token (`revokedAt = time::now()` on the `jti` record) — atomic
-   with step 6 in the same batched query.
-6. Issue a **new JWT** with the new Tenant and a fresh `jti`, using the
-   remaining lifetime of the previous token (stay-logged-in semantics carry over
-   but are not extended).
+5. Issue a **new JWT** with the new Tenant, using the remaining lifetime of the
+   previous token (stay-logged-in semantics carry over but are not extended).
+6. Update the actor-validity cache (§12.8): `forgetActor(oldTenant,
+   user.id)`
+   then `rememberActor(newTenant, user.id)`. Any request bearing the previous
+   JWT now fails at `withAuth` because the user id is no longer in the old
+   partition.
 7. Return the new token.
 
 **Frontend:** `useAuth` exposes `exchangeTenant(companyId, systemId)` which
@@ -3672,22 +3817,33 @@ Companies page "Access" button (§20.7) is the UI entry point.
 
 #### 19.12 Token revocation lifecycle
 
-Revocation uses `jti` (not token hash), so it works for freshly minted user
-tokens as well as persisted `api_token` / connected-app tokens.
+Revocation is driven by the actor-validity cache (§12.8). `withAuth` consults
+the cache only; there is no per-request DB probe for `revokedAt`.
 
-- `api_token` records persist `jti` (see `0015_create_api_token`). Deleting a
-  token from the Tokens page or revoking a connected app from the Connected Apps
-  page sets `revokedAt = time::now()` in a single batched query. `withAuth`
-  rejects any JWT whose `jti` maps to a row with `revokedAt IS NOT NONE`.
-- **User-session JWTs** (login / exchange) use the `token_revocation` TTL table
-  (§12.8). Exchange invalidates the prior session token by `jti`. Logout
-  invalidates the current session token.
+- **`api_token` records persist `revokedAt`**. Revocation sets
+  `revokedAt = time::now()` in a single batched query AND, in the same request's
+  response path, calls `forgetActor(tenant, token.id)`. The underlying bearer —
+  a JWT embedding the token id as `actorId` — fails at `withAuth` on the very
+  next call because the id is no longer in the tenant's partition.
+- **User-session JWTs** (login / exchange / refresh) are authorized by the
+  user's id in the tenant's partition. Login calls
+  `rememberActor(tenant, user.id)`. Logout (`POST /api/auth/logout`) calls
+  `forgetActor(tenant, claims.actorId)`. Exchange moves the user from the old
+  tenant's partition to the new one (§19.11 step 6). The cache is the single
+  source of truth.
+- **Role / membership changes evict.** Any mutation to
+  `user_company_system.roles`, or deletion of a `user_company_system` row, calls
+  `forgetActor(tenant, userId)` in the same request handler after the batched DB
+  update. The user's next request is rejected by `withAuth` and they must log in
+  again; `login` pulls the fresh roles/permissions from the DB and re-adds the
+  id to the cache.
 - **Deletion → revocation guarantee.** Any deletion of an `api_token` or
   `connected_app` sets `revokedAt` on the underlying `api_token` in the same
-  batched query that removes the `connected_app` record. Rows stay for 90-day
-  audit, then `server/jobs/token-cleanup.ts` hard-deletes them. Third parties
-  who hold the raw bearer value cannot continue calling the API after the user
-  revokes.
+  batched query that removes the `connected_app` record AND calls
+  `forgetActor(tenant, token.id)` in memory. Rows stay for 90-day audit, then
+  `server/jobs/token-cleanup.ts` hard-deletes them and calls `reloadTenant` on
+  every affected tenant. Third parties who hold a bearer for a revoked token
+  cannot continue calling the API.
 
 #### 19.13 Entity Channels
 
@@ -4300,8 +4456,9 @@ carries the Tenant of that (company, system) and is **not exchangeable**
   appears.
 - Backend re-validates: `neverExpires` XOR `expiresAt`; `frontendUse` implies ≥
   1 frontend domain.
-- **On success, a modal displays the raw token once** with a copy button and a
-  warning that it cannot be shown again.
+- **On success, a modal displays the issued JWT once** (§19.10 — `actorId` is
+  the new `api_token` row id) with a copy button and a warning that it cannot be
+  shown again.
 
 **Delete token** — `DeleteButton` on each row with confirmation. Calls
 `DELETE /api/tokens` which sets `revokedAt` on the `api_token` row (§19.12),
@@ -4313,17 +4470,19 @@ date or a "Never expires" badge, a "Frontend" badge with the domain count when
 
 ##### 21.2.1 `ApiToken` contract (rules-bearing)
 
+The bearer issued for an `api_token` row is a JWT (§19.10) whose `actorId` claim
+is the row id. Verification is uniform with user sessions — there is no token
+hash, no `jti`, no opaque envelope.
+
 ```typescript
 export interface ApiToken {
-  id: string;
+  id: string; // universal actor id (§12.8)
   userId: string;
-  tenant: Tenant; // source of truth for scope (§9)
+  tenant: Tenant; // source of truth for scope (§9); duplicated into JWT claims
   companyId: string; // mirrors tenant.companyId — denormalized for indexing
   systemId: string; // mirrors tenant.systemId — denormalized for indexing
   name: string;
   description?: string;
-  tokenHash: string; // stored hashed; raw shown once
-  jti: string; // unique — used for revocation (§19.12)
   permissions: string[]; // duplicated into tenant.permissions at issue time
   monthlySpendLimit?: number;
   maxOperationCount?: Record<string, number>; // per-resourceKey operation count cap
@@ -5060,11 +5219,12 @@ access to a user's data. **This is not social login.**
    Backend:
    - Resolves `systemId` from `systemSlug`.
    - Creates `connected_app` (UI-facing metadata).
-   - Creates `api_token` (the actual bearer credential) linked to the
-     authorizing user + company + system with the granted permissions,
-     `exchangeable: false`, embedded Tenant.
-   - Returns the raw token **once**; only its SHA-256 hash is stored in
-     `api_token.tokenHash`.
+   - Creates `api_token` linked to the authorizing user + company + system with
+     the granted permissions, `exchangeable: false`, embedded Tenant. The token
+     id is the universal actor id (§12.8).
+   - Issues a JWT (§19.10) whose `actorId` is the `api_token` id and returns it
+     **once** as the connected-app bearer. Only the `api_token` row persists;
+     there is no raw-bearer column.
    - Page posts back:
      `window.opener.postMessage({ token },
      redirectOrigin); window.close();`.
@@ -5085,8 +5245,10 @@ sets `revokedAt` on the underlying `api_token` (§19.12).
 Users can also create API tokens via the Tokens menu (§21.2). Each token has a
 name, description, selected granular permissions, optional spend limit, optional
 expiry (mutually exclusive with `neverExpires`), optional `frontendUse` +
-`frontendDomains`. The raw value is shown once and never stored — only its
-SHA-256 hash.
+`frontendDomains`. On create, the backend issues a JWT (§19.10) whose `actorId`
+is the new `api_token` row id and returns it once; only the row itself persists.
+The bearer cannot be rebuilt server-side — a lost token is revoked and re-issued
+rather than recovered.
 
 ### 25. Terms of Acceptance (LGPD)
 

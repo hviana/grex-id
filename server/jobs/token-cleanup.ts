@@ -19,17 +19,21 @@ export function startTokenCleanup(): void {
       const db = await getDb();
 
       const result = await db.query<
-        [{ count: number }[], { count: number }[]]
+        [unknown, { count: number }[], { count: number }[]]
       >(
         `LET $cutoff = time::now() - 90d;
          DELETE FROM api_token WHERE revokedAt IS NOT NONE AND revokedAt < $cutoff RETURN count() AS count;
          DELETE FROM connected_app WHERE apiTokenId NOT IN (SELECT VALUE id FROM api_token) RETURN count() AS count;`,
       );
 
-      const tokensDeleted = result[0]?.[0]?.count ?? 0;
-      const appsDeleted = result[1]?.[0]?.count ?? 0;
+      const tokensDeleted = result[1]?.[0]?.count ?? 0;
+      const appsDeleted = result[2]?.[0]?.count ?? 0;
 
       if (tokensDeleted > 0 || appsDeleted > 0) {
+        // No actor-validity touch: rows hard-deleted here had
+        // `revokedAt IS NOT NONE` for >90 days, so `forgetActor` was
+        // already called on each at revocation time (§12.8). The in-memory
+        // partitions do not hold these ids.
         console.log(
           `[token-cleanup] Removed ${tokensDeleted} revoked tokens (>${REVOKED_OLDER_THAN_DAYS}d) and ${appsDeleted} orphaned connected apps.`,
         );

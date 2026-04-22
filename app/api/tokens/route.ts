@@ -3,8 +3,9 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
-import { generateSecureToken, hashToken } from "@/server/utils/token";
-import { revokeToken } from "@/server/db/queries/tokens";
+import { createTenantToken } from "@/server/utils/token";
+import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
+import type { ApiToken } from "@/src/contracts/token";
 import type { Tenant } from "@/src/contracts/tenant";
 
 async function getHandler(req: Request, ctx: RequestContext) {
@@ -16,8 +17,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const bindings: Record<string, unknown> = {};
   let query =
     `SELECT id, name, description, permissions, monthlySpendLimit, maxOperationCount,
-            neverExpires, expiresAt, frontendUse, frontendDomains,
-            jti, createdAt
+            neverExpires, expiresAt, frontendUse, frontendDomains, createdAt
      FROM api_token WHERE revokedAt IS NONE`;
   const conditions: string[] = [];
 
@@ -30,7 +30,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     bindings.companyId = rid(companyId);
   }
 
-  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
+  if (conditions.length) query += " AND " + conditions.join(" AND ");
   query += " ORDER BY createdAt DESC LIMIT 50";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
@@ -67,7 +67,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Validate neverExpires XOR expiresAt
   if (neverExpires && expiresAt) {
     return Response.json(
       {
@@ -81,7 +80,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Validate frontendUse requires domains
   const useFrontend = frontendUse === true;
   const domains: string[] = frontendDomains ?? [];
   if (useFrontend && domains.length === 0) {
@@ -97,11 +95,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const rawToken = generateSecureToken();
-  const tokenHash = await hashToken(rawToken);
-  const jti = crypto.randomUUID();
-
-  // Build tenant from current context
   const tenant: Tenant = {
     systemId: ctx.tenant.systemId,
     companyId: ctx.tenant.companyId,
@@ -111,7 +104,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   };
 
   const db = await getDb();
-  const result = await db.query(
+  const result = await db.query<[ApiToken[]]>(
     `CREATE api_token SET
       userId = $userId,
       companyId = $companyId,
@@ -119,8 +112,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       tenant = $tenant,
       name = $name,
       description = $description,
-      tokenHash = $tokenHash,
-      jti = $jti,
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
       maxOperationCount = $maxOperationCount,
@@ -135,8 +126,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       tenant,
       name,
       description: description ?? undefined,
-      tokenHash,
-      jti,
       permissions: permissions ?? [],
       monthlySpendLimit: monthlySpendLimit ?? undefined,
       maxOperationCount: maxOperationCount ?? undefined,
@@ -147,13 +136,49 @@ async function postHandler(req: Request, ctx: RequestContext) {
     },
   );
 
+  const createdToken = result[0]?.[0];
+  if (!createdToken) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "ERROR", message: "common.error.generic" },
+      },
+      { status: 500 },
+    );
+  }
+
+  // Issue the JWT bearer for this api_token. The actor id is the row id
+  // (§12.8); exp comes from expiresAt or a far-future date for
+  // never-expires tokens.
+  const far = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+  const exp = createdToken.neverExpires
+    ? far
+    : createdToken.expiresAt
+    ? new Date(createdToken.expiresAt)
+    : far;
+
+  const jwt = await createTenantToken(
+    {
+      ...tenant,
+      actorType: "api_token",
+      actorId: String(createdToken.id),
+      exchangeable: false,
+      frontendUse: createdToken.frontendUse,
+      frontendDomains: createdToken.frontendDomains ?? [],
+    },
+    false,
+    exp,
+  );
+
+  await rememberActor(tenant, String(createdToken.id));
+
   return Response.json(
-    { success: true, data: { token: rawToken } },
+    { success: true, data: { token: jwt } },
     { status: 201 },
   );
 }
 
-async function deleteHandler(req: Request, ctx: RequestContext) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
@@ -167,8 +192,24 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Soft-delete: set revokedAt instead of hard-deleting
-  await revokeToken(id);
+  // Resolve tenant + revoke in a single batched query (§7.2).
+  const db = await getDb();
+  const result = await db.query<
+    [{ companyId: string; systemId: string }[], unknown]
+  >(
+    `SELECT companyId, systemId FROM $id LIMIT 1;
+     UPDATE $id SET revokedAt = time::now() WHERE revokedAt IS NONE;`,
+    { id: rid(id) },
+  );
+
+  const row = result[0]?.[0];
+  if (row?.companyId && row?.systemId) {
+    await forgetActor(
+      { companyId: String(row.companyId), systemId: String(row.systemId) },
+      id,
+    );
+  }
+
   return Response.json({ success: true });
 }
 

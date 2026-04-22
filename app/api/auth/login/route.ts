@@ -11,6 +11,7 @@ import Core from "@/server/utils/Core";
 import { decryptField } from "@/server/utils/crypto";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { getDb, rid } from "@/server/db/connection";
+import { rememberActor } from "@/server/utils/actor-validity";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
 
 function withAuthRateLimit() {
@@ -229,17 +230,20 @@ async function handler(
     tenant.permissions = ["*"];
   }
 
-  const jti = crypto.randomUUID();
   const systemToken = await createTenantToken(
     {
       ...tenant,
       actorType: "user",
       actorId: String(user.id),
-      jti,
       exchangeable: true,
     },
     stayLoggedIn ?? false,
   );
+
+  // Register the user in the tenant's actor-validity partition (§12.8).
+  // This is the only signal withAuth consults on subsequent requests.
+  await rememberActor(tenant, String(user.id));
+
   return Response.json({
     success: true,
     data: {

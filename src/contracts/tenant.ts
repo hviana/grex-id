@@ -14,8 +14,12 @@ export type TenantActorType =
 
 export interface TenantClaims extends Tenant {
   actorType: TenantActorType;
-  actorId: string; // user/token/app id; "0" for anonymous
-  jti: string; // unique token id for revocation
+  actorId: string; // universal actor id — user id or api_token id; "0" for anonymous
   exchangeable: boolean; // true only for actorType="user"
-  exp?: number; // unix seconds — present on JWT-decoded claims; absent for API tokens
+  exp?: number; // unix seconds — present on JWT-decoded claims
+  // Frontend-bearer CORS policy (§12.7). Only present on tokens issued for
+  // non-user actors (api_token / connected_app). Embedded in the JWT so
+  // withAuth can enforce CORS without a DB read.
+  frontendUse?: boolean;
+  frontendDomains?: string[];
 }

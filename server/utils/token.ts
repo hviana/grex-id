@@ -1,7 +1,7 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
 import { getCache } from "./cache.ts";
-import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
+import type { TenantClaims } from "@/src/contracts/tenant.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/token.ts");
@@ -22,11 +22,16 @@ async function getJwtSecret(): Promise<Uint8Array> {
 }
 
 /**
- * Creates a tenant-bearing JWT.
- * All tokens now embed the full Tenant + actor metadata + jti for revocation.
+ * Creates the universal tenant-bearing JWT used by every authenticating
+ * actor (§19.10). The claims include the full Tenant, the `actorId` used
+ * by the actor-validity cache (§12.8), and — for non-user actors — the
+ * CORS policy (`frontendUse`, `frontendDomains`) so `withAuth` does not
+ * need a DB read.
  *
- * @param expiresAt - When provided, uses this explicit expiry (for token exchange
- *   lifetime carry-over per §19.11). Otherwise calculates from Core settings.
+ * @param expiresAt - When provided, uses this explicit expiry (for token
+ *   exchange lifetime carry-over per §19.11, or for `api_token` expiries
+ *   that are configured on the row). Otherwise calculates from Core
+ *   settings.
  */
 export async function createTenantToken(
   claims: TenantClaims,
@@ -44,8 +49,9 @@ export async function createTenantToken(
     },
     actorType: claims.actorType,
     actorId: claims.actorId,
-    jti: claims.jti,
     exchangeable: claims.exchangeable,
+    frontendUse: claims.frontendUse,
+    frontendDomains: claims.frontendDomains,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -92,24 +98,21 @@ export async function verifyTenantToken(
     permissions: tenant.permissions ?? [],
     actorType: (payload.actorType as TenantClaims["actorType"]) ?? "user",
     actorId: (payload.actorId as string) ?? "0",
-    jti: (payload.jti as string) ?? "",
     exchangeable: (payload.exchangeable as boolean) ?? false,
     exp: payload.exp,
+    frontendUse: payload.frontendUse as boolean | undefined,
+    frontendDomains: payload.frontendDomains as string[] | undefined,
   };
 }
 
+/**
+ * Cryptographically random 32-byte hex string. Used for non-JWT flows —
+ * e.g. verification-request confirmation URLs (§12.13).
+ */
 export function generateSecureToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export async function hashToken(token: string): Promise<string> {
-  const encoded = new TextEncoder().encode(token);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
-  return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }

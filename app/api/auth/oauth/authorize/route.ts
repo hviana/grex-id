@@ -4,8 +4,11 @@ import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { getDb, rid } from "@/server/db/connection";
-import { generateSecureToken, hashToken } from "@/server/utils/token";
+import { createTenantToken } from "@/server/utils/token";
 import { standardizeField } from "@/server/utils/field-standardizer";
+import { rememberActor } from "@/server/utils/actor-validity";
+import type { ApiToken } from "@/src/contracts/token";
+import type { Tenant } from "@/src/contracts/tenant";
 
 function withAuthRateLimit() {
   return async (
@@ -28,7 +31,8 @@ function withAuthRateLimit() {
  * POST /api/auth/oauth/authorize
  *
  * Called by the OAuth authorize page after the user approves access.
- * Creates a connected_app record and an api_token for the requesting app.
+ * Creates a connected_app + its backing api_token in a single batched
+ * query, then returns the JWT (§19.10) the client will use as the bearer.
  */
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const claims = ctx.claims;
@@ -68,7 +72,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   const db = await getDb();
 
-  // Resolve systemId from slug
   const sysResult = await db.query<[{ id: string }[]]>(
     "SELECT id FROM system WHERE slug = $slug LIMIT 1",
     { slug: standardizeField("slug", systemSlug) },
@@ -91,33 +94,49 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     : [];
 
   const userId = claims.actorId;
-  const rawToken = generateSecureToken();
-  const tokenHash = await hashToken(rawToken);
 
-  // Single batched query: create connected_app + api_token
-  const result = await db.query<[unknown, unknown, Record<string, unknown>[]]>(
-    `LET $app = CREATE connected_app SET
-       name = $clientName,
-       companyId = $companyId,
-       systemId = $systemId,
-       permissions = $permissions,
-       monthlySpendLimit = $monthlySpendLimit,
-       maxOperationCount = $maxOperationCount;
-     CREATE api_token SET
+  const resolvedSlug = standardizeField("slug", systemSlug);
+  const tokenTenant: Tenant = {
+    systemId: String(systemId),
+    companyId: String(companyId),
+    systemSlug: resolvedSlug,
+    roles: [],
+    permissions: grantedPermissions,
+  };
+
+  // Single batched query (§7.2): create api_token + connected_app and
+  // return the fully-resolved rows.
+  const result = await db.query<
+    [unknown, unknown, ApiToken[], Record<string, unknown>[]]
+  >(
+    `LET $token = CREATE api_token SET
        userId = $userId,
        companyId = $companyId,
        systemId = $systemId,
+       tenant = $tenant,
        name = $clientName,
        description = $redirectOrigin,
-       tokenHash = $tokenHash,
        permissions = $permissions,
        monthlySpendLimit = $monthlySpendLimit,
-       maxOperationCount = $maxOperationCount;
+       maxOperationCount = $maxOperationCount,
+       neverExpires = true,
+       frontendUse = false,
+       frontendDomains = [];
+     LET $app = CREATE connected_app SET
+       name = $clientName,
+       companyId = $companyId,
+       systemId = $systemId,
+       permissions = $permissions,
+       monthlySpendLimit = $monthlySpendLimit,
+       maxOperationCount = $maxOperationCount,
+       apiTokenId = $token[0].id;
+     SELECT * FROM $token[0].id;
      SELECT * FROM $app[0].id;`,
     {
       clientName,
-      companyId: rid(companyId),
-      systemId: rid(systemId),
+      companyId: rid(String(companyId)),
+      systemId: rid(String(systemId)),
+      tenant: tokenTenant,
       permissions: grantedPermissions,
       monthlySpendLimit: monthlySpendLimit
         ? Number(monthlySpendLimit)
@@ -125,14 +144,39 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       maxOperationCount: maxOperationCount ?? undefined,
       userId: rid(userId),
       redirectOrigin: redirectOrigin ?? "",
-      tokenHash,
     },
   );
 
-  const app = result[2]?.[0];
+  const createdToken = result[2]?.[0];
+  const app = result[3]?.[0];
+  if (!createdToken) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "ERROR", message: "common.error.generic" },
+      },
+      { status: 500 },
+    );
+  }
+
+  const farFuture = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+  const jwt = await createTenantToken(
+    {
+      ...tokenTenant,
+      actorType: "connected_app",
+      actorId: String(createdToken.id),
+      exchangeable: false,
+      frontendUse: false,
+      frontendDomains: [],
+    },
+    false,
+    farFuture,
+  );
+
+  await rememberActor(tokenTenant, String(createdToken.id));
 
   return Response.json(
-    { success: true, data: { token: rawToken, app } },
+    { success: true, data: { token: jwt, app } },
     { status: 201 },
   );
 }

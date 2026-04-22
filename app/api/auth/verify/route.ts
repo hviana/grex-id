@@ -18,6 +18,7 @@ import {
 import { runLifecycleHooks } from "@/server/module-registry";
 import { getDb, rid } from "@/server/db/connection";
 import { createTenantToken } from "@/server/utils/token";
+import { rememberActor } from "@/server/utils/actor-validity";
 
 interface LeadUpdatePayload {
   name?: string;
@@ -279,11 +280,12 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
           ...tenant,
           actorType: "user",
           actorId: String(user.id),
-          jti: crypto.randomUUID(),
           exchangeable: true,
         },
         stayLoggedIn,
       );
+
+      await rememberActor(tenant, String(user.id));
 
       return Response.json({
         success: true,

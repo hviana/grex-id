@@ -4,7 +4,7 @@ import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { createTenantToken } from "@/server/utils/token";
-import { isJtiRevoked } from "@/server/utils/token-revocation";
+import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
 import { getDb, rid } from "@/server/db/connection";
 
 function withAuthRateLimit() {
@@ -47,16 +47,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  // Check current token not revoked
-  if (claims.jti && (await isJtiRevoked(claims.jti))) {
-    return Response.json(
-      {
-        success: false,
-        error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" },
-      },
-      { status: 401 },
-    );
-  }
+  // Note: withAuth has already validated the current token against the
+  // actor-validity cache (§12.8). No additional revocation check here.
 
   const body = await req.json();
   const { companyId, systemId } = body;
@@ -74,8 +66,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const newJti = crypto.randomUUID();
   const db = await getDb();
+  const oldTenant = {
+    companyId: String(claims.companyId),
+    systemId: String(claims.systemId),
+  };
 
   // Superuser company-access bypass (§19.11.1)
   const isSuperuser = claims.roles.includes("superuser");
@@ -83,20 +78,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   if (isSuperuser) {
     // Verify company_system association exists and resolve slug
     const suResult = await db.query<
-      [{ id: string }[], { slug: string }[], unknown[]]
+      [{ id: string }[], { slug: string }[]]
     >(
       `SELECT id FROM company_system
          WHERE companyId = $companyId AND systemId = $systemId LIMIT 1;
-       SELECT slug FROM system WHERE id = $systemId LIMIT 1;
-       INSERT INTO token_revocation (jti, reason, expiresAt) VALUES ($oldJti, "exchanged", $exp)
-         ON DUPLICATE KEY UPDATE reason = "exchanged";`,
+       SELECT slug FROM system WHERE id = $systemId LIMIT 1;`,
       {
         companyId: rid(companyId),
         systemId: rid(systemId),
-        oldJti: claims.jti,
-        exp: claims.exp
-          ? new Date(claims.exp * 1000)
-          : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       },
     );
 
@@ -111,7 +100,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     }
 
     const systemSlug = suResult[1]?.[0]?.slug ?? "core";
-
     const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
 
     const newToken = await createTenantToken(
@@ -123,12 +111,20 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
         permissions: ["*"],
         actorType: "user",
         actorId: claims.actorId,
-        jti: newJti,
         exchangeable: true,
       },
       false,
       oldExp,
     );
+
+    // Move the user id from the old tenant's partition to the new one
+    // (§12.8, §19.11 step 6).
+    const newTenant = {
+      companyId: String(companyId),
+      systemId: String(systemId),
+    };
+    await forgetActor(oldTenant, String(claims.actorId));
+    await rememberActor(newTenant, String(claims.actorId));
 
     return Response.json({
       success: true,
@@ -145,13 +141,12 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     });
   }
 
-  // Batch: verify membership + resolve slug/permissions + revoke old token — single query (§7.2, §19.11)
+  // Batch: verify membership + resolve slug/permissions — single query (§7.2, §19.11)
   const result = await db.query<
     [
       { id: string; roles: string[] }[],
       { slug: string }[],
       { permissions: string[] }[],
-      unknown[],
     ]
   >(
     `SELECT id, roles FROM user_company_system
@@ -159,17 +154,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
        LIMIT 1;
      SELECT slug FROM system WHERE id = $systemId LIMIT 1;
      SELECT permissions FROM role WHERE id IN (SELECT VALUE roles FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);
-     INSERT INTO token_revocation (jti, reason, expiresAt) VALUES ($oldJti, "exchanged", $exp)
-       ON DUPLICATE KEY UPDATE reason = "exchanged";`,
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
     {
       userId: rid(claims.actorId),
       companyId: rid(companyId),
       systemId: rid(systemId),
-      oldJti: claims.jti,
-      exp: claims.exp
-        ? new Date(claims.exp * 1000)
-        : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     },
   );
 
@@ -201,12 +190,20 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       permissions,
       actorType: "user",
       actorId: claims.actorId,
-      jti: newJti,
       exchangeable: true,
     },
     false,
     oldExp,
   );
+
+  // Move the user id from the old tenant's partition to the new one
+  // (§12.8, §19.11 step 6).
+  const newTenant = {
+    companyId: String(companyId),
+    systemId: String(systemId),
+  };
+  await forgetActor(oldTenant, String(claims.actorId));
+  await rememberActor(newTenant, String(claims.actorId));
 
   return Response.json({
     success: true,

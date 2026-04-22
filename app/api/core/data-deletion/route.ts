@@ -7,6 +7,7 @@ import {
   verifyUserPassword,
 } from "@/server/db/queries/data-deletion";
 import { getDb } from "@/server/db/connection";
+import { reloadTenant } from "@/server/utils/actor-validity";
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
@@ -83,6 +84,14 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   await deleteCompanySystemData(companyId, systemId, systemSlug);
+
+  // Rebuild this tenant's actor-validity partition — the batched deletion
+  // removed api_tokens and user_company_system rows for (companyId,
+  // systemId) (§12.8 rule 2, §20.6.1).
+  await reloadTenant({
+    companyId: String(companyId),
+    systemId: String(systemId),
+  });
 
   return Response.json({
     success: true,

@@ -3,7 +3,10 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { createTenantToken, verifyTenantToken } from "@/server/utils/token";
-import { isJtiRevoked } from "@/server/utils/token-revocation";
+import {
+  ensureActorValidityLoaded,
+  isActorValid,
+} from "@/server/utils/actor-validity";
 import { getDb, rid } from "@/server/db/connection";
 
 function withAuthRateLimit() {
@@ -39,9 +42,12 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   try {
     const claims = await verifyTenantToken(systemToken);
+    await ensureActorValidityLoaded(claims);
 
-    // Check if token has been revoked
-    if (claims.jti && (await isJtiRevoked(claims.jti))) {
+    // Cache-only validity check (§12.8). Refresh extends the lifetime of
+    // an already-valid bearer; it is not a recovery path. A user whose id
+    // was evicted (logout, role change, tenant removal) must log in again.
+    if (!claims.actorId || !isActorValid(claims, String(claims.actorId))) {
       return Response.json(
         {
           success: false,
@@ -51,13 +57,28 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    const db = await getDb();
+    // Only user sessions can refresh here — API-token / connected-app JWTs
+    // are issued with their final expiry and do not use this endpoint.
+    if (claims.actorType !== "user") {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "auth.error.refreshNotAllowed",
+          },
+        },
+        { status: 403 },
+      );
+    }
 
-    // Always fetch user first
+    // Fetch the fields the client needs to re-hydrate its UI state. Roles
+    // and permissions are preserved from the current claims — role changes
+    // evict the user (§12.8) and would have rejected this refresh.
+    const db = await getDb();
     const userResult = await db.query<
       [{
         id: string;
-        email: string;
         stayLoggedIn: boolean;
         roles: string[];
         twoFactorEnabled: boolean;
@@ -65,7 +86,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       }[]]
     >(
       `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profile, channels
-         FROM user WHERE id = $userId LIMIT 1
+         FROM $userId LIMIT 1
          FETCH profile, channels;`,
       { userId: rid(claims.actorId) },
     );
@@ -81,42 +102,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Resolve updated claims
-    let updatedClaims = claims;
-    if (claims.actorType === "user") {
-      const isSuperuser = (user.roles ?? []).includes("superuser");
-
-      if (isSuperuser) {
-        updatedClaims = { ...claims, roles: ["superuser"], permissions: ["*"] };
-      } else if (claims.systemId !== "0" && claims.companyId !== "0") {
-        const membershipResult = await db.query<
-          [{ roles: string[] }[], { permissions: string[] }[]]
-        >(
-          `SELECT roles FROM user_company_system
-             WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-             LIMIT 1;
-           SELECT permissions FROM role WHERE systemId = $systemId AND id IN (SELECT VALUE roles FROM user_company_system
-             WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
-          {
-            userId: rid(claims.actorId),
-            companyId: rid(claims.companyId),
-            systemId: rid(claims.systemId),
-          },
-        );
-        const roles = membershipResult[0]?.[0]?.roles ?? claims.roles;
-        const permissions = [
-          ...new Set(
-            membershipResult[1]?.flatMap((r) => r.permissions ?? []) ?? [],
-          ),
-        ];
-        updatedClaims = { ...claims, roles, permissions };
-      }
-    }
-
-    // Issue new token with same tenant but fresh expiry
-    const newJti = crypto.randomUUID();
     const newToken = await createTenantToken(
-      { ...updatedClaims, jti: newJti },
+      claims,
       user.stayLoggedIn ?? false,
     );
 

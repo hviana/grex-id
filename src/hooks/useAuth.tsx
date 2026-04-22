@@ -95,7 +95,6 @@ function extractClaims(token: string): TenantClaims | null {
     permissions: t?.permissions ?? [],
     actorType: (payload.actorType as TenantClaims["actorType"]) ?? "user",
     actorId: (payload.actorId as string) ?? "0",
-    jti: (payload.jti as string) ?? "",
     exchangeable: (payload.exchangeable as boolean) ?? false,
   };
 }
@@ -191,6 +190,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    const currentToken = getCookie(TOKEN_COOKIE_NAME);
+    if (currentToken) {
+      // Fire-and-forget: server removes the user from the actor-validity
+      // cache (§12.8). Failure does not block the client-side teardown.
+      fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+      }).catch(() => {});
+    }
     removeCookie(TOKEN_COOKIE_NAME);
     setState({
       user: null,

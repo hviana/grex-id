@@ -16,9 +16,11 @@ import {
 import Core from "@/server/utils/Core";
 import { checkFileAccess } from "@/server/utils/file-access-guard";
 import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
-import { hashToken, verifyTenantToken } from "@/server/utils/token";
-import { findTokenByHash } from "@/server/db/queries/tokens";
-import { isJtiRevoked } from "@/server/utils/token-revocation";
+import { verifyTenantToken } from "@/server/utils/token";
+import {
+  ensureActorValidityLoaded,
+  isActorValid,
+} from "@/server/utils/actor-validity";
 import { getAnonymousTenant } from "@/server/utils/tenant";
 
 const DEFAULT_MIME = "application/octet-stream";
@@ -28,43 +30,18 @@ async function resolveTokenParam(
   tokenStr: string,
 ): Promise<{ tenant: Tenant; claims?: TenantClaims } | null> {
   try {
-    if (tokenStr.split(".").length === 3) {
-      const claims = await verifyTenantToken(tokenStr);
-      if (claims.jti && (await isJtiRevoked(claims.jti))) return null;
-      return {
-        tenant: {
-          systemId: claims.systemId,
-          companyId: claims.companyId,
-          systemSlug: claims.systemSlug,
-          roles: claims.roles,
-          permissions: claims.permissions,
-        },
-        claims,
-      };
-    }
+    const claims = await verifyTenantToken(tokenStr);
+    if (!claims.actorId) return null;
 
-    const tokenHash = await hashToken(tokenStr);
-    const apiToken = await findTokenByHash(tokenHash);
-    if (!apiToken || apiToken.revokedAt) return null;
-    if (
-      !apiToken.neverExpires &&
-      apiToken.expiresAt &&
-      new Date(apiToken.expiresAt).getTime() <= Date.now()
-    ) return null;
+    await ensureActorValidityLoaded(claims);
+    if (!isActorValid(claims, claims.actorId)) return null;
 
-    const tenant: Tenant = apiToken.tenant ?? {
-      systemId: String(apiToken.systemId),
-      companyId: String(apiToken.companyId),
-      systemSlug: "",
-      roles: [],
-      permissions: apiToken.permissions ?? [],
-    };
-    const claims: TenantClaims = {
-      ...tenant,
-      actorType: "api_token",
-      actorId: String(apiToken.id),
-      jti: apiToken.jti ?? "",
-      exchangeable: false,
+    const tenant: Tenant = {
+      systemId: claims.systemId,
+      companyId: claims.companyId,
+      systemSlug: claims.systemSlug,
+      roles: claims.roles,
+      permissions: claims.permissions,
     };
     return { tenant, claims };
   } catch {

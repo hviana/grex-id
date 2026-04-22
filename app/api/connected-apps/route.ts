@@ -3,11 +3,12 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { getDb, rid } from "@/server/db/connection";
-import { generateSecureToken, hashToken } from "@/server/utils/token";
+import { createTenantToken } from "@/server/utils/token";
+import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
+import type { ApiToken } from "@/src/contracts/token";
 import type { Tenant } from "@/src/contracts/tenant";
 
-async function getHandler(req: Request, ctx: RequestContext) {
-  const url = new URL(req.url);
+async function getHandler(_req: Request, ctx: RequestContext) {
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
@@ -33,8 +34,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 /**
- * POST — creates a connected_app AND its backing api_token in one batched query.
- * The connected_app is linked to the api_token via apiTokenId.
+ * POST — creates a connected_app AND its backing api_token in one batched
+ * query, then issues a JWT (§19.10) whose `actorId` is the api_token id.
  */
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
@@ -53,11 +54,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const rawToken = generateSecureToken();
-  const tokenHash = await hashToken(rawToken);
-  const jti = crypto.randomUUID();
-
-  // Build tenant
   const tenant: Tenant = {
     systemId: ctx.tenant.systemId,
     companyId: ctx.tenant.companyId,
@@ -68,7 +64,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const db = await getDb();
   const result = await db.query<
-    [unknown, unknown, Record<string, unknown>[]]
+    [unknown, unknown, Record<string, unknown>[], ApiToken[]]
   >(
     `LET $token = CREATE api_token SET
       userId = $userId,
@@ -76,8 +72,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       systemId = $systemId,
       tenant = $tenant,
       name = $name,
-      tokenHash = $tokenHash,
-      jti = $jti,
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
       neverExpires = true,
@@ -90,34 +84,54 @@ async function postHandler(req: Request, ctx: RequestContext) {
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
       apiTokenId = $token[0].id;
-    SELECT * FROM $app[0].id;`,
+    SELECT * FROM $app[0].id;
+    SELECT * FROM $token[0].id;`,
     {
       userId: rid(ctx.claims?.actorId ?? "0"),
       name,
       companyId: rid(companyId),
       systemId: rid(systemId),
       tenant,
-      tokenHash,
-      jti,
       permissions: permissions ?? [],
       monthlySpendLimit: monthlySpendLimit ?? undefined,
     },
   );
 
   const app = result[2]?.[0];
-  return Response.json(
-    {
-      success: true,
-      data: {
-        app,
-        token: rawToken, // Shown once
+  const createdToken = result[3]?.[0];
+  if (!createdToken) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "ERROR", message: "common.error.generic" },
       },
+      { status: 500 },
+    );
+  }
+
+  const farFuture = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
+  const jwt = await createTenantToken(
+    {
+      ...tenant,
+      actorType: "connected_app",
+      actorId: String(createdToken.id),
+      exchangeable: false,
+      frontendUse: false,
+      frontendDomains: [],
     },
+    false,
+    farFuture,
+  );
+
+  await rememberActor(tenant, String(createdToken.id));
+
+  return Response.json(
+    { success: true, data: { app, token: jwt } },
     { status: 201 },
   );
 }
 
-async function putHandler(req: Request, ctx: RequestContext) {
+async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id, name, permissions, monthlySpendLimit } = body;
 
@@ -161,10 +175,11 @@ async function putHandler(req: Request, ctx: RequestContext) {
 }
 
 /**
- * DELETE — revokes the linked api_token AND deletes the connected_app
- * in a single batched query (revocation guarantee per §19.12).
+ * DELETE — revokes the linked api_token AND deletes the connected_app in a
+ * single batched query; evicts the api_token id from the tenant's
+ * actor-validity partition (§12.8 / §19.12).
  */
-async function deleteHandler(req: Request, ctx: RequestContext) {
+async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
@@ -178,17 +193,34 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
+  // Single batched query (§7.2): read the linked api_token + tenant keys,
+  // set `revokedAt` on the api_token, then delete the connected_app.
   const db = await getDb();
-
-  // Set revokedAt on the linked api_token and delete the connected_app in one batch
-  await db.query(
-    `LET $app = (SELECT apiTokenId FROM $id LIMIT 1);
+  const result = await db.query<
+    [
+      unknown,
+      unknown,
+      unknown,
+      { apiTokenId: string; companyId: string; systemId: string }[],
+    ]
+  >(
+    `LET $app = (SELECT apiTokenId, companyId, systemId FROM $id LIMIT 1);
      IF $app[0].apiTokenId != NONE {
        UPDATE $app[0].apiTokenId SET revokedAt = time::now() WHERE revokedAt IS NONE;
      };
-     DELETE $id;`,
+     DELETE $id;
+     RETURN $app;`,
     { id: rid(id) },
   );
+
+  const row = result[3]?.[0];
+  const apiTokenId = String(row?.apiTokenId ?? "");
+  if (apiTokenId && row?.companyId && row?.systemId) {
+    await forgetActor(
+      { companyId: String(row.companyId), systemId: String(row.systemId) },
+      apiTokenId,
+    );
+  }
 
   return Response.json({ success: true });
 }

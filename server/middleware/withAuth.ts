@@ -1,64 +1,24 @@
 import type { Middleware } from "./compose.ts";
-import type { RequestContext } from "@/src/contracts/auth.ts";
-import type { TenantClaims } from "@/src/contracts/tenant.ts";
-import type { ApiToken } from "@/src/contracts/token.ts";
-import { hashToken, verifyTenantToken } from "../utils/token.ts";
-import { findTokenByHash } from "../db/queries/tokens.ts";
-import { isJtiRevoked } from "../utils/token-revocation.ts";
+import { verifyTenantToken } from "../utils/token.ts";
 import { enforceCors, getCorsHeaders } from "../utils/cors.ts";
 import { getAnonymousTenant } from "../utils/tenant.ts";
-
-function isLikelyJwt(token: string): boolean {
-  return token.split(".").length === 3;
-}
-
-/**
- * Constructs a RequestContext from a verified TenantClaims.
- * Used by both JWT and API token paths.
- */
-function buildContext(
-  claims: TenantClaims,
-): RequestContext {
-  return {
-    tenant: {
-      systemId: claims.systemId,
-      companyId: claims.companyId,
-      systemSlug: claims.systemSlug,
-      roles: claims.roles,
-      permissions: claims.permissions,
-    },
-    claims,
-  };
-}
+import {
+  ensureActorValidityLoaded,
+  isActorValid,
+} from "../utils/actor-validity.ts";
 
 /**
- * Constructs a RequestContext from an API token row.
- * Maps flat fields to the Tenant interface.
+ * Authenticates a request without touching the database (§12.8).
+ *
+ * Flow:
+ *   1. No `Authorization: Bearer` → synthesize anonymous Tenant (§9.2).
+ *   2. Otherwise verify the JWT; claims carry Tenant + universal actorId +
+ *      frontendUse/frontendDomains (for api_token actors).
+ *   3. Load the tenant's actor-validity partition on first use and check
+ *      `isActorValid(tenant, actorId)`.
+ *   4. Enforce CORS using the claims (no DB read).
+ *   5. Apply role/permission gates; superusers bypass them.
  */
-function buildContextFromApiToken(
-  apiToken: ApiToken,
-): RequestContext {
-  // Prefer embedded tenant object, fall back to flat fields
-  const tenant = apiToken.tenant ?? {
-    systemId: String(apiToken.systemId),
-    companyId: String(apiToken.companyId),
-    systemSlug: "",
-    roles: [],
-    permissions: apiToken.permissions ?? [],
-  };
-
-  return {
-    tenant,
-    claims: {
-      ...tenant,
-      actorType: "api_token",
-      actorId: String(apiToken.id),
-      jti: apiToken.jti ?? "",
-      exchangeable: false,
-    },
-  };
-}
-
 export function withAuth(
   options?: {
     roles?: string[];
@@ -69,7 +29,6 @@ export function withAuth(
   return async (req, ctx, next) => {
     const authHeader = req.headers.get("Authorization");
 
-    // No auth header — synthesize anonymous tenant
     if (!authHeader?.startsWith("Bearer ")) {
       if (options?.requireAuthenticated) {
         return Response.json(
@@ -84,7 +43,6 @@ export function withAuth(
         );
       }
 
-      // Determine system slug from URL if possible (§9.2)
       const url = new URL(req.url);
       let systemSlug = "core";
       if (
@@ -93,7 +51,6 @@ export function withAuth(
       ) {
         systemSlug = "core";
       } else if (url.pathname.startsWith("/api/public/")) {
-        // Public routes: use slug param if present, else "core"
         systemSlug = url.searchParams.get("slug") ??
           url.searchParams.get("systemSlug") ?? "core";
       } else if (url.pathname.match(/^\/api\/systems\/([^/]+)/)) {
@@ -111,107 +68,40 @@ export function withAuth(
     const token = authHeader.slice(7);
 
     try {
-      if (isLikelyJwt(token)) {
-        // JWT path — tenant-bearing token
-        const claims = await verifyTenantToken(token);
+      const claims = await verifyTenantToken(token);
 
-        // Check revocation
-        if (claims.jti && (await isJtiRevoked(claims.jti))) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "UNAUTHORIZED",
-                message: "auth.error.tokenRevoked",
-              },
+      // Cache-only validity check (§12.8). One call covers every actor
+      // type because the cache is keyed by (tenant, actorId).
+      await ensureActorValidityLoaded(claims);
+      if (!claims.actorId || !isActorValid(claims, claims.actorId)) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "UNAUTHORIZED",
+              message: "auth.error.tokenRevoked",
             },
-            { status: 401 },
-          );
-        }
-
-        // Populate context
-        const authCtx = buildContext(claims);
-        ctx.tenant = authCtx.tenant;
-        ctx.claims = authCtx.claims;
-      } else {
-        // Opaque API token path
-        const tokenHash = await hashToken(token);
-        const apiToken = await findTokenByHash(tokenHash);
-
-        if (!apiToken) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "UNAUTHORIZED",
-                message: "auth.error.invalidToken",
-              },
-            },
-            { status: 401 },
-          );
-        }
-
-        // Check revokedAt
-        if (apiToken.revokedAt) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "UNAUTHORIZED",
-                message: "auth.error.tokenRevoked",
-              },
-            },
-            { status: 401 },
-          );
-        }
-
-        // Check expiry (only if not neverExpires)
-        if (
-          !apiToken.neverExpires &&
-          apiToken.expiresAt &&
-          new Date(apiToken.expiresAt).getTime() <= Date.now()
-        ) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "UNAUTHORIZED",
-                message: "auth.error.tokenExpired",
-              },
-            },
-            { status: 401 },
-          );
-        }
-
-        // Enforce CORS for frontend-use tokens
-        const claims: TenantClaims = {
-          systemId: String(apiToken.tenant?.systemId ?? apiToken.systemId),
-          companyId: String(
-            apiToken.tenant?.companyId ?? apiToken.companyId,
-          ),
-          systemSlug: apiToken.tenant?.systemSlug ?? "",
-          roles: apiToken.tenant?.roles ?? [],
-          permissions: apiToken.tenant?.permissions ?? apiToken.permissions ??
-            [],
-          actorType: "api_token",
-          actorId: String(apiToken.id),
-          jti: apiToken.jti ?? "",
-          exchangeable: false,
-        };
-
-        const corsError = enforceCors(req, claims, apiToken);
-        if (corsError) return corsError;
-
-        const authCtx = buildContextFromApiToken(apiToken);
-        ctx.tenant = authCtx.tenant;
-        ctx.claims = authCtx.claims;
+          },
+          { status: 401 },
+        );
       }
 
-      // Superuser bypasses all role/permission checks
+      // CORS policy lives on the JWT itself for non-user actors (§12.7).
+      const corsError = enforceCors(req, claims);
+      if (corsError) return corsError;
+
+      ctx.tenant = {
+        systemId: claims.systemId,
+        companyId: claims.companyId,
+        systemSlug: claims.systemSlug,
+        roles: claims.roles,
+        permissions: claims.permissions,
+      };
+      ctx.claims = claims;
+
       if (ctx.tenant.roles.includes("superuser")) {
-        // Add CORS headers to the response from downstream
         const response = await next();
-        if (ctx.claims && ctx.claims.actorType !== "user") {
+        if (ctx.claims.actorType !== "user") {
           const corsHeaders = getCorsHeaders(req, ctx.claims);
           for (const [key, value] of Object.entries(corsHeaders)) {
             response.headers.set(key, value);
@@ -220,7 +110,6 @@ export function withAuth(
         return response;
       }
 
-      // Role check
       if (options?.roles && options.roles.length > 0) {
         const hasRole = options.roles.some((r) => ctx.tenant.roles.includes(r));
         if (!hasRole) {
@@ -237,7 +126,6 @@ export function withAuth(
         }
       }
 
-      // Permission check
       if (options?.permissions && options.permissions.length > 0) {
         const hasPermission = ctx.tenant.permissions.includes("*") ||
           options.permissions.some((p) => ctx.tenant.permissions.includes(p));
@@ -257,8 +145,7 @@ export function withAuth(
 
       const response = await next();
 
-      // Add CORS headers for API tokens with frontendUse
-      if (ctx.claims && ctx.claims.actorType !== "user") {
+      if (ctx.claims.actorType !== "user") {
         const corsHeaders = getCorsHeaders(req, ctx.claims);
         for (const [key, value] of Object.entries(corsHeaders)) {
           response.headers.set(key, value);

@@ -12,6 +12,7 @@ import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
+import { forgetActor } from "@/server/utils/actor-validity";
 
 interface SubmittedChannel {
   type: string;
@@ -242,6 +243,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const inviterName = returnData?.inviter?.[0]?.profileName ?? "";
     const inviteeName = returnData?.invitee?.[0]?.profileName ?? "";
 
+    // Roles changed for the invited user — evict from this tenant's
+    // partition so their next request re-authenticates with fresh
+    // roles/permissions (§12.8).
+    await forgetActor(
+      { companyId: String(companyId), systemId: String(systemId) },
+      String(existingUserId),
+    );
+
     const core = Core.getInstance();
     const baseUrl =
       (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
@@ -461,6 +470,13 @@ async function putHandler(req: Request, ctx: RequestContext) {
         { status: 400 },
       );
     }
+
+    // Roles changed — evict from this tenant's partition so the user's
+    // next request re-authenticates with fresh roles/permissions (§12.8).
+    await forgetActor(
+      { companyId: String(companyId), systemId: String(systemId) },
+      String(id),
+    );
   }
 
   return Response.json({ success: true });
@@ -514,6 +530,16 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
       { status: 400 },
     );
   }
+
+  // Membership removed — evict the user from this tenant's partition so
+  // the user's next request fails at withAuth (§12.8). The user's
+  // api_tokens scoped to this tenant are not affected here (still live
+  // according to `revokedAt`); if they should also be revoked, the caller
+  // is the admin UI which handles token revocation separately.
+  await forgetActor(
+    { companyId: String(companyId), systemId: String(systemId) },
+    String(userId),
+  );
 
   return Response.json({ success: true });
 }
