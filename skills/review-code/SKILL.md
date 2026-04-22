@@ -1,16 +1,15 @@
 ---
 name: review-code
-description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill reviews the whole codebase against the root `AGENTS.md` rules using the checklist in `docs/agent-checklist.md`, exercises database operations, endpoints, frontend files, and events via the project's testing skills, and restarts the loop until no errors remain.
+description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events, check-library-updates), fixes failures, and restarts the loop until no errors remain.
 ---
 
 # Review Code
 
-Iterative, whole-project review loop. Reviews Core, every subsystem, and every
-framework against the authoritative rules in the root `AGENTS.md` using the
-checklist in `docs/agent-checklist.md`. Exercises each code snippet — database
-operations, HTTP endpoints, frontend pages, and event-queue handlers — through
-the project's dedicated testing skills. Repeats the full loop until a pass finds
-zero errors.
+Iterative, whole-project review loop that **exercises the code** — every route,
+every query, every frontend page, every event handler — through the project's
+testing skills. Reading files and checking the checklist is secondary; running
+the code and fixing failures is the primary activity. Repeats until a full pass
+produces zero failures.
 
 ## When to use
 
@@ -35,59 +34,135 @@ review flow and the `isolation-guard` skill to confirm the target layer.
    proceeds directly.
 2. Read the root `AGENTS.md` and `docs/agent-checklist.md` in full before the
    first pass. They are the source of truth for every rule verified here.
+3. Verify `database.json` has `"test": true`. Every test skill requires it. If
+   it's missing or `false`, set it to `true` before proceeding and warn the user
+   to revert it after the review.
 
 ## The loop
 
 Repeat until a full pass completes with zero findings:
 
-1. **Enumerate scope.**
-   - Core: everything under the project root that is not in `systems/<slug>/`,
-     `frameworks/<name>/`, or their sibling namespaced directories.
-   - Subsystems: every `[slug]` folder under `systems/`,
-     `src/components/systems/`, `server/db/migrations/systems/`,
-     `server/db/queries/systems/`, `server/db/frontend-queries/systems/`,
-     `server/event-queue/handlers/systems/`, `app/api/systems/`,
-     `public/systems/`, `src/i18n/<locale>/systems/`.
-   - Frameworks: every `<name>` folder under `frameworks/`.
+### Phase 1 — Enumerate scope
 
-2. **Checklist sweep.** For each layer, walk every item in
-   `docs/agent-checklist.md` section by section. For each rule, locate the code
-   that implements or violates it and verify the implementation against the
-   referenced AGENTS.md section. Record every mismatch as a finding with file
-   path, line number, and the violated rule.
+List every runnable artifact in the project:
 
-3. **Exercise the code.** Do not trust reading alone — run the project's testing
-   skills against the snippets you just reviewed:
-   - Database operations (queries, migrations, seeds):
-     `skills/test-db-queries/SKILL.md`.
-   - HTTP endpoints (every route under `/api/**`):
-     `skills/test-routes/SKILL.md`.
-   - Frontend pages and UI flows: `skills/test-frontend/SKILL.md`.
-   - Event-queue handlers and communications: `skills/test-events/SKILL.md`.
-   - Dependency drift: `skills/check-library-updates/SKILL.md`. Treat any failed
-     assertion, unexpected status, broken render, unhandled event, or stale
-     dependency as a finding.
+- **Routes:** every `app/api/**/route.ts` file.
+- **Queries:** every exported function in every `server/db/queries/**/*.ts`, In
+  addition to queries scattered throughout the files - find all `db.query`
+  calls.
+- **Event handlers:** every registered handler name (core + systems +
+  frameworks).
+- **Frontend pages:** every `app/**/page.tsx` file.
+- **Subsystems:** every `[slug]` folder under `systems/`.
+- **Frameworks:** every `<name>` folder under `frameworks/`.
 
-4. **Fix findings.** Apply the minimal change that resolves each finding without
-   introducing new abstractions or drifting from the AGENTS.md rules. Keep fixes
-   scoped — a bug fix does not need surrounding cleanup.
+### Phase 2 — Run every test skill against every artifact
 
-5. **Restart.** Go back to step 1 and run the full sweep again. Stop only when a
-   complete pass produces zero findings across Core, every subsystem, and every
-   framework, with every test skill passing.
+This is the core of the review. For each category below, run the corresponding
+test skill against **every** artifact in that category. Record every failure,
+unexpected status, broken render, unhandled event, or stale dependency as a
+finding.
+
+#### 2a. Database — run `skills/test-db-queries/SKILL.md`
+
+For every query function in `server/db/queries/` and queries scattered
+throughout the files - find all `db.query` calls (core + systems + frameworks):
+
+1. Read the query file to understand what the function does and what parameters
+   it expects.
+2. Construct a valid SurrealQL test call for each query.
+3. Run the query and verify:
+   - The result shape matches what the route handler expects.
+   - FETCH directives resolve record links correctly.
+   - Cursor pagination works (returns `nextCursor`/`prevCursor` when
+     applicable).
+   - No SurrealDB errors in the output.
+
+#### 2b. Routes — run `skills/test-routes/SKILL.md`
+
+For every route in `app/api/` (core + systems + frameworks):
+
+1. Start the dev server: `tsx skills/test-routes/run.ts server start`
+2. Login as superuser: `tsx skills/test-routes/run.ts login`
+3. For each HTTP method the route supports (GET, POST, PUT, DELETE):
+   - Construct a request with valid parameters.
+   - Run the request:
+     `tsx skills/test-routes/run.ts <METHOD> <PATH>
+     --as-superuser --body '<json>'`
+   - Verify the response: `success: true`, expected data shape, no errors.
+   - Also test **error paths**: missing required fields, invalid data,
+     unauthorized access (no token), wrong roles.
+4. Record every non-200 response that isn't an expected validation rejection as
+   a finding.
+
+#### 2c. Events — run `skills/test-events/SKILL.md`
+
+For every registered event handler (core + systems + frameworks):
+
+1. Trigger the action that publishes the event (via `test-routes` or
+   `test-db-queries`).
+2. Wait for the delivery:
+   `tsx skills/test-events/run.ts wait --handler
+   <name> --timeout 30000`
+3. Verify the delivery reached `status: "done"` (not `"dead"`).
+4. For dead deliveries, read `lastError` and record as a finding.
+5. For communication events, also verify the `verification_request` row was
+   created and carries the expected `actionKey`.
+
+#### 2d. Frontend — run `skills/test-frontend/SKILL.md`
+
+For every page in `app/` (auth pages, core admin, app panel, public pages):
+
+1. Start the frontend driver: `tsx skills/test-frontend/run.ts start`
+2. For pages requiring auth, run `tsx skills/test-frontend/run.ts login` first.
+3. Navigate to the page: `tsx skills/test-frontend/run.ts goto <path>`
+4. Verify the page renders without errors:
+   - `tsx skills/test-frontend/run.ts console --tail 50` — check for `pageerror`
+     entries.
+   - `tsx skills/test-frontend/run.ts screenshot <page>.png` — visual check.
+   - `tsx skills/test-frontend/run.ts exists 'main'` — content area rendered.
+5. Record any page that fails to render, throws console errors, or shows a
+   Next.js error overlay as a finding.
+
+#### 2e. Dependencies — run `skills/check-library-updates/SKILL.md`
+
+Run the dependency check and record any stale or vulnerable dependencies.
+
+### Phase 3 — Checklist sweep (secondary)
+
+While the test results are the primary source of findings, also walk the
+checklist in `docs/agent-checklist.md` to catch rule violations that don't
+surface as runtime failures (e.g. missing i18n keys, wrong file locations,
+missing `assertServerOnly` calls). For each violation found, record it as a
+finding with file path, line number, and the violated rule.
+
+### Phase 4 — Fix findings
+
+Apply the minimal change that resolves each finding without introducing new
+abstractions or drifting from the AGENTS.md rules. Keep fixes scoped — a bug fix
+does not need surrounding cleanup.
+
+After fixing, **re-run the specific test skill that caught the finding** to
+confirm the fix works. Do not assume a fix is correct without exercising it.
+
+### Phase 5 — Restart
+
+Go back to Phase 1 and run the full sweep again. Stop only when a complete pass
+produces zero findings across Core, every subsystem, and every framework, with
+every test skill passing.
 
 ## Rules for the review itself
 
+- **Running code beats reading code.** A test skill failure is a definitive
+  finding. A static analysis suspicion is only a finding after you confirm it
+  with a test.
+- **Do not skip running the test skills.** Every route, every query, every page,
+  every event handler must be exercised. If a test skill cannot cover a snippet,
+  state so explicitly in the finding log instead of marking it passed.
 - The root `AGENTS.md` is authoritative. A subsystem or framework `AGENTS.md`
   never overrides Core rules — it only adds (§26.2). Flag any contradiction as a
   finding.
 - Layer isolation (§6, §26) is non-negotiable. Cross-namespace imports, shared
   files, or aliases between Core ↔ framework ↔ subsystem are findings.
-- Every checklist item in `docs/agent-checklist.md` maps to an AGENTS.md
-  section. When a rule does not apply to a given file, skip it deliberately —
-  record the deliberate skip so the next pass does not re-flag it.
-- Do not claim success on code that was not exercised. If a test skill cannot
-  cover a snippet (e.g. UI you cannot drive in a browser), state so explicitly
-  in the finding log instead of marking it passed.
 - Only stop when a full pass is clean. A single remaining finding restarts the
   loop.
