@@ -21,8 +21,9 @@ zero errors.
 
 The user may optionally specify a review target — one or more of: `core`, a
 specific subsystem (by slug), a specific subframework (by name), or any
-combination thereof. When specified, the loop is restricted to those layers
-only. When no target is given, the full project is reviewed.
+combination thereof. The user can also specify only components or parts of
+these. When specified, the loop is restricted to those layers only. When no
+target is given, the full project is reviewed.
 
 Do NOT use this skill for a scoped review of a single file — use the normal
 review flow and the `isolation-guard` skill to confirm the target layer.
