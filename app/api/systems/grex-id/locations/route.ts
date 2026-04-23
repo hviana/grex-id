@@ -24,12 +24,19 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
+
+  if (!companyId || companyId === "0" || !systemId || systemId === "0") {
+    return Response.json({ success: true, data: [], nextCursor: null });
+  }
+
   const result = await listLocations({
     limit,
     cursor,
     search,
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
+    companyId,
+    systemId,
   });
 
   return Response.json({ success: true, ...result });
@@ -44,6 +51,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
       {
         success: false,
         error: { code: "VALIDATION", errors: ["validation.fields.required"] },
+      },
+      { status: 400 },
+    );
+  }
+
+  if (
+    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
+    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+  ) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.companyAndSystem.required",
+        },
       },
       { status: 400 },
     );

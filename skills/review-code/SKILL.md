@@ -49,7 +49,8 @@ List every runnable artifact in the project:
 - **Routes:** every `app/api/**/route.ts` file.
 - **Queries:** every exported function in every `server/db/queries/**/*.ts`, In
   addition to queries scattered throughout the files - find all `db.query`
-  calls.
+  calls. You need to test exactly the queries that are in the code, not
+  meaningless simplifications.
 - **Event handlers:** every registered handler name (core + systems +
   frameworks).
 - **Frontend pages:** every `app/**/page.tsx` file.
@@ -148,6 +149,8 @@ every test skill passing.
 
 ## Rules for the review itself
 
-- **Do not skip running the test skills.** Every route, every query, every page,
-  every event handler must be exercised. If a test skill cannot cover a snippet,
-  state so explicitly in the finding log instead of marking it passed.
+- **Do not skip running the test skills.** Every route, every query (you need to
+  test exactly the queries that are in the code, not meaningless
+  simplifications.), every page, every event handler must be exercised. If a
+  test skill cannot cover a snippet, state so explicitly in the finding log
+  instead of marking it passed.
