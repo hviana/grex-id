@@ -440,7 +440,10 @@ async function putHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (roles !== undefined && companyId && systemId) {
+  if (
+    roles !== undefined && companyId && systemId && companyId !== "0" &&
+    systemId !== "0"
+  ) {
     const res = await db.query(
       `LET $ac = (SELECT count() AS c FROM user_company_system
          WHERE companyId = $companyId AND systemId = $systemId
