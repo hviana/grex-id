@@ -153,16 +153,6 @@ every test skill passing.
 
 ## Rules for the review itself
 
-- **Running code beats reading code.** A test skill failure is a definitive
-  finding. A static analysis suspicion is only a finding after you confirm it
-  with a test.
 - **Do not skip running the test skills.** Every route, every query, every page,
   every event handler must be exercised. If a test skill cannot cover a snippet,
   state so explicitly in the finding log instead of marking it passed.
-- The root `AGENTS.md` is authoritative. A subsystem or framework `AGENTS.md`
-  never overrides Core rules — it only adds (§26.2). Flag any contradiction as a
-  finding.
-- Layer isolation (§6, §26) is non-negotiable. Cross-namespace imports, shared
-  files, or aliases between Core ↔ framework ↔ subsystem are findings.
-- Only stop when a full pass is clean. A single remaining finding restarts the
-  loop.
