@@ -60,8 +60,7 @@ List every runnable artifact in the project:
 
 This is the core of the review. For each category below, run the corresponding
 test skill against **every** artifact in that category. Record every failure,
-unexpected status, broken render, unhandled event, or stale dependency as a
-finding.
+unexpected status, broken render, unhandled event, etc as a finding.
 
 #### 2a. Database — run `skills/test-db-queries/SKILL.md`
 
@@ -123,10 +122,6 @@ For every page in `app/` (auth pages, core admin, app panel, public pages):
    - `tsx skills/test-frontend/run.ts exists 'main'` — content area rendered.
 5. Record any page that fails to render, throws console errors, or shows a
    Next.js error overlay as a finding.
-
-#### 2e. Dependencies — run `skills/check-library-updates/SKILL.md`
-
-Run the dependency check and record any stale or vulnerable dependencies.
 
 ### Phase 3 — Checklist sweep
 
