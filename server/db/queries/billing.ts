@@ -532,12 +532,12 @@ export async function retryPayment(
        LIMIT 1);
      IF array::len($sub) = 0 {
        RETURN [{ result: "not_found" }];
-     } ELSE IF $sub[0].retryPaymentInProgress = true {
+     } ELSE (IF $sub[0].retryPaymentInProgress = true {
        RETURN [{ result: "conflict" }];
      } ELSE {
        UPDATE $sub[0].id SET retryPaymentInProgress = true;
        RETURN [{ result: "ok", id: $sub[0].id }];
-     };`,
+     });`,
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
 

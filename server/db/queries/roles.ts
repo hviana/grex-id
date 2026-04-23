@@ -16,7 +16,7 @@ export async function listRoles(
 
   if (params.systemId) {
     conditions.push("systemId = $systemId");
-    bindings.systemId = params.systemId;
+    bindings.systemId = rid(params.systemId);
   }
   if (params.search) {
     conditions.push("name CONTAINS $search");
@@ -58,7 +58,11 @@ export async function createRole(data: {
       systemId = $systemId,
       permissions = $permissions,
       isBuiltIn = $isBuiltIn`,
-    { ...data, isBuiltIn: data.isBuiltIn ?? false },
+    {
+      ...data,
+      systemId: rid(data.systemId),
+      isBuiltIn: data.isBuiltIn ?? false,
+    },
   );
   return result[0][0];
 }

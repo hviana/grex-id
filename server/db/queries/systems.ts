@@ -95,7 +95,7 @@ export async function getSystemSlug(systemId: string): Promise<string | null> {
   const db = await getDb();
   const result = await db.query<[{ slug: string }[]]>(
     "SELECT slug FROM $systemId LIMIT 1",
-    { systemId },
+    { systemId: rid(systemId) },
   );
   return result[0]?.[0]?.slug ?? null;
 }
@@ -115,7 +115,7 @@ export async function companyExists(companyId: string): Promise<boolean> {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     "SELECT id FROM $companyId LIMIT 1",
-    { companyId },
+    { companyId: rid(companyId) },
   );
   return !!result[0]?.[0];
 }

@@ -450,7 +450,7 @@ export async function getUserWithProfile(userId: string): Promise<
       channels: { value: string }[];
     }[]]
   >(
-    `SELECT * FROM $userId FETCH profile, channels LIMIT 1`,
+    `SELECT * FROM $userId LIMIT 1 FETCH profile, channels`,
     { userId: rid(userId) },
   );
   return result[0]?.[0] ?? null;

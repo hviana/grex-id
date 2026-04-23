@@ -17,7 +17,11 @@ export async function getUsageForPeriod(
     `SELECT * FROM usage_record
      WHERE companyId = $companyId AND systemId = $systemId AND period = $period
      ORDER BY resource ASC`,
-    { companyId, systemId, period: currentPeriod },
+    {
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+      period: currentPeriod,
+    },
   );
   return result[0] ?? [];
 }
@@ -35,7 +39,12 @@ export async function getUsageHistory(
      GROUP BY period
      ORDER BY period DESC
      LIMIT $limit`,
-    { companyId, systemId, resource, limit: periodCount },
+    {
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+      resource,
+      limit: periodCount,
+    },
   );
   return (result[0] ?? []).reverse();
 }

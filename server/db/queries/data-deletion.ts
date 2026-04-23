@@ -1,4 +1,4 @@
-import { getDb } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { assertServerOnly } from "../../utils/server-only.ts";
@@ -29,7 +29,7 @@ export async function deleteCompanySystemData(
     DELETE FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId;
     DELETE FROM tag WHERE companyId = $companyId AND systemId = $systemId;
     `,
-    { companyId, systemId },
+    { companyId: rid(companyId), systemId: rid(systemId) },
   );
 
   // Delete all uploaded files under {companyId}/{systemSlug}/
@@ -55,7 +55,7 @@ export async function verifyUserPassword(
   const result = await db.query<[{ valid: boolean }[]]>(
     `SELECT crypto::argon2::compare(passwordHash, $password) AS valid
      FROM $userId LIMIT 1`,
-    { userId, password },
+    { userId: rid(userId), password },
   );
   return result[0]?.[0]?.valid === true;
 }

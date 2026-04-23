@@ -16,7 +16,7 @@ export async function searchTags(
        AND systemId = $systemId
        AND name @@ $search
      LIMIT 20`,
-    { companyId, systemId, search },
+    { companyId: rid(companyId), systemId: rid(systemId), search },
   );
   return result[0] ?? [];
 }
@@ -31,7 +31,7 @@ export async function listTags(
      WHERE companyId = $companyId
        AND systemId = $systemId
      ORDER BY name ASC`,
-    { companyId, systemId },
+    { companyId: rid(companyId), systemId: rid(systemId) },
   );
   return result[0] ?? [];
 }
@@ -58,7 +58,7 @@ export async function createTag(data: {
       color = $color,
       companyId = $companyId,
       systemId = $systemId`,
-    data,
+    { ...data, companyId: rid(data.companyId), systemId: rid(data.systemId) },
   );
   return result[0][0];
 }

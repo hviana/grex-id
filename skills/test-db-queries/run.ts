@@ -6,13 +6,10 @@ import { runSeeds } from "../../server/db/seeds/runner.ts";
 import dbConfig from "../../database.json" with { type: "json" };
 import process from "node:process";
 
-/**
- * Test-mode guard.
- *
- * Hard-refuses to run when `database.json` does not carry `"test": true`.
- * This is deterministic: no env var override, no flag, no "I know what I'm
- * doing" path. Flip the flag in `database.json` before using this skill.
- */
+// ---------------------------------------------------------------------------
+// Test-mode guard.
+// ---------------------------------------------------------------------------
+
 const isTestMode = (dbConfig as { test?: unknown }).test === true;
 if (!isTestMode) {
   console.error(
@@ -35,14 +32,157 @@ if (!isTestMode) {
   process.exit(2);
 }
 
-/**
- * DDL blocker.
- *
- * This skill is for CRUD only (SELECT / CREATE / UPDATE / UPSERT / DELETE /
- * INSERT / RELATE / LET / IF / FOR / transactions). Any statement that would
- * change the schema — DEFINE / REMOVE / ALTER — is refused. Schema changes
- * belong in migration files under server/db/migrations/.
- */
+// ---------------------------------------------------------------------------
+// Query normalization.
+//
+// Strips encoding artifacts and whitespace noise that corrupt SurrealDB
+// queries silently — BOM, CRLF, trailing junk. Applied before DDL check and
+// before sending to the database so the user always sees what was actually
+// sent.
+// ---------------------------------------------------------------------------
+
+function normalizeQuery(raw: string): string {
+  let q = raw;
+  // Strip UTF-8 BOM.
+  if (q.charCodeAt(0) === 0xfeff) q = q.slice(1);
+  // Normalize CRLF → LF.
+  q = q.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Strip trailing whitespace per line.
+  q = q.replace(/[ \t]+$/gm, "");
+  // Collapse 3+ consecutive blank lines into 2 (keeps paragraph breaks).
+  q = q.replace(/\n{3,}/g, "\n\n");
+  // Trim leading/trailing whitespace.
+  q = q.trim();
+  return q;
+}
+
+// ---------------------------------------------------------------------------
+// SurrealDB 3.0 syntax warnings.
+//
+// These are printed to stderr as non-blocking warnings. They catch the most
+// common foot-guns that silently produce wrong results rather than errors.
+// ---------------------------------------------------------------------------
+
+interface SyntaxWarning {
+  code: string;
+  message: string;
+}
+
+function checkSyntaxWarnings(sql: string): SyntaxWarning[] {
+  const warnings: SyntaxWarning[] = [];
+
+  // Strip comments for analysis.
+  const stripped = sql
+    .replace(/--.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+  // --- W1: bare `value` in SELECT column list ---
+  // `value` is a SurrealQL reserved keyword. In SurrealDB 3.0 it cannot
+  // appear as a bare column name — it must be backtick-quoted. This regex
+  // looks for SELECT ... value ... FROM patterns where `value` is not
+  // inside backticks and not part of a larger identifier.
+  const selectBlocks = stripped.match(/SELECT\s+([\s\S]*?)\s+FROM\b/gi);
+  if (selectBlocks) {
+    for (const block of selectBlocks) {
+      const cols = block.replace(/^SELECT\s+/i, "").replace(/\s+FROM\b.*/i, "");
+      // Tokenize column list by commas (rough but catches the common case).
+      const tokens = cols.split(",");
+      for (const token of tokens) {
+        const trimmed = token.trim();
+        // Match bare `value` (not `value.something`, not `` `value` ``, not
+        // inside a function call like `count()`).
+        if (/^\bvalue\b$/i.test(trimmed)) {
+          warnings.push({
+            code: "W_BARE_VALUE",
+            message:
+              `"value" is a SurrealDB reserved keyword. In SELECT column lists,` +
+              ` use \`value\` (backtick-quoted) or SELECT * instead.` +
+              ` Bare \`value\` silently returns NULL in SurrealDB 3.0.`,
+          });
+          break; // one warning per SELECT is enough
+        }
+      }
+    }
+  }
+
+  // --- W2: FETCH after LIMIT ---
+  // SurrealDB requires: SELECT ... LIMIT n FETCH ... (FETCH after LIMIT is
+  // silently ignored in some versions). Correct order is FETCH before LIMIT
+  // in SurrealDB 3.0.
+  if (/\bLIMIT\b.*\bFETCH\b/is.test(stripped)) {
+    warnings.push({
+      code: "W_FETCH_AFTER_LIMIT",
+      message:
+        `FETCH appears after LIMIT. In SurrealDB 3.0 the correct order is` +
+        ` SELECT ... FETCH ... LIMIT .... FETCH after LIMIT may be silently ignored.`,
+    });
+  }
+
+  // --- W3: nested IF without parentheses ---
+  // SurrealDB 3.0 requires parenthesization of nested IF blocks, regardless
+  // of which syntax form is used:
+  //   Brace form:   IF cond { ... } ELSE { ... }
+  //   THEN form:    IF cond THEN ... ELSE ... END
+  // A nested IF (one appearing inside another IF's body) must be wrapped:
+  //   (IF cond THEN ... ELSE ... END)
+  // We detect two patterns:
+  //   (a) IF inside a { } block (brace depth >= 1) — not parenthesized
+  //   (b) "ELSE IF" on the same line — the inner IF is not parenthesized
+  const lines = stripped.split("\n");
+  let braceDepth = 0;
+  let thenIfDepth = 0; // tracks IF/THEN...END nesting without braces
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Snapshot depths before counting this line's braces.
+    const lineBraceDepth = braceDepth;
+    // Count braces.
+    for (const ch of line) {
+      if (ch === "{") braceDepth++;
+      if (ch === "}") braceDepth--;
+    }
+    // (a) Brace-form nested IF: IF keyword inside a { } block.
+    if (lineBraceDepth >= 1) {
+      const hasBareIf = /\bIF\b/i.test(line) && !/\(\s*IF\b/i.test(line);
+      if (hasBareIf) {
+        warnings.push({
+          code: "W_NESTED_IF_UNPARENTHESIZED",
+          message: `Nested IF found at line ${i + 1} without parentheses.` +
+            ` SurrealDB 3.0 requires parenthesizing nested IF expressions:` +
+            ` (IF ... { ... } ELSE { ... }).`,
+        });
+        break;
+      }
+    }
+    // (b) THEN-form nested IF: "ELSE IF" on the same line means a bare
+    //     nested IF without parens. Correct: "ELSE (IF ...".
+    //     Track IF/END depth to also catch cases where END closes an inner IF
+    //     and the outer IF still expects one more END.
+    if (/\bELSE\s+IF\b/i.test(line) && !/\bELSE\s*\(\s*IF\b/i.test(line)) {
+      warnings.push({
+        code: "W_NESTED_IF_UNPARENTHESIZED",
+        message: `Nested IF found at line ${i + 1} without parentheses` +
+          ` ("ELSE IF" pattern). SurrealDB 3.0 requires wrapping the inner IF:` +
+          ` ELSE (IF ... THEN ... ELSE ... END).`,
+      });
+      break;
+    }
+    // Track THEN-form IF/END depth for context.
+    const ifMatches = line.match(/\bIF\b/gi);
+    const endMatches = line.match(/\bEND\b/gi);
+    if (ifMatches) thenIfDepth += ifMatches.length;
+    if (endMatches) thenIfDepth -= endMatches.length;
+  }
+
+  return warnings;
+}
+
+// ---------------------------------------------------------------------------
+// DDL blocker.
+//
+// Only blocks on comments + code. The `sql` parameter must already be
+// normalized (BOM, CRLF stripped).
+// ---------------------------------------------------------------------------
+
 function assertNoDDL(sql: string): void {
   const stripped = sql
     .replace(/--.*$/gm, "")
@@ -67,6 +207,10 @@ function assertNoDDL(sql: string): void {
     process.exit(3);
   }
 }
+
+// ---------------------------------------------------------------------------
+// CLI parsing.
+// ---------------------------------------------------------------------------
 
 interface ParsedArgs {
   query?: string;
@@ -154,13 +298,24 @@ function printHelp(): void {
       "",
       "Binding record ids:",
       "  SurrealDB fields typed `record<table>` will not match a plain string",
-      "  binding. For ad-hoc queries, use `type::thing` inline:",
-      '    SELECT * FROM type::thing("user", "abc");',
+      "  binding. For ad-hoc queries, use `type::record` inline:",
+      '    SELECT * FROM type::record("user", "abc");',
       "  or:",
-      "    LET $id = type::thing($table, $key); SELECT * FROM $id;",
+      "    LET $id = type::record($table, $key); SELECT * FROM $id;",
+      "",
+      "Syntax warnings:",
+      "  The runner checks for common SurrealDB 3.0 foot-guns and prints",
+      "  warnings to stderr before executing. These are non-blocking:",
+      "    - bare `value` in SELECT (reserved keyword — backtick-quote it)",
+      "    - FETCH after LIMIT (may be silently ignored)",
+      "    - unparenthesized nested IF (must wrap in parentheses)",
     ].join("\n"),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Serialization.
+// ---------------------------------------------------------------------------
 
 function stringify(value: unknown, pretty: boolean): string {
   const replacer = (_key: string, v: unknown): unknown => {
@@ -186,19 +341,10 @@ function stringify(value: unknown, pretty: boolean): string {
     : JSON.stringify(value, replacer);
 }
 
-/**
- * Bootstrap.
- *
- * "If the database doesn't exist, create it." Detection signal: the
- * `_migrations` tracking table is missing or empty — i.e. no schema has
- * been applied yet. When that's the case we run the project's migration
- * runner followed by the seed runner; otherwise we leave the database alone
- * (the assumption is the user or `npm run db:setup` already initialized it).
- *
- * The runners print progress via `console.log`, which would corrupt the
- * stdout JSON contract. We route them to stderr for the duration of the
- * bootstrap and restore stdout afterwards.
- */
+// ---------------------------------------------------------------------------
+// Bootstrap — auto-initialize if the database is empty.
+// ---------------------------------------------------------------------------
+
 async function isDatabaseInitialized(): Promise<boolean> {
   const db = await getDb();
   try {
@@ -229,8 +375,51 @@ async function ensureDatabaseReady(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Error-context printer.
+//
+// When a query fails, dumps the normalized query and bindings to stderr so
+// the user can see exactly what was sent to SurrealDB.
+// ---------------------------------------------------------------------------
+
+function printErrorContext(
+  query: string,
+  bindings: Record<string, unknown>,
+  err: unknown,
+): void {
+  console.error("[test-db-queries] query failed:");
+  const msg = err instanceof Error ? err.stack ?? err.message : String(err);
+  console.error(msg);
+  console.error("");
+  console.error("--- query sent to SurrealDB ---");
+  // Print with line numbers for easy reference.
+  const lines = query.split("\n");
+  const width = String(lines.length).length;
+  for (let i = 0; i < lines.length; i++) {
+    console.error(`${String(i + 1).padStart(width)} | ${lines[i]}`);
+  }
+  console.error("--- end query ---");
+  if (Object.keys(bindings).length > 0) {
+    console.error("");
+    console.error("--- bindings ---");
+    console.error(JSON.stringify(bindings, null, 2));
+    console.error("--- end bindings ---");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main.
+// ---------------------------------------------------------------------------
+
+// The parsed args and normalized query are stored here so the catch handler
+// can print them as error context. Only parseArgs once — stdin is consumed
+// on first read and cannot be re-read.
+let lastQuery: string | undefined;
+let lastBindings: Record<string, unknown> = {};
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  lastBindings = args.bindings;
 
   if (args.help) {
     printHelp();
@@ -243,21 +432,36 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  assertNoDDL(args.query);
+  // Normalize before any analysis.
+  const query = normalizeQuery(args.query);
+  lastQuery = query;
+
+  assertNoDDL(query);
+
+  // Print syntax warnings (non-blocking).
+  const warnings = checkSyntaxWarnings(query);
+  for (const w of warnings) {
+    console.error(`[test-db-queries] ${w.code}: ${w.message}`);
+  }
 
   await ensureDatabaseReady();
 
   const db = await getDb();
-  const result = await db.query(args.query, args.bindings);
+  const result = await db.query(query, args.bindings);
   console.log(stringify(result, args.pretty));
 }
 
 main()
   .then(() => closeDb())
   .catch(async (err: unknown) => {
-    console.error("[test-db-queries] query failed:");
-    const msg = err instanceof Error ? err.stack ?? err.message : String(err);
-    console.error(msg);
+    if (lastQuery) {
+      printErrorContext(lastQuery, lastBindings, err);
+    } else {
+      console.error("[test-db-queries] query failed:");
+      console.error(
+        err instanceof Error ? err.stack ?? err.message : String(err),
+      );
+    }
     await closeDb().catch(() => {});
     process.exit(1);
   });

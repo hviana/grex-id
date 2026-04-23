@@ -14,7 +14,7 @@ export async function listMenuItems(systemId?: string): Promise<MenuItem[]> {
 
   if (systemId) {
     query += " WHERE systemId = $systemId";
-    bindings.systemId = systemId;
+    bindings.systemId = rid(systemId);
   }
 
   query += " ORDER BY sortOrder ASC";

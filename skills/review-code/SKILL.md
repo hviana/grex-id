@@ -1,15 +1,55 @@
 ---
 name: review-code
-description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events), fixes failures, and restarts the loop until no errors remain. This skill has nothing to do with uncommitted code, etc., and nothing to do with Git. It's for reviewing the project's codebase.
+description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler, every utility, through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events), fixes failures, and restarts the loop until no errors remain. This skill has nothing to do with uncommitted code, etc., and nothing to do with Git. It's for reviewing the target codebase with "Context Optimization: Isolated Snippet Testing".
 ---
 
 # Review Code
 
 Iterative, whole-project review loop that **exercises the code** — every route,
-every query, every frontend page, every event handler — through the project's
-testing skills. Reading files and checking the checklist is secondary; running
-the code and fixing failures is the primary activity. Repeats until a full pass
-produces zero failures.
+every query, every frontend page, every event handler, every utility — through
+the project's testing skills. Reading files and checking the checklist is
+secondary; running the code and fixing failures is the primary activity. Repeats
+until a full pass produces zero failures.
+
+Context Optimization: Isolated Snippet Testing
+
+Purpose: Minimize context usage on large tasks by reading only the files
+strictly required for each test, then verifying the impact of any fix before
+moving on.
+
+Procedure (steps):
+
+1. Scope the read to the snippet under test. For each test, open only the file
+   that contains the target snippet (the query, route, component, utility,
+   etc.). Do not preemptively read related files.
+
+2. Run the isolated test on that snippet.
+
+3. If no fix is needed, proceed to step 7.
+
+4. If a fix is applied, identify the change surface. Note exactly what was
+   modified (function signature, return shape, exported name, query field, route
+   path, prop, etc.).
+
+5. Search for references systematically. Locate every caller, importer, or
+   specification that depends on the changed surface. Read only those files. Do
+   not read files that do not reference the change.
+
+6. Verify semantic correctness across specifications/guidelines and code calls.
+   For each referencing file, confirm the original purpose of the changed
+   element is preserved, confirm relevant specifications/guidelines still hold,
+   and confirm each caller connects correctly (types, shapes, names, and
+   contracts all align).
+
+7. If you adjusted the snippet after the checks in step 6, THEN repeat from step
+   1 for the same snippet. ELSE, Execute step 1 for the next snippet.
+
+Rules:
+
+- Never read a file unless the current step requires it.
+- A file is "required" only if it contains the snippet under test or references
+  a change just made.
+- Do not batch reads in anticipation of future tests.
 
 ## When to use
 

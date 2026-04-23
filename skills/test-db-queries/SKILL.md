@@ -104,17 +104,43 @@ a non-zero code.
 SurrealDB fields typed `record<table>` will not match a plain `"user:abc"`
 string binding — the driver expects a record-id object. Two safe options:
 
-- Build the id inline with `type::thing` and bind the plain string:
+- Build the id inline with `type::record` and bind the plain string:
   ```surql
-  SELECT * FROM type::thing("user", $key);
+  SELECT * FROM type::record("user", $key);
   ```
-- Or use `LET` + `type::thing`:
+- Or use `LET` + `type::record`:
   ```surql
-  LET $id = type::thing($table, $key);
+  LET $id = type::record($table, $key);
   SELECT * FROM $id;
   ```
 
 Both work through the skill without any extra machinery.
+
+## Syntax warnings
+
+Before executing, the runner checks for common SurrealDB 3.0 foot-guns and
+prints warnings to stderr. These are **non-blocking** — the query still runs.
+
+| Code                          | Trigger                                                   |
+| ----------------------------- | --------------------------------------------------------- |
+| `W_BARE_VALUE`                | `value` used as a bare SELECT column (reserved keyword)   |
+| `W_FETCH_AFTER_LIMIT`         | FETCH appears after LIMIT (wrong order)                   |
+| `W_NESTED_IF_UNPARENTHESIZED` | Nested IF without parentheses (SurrealDB 3.0 requirement) |
+
+Fix the query to eliminate the warning, or ignore it if the warning is a false
+positive for your specific case.
+
+## Query normalization
+
+All queries are normalized before execution:
+
+- UTF-8 BOM is stripped.
+- CRLF (`\r\n`) is normalized to LF.
+- Trailing whitespace per line is stripped.
+- Excessive blank lines are collapsed.
+
+This prevents encoding artifacts from silently corrupting SurrealDB queries
+(especially common with heredoc input and Windows editors).
 
 ## Rules
 

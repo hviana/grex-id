@@ -20,7 +20,7 @@ export async function listUsers(
     conditions.push(
       "id IN (SELECT userId FROM company_user WHERE companyId = $companyId)",
     );
-    bindings.companyId = params.companyId;
+    bindings.companyId = rid(params.companyId);
   }
   if (params.search) {
     conditions.push("profile.name @@ $search");
