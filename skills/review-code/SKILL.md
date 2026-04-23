@@ -1,6 +1,6 @@
 ---
 name: review-code
-description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events, check-library-updates), fixes failures, and restarts the loop until no errors remain.
+description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events, check-library-updates), fixes failures, and restarts the loop until no errors remain. This skill has nothing to do with uncommitted code, etc., and nothing to do with Git. It's for reviewing the project's codebase.
 ---
 
 # Review Code
