@@ -476,7 +476,7 @@ export default function MenuTreeEditor(
                   {node.emoji ?? (node.children.length > 0 ? "📁" : "📄")}
                 </span>
                 <span className="font-medium text-sm text-white truncate">
-                  {node.label}
+                  {t(node.label)}
                 </span>
                 {node.componentName && (
                   <span className="hidden sm:inline text-xs text-[var(--color-light-text)]/40 font-mono truncate">

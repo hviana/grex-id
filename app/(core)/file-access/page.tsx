@@ -89,7 +89,7 @@ export default function FileAccessPage() {
             <span className="text-xl">📂</span>
             <div>
               <h3 className="font-semibold text-white text-lg">
-                {item.name}
+                {t(item.name)}
               </h3>
               <p className="font-mono text-sm text-[var(--color-light-text)] mt-0.5">
                 {item.categoryPattern}
