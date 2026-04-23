@@ -172,7 +172,7 @@ export async function createUserWithChannels(params: {
       passwordHash = crypto::argon2::generate($password),
       profile = $prof[0].id,
       channels = [${channelsArray}],
-      roles = ["viewer"],
+      roles = [],
       twoFactorEnabled = false,
       stayLoggedIn = false;
     SELECT * FROM $usr[0].id FETCH profile, channels;`;

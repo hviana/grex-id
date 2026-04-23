@@ -92,6 +92,7 @@ export async function handleAutoRecharge(
     systemId: String(sub.systemId),
     amount: sub.autoRechargeAmount,
     paymentMethodId: String(paymentMethod.id),
+    subscriptionId: String(sub.id),
   });
 
   await publish("process_payment", {

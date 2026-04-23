@@ -20,10 +20,10 @@ export async function searchUserCompaniesBySystem(params: {
     `LET $sys = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1);
      SELECT companyId FROM company_system
      WHERE systemId = $sys[0].id
-       AND companyId IN (SELECT companyId FROM company_user WHERE userId = $userId)
+       AND companyId INSIDE (SELECT VALUE companyId FROM company_user WHERE userId = $userId)
        AND companyId.name @@ $search
-     FETCH companyId
-     LIMIT 20`,
+     LIMIT 20
+     FETCH companyId`,
     {
       systemSlug: params.systemSlug,
       userId: params.userId,

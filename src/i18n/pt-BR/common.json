@@ -41,8 +41,6 @@
   "user": "Usuário",
   "roles.superuser.name": "Superusuário",
   "roles.admin.name": "Administrador",
-  "roles.editor.name": "Editor",
-  "roles.viewer.name": "Visualizador",
   "sidebar.search": "Buscar no menu...",
   "sidebar.navigation": "Navegação",
   "profile.title": "Meu Perfil",

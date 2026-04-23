@@ -98,7 +98,7 @@ export async function getBillingData(params: {
     `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
      SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddress;
      SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
-     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";
+     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits" GROUP ALL;
      ${paymentQuery}
      SELECT id, amount, currency, kind, continuityData, expiresAt, createdAt
        FROM payment
@@ -324,11 +324,14 @@ export async function purchaseCredits(params: {
   const result = await db.query<
     [Record<string, unknown>[], { id: string }[]]
   >(
-    `CREATE credit_purchase SET
+    `LET $subId = (SELECT id FROM subscription
+      WHERE companyId = $companyId AND systemId = $systemId AND status = "active" LIMIT 1)[0].id;
+     CREATE credit_purchase SET
       companyId = $companyId,
       systemId = $systemId,
       amount = $amount,
       paymentMethodId = $paymentMethodId,
+      subscriptionId = $subId,
       status = "pending";
      UPDATE subscription SET creditAlertSent = false
       WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
@@ -434,7 +437,7 @@ export async function applyVoucherToSubscription(params: {
   const hasOpCountChanges = opCountNewValues &&
     Object.keys(opCountNewValues).length > 0;
   const opCountMergeClause = hasOpCountChanges
-    ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountNewValues), operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, $alertResets)"
+    ? ", remainingOperationCount = object::extend(remainingOperationCount ?? {}, $opCountNewValues), operationCountAlertSent = object::extend(operationCountAlertSent ?? {}, $alertResets)"
     : "";
 
   const updateQuery = creditClause || opCountMergeClause
@@ -532,12 +535,12 @@ export async function retryPayment(
        LIMIT 1);
      IF array::len($sub) = 0 {
        RETURN [{ result: "not_found" }];
-     } ELSE (IF $sub[0].retryPaymentInProgress = true {
+     } ELSE IF $sub[0].retryPaymentInProgress = true {
        RETURN [{ result: "conflict" }];
      } ELSE {
        UPDATE $sub[0].id SET retryPaymentInProgress = true;
        RETURN [{ result: "ok", id: $sub[0].id }];
-     });`,
+     };`,
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
 
@@ -638,6 +641,7 @@ export async function createCreditPurchase(data: {
   systemId: string;
   amount: number;
   paymentMethodId: string;
+  subscriptionId?: string;
 }): Promise<CreditPurchase> {
   const db = await getDb();
   const result = await db.query<[CreditPurchase[]]>(
@@ -646,8 +650,14 @@ export async function createCreditPurchase(data: {
       systemId = $systemId,
       amount = $amount,
       paymentMethodId = $paymentMethodId,
+      subscriptionId = $subscriptionId,
       status = "pending"`,
-    data,
+    {
+      ...data,
+      subscriptionId: data.subscriptionId
+        ? rid(data.subscriptionId)
+        : undefined,
+    },
   );
   return result[0][0];
 }
@@ -1311,6 +1321,7 @@ export async function createAutoRechargePurchase(params: {
   systemId: string;
   amount: number;
   paymentMethodId: string;
+  subscriptionId: string;
 }): Promise<string> {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
@@ -1319,12 +1330,14 @@ export async function createAutoRechargePurchase(params: {
        systemId = $systemId,
        amount = $amount,
        paymentMethodId = $paymentMethodId,
+       subscriptionId = $subscriptionId,
        status = "pending"`,
     {
       companyId: rid(params.companyId),
       systemId: rid(params.systemId),
       amount: params.amount,
       paymentMethodId: rid(params.paymentMethodId),
+      subscriptionId: rid(params.subscriptionId),
     },
   );
   return String(result[0]?.[0]?.id ?? "");

@@ -25,6 +25,7 @@ export async function listTags(
   companyId: string,
   systemId: string,
 ): Promise<Tag[]> {
+  if (companyId === "0" || systemId === "0") return [];
   const db = await getDb();
   const result = await db.query<[Tag[]]>(
     `SELECT * FROM tag

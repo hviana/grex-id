@@ -18,7 +18,7 @@ export async function listUsers(
 
   if (params.companyId) {
     conditions.push(
-      "id IN (SELECT userId FROM company_user WHERE companyId = $companyId)",
+      "id INSIDE (SELECT VALUE userId FROM company_user WHERE companyId = $companyId)",
     );
     bindings.companyId = rid(params.companyId);
   }

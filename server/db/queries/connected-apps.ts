@@ -53,7 +53,7 @@ export async function createConnectedAppWithToken(data: {
 }): Promise<{ app: ConnectedApp; token: ApiToken }> {
   const db = await getDb();
   const result = await db.query<[unknown, unknown, ConnectedApp[], ApiToken[]]>(
-    `LET $token = CREATE api_token SET
+    `LET $tkn = CREATE api_token SET
       userId = $userId,
       companyId = $companyId,
       systemId = $systemId,
@@ -73,9 +73,9 @@ export async function createConnectedAppWithToken(data: {
       permissions = $permissions,
       monthlySpendLimit = $monthlySpendLimit,
       maxOperationCount = $maxOperationCount,
-      apiTokenId = $token[0].id;
+      apiTokenId = $tkn[0].id;
     SELECT * FROM $app[0].id;
-    SELECT * FROM $token[0].id;`,
+    SELECT * FROM $tkn[0].id;`,
     {
       userId: rid(data.userId),
       name: data.name,

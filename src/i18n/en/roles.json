@@ -1,6 +1,4 @@
 {
   "superuser": "Superuser",
-  "admin": "Admin",
-  "editor": "Editor",
-  "viewer": "Viewer"
+  "admin": "Admin"
 }

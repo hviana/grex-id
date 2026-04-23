@@ -105,7 +105,7 @@ export async function deductFromPlanCredits(params: {
   await db.query(
     `UPDATE $subId SET remainingPlanCredits -= $amount${
       params.opCountMerge
-        ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)"
+        ? ", remainingOperationCount = object::extend(remainingOperationCount ?? {}, $opCountMerge)"
         : ""
     };
      UPSERT credit_expense SET
@@ -147,7 +147,7 @@ export async function deductFromPurchasedCredits(params: {
   await db.query(
     `UPDATE $subId SET remainingPlanCredits = 0${
       params.opCountMerge
-        ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountMerge)"
+        ? ", remainingOperationCount = object::extend(remainingOperationCount ?? {}, $opCountMerge)"
         : ""
     };
      UPSERT usage_record SET
@@ -238,7 +238,7 @@ export async function setOperationCountAlertAndFetchOwner(params: {
 > {
   const db = await getDb();
   return db.query(
-    `UPDATE $subId SET operationCountAlertSent = object::merge(CASE WHEN operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
+    `UPDATE $subId SET operationCountAlertSent = object::extend(IF operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
      LET $companyId = $cId;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT id, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
