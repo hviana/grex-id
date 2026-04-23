@@ -9,6 +9,7 @@ import enRoles from "./en/roles.json";
 import enPermissions from "./en/permissions.json";
 import enEntities from "./en/entities.json";
 import enResources from "./en/resources.json";
+import enGrexId from "./en/systems/grex-id.json";
 import ptBRCommon from "./pt-BR/common.json";
 import ptBRAuth from "./pt-BR/auth.json";
 import ptBRCore from "./pt-BR/core.json";
@@ -20,6 +21,7 @@ import ptBRRoles from "./pt-BR/roles.json";
 import ptBRPermissions from "./pt-BR/permissions.json";
 import ptBREntities from "./pt-BR/entities.json";
 import ptBRResources from "./pt-BR/resources.json";
+import ptBRGrexId from "./pt-BR/systems/grex-id.json";
 
 type TranslationMap = Record<string, string>;
 
@@ -52,7 +54,10 @@ const translations: Record<string, Record<string, TranslationMap>> = {
   },
 };
 
-const systemTranslations: Record<string, Record<string, TranslationMap>> = {};
+const systemTranslations: Record<string, Record<string, TranslationMap>> = {
+  en: { "grex-id": enGrexId },
+  "pt-BR": { "grex-id": ptBRGrexId },
+};
 const frameworkTranslations: Record<string, Record<string, TranslationMap>> =
   {};
 

@@ -193,7 +193,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuth({ requireAuthenticated: true }),
   getHandler,
 );
 

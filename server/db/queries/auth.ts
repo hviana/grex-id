@@ -377,8 +377,9 @@ export async function resolveUserExchange(
        WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
        LIMIT 1;
      SELECT slug FROM system WHERE id = $systemId LIMIT 1;
-     SELECT permissions FROM role WHERE id IN (SELECT VALUE roles FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
+     SELECT permissions FROM role WHERE name IN array::flatten(SELECT VALUE roles FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1)
+       AND systemId = $systemId;`,
     {
       userId: rid(userId),
       companyId: rid(companyId),

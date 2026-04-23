@@ -57,7 +57,7 @@ export default function OnboardingSystemPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/core/systems")
+    fetch("/api/public/system?list=true")
       .then((r) => r.json())
       .then((json) => {
         if (json.success) {
@@ -78,13 +78,11 @@ export default function OnboardingSystemPage() {
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/core/plans?systemId=${
-          encodeURIComponent(selectedSystem.id)
-        }&limit=50`,
-      );
-      const json = await res.json();
-      const activePlans = (json.data ?? []).filter(
+      // Plans are already included in the public system list response
+      const systemWithPlans = systems.find((s) => s.id === selectedSystem.id) as
+        | (SystemOption & { plans?: PlanOption[] })
+        | undefined;
+      const activePlans = (systemWithPlans?.plans ?? []).filter(
         (p: PlanOption) => p.isActive,
       );
       setPlans(activePlans);

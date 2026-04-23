@@ -182,6 +182,11 @@ class Core {
     return data.systemsBySlug.get(slug);
   }
 
+  async getAllSystems(): Promise<System[]> {
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return Array.from(data.systemsBySlug.values());
+  }
+
   async getRolesForSystem(systemId: string): Promise<Role[]> {
     const data = await getCache<CoreData>(CORE_SLUG, "data");
     return data.rolesBySystem.get(String(systemId)) ?? [];
