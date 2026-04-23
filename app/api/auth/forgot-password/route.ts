@@ -9,7 +9,7 @@ import {
   findVerifiedOwnerByChannelValue,
   listVerifiedChannelTypes,
 } from "@/server/db/queries/entity-channels";
-import { getDb, rid } from "@/server/db/connection";
+import { getUserProfile } from "@/server/db/queries/auth";
 
 function withAuthRateLimit() {
   return async (
@@ -89,15 +89,9 @@ async function handler(
     ...allTypes.filter((t) => t !== matchedType),
   ];
 
-  const db = await getDb();
-  const profile = await db.query<
-    [{ profile: { name: string; locale?: string } }[]]
-  >(
-    `SELECT profile FROM $userId FETCH profile`,
-    { userId: rid(match.ownerId) },
-  );
-  const name = profile[0]?.[0]?.profile?.name ?? "";
-  const locale = profile[0]?.[0]?.profile?.locale;
+  const profileData = await getUserProfile(match.ownerId);
+  const name = profileData?.name ?? "";
+  const locale = profileData?.locale;
 
   await publish("send_communication", {
     channels: channelOrder,

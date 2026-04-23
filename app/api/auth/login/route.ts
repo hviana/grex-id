@@ -3,6 +3,7 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
   findUserByVerifiedChannel,
+  resolveUserMembership,
   userHasVerifiedChannel,
   verifyPassword,
 } from "@/server/db/queries/auth";
@@ -10,7 +11,6 @@ import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
 import { decryptField } from "@/server/utils/crypto";
 import { standardizeField } from "@/server/utils/field-standardizer";
-import { getDb, rid } from "@/server/db/connection";
 import { rememberActor } from "@/server/utils/actor-validity";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
 
@@ -180,34 +180,8 @@ async function handler(
     }
   }
 
-  const db = await getDb();
-  const membership = await db.query<
-    [{
-      companyId: string;
-      systemId: string;
-      systemSlug: string;
-      roles: string[];
-      permissions: string[];
-    }[]]
-  >(
-    `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
-     IF array::len($ucs) > 0 {
-       LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
-       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
-       SELECT
-         $ucs[0].companyId AS companyId,
-         $ucs[0].systemId AS systemId,
-         $sys[0].slug AS systemSlug,
-         (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
-         array::flatten($roleRecs[*].permissions) AS permissions
-       FROM system WHERE id = $ucs[0].systemId LIMIT 1;
-     } ELSE {
-       RETURN [];
-     };`,
-    { userId: rid(String(user.id)) },
-  );
+  const mem = await resolveUserMembership(String(user.id));
 
-  const mem = membership[0]?.[0];
   const tenant = mem
     ? {
       systemId: String(mem.systemId),

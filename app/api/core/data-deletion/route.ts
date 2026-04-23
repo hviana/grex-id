@@ -6,7 +6,7 @@ import {
   deleteCompanySystemData,
   verifyUserPassword,
 } from "@/server/db/queries/data-deletion";
-import { getDb } from "@/server/db/connection";
+import { companyExists, getSystemSlug } from "@/server/db/queries/systems";
 import { reloadTenant } from "@/server/utils/actor-validity";
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
@@ -45,12 +45,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Look up the system slug for file deletion
-  const db = await getDb();
-  const systemResult = await db.query<[{ slug: string }[]]>(
-    "SELECT slug FROM $systemId LIMIT 1",
-    { systemId },
-  );
-  const systemSlug = systemResult[0]?.[0]?.slug;
+  const systemSlug = await getSystemSlug(systemId);
 
   if (!systemSlug) {
     return Response.json(
@@ -66,11 +61,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Verify company exists
-  const companyResult = await db.query<[{ id: string }[]]>(
-    "SELECT id FROM $companyId LIMIT 1",
-    { companyId },
-  );
-  if (!companyResult[0]?.[0]) {
+  const exists = await companyExists(companyId);
+  if (!exists) {
     return Response.json(
       {
         success: false,

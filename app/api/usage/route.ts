@@ -2,13 +2,13 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { resolveFileCacheLimit } from "@/server/utils/guards";
 import {
   getCoreCreditExpenses,
   getOperationCount,
+  getTenantUsageConfig,
 } from "@/server/db/queries/usage";
 
 async function getHandler(req: Request, ctx: RequestContext) {
@@ -108,61 +108,20 @@ async function getHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const db = await getDb();
-
-  const configResult = await db.query<
-    [
-      { slug: string }[],
-      {
-        storageLimitBytes: number;
-        fileCacheLimitBytes: number;
-        voucherId: string | null;
-      }[],
-      { storageLimitModifier: number; fileCacheLimitModifier: number }[],
-      { resourceKey: string; totalAmount: number; totalCount: number }[],
-    ]
-  >(
-    `SELECT slug FROM ONLY $systemId;
-     SELECT plan.storageLimitBytes AS storageLimitBytes, plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
-       FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1
-       FETCH plan;
-     LET $voucherId = (SELECT VALUE voucherId FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1)[0];
-     IF $voucherId != NONE {
-       SELECT storageLimitModifier, fileCacheLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
-     } ELSE {
-       SELECT NONE FROM NONE;
-     };
-     SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount FROM credit_expense
-       WHERE companyId = $companyId AND systemId = $systemId
-         AND day >= $startDate AND day <= $endDate
-       GROUP BY resourceKey
-       ORDER BY totalAmount DESC`,
-    {
-      systemId: rid(systemId),
-      companyId: rid(companyId),
-      startDate: start,
-      endDate: end,
-    },
-  );
-
-  const systemSlug = (configResult[0] as unknown as { slug?: string }[])
-    ?.[0]?.slug;
-  const subRow = (configResult[1] as unknown[])?.[0] as {
-    storageLimitBytes?: number;
-    fileCacheLimitBytes?: number;
-  } | undefined;
+  const config = await getTenantUsageConfig({
+    systemId,
+    companyId,
+    startDate: start,
+    endDate: end,
+  });
 
   let usedBytes = 0;
-  if (systemSlug) {
+  if (config.systemSlug) {
     const fs = await getFS();
     let cursor: unknown = undefined;
     do {
       const listing = await fs.readDir({
-        path: [companyId, systemSlug],
+        path: [companyId, config.systemSlug],
         control: () => ({
           accessAllowed: true,
           maxPageSize: 1000,
@@ -174,13 +133,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
     } while (cursor);
   }
 
-  let storageLimitBytes = subRow?.storageLimitBytes ?? 1073741824;
-  storageLimitBytes +=
-    (configResult[2]?.[0] as unknown as { storageLimitModifier?: number })
-      ?.storageLimitModifier ?? 0;
+  let storageLimitBytes = config.subscriptionStorageLimit ?? 1073741824;
+  storageLimitBytes += config.voucherStorageModifier;
 
   const cacheLimitResult = await resolveFileCacheLimit({ companyId, systemId });
-  const tenantKey = systemSlug ? `${companyId}:${systemSlug}` : null;
+  const tenantKey = config.systemSlug
+    ? `${companyId}:${config.systemSlug}`
+    : null;
   const cacheStats = tenantKey
     ? FileCacheManager.getInstance().getStats(
       tenantKey,
@@ -188,7 +147,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     )
     : { usedBytes: 0, maxBytes: cacheLimitResult.maxBytes, fileCount: 0 };
 
-  const creditExpenses = configResult[3] ?? [];
+  const creditExpenses = config.creditExpenses;
 
   const operationCount = await getOperationCount(companyId, systemId);
 

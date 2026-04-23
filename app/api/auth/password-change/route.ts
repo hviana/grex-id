@@ -3,9 +3,12 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
-import { hashPassword, verifyPassword } from "@/server/db/queries/auth";
+import {
+  getUserProfile,
+  hashPassword,
+  verifyPassword,
+} from "@/server/db/queries/auth";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
-import { getDb, rid } from "@/server/db/connection";
 import { validateField } from "@/server/utils/field-validator";
 import { publish } from "@/server/event-queue/publisher";
 import { communicationGuard } from "@/server/utils/verification-guard";
@@ -139,15 +142,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     ...verifiedTypes.filter((c) => !defaultChannels.includes(c)),
   ];
 
-  const db = await getDb();
-  const profile = await db.query<
-    [{ profile: { name: string; locale?: string } }[]]
-  >(
-    `SELECT profile FROM $userId FETCH profile`,
-    { userId: rid(userId) },
-  );
-  const name = profile[0]?.[0]?.profile?.name ?? "";
-  const locale = profile[0]?.[0]?.profile?.locale;
+  const profileData = await getUserProfile(userId);
+  const name = profileData?.name ?? "";
+  const locale = profileData?.locale;
 
   await publish("send_communication", {
     channels: channelOrder,

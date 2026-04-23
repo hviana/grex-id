@@ -8,6 +8,12 @@ import {
 } from "@/server/db/queries/systems/grex-id/detections";
 
 async function getHandler(req: Request, ctx: RequestContext) {
+  if (
+    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
+    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+  ) {
+    return Response.json({ success: true, data: [] });
+  }
   const url = new URL(req.url);
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");

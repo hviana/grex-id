@@ -8,6 +8,12 @@ import {
 } from "@/server/db/queries/systems/grex-id/settings";
 
 async function getHandler(req: Request, ctx: RequestContext) {
+  if (
+    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
+    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+  ) {
+    return Response.json({ success: true, data: [] });
+  }
   const settings = await getAllSettings(
     ctx.tenant.companyId,
     ctx.tenant.systemId,
@@ -16,6 +22,21 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
+  if (
+    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
+    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+  ) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.billing.companyAndSystem",
+        },
+      },
+      { status: 400 },
+    );
+  }
   const body = await req.json();
   const { settings } = body;
 

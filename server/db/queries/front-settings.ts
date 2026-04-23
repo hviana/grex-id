@@ -82,3 +82,14 @@ export async function batchUpsertFrontSettings(
   });
   await db.query(stmts.join("; "), bindings);
 }
+
+/**
+ * Fetches all front_setting rows for cache hydration.
+ */
+export async function fetchAllFrontSettings(): Promise<FrontCoreSetting[]> {
+  const db = await getDb();
+  const results = await db.query<[FrontCoreSetting[]]>(
+    "SELECT * FROM front_setting;",
+  );
+  return results[0] ?? [];
+}

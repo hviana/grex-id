@@ -89,3 +89,33 @@ export async function deleteSystem(id: string): Promise<void> {
   const db = await getDb();
   await db.query("DELETE $id", { id: rid(id) });
 }
+
+/** Returns the slug for a system by its record id, or null if not found. */
+export async function getSystemSlug(systemId: string): Promise<string | null> {
+  const db = await getDb();
+  const result = await db.query<[{ slug: string }[]]>(
+    "SELECT slug FROM $systemId LIMIT 1",
+    { systemId },
+  );
+  return result[0]?.[0]?.slug ?? null;
+}
+
+/** Returns the system id by its slug, or null if not found. */
+export async function getSystemIdBySlug(slug: string): Promise<string | null> {
+  const db = await getDb();
+  const result = await db.query<[{ id: string }[]]>(
+    "SELECT id FROM system WHERE slug = $slug LIMIT 1",
+    { slug },
+  );
+  return result[0]?.[0]?.id ?? null;
+}
+
+/** Checks whether a company record exists for the given record id. */
+export async function companyExists(companyId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.query<[{ id: string }[]]>(
+    "SELECT id FROM $companyId LIMIT 1",
+    { companyId },
+  );
+  return !!result[0]?.[0];
+}

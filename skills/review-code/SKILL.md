@@ -1,6 +1,6 @@
 ---
 name: review-code
-description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events, check-library-updates), fixes failures, and restarts the loop until no errors remain. This skill has nothing to do with uncommitted code, etc., and nothing to do with Git. It's for reviewing the project's codebase.
+description: Use when the user asks for a full, iterative code review of the entire project — Core, every subsystem, and every framework. Trigger on phrases like "review the code", "audit the project", "review everything", "loop until clean", "full project review". The skill exercises every route, every query, every frontend page, and every event handler through the project's testing skills (test-db-queries, test-routes, test-frontend, test-events), fixes failures, and restarts the loop until no errors remain. This skill has nothing to do with uncommitted code, etc., and nothing to do with Git. It's for reviewing the project's codebase.
 ---
 
 # Review Code
@@ -49,10 +49,8 @@ List every runnable artifact in the project:
 - **Routes:** every `app/api/**/route.ts` file.
 - **Queries:** every exported function in every `server/db/queries/**/*.ts`, In
   addition to queries scattered throughout the files - find all `db.query`
-  calls. You need to test exactly the queries that are in the code, not
-  meaningless simplifications.
-- **Event handlers:** every registered handler name (core + systems +
-  frameworks).
+  calls.
+- **Event handlers:** every registered handler name (all specified targets).
 - **Frontend pages:** every `app/**/page.tsx` file.
 - **Subsystems:** every `[slug]` folder under `systems/`.
 - **Frameworks:** every `<name>` folder under `frameworks/`.
@@ -66,7 +64,7 @@ unexpected status, broken render, unhandled event, etc as a finding.
 #### 2a. Database — run `skills/test-db-queries/SKILL.md`
 
 For every query function in `server/db/queries/` and queries scattered
-throughout the files - find all `db.query` calls (core + systems + frameworks):
+throughout the files - find all `db.query` calls (all specified targets):
 
 1. Read the query file to understand what the function does and what parameters
    it expects.
@@ -76,11 +74,14 @@ throughout the files - find all `db.query` calls (core + systems + frameworks):
    - FETCH directives resolve record links correctly.
    - Cursor pagination works (returns `nextCursor`/`prevCursor` when
      applicable).
-   - No SurrealDB errors in the output.
+   - No SurrealDB errors in the output. **Important** You need to test exactly
+     the queries that are in the code, not meaningless simplifications. You may
+     need to insert synthetic data for testing, observing the database structure
+     and using the testing skill to insert as well, etc.
 
 #### 2b. Routes — run `skills/test-routes/SKILL.md`
 
-For every route in `app/api/` (core + systems + frameworks):
+For every route in `app/api/` (all specified targets):
 
 1. Start the dev server: `tsx skills/test-routes/run.ts server start`
 2. Login as superuser: `tsx skills/test-routes/run.ts login`
@@ -97,7 +98,7 @@ For every route in `app/api/` (core + systems + frameworks):
 
 #### 2c. Events — run `skills/test-events/SKILL.md`
 
-For every registered event handler (core + systems + frameworks):
+For every registered event handler (all specified targets):
 
 1. Trigger the action that publishes the event (via `test-routes` or
    `test-db-queries`).
@@ -111,7 +112,7 @@ For every registered event handler (core + systems + frameworks):
 
 #### 2d. Frontend — run `skills/test-frontend/SKILL.md`
 
-For every page in `app/` (auth pages, core admin, app panel, public pages):
+For every page in `app/` (all specified targets):
 
 1. Start the frontend driver: `tsx skills/test-frontend/run.ts start`
 2. For pages requiring auth, run `tsx skills/test-frontend/run.ts login` first.
@@ -143,14 +144,13 @@ confirm the fix works. Do not assume a fix is correct without exercising it.
 
 ### Phase 5 — Restart
 
-Go back to Phase 1 and run the full sweep again. Stop only when a complete pass
-produces zero findings across Core, every subsystem, and every framework, with
-every test skill passing.
+First, compact the context, then go back to Phase 1 and run the full sweep
+again. Stop only when a complete pass produces zero findings across all
+specified targets.
 
 ## Rules for the review itself
 
 - **Do not skip running the test skills.** Every route, every query (you need to
-  test exactly the queries that are in the code, not meaningless
-  simplifications.), every page, every event handler must be exercised. If a
-  test skill cannot cover a snippet, state so explicitly in the finding log
-  instead of marking it passed.
+  test exactly the queries that are in the code), every page, every event
+  handler must be exercised. If a test skill cannot cover a snippet, state so
+  explicitly in the finding log instead of marking it passed.

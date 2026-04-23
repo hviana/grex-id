@@ -13,7 +13,7 @@ export async function listVouchers(
   const bindings: Record<string, unknown> = {};
 
   if (params.search) {
-    conditions.push("code CONTAINS $search");
+    conditions.push("code @@ $search");
     bindings.search = params.search;
   }
 
@@ -37,6 +37,7 @@ export async function findVoucherByCode(code: string): Promise<Voucher | null> {
 export async function createVoucher(data: {
   code: string;
   applicableCompanyIds: string[];
+  applicablePlanIds: string[];
   priceModifier: number;
   permissions: string[];
   entityLimitModifiers?: Record<string, number>;
@@ -47,7 +48,7 @@ export async function createVoucher(data: {
   maxConcurrentUploadsModifier?: number;
   maxDownloadBandwidthModifier?: number;
   maxUploadBandwidthModifier?: number;
-  maxOperationCountModifier?: number;
+  maxOperationCountModifier?: Record<string, number>;
   creditModifier?: number;
   expiresAt?: string;
 }): Promise<Voucher> {
@@ -58,6 +59,7 @@ export async function createVoucher(data: {
     `CREATE voucher SET
       code = $code,
       applicableCompanyIds = $applicableCompanyIds,
+      applicablePlanIds = $applicablePlanIds,
       priceModifier = $priceModifier,
       permissions = $permissions,
       ${
@@ -78,6 +80,7 @@ export async function createVoucher(data: {
     {
       ...data,
       applicableCompanyIds: data.applicableCompanyIds ?? [],
+      applicablePlanIds: data.applicablePlanIds ?? [],
       entityLimitModifiers: hasEntityLimitModifiers
         ? data.entityLimitModifiers
         : undefined,
@@ -88,15 +91,53 @@ export async function createVoucher(data: {
       maxConcurrentUploadsModifier: data.maxConcurrentUploadsModifier ?? 0,
       maxDownloadBandwidthModifier: data.maxDownloadBandwidthModifier ?? 0,
       maxUploadBandwidthModifier: data.maxUploadBandwidthModifier ?? 0,
-      maxOperationCountModifier: data.maxOperationCountModifier ?? 0,
+      maxOperationCountModifier: data.maxOperationCountModifier || undefined,
       creditModifier: data.creditModifier ?? 0,
-      expiresAt: data.expiresAt ?? undefined,
+      expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
     },
   );
   return result[0][0];
 }
 
+/**
+ * Updates a voucher with auto-removal cascade (§22.7).
+ * If applicablePlanIds is non-empty after the update, clears voucherId
+ * on any subscription whose planId is NOT in the new list.
+ * Both operations run in one batched query.
+ */
+export async function updateVoucherWithCascade(
+  id: string,
+  sets: string[],
+  bindings: Record<string, unknown>,
+  shouldCascade: boolean,
+): Promise<Voucher | null> {
+  if (sets.length === 0) return null;
+
+  const db = await getDb();
+  bindings.id = rid(String(id));
+
+  const cascadeQuery = shouldCascade
+    ? `UPDATE subscription SET voucherId = NONE
+       WHERE voucherId = $id
+         AND planId NOT IN $applicablePlanIds;`
+    : "";
+
+  const result = await db.query<[Voucher[]]>(
+    `UPDATE $id SET ${sets.join(", ")} RETURN AFTER;${cascadeQuery}`,
+    bindings,
+  );
+  return result[0]?.[0] ?? null;
+}
+
+/**
+ * Removes voucher reference from subscriptions and deletes the voucher
+ * in one batched query.
+ */
 export async function deleteVoucher(id: string): Promise<void> {
   const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
+  await db.query(
+    `UPDATE subscription SET voucherId = NONE WHERE voucherId = $id;
+     DELETE $id;`,
+    { id: rid(id) },
+  );
 }

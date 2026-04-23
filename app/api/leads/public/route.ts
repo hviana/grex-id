@@ -7,8 +7,8 @@ import {
   findLeadByChannelValues,
   isLeadAssociated,
 } from "@/server/db/queries/leads";
+import { getSystemIdBySlug } from "@/server/db/queries/systems";
 import { publish } from "@/server/event-queue/publisher";
-import { getDb } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -131,12 +131,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       ? { avatarUri }
       : undefined;
 
-    const db = await getDb();
-    const systemResult = await db.query<[{ id: string }[]]>(
-      "SELECT id FROM system WHERE slug = $slug LIMIT 1",
-      { slug: systemSlug },
-    );
-    const systemId = systemResult[0]?.[0]?.id;
+    const systemId = await getSystemIdBySlug(systemSlug!);
 
     if (!systemId) {
       return Response.json(

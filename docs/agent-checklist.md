@@ -123,8 +123,8 @@ Before writing any new UI, verify a shared primitive does not already handle it
       `record<>`; parent holds the link, child has **no** back-pointer (§1.1.10,
       §7.1).
 - [ ] Pagination is cursor-based, capped at 200 server-side (§7.1).
-- [ ] Queries live under `server/db/queries/` — never inlined in route handlers
-      (§7.1).
+- [ ] Queries live under `server/db/queries/` — never inlined in any file,
+      except agent skills, migrations and seeds (§7.1).
 - [ ] **Every query function batches all statements into one `db.query()`** — no
       sequential awaits, no `Promise.all` of `db.query()` (§7.2).
 - [ ] CREATE flow uses the mandatory helpers: `standardizeField` →

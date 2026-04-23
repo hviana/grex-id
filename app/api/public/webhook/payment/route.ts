@@ -1,5 +1,5 @@
-import { getDb, rid } from "@/server/db/connection";
 import { publish } from "@/server/event-queue/publisher";
+import { findPaymentByTransactionId } from "@/server/db/queries/billing";
 
 export async function POST(req: Request) {
   let payload: Record<string, any>;
@@ -36,15 +36,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const db = await getDb();
-  const paymentLookup = await db.query<
-    [{ id: string; status: string }[]]
-  >(
-    `SELECT id, status FROM payment WHERE transactionId = $txId LIMIT 1`,
-    { txId: transactionId },
-  );
+  const payment = await findPaymentByTransactionId(transactionId);
 
-  const payment = paymentLookup[0]?.[0];
   if (!payment) {
     return Response.json({ success: true, action: "ignored" });
   }

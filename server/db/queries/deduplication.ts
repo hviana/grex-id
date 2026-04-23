@@ -1,0 +1,29 @@
+import { getDb } from "../connection.ts";
+import { assertServerOnly } from "../../utils/server-only.ts";
+
+assertServerOnly("deduplication");
+
+/**
+ * Checks for existing records matching the given field/value pairs.
+ * Each check is batched into a single query with dynamic bindings.
+ *
+ * Returns an array of result sets, one per field, in order.
+ */
+export async function queryDuplicateChecks(
+  entity: string,
+  fields: { field: string; value: unknown }[],
+): Promise<{ id: string }[][]> {
+  const db = await getDb();
+
+  const statements = fields
+    .map((f, i) =>
+      `SELECT id FROM type::table($entity) WHERE ${f.field} = $val_${i} LIMIT 1`
+    )
+    .join(";\n");
+  const bindings: Record<string, unknown> = { entity };
+  fields.forEach((f, i) => {
+    bindings[`val_${i}`] = f.value;
+  });
+
+  return db.query<{ id: string }[][]>(statements, bindings);
+}

@@ -70,92 +70,10 @@ export function withAuth(
 
     const token = authHeader.slice(7);
 
+    // Auth-only verification — narrow catch so handler errors propagate.
+    let claims;
     try {
-      const claims = await verifyTenantToken(token);
-
-      // Cache-only validity check (§12.8). One call covers every actor
-      // type because the cache is keyed by (tenant, actorId).
-      await ensureActorValidityLoaded(claims);
-      if (!claims.actorId || !isActorValid(claims, claims.actorId)) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "UNAUTHORIZED",
-              message: "auth.error.tokenRevoked",
-            },
-          },
-          { status: 401 },
-        );
-      }
-
-      // CORS policy lives on the JWT itself for non-user actors (§12.7).
-      const corsError = enforceCors(req, claims);
-      if (corsError) return corsError;
-
-      ctx.tenant = {
-        systemId: claims.systemId,
-        companyId: claims.companyId,
-        systemSlug: claims.systemSlug,
-        roles: claims.roles,
-        permissions: claims.permissions,
-      };
-      ctx.claims = claims;
-
-      if (ctx.tenant.roles.includes("superuser")) {
-        const response = await next();
-        if (ctx.claims.actorType !== "user") {
-          const corsHeaders = getCorsHeaders(req, ctx.claims);
-          for (const [key, value] of Object.entries(corsHeaders)) {
-            response.headers.set(key, value);
-          }
-        }
-        return response;
-      }
-
-      if (options?.roles && options.roles.length > 0) {
-        const hasRole = options.roles.some((r) => ctx.tenant.roles.includes(r));
-        if (!hasRole) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "FORBIDDEN",
-                message: "auth.error.insufficientRole",
-              },
-            },
-            { status: 403 },
-          );
-        }
-      }
-
-      if (options?.permissions && options.permissions.length > 0) {
-        const hasPermission = ctx.tenant.permissions.includes("*") ||
-          options.permissions.some((p) => ctx.tenant.permissions.includes(p));
-        if (!hasPermission) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "FORBIDDEN",
-                message: "auth.error.insufficientPermissions",
-              },
-            },
-            { status: 403 },
-          );
-        }
-      }
-
-      const response = await next();
-
-      if (ctx.claims.actorType !== "user") {
-        const corsHeaders = getCorsHeaders(req, ctx.claims);
-        for (const [key, value] of Object.entries(corsHeaders)) {
-          response.headers.set(key, value);
-        }
-      }
-
-      return response;
+      claims = await verifyTenantToken(token);
     } catch {
       return Response.json(
         {
@@ -168,5 +86,89 @@ export function withAuth(
         { status: 401 },
       );
     }
+
+    // Cache-only validity check (§12.8). One call covers every actor
+    // type because the cache is keyed by (tenant, actorId).
+    await ensureActorValidityLoaded(claims);
+    if (!claims.actorId || !isActorValid(claims, claims.actorId)) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "auth.error.tokenRevoked",
+          },
+        },
+        { status: 401 },
+      );
+    }
+
+    // CORS policy lives on the JWT itself for non-user actors (§12.7).
+    const corsError = enforceCors(req, claims);
+    if (corsError) return corsError;
+
+    ctx.tenant = {
+      systemId: claims.systemId,
+      companyId: claims.companyId,
+      systemSlug: claims.systemSlug,
+      roles: claims.roles,
+      permissions: claims.permissions,
+    };
+    ctx.claims = claims;
+
+    if (ctx.tenant.roles.includes("superuser")) {
+      const response = await next();
+      if (ctx.claims.actorType !== "user") {
+        const corsHeaders = getCorsHeaders(req, ctx.claims);
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          response.headers.set(key, value);
+        }
+      }
+      return response;
+    }
+
+    if (options?.roles && options.roles.length > 0) {
+      const hasRole = options.roles.some((r) => ctx.tenant.roles.includes(r));
+      if (!hasRole) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "auth.error.insufficientRole",
+            },
+          },
+          { status: 403 },
+        );
+      }
+    }
+
+    if (options?.permissions && options.permissions.length > 0) {
+      const hasPermission = ctx.tenant.permissions.includes("*") ||
+        options.permissions.some((p) => ctx.tenant.permissions.includes(p));
+      if (!hasPermission) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "FORBIDDEN",
+              message: "auth.error.insufficientPermissions",
+            },
+          },
+          { status: 403 },
+        );
+      }
+    }
+
+    const response = await next();
+
+    if (ctx.claims.actorType !== "user") {
+      const corsHeaders = getCorsHeaders(req, ctx.claims);
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        response.headers.set(key, value);
+      }
+    }
+
+    return response;
   };
 }

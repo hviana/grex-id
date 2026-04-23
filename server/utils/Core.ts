@@ -1,4 +1,3 @@
-import { getDb, rid } from "../db/connection.ts";
 import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
@@ -9,6 +8,10 @@ import type { Voucher } from "@/src/contracts/voucher";
 import type { Subscription } from "@/src/contracts/billing";
 import dbConfig from "../../database.json" with { type: "json" };
 import { assertServerOnly } from "./server-only.ts";
+import {
+  fetchActiveSubscription,
+  fetchAllCoreData,
+} from "../db/queries/core-settings.ts";
 
 assertServerOnly("Core");
 
@@ -35,18 +38,7 @@ export interface CoreData {
 const CORE_SLUG = "core";
 
 export async function loadCoreData(): Promise<CoreData> {
-  const db = await getDb();
-
-  const results = await db.query<
-    [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
-  >(
-    `SELECT * FROM system;
-    SELECT * FROM role;
-    SELECT * FROM plan;
-    SELECT * FROM menu_item ORDER BY sortOrder ASC;
-    SELECT * FROM setting;
-    SELECT * FROM voucher;`,
-  );
+  const results = await fetchAllCoreData();
 
   const systems = results[0] ?? [];
   const roles = results[1] ?? [];
@@ -130,14 +122,8 @@ async function loadSubscription(
   companyId: string,
   systemId: string,
 ): Promise<Subscription | null> {
-  const db = await getDb();
-  const result = await db.query<[Subscription[]]>(
-    `SELECT * FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-     LIMIT 1`,
-    { companyId: rid(companyId), systemId: rid(systemId) },
-  );
-  return result[0]?.[0] ?? null;
+  const rows = await fetchActiveSubscription({ companyId, systemId });
+  return rows[0] ?? null;
 }
 
 // Tracked subscription cache keys for bulk eviction

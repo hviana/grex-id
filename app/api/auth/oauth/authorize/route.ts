@@ -3,11 +3,11 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
-import { getDb, rid } from "@/server/db/connection";
-import { createTenantToken } from "@/server/utils/token";
 import { standardizeField } from "@/server/utils/field-standardizer";
+import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
-import type { ApiToken } from "@/src/contracts/token";
+import { findSystemIdBySlug } from "@/server/db/queries/auth";
+import { createConnectedAppWithToken } from "@/server/db/queries/connected-apps";
 import type { Tenant } from "@/src/contracts/tenant";
 
 function withAuthRateLimit() {
@@ -70,13 +70,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const db = await getDb();
-
-  const sysResult = await db.query<[{ id: string }[]]>(
-    "SELECT id FROM system WHERE slug = $slug LIMIT 1",
-    { slug: standardizeField("slug", systemSlug) },
+  const systemId = await findSystemIdBySlug(
+    standardizeField("slug", systemSlug),
   );
-  const systemId = sysResult[0]?.[0]?.id;
   if (!systemId) {
     return Response.json(
       {
@@ -104,51 +100,20 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     permissions: grantedPermissions,
   };
 
-  // Single batched query (§7.2): create api_token + connected_app and
-  // return the fully-resolved rows.
-  const result = await db.query<
-    [unknown, unknown, ApiToken[], Record<string, unknown>[]]
-  >(
-    `LET $token = CREATE api_token SET
-       userId = $userId,
-       companyId = $companyId,
-       systemId = $systemId,
-       tenant = $tenant,
-       name = $clientName,
-       description = $redirectOrigin,
-       permissions = $permissions,
-       monthlySpendLimit = $monthlySpendLimit,
-       maxOperationCount = $maxOperationCount,
-       neverExpires = true,
-       frontendUse = false,
-       frontendDomains = [];
-     LET $app = CREATE connected_app SET
-       name = $clientName,
-       companyId = $companyId,
-       systemId = $systemId,
-       permissions = $permissions,
-       monthlySpendLimit = $monthlySpendLimit,
-       maxOperationCount = $maxOperationCount,
-       apiTokenId = $token[0].id;
-     SELECT * FROM $token[0].id;
-     SELECT * FROM $app[0].id;`,
-    {
-      clientName,
-      companyId: rid(String(companyId)),
-      systemId: rid(String(systemId)),
-      tenant: tokenTenant,
-      permissions: grantedPermissions,
-      monthlySpendLimit: monthlySpendLimit
-        ? Number(monthlySpendLimit)
-        : undefined,
-      maxOperationCount: maxOperationCount ?? undefined,
-      userId: rid(userId),
-      redirectOrigin: redirectOrigin ?? "",
-    },
-  );
+  const { app, token: createdToken } = await createConnectedAppWithToken({
+    userId,
+    name: clientName,
+    companyId: String(companyId),
+    systemId: String(systemId),
+    tenant: tokenTenant,
+    permissions: grantedPermissions,
+    monthlySpendLimit: monthlySpendLimit
+      ? Number(monthlySpendLimit)
+      : undefined,
+    maxOperationCount: maxOperationCount ?? undefined,
+    description: redirectOrigin ?? "",
+  });
 
-  const createdToken = result[2]?.[0];
-  const app = result[3]?.[0];
   if (!createdToken) {
     return Response.json(
       {

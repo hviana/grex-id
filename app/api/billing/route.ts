@@ -2,9 +2,22 @@ import { compose } from "@/server/middleware/compose";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import { withAuth } from "@/server/middleware/withAuth";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
+import {
+  addPaymentMethod,
+  applyVoucherToSubscription,
+  cancelSubscription,
+  disableAutoRecharge,
+  enableAutoRecharge,
+  getBillingData,
+  lookupVoucherAndSubscription,
+  purchaseCredits,
+  removePaymentMethod,
+  retryPayment,
+  setDefaultPaymentMethod,
+  subscribe,
+} from "@/server/db/queries/billing";
 
 function tenantGuard(ctx: RequestContext): Response | null {
   if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
@@ -51,84 +64,18 @@ async function getHandler(req: Request, ctx: RequestContext) {
     }
   }
 
-  const db = await getDb();
-
-  // Build payment history query if requested (§7.1 cursor-based, §7.2 single call)
-  let paymentQuery = "";
-  const queryParams: Record<string, unknown> = {
-    companyId: rid(companyId),
-    systemId: rid(systemId),
-  };
-
-  if (includePayments) {
-    const whereClauses = ["companyId = $companyId", "systemId = $systemId"];
-    if (startDate) {
-      whereClauses.push("createdAt >= $startDate");
-      queryParams.startDate = new Date(startDate).toISOString();
-    }
-    if (endDate) {
-      whereClauses.push("createdAt <= $endDate");
-      queryParams.endDate = new Date(endDate).toISOString();
-    }
-    // Cursor-based pagination on createdAt (§7.1) — cursor is the ISO date of the last row
-    if (paymentCursor) {
-      whereClauses.push("createdAt < $cursorDate");
-      queryParams.cursorDate = new Date(atob(paymentCursor)).toISOString();
-    }
-    const whereStr = whereClauses.join(" AND ");
-    paymentQuery =
-      `SELECT * FROM payment WHERE ${whereStr} ORDER BY createdAt DESC LIMIT 21;`;
-  }
-
-  const result = await db.query<
-    [
-      Record<string, unknown>[],
-      Record<string, unknown>[],
-      Record<string, unknown>[],
-      Record<string, unknown>[],
-      Record<string, unknown>[]?,
-      Record<string, unknown>[]?,
-    ]
-  >(
-    `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
-     SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddress;
-     SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
-     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits";
-     ${paymentQuery}
-     SELECT id, amount, currency, kind, continuityData, expiresAt, createdAt
-       FROM payment
-       WHERE companyId = $companyId
-         AND systemId = $systemId
-         AND status = "pending"
-         AND continuityData IS NOT NONE
-       ORDER BY createdAt DESC
-       LIMIT 10;`,
-    queryParams,
-  );
-
-  const responseData: Record<string, unknown> = {
-    subscriptions: result[0] ?? [],
-    paymentMethods: result[1] ?? [],
-    creditPurchases: result[2] ?? [],
-    creditsBalance: result[3]?.[0]?.balance ?? 0,
-  };
-
-  if (includePayments) {
-    const paymentRows: Record<string, unknown>[] = result[4] ?? [];
-    const hasMore = paymentRows.length > 20;
-    const paymentData = hasMore ? paymentRows.slice(0, 20) : paymentRows;
-    const lastRow = paymentData[paymentData.length - 1];
-    responseData.payments = paymentData;
-    responseData.paymentsNextCursor = hasMore && lastRow
-      ? btoa(String(lastRow.createdAt))
-      : null;
-  }
-
-  responseData.pendingAsyncPayments = result[5] ?? [];
+  const data = await getBillingData({
+    companyId,
+    systemId,
+    startDate: startDate ?? undefined,
+    endDate: endDate ?? undefined,
+    paymentCursor: paymentCursor ?? undefined,
+    includePayments: !!includePayments,
+  });
 
   return Response.json({
     success: true,
-    data: responseData,
+    data,
   });
 }
 
@@ -136,7 +83,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { action } = body;
 
-  const db = await getDb();
   const core = Core.getInstance();
   // §9.2: companyId/systemId come from ctx.tenant, except subscribe which
   // accepts them from body for the onboarding flow (user hasn't exchanged yet)
@@ -209,55 +155,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
       now.getTime() + (plan.recurrenceDays ?? 30) * 86400000,
     );
 
-    const params: Record<string, unknown> = {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      planId: rid(planId),
+    const result = await subscribe({
+      companyId,
+      systemId,
+      planId,
+      paymentMethodId: paymentMethodId ?? null,
+      userId,
       planCredits: plan.planCredits ?? 0,
       operationCountMap,
       start: now,
       end: periodEnd,
-    };
-    if (paymentMethodId) {
-      params.paymentMethodId = rid(paymentMethodId);
-    }
-    if (userId) {
-      params.userId = rid(userId);
-    }
-
-    const ucsClause = userId
-      ? `IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-           CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = ["admin"];
-         };`
-      : "";
-
-    const result = await db.query(
-      `IF array::len((SELECT id FROM company_system WHERE companyId = $companyId AND systemId = $systemId)) = 0 {
-         CREATE company_system SET companyId = $companyId, systemId = $systemId;
-       };
-       UPDATE subscription SET status = "cancelled" WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
-       CREATE subscription SET
-         companyId = $companyId,
-         systemId = $systemId,
-         planId = $planId,
-         paymentMethodId = ${paymentMethodId ? "$paymentMethodId" : "NONE"},
-         status = "active",
-         currentPeriodStart = $start,
-         currentPeriodEnd = $end,
-         voucherId = NONE,
-         remainingPlanCredits = $planCredits,
-         remainingOperationCount = ${
-        operationCountMap ? "$operationCountMap" : "NONE"
-      },
-         creditAlertSent = false,
-         operationCountAlertSent = {},
-         autoRechargeEnabled = false,
-         autoRechargeAmount = 0,
-         autoRechargeInProgress = false,
-         retryPaymentInProgress = false;
-       ${ucsClause}`,
-      params,
-    );
+    });
 
     await Core.getInstance().reloadSubscription(
       String(companyId),
@@ -271,11 +179,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    await db.query(
-      `UPDATE subscription SET status = "cancelled"
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
-      { companyId: rid(companyId), systemId: rid(systemId) },
-    );
+    await cancelSubscription(companyId, systemId);
 
     await Core.getInstance().reloadSubscription(companyId, systemId);
 
@@ -306,49 +210,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const addr = billingAddress;
-    const result = await db.query<
-      [unknown, unknown, unknown, Record<string, unknown>[]]
-    >(
-      `LET $addr = CREATE address SET
-        street = $street,
-        number = $number,
-        complement = $complement,
-        neighborhood = $neighborhood,
-        city = $city,
-        state = $state,
-        country = $country,
-        postalCode = $postalCode;
-      LET $existingCount = (SELECT count() FROM payment_method WHERE companyId = $companyId GROUP ALL).count ?? 0;
-      LET $pm = CREATE payment_method SET
-        companyId = $companyId,
-        type = "credit_card",
-        cardMask = $cardMask,
-        cardToken = $cardToken,
-        holderName = $holderName,
-        holderDocument = $holderDocument,
-        billingAddress = $addr[0].id,
-        isDefault = IF $existingCount = 0 THEN true ELSE false END;
-      SELECT * FROM $pm[0].id FETCH billingAddress;`,
-      {
-        street: addr.street ?? "",
-        number: addr.number ?? "",
-        complement: addr.complement || undefined,
-        neighborhood: addr.neighborhood || undefined,
-        city: addr.city ?? "",
-        state: addr.state ?? "",
-        country: addr.country ?? "",
-        postalCode: addr.postalCode ?? "",
-        companyId: rid(companyId),
-        cardMask,
-        cardToken,
-        holderName,
-        holderDocument: holderDocument ?? "",
-      },
-    );
+    const pm = await addPaymentMethod({
+      companyId,
+      cardToken,
+      cardMask,
+      holderName,
+      holderDocument,
+      billingAddress,
+    });
 
     return Response.json(
-      { success: true, data: result[3]?.[0] },
+      { success: true, data: pm },
       { status: 201 },
     );
   }
@@ -369,11 +241,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await db.query(
-      `UPDATE payment_method SET isDefault = false WHERE companyId = $companyId;
-       UPDATE $pmId SET isDefault = true;`,
-      { companyId: rid(companyId), pmId: rid(paymentMethodId) },
-    );
+    await setDefaultPaymentMethod(companyId, paymentMethodId);
 
     return Response.json({ success: true });
   }
@@ -394,20 +262,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await db.query(
-      `LET $pm = (SELECT billingAddress, companyId, isDefault FROM $id);
-       DELETE $id;
-       IF $pm[0].billingAddress != NONE {
-         DELETE $pm[0].billingAddress;
-       };
-       IF $pm[0].isDefault = true {
-         LET $next = (SELECT id FROM payment_method WHERE companyId = $pm[0].companyId LIMIT 1);
-         IF $next[0].id != NONE {
-           UPDATE $next[0].id SET isDefault = true;
-         };
-       };`,
-      { id: rid(paymentMethodId) },
-    );
+    await removePaymentMethod(paymentMethodId);
 
     return Response.json({ success: true });
   }
@@ -431,34 +286,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    const result = await db.query<
-      [Record<string, unknown>[], { id: string }[]]
-    >(
-      `CREATE credit_purchase SET
-        companyId = $companyId,
-        systemId = $systemId,
-        amount = $amount,
-        paymentMethodId = $paymentMethodId,
-        status = "pending";
-       UPDATE subscription SET creditAlertSent = false
-        WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
-       SELECT id FROM subscription
-        WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-        LIMIT 1;`,
-      {
-        companyId: rid(companyId),
-        systemId: rid(systemId),
-        amount: Number(amount),
-        paymentMethodId: rid(paymentMethodId),
-      },
-    );
-
-    const purchase = result[0]?.[0];
-    const activeSubId = result[1]?.[0]?.id;
+    const { purchase, activeSubscriptionId } = await purchaseCredits({
+      companyId,
+      systemId,
+      amount: Number(amount),
+      paymentMethodId,
+    });
 
     await publish("process_payment", {
       creditPurchaseId: String(purchase?.id ?? ""),
-      subscriptionId: String(activeSubId ?? ""),
+      subscriptionId: activeSubscriptionId,
       companyId,
       systemId,
       amount: String(amount),
@@ -492,37 +329,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    // Batch: voucher + current subscription + old voucher creditModifier & maxOperationCountModifier (§7.2)
-    const batchResult = await db.query<
-      [
-        Record<string, unknown>[],
-        {
-          planId: string;
-          voucherId: string | null;
-          remainingOperationCount?: Record<string, number>;
-        }[],
-        {
-          creditModifier: number;
-          maxOperationCountModifier?: Record<string, number>;
-        }[],
-      ]
-    >(
-      `SELECT * FROM voucher WHERE code = $code LIMIT 1;
-       SELECT planId, voucherId, remainingOperationCount FROM subscription
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-         LIMIT 1;
-       LET $oldVoucherId = (SELECT VALUE voucherId FROM subscription
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-         LIMIT 1)[0];
-       IF $oldVoucherId != NONE {
-         SELECT creditModifier, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
-       } ELSE {
-         SELECT NONE FROM NONE;
-       };`,
-      { code: voucherCode, companyId: rid(companyId), systemId: rid(systemId) },
-    );
-
-    const voucher = batchResult[0]?.[0];
+    const { voucher, subscription: activeSub, oldVoucher } =
+      await lookupVoucherAndSubscription({
+        voucherCode,
+        companyId,
+        systemId,
+      });
 
     if (!voucher) {
       return Response.json(
@@ -568,7 +380,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const applicablePlanIds = voucher.applicablePlanIds as string[];
-    const currentPlanId = String(batchResult[1]?.[0]?.planId ?? "");
+    const currentPlanId = String(activeSub?.planId ?? "");
     if (applicablePlanIds && applicablePlanIds.length > 0) {
       if (
         !currentPlanId ||
@@ -587,12 +399,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    const oldCreditMod = Number(batchResult[2]?.[0]?.creditModifier ?? 0);
+    const oldCreditMod = Number(oldVoucher?.creditModifier ?? 0);
     const newCreditMod = Number(voucher.creditModifier ?? 0);
     const creditDelta = newCreditMod - oldCreditMod;
 
     // Per-resourceKey operation count delta
-    const oldOpCountMod = batchResult[2]?.[0]?.maxOperationCountModifier ?? {};
+    const oldOpCountMod = oldVoucher?.maxOperationCountModifier ?? {};
     const newOpCountMod = (voucher.maxOperationCountModifier ?? {}) as Record<
       string,
       number
@@ -606,21 +418,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const delta = (newOpCountMod[key] ?? 0) - (oldOpCountMod[key] ?? 0);
       if (delta !== 0) opCountDeltas[key] = delta;
     }
-    const hasOpCountChanges = Object.keys(opCountDeltas).length > 0;
-
-    // Build the new remainingOperationCount map by applying deltas to current values
-    // object::merge replaces values, so we compute the merged result in the query
-    // using per-key arithmetic instead of passing raw deltas
-    const opCountMergeClause = hasOpCountChanges
-      ? ", remainingOperationCount = object::merge(remainingOperationCount ?? {}, $opCountNewValues), operationCountAlertSent = object::merge(operationCountAlertSent ?? {}, $alertResets)"
-      : "";
 
     // Compute the new values (current + delta, clamped to >= 0) for each key
     // Also compute alert resets for keys where count increased above 0
     const opCountNewValues: Record<string, number> = {};
     const alertResets: Record<string, boolean> = {};
-    // Fetch current remainingOperationCount from the batch result
-    const currentOpCounts = batchResult[1]?.[0]?.remainingOperationCount ?? {};
+    const currentOpCounts = activeSub?.remainingOperationCount ?? {};
     for (const key of allOpKeys) {
       const current = currentOpCounts[key] ?? 0;
       const delta = opCountDeltas[key] ?? 0;
@@ -631,22 +434,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    const creditClause = creditDelta !== 0
-      ? ", remainingPlanCredits = remainingPlanCredits + $creditDelta"
-      : "";
-
-    const updateQuery = creditClause || opCountMergeClause
-      ? `UPDATE subscription SET voucherId = $voucherId${creditClause}${opCountMergeClause}
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`
-      : `UPDATE subscription SET voucherId = $voucherId
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`;
-
-    await db.query(updateQuery, {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      voucherId: rid(voucher.id as string),
-      ...(creditDelta !== 0 ? { creditDelta } : {}),
-      ...(hasOpCountChanges ? { opCountNewValues, alertResets } : {}),
+    await applyVoucherToSubscription({
+      companyId,
+      systemId,
+      voucherId: voucher.id as string,
+      creditDelta,
+      opCountNewValues,
+      alertResets,
     });
 
     await Core.getInstance().reloadSubscription(companyId, systemId);
@@ -704,30 +498,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
         );
       }
 
-      // Batch: check payment method + update subscription in one query (§7.2)
-      const pmResult = await db.query<
-        [{ id: string }[], unknown[]]
-      >(
-        `LET $pm = (SELECT id FROM payment_method WHERE companyId = $companyId AND isDefault = true LIMIT 1);
-         IF array::len($pm) > 0 {
-           UPDATE subscription SET
-             autoRechargeEnabled = true,
-             autoRechargeAmount = $amount
-           WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
-         };
-         RETURN $pm;`,
-        {
-          companyId: rid(companyId),
-          systemId: rid(systemId),
-          amount: Number(amount),
-        },
-      );
+      const { hasDefaultPaymentMethod } = await enableAutoRecharge({
+        companyId,
+        systemId,
+        amount: Number(amount),
+      });
 
-      const pm = pmResult[1];
-      if (
-        !pm || (Array.isArray(pm) && pm.length === 0) ||
-        (pm as any)[0]?.id === undefined
-      ) {
+      if (!hasDefaultPaymentMethod) {
         return Response.json(
           {
             success: false,
@@ -740,17 +517,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         );
       }
     } else {
-      await db.query(
-        `UPDATE subscription SET
-          autoRechargeEnabled = false,
-          autoRechargeAmount = 0,
-          autoRechargeInProgress = false
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
-        {
-          companyId: rid(companyId),
-          systemId: rid(systemId),
-        },
-      );
+      await disableAutoRecharge(companyId, systemId);
     }
 
     await Core.getInstance().reloadSubscription(companyId, systemId);
@@ -762,26 +529,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    // Batch: lookup + guard update in one query (§7.2)
-    const retryResult = await db.query<
-      [{ result: string; id?: string }[]]
-    >(
-      `LET $sub = (SELECT id, retryPaymentInProgress FROM subscription
-         WHERE companyId = $companyId AND systemId = $systemId AND status = "past_due"
-         LIMIT 1);
-       IF array::len($sub) = 0 {
-         RETURN [{ result: "not_found" }];
-       } ELSE IF $sub[0].retryPaymentInProgress = true {
-         RETURN [{ result: "conflict" }];
-       } ELSE {
-         UPDATE $sub[0].id SET retryPaymentInProgress = true;
-         RETURN [{ result: "ok", id: $sub[0].id }];
-       };`,
-      { companyId: rid(companyId), systemId: rid(systemId) },
-    );
+    const result = await retryPayment(companyId, systemId);
 
-    const retryRow = retryResult[0]?.[0];
-    if (!retryRow || retryRow.result === "not_found") {
+    if (result.status === "not_found") {
       return Response.json(
         {
           success: false,
@@ -791,7 +541,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (retryRow.result === "conflict") {
+    if (result.status === "conflict") {
       return Response.json(
         {
           success: false,
@@ -802,7 +552,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     await publish("process_payment", {
-      subscriptionId: String(retryRow.id),
+      subscriptionId: result.subscriptionId!,
       companyId,
       systemId,
       purpose: "retry",

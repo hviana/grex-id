@@ -1,5 +1,11 @@
-import { getDb } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import type { CoreSetting } from "@/src/contracts/core-settings";
+import type { System } from "@/src/contracts/system";
+import type { Role } from "@/src/contracts/role";
+import type { Plan } from "@/src/contracts/plan";
+import type { MenuItem } from "@/src/contracts/menu";
+import type { Voucher } from "@/src/contracts/voucher";
+import type { Subscription } from "@/src/contracts/billing";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("core-settings");
@@ -95,4 +101,41 @@ export async function batchUpsertSettings(
     bindings[`s${i}`] = resolveScope(item.systemSlug);
   });
   await db.query(stmts.join("; "), bindings);
+}
+
+/**
+ * Fetches all core entities (systems, roles, plans, menus, settings, vouchers)
+ * in a single batched query for cache hydration.
+ */
+export async function fetchAllCoreData(): Promise<
+  [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
+> {
+  const db = await getDb();
+  return db.query<
+    [System[], Role[], Plan[], MenuItem[], CoreSetting[], Voucher[]]
+  >(
+    `SELECT * FROM system;
+    SELECT * FROM role;
+    SELECT * FROM plan;
+    SELECT * FROM menu_item ORDER BY sortOrder ASC;
+    SELECT * FROM setting;
+    SELECT * FROM voucher;`,
+  );
+}
+
+/**
+ * Fetches the active subscription for a company+system pair.
+ */
+export async function fetchActiveSubscription(params: {
+  companyId: string;
+  systemId: string;
+}): Promise<Subscription[]> {
+  const db = await getDb();
+  const result = await db.query<[Subscription[]]>(
+    `SELECT * FROM subscription
+     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     LIMIT 1`,
+    { companyId: rid(params.companyId), systemId: rid(params.systemId) },
+  );
+  return result[0] ?? [];
 }

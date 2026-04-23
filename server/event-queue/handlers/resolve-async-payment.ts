@@ -1,9 +1,14 @@
 import type { HandlerFn } from "../worker.ts";
-import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
+import {
+  getAsyncPaymentContext,
+  resolveAsyncCreditSuccess,
+  resolveAsyncPaymentFailure,
+  resolveAsyncRecurringSuccess,
+} from "../../db/queries/billing.ts";
 
 assertServerOnly("resolve-async-payment handler");
 
@@ -13,61 +18,10 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const transactionId = payload.transactionId as string | undefined;
   const invoiceUrl = payload.invoiceUrl as string | undefined;
   const failureReason = payload.failureReason as string | undefined;
-  const db = await getDb();
 
-  // Batch: payment + subscription + plan + voucher + owner + system (§7.2)
-  const result = await db.query<
-    [
-      {
-        id: string;
-        status: string;
-        subscriptionId: string;
-        companyId: string;
-        systemId: string;
-        amount: number;
-        currency: string;
-        kind: string;
-      }[],
-      {
-        id: string;
-        planId: string;
-        paymentMethodId: string;
-        status: string;
-        currentPeriodEnd: string;
-      }[],
-      {
-        price: number;
-        recurrenceDays: number;
-        planCredits: number;
-        currency: string;
-      }[],
-      { priceModifier: number; creditModifier: number }[],
-      { id: string; name: string }[],
-      { name: string; slug: string }[],
-      { status?: string }[],
-    ]
-  >(
-    `SELECT id, status, subscriptionId, companyId, systemId, amount, currency, kind FROM payment WHERE id = $id LIMIT 1;
-     LET $subId = (SELECT VALUE subscriptionId FROM payment WHERE id = $id LIMIT 1)[0];
-     SELECT id, planId, paymentMethodId, status, currentPeriodEnd FROM subscription WHERE id = $subId LIMIT 1;
-     LET $planId = (SELECT VALUE planId FROM subscription WHERE id = $subId LIMIT 1)[0];
-     SELECT price, recurrenceDays, planCredits, currency FROM plan WHERE id = $planId LIMIT 1;
-     LET $voucherId = (SELECT VALUE voucherId FROM subscription WHERE id = $subId LIMIT 1)[0];
-     IF $voucherId != NONE {
-       SELECT priceModifier, creditModifier FROM voucher WHERE id = $voucherId LIMIT 1;
-     } ELSE {
-       SELECT NONE FROM NONE;
-     };
-     LET $companyId = (SELECT VALUE companyId FROM payment WHERE id = $id LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-     SELECT id, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
-     LET $systemId = (SELECT VALUE systemId FROM payment WHERE id = $id LIMIT 1)[0];
-     SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
-     SELECT status FROM credit_purchase WHERE subscriptionId = $subId AND status = "pending" LIMIT 1;`,
-    { id: rid(paymentId) },
-  );
+  const ctx = await getAsyncPaymentContext(paymentId);
 
-  const payment = result[0]?.[0];
+  const payment = ctx.payment;
   if (!payment) {
     console.log(
       `[resolve-async] Payment ${paymentId} not found, skipping.`,
@@ -87,12 +41,12 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  const sub = result[1]?.[0];
-  const plan = result[2]?.[0];
-  const voucher = result[3]?.[0];
-  const owner = result[4]?.[0];
-  const systemInfo = result[5]?.[0];
-  const creditPurchase = result[6]?.[0];
+  const sub = ctx.sub;
+  const plan = ctx.plan;
+  const voucher = ctx.voucher;
+  const owner = ctx.owner;
+  const systemInfo = ctx.systemInfo;
+  const creditPurchase = ctx.creditPurchase;
   const systemName = systemInfo?.name ?? "";
   const systemSlug = systemInfo?.slug ?? "";
   const currency = plan?.currency ?? payment.currency ?? "USD";
@@ -119,79 +73,33 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
         systemId: String(payment.systemId),
       });
 
-      const creditPurchaseStmt = creditPurchase
-        ? `UPDATE credit_purchase SET status = "completed" WHERE subscriptionId = $subId AND status = "pending";`
-        : "";
-
-      await db.query(
-        `UPDATE $subId SET
-          status = "active",
-          retryPaymentInProgress = false,
-          currentPeriodStart = $newStart,
-          currentPeriodEnd = $newEnd,
-          remainingPlanCredits = $remainingPlanCredits,
-          remainingOperationCount = $remainingOperationCount,
-          creditAlertSent = false,
-          operationCountAlertSent = {};
-         UPDATE $paymentId SET
-          status = "completed",
-          transactionId = $txId,
-          invoiceUrl = $invoiceUrl;
-         ${creditPurchaseStmt}`,
-        {
-          subId: rid(sub.id),
-          paymentId: rid(paymentId),
-          newStart,
-          newEnd,
-          remainingPlanCredits,
-          remainingOperationCount,
-          txId: transactionId ?? undefined,
-          invoiceUrl: invoiceUrl ?? undefined,
-        },
-      );
+      await resolveAsyncRecurringSuccess({
+        subscriptionId: sub.id,
+        paymentId,
+        newStart,
+        newEnd,
+        remainingPlanCredits,
+        remainingOperationCount,
+        hasPendingCreditPurchase: !!creditPurchase,
+        transactionId,
+        invoiceUrl,
+      });
     } else {
       // Credit purchase or auto-recharge — increment purchased credits
       const period = new Date().toISOString().slice(0, 7);
-      const stmts = [
-        `UPSERT usage_record SET
-          actorType = "user", actorId = "0",
-          companyId = $companyId, systemId = $systemId,
-          resource = "credits", value += $amount, period = $period
-         WHERE companyId = $companyId AND systemId = $systemId
-           AND resource = "credits";`,
-      ];
-      const params: Record<string, unknown> = {
-        companyId: rid(String(payment.companyId)),
-        systemId: rid(String(payment.systemId)),
+
+      await resolveAsyncCreditSuccess({
+        companyId: String(payment.companyId),
+        systemId: String(payment.systemId),
         amount: chargeAmount,
         period,
-        subId: sub ? rid(sub.id) : undefined,
-        paymentId: rid(paymentId),
-        txId: transactionId ?? undefined,
-        invoiceUrl: invoiceUrl ?? undefined,
-      };
-
-      if (creditPurchase && sub) {
-        stmts.push(
-          `UPDATE credit_purchase SET status = "completed" WHERE subscriptionId = $subId AND status = "pending";`,
-        );
-      }
-      if (kind === "auto-recharge" && sub) {
-        stmts.push(
-          `UPDATE $subId SET autoRechargeInProgress = false;`,
-        );
-      }
-
-      // Reset credit alert on credit purchase success (§22.3)
-      if (sub) {
-        stmts.push(`UPDATE $subId SET creditAlertSent = false;`);
-      }
-
-      stmts.push(
-        `UPDATE $paymentId SET status = "completed", transactionId = $txId, invoiceUrl = $invoiceUrl;`,
-      );
-
-      await db.query(stmts.join("\n"), params);
+        subscriptionId: sub?.id,
+        paymentId,
+        hasPendingCreditPurchase: !!(creditPurchase && sub),
+        isAutoRecharge: kind === "auto-recharge",
+        transactionId,
+        invoiceUrl,
+      });
     }
 
     await Core.getInstance().reloadSubscription(
@@ -219,34 +127,14 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     }
   } else {
     // Payment failed
-    const stmts: string[] = [];
-    const params: Record<string, unknown> = {
-      subId: sub ? rid(sub.id) : undefined,
-      paymentId: rid(paymentId),
-    };
-
-    const subSets: string[] = [];
-    if (isRecurring) subSets.push(`status = "past_due"`);
-    subSets.push(`retryPaymentInProgress = false`);
-    if (kind === "auto-recharge") {
-      subSets.push(`autoRechargeInProgress = false`);
-    }
-    if (subSets.length > 0 && sub) {
-      stmts.push(`UPDATE $subId SET ${subSets.join(", ")};`);
-    }
-
-    if (creditPurchase) {
-      stmts.push(
-        `UPDATE credit_purchase SET status = "failed" WHERE subscriptionId = $subId AND status = "pending";`,
-      );
-    }
-
-    stmts.push(
-      `UPDATE $paymentId SET status = "failed", failureReason = $reason;`,
-    );
-    params.reason = failureReason || "billing.payment.genericFailure";
-
-    await db.query(stmts.join("\n"), params);
+    await resolveAsyncPaymentFailure({
+      subscriptionId: sub?.id,
+      paymentId,
+      isRecurring,
+      isAutoRecharge: kind === "auto-recharge",
+      hasPendingCreditPurchase: !!creditPurchase,
+      failureReason: failureReason || "billing.payment.genericFailure",
+    });
 
     await Core.getInstance().reloadSubscription(
       String(payment.companyId),

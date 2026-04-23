@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection.ts";
+import { upsertUsageRecord } from "../db/queries/usage.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("usage-tracker.ts");
@@ -18,25 +18,15 @@ export async function trackUsage(params: {
   resource: string;
   value: number;
 }): Promise<void> {
-  const db = await getDb();
   const period = getCurrentPeriod();
 
-  // Single-call rule: use UPSERT to atomically create or increment
-  await db.query(
-    `UPSERT usage_record SET
-      actorType = $actorType,
-      actorId = $actorId,
-      companyId = $companyId,
-      systemId = $systemId,
-      resource = $resource,
-      value += $value,
-      period = $period
-    WHERE actorType = $actorType
-      AND actorId = $actorId
-      AND companyId = $companyId
-      AND systemId = $systemId
-      AND resource = $resource
-      AND period = $period`,
-    { ...params, period },
-  );
+  await upsertUsageRecord({
+    actorType: params.actorType,
+    actorId: params.actorId,
+    companyId: params.companyId,
+    systemId: params.systemId,
+    resource: params.resource,
+    value: params.value,
+    period,
+  });
 }

@@ -11,15 +11,16 @@ import {
   deleteChannel,
   findChannelById,
   findChannelByOwnerTypeAndValue,
+  getUserProfileName,
   listChannelsByOwner,
   listVerifiedChannelTypes,
+  userOwnsChannel,
 } from "@/server/db/queries/entity-channels";
 import Core from "@/server/utils/Core";
 import {
   communicationGuard,
   type CommunicationGuardResult,
 } from "@/server/utils/verification-guard";
-import { getDb, rid } from "@/server/db/connection";
 
 async function sendChannelConfirmation(
   userId: string,
@@ -73,23 +74,6 @@ async function sendChannelConfirmation(
   return guardResult;
 }
 
-/**
- * Returns true when the given channel id is referenced by the user's
- * `channels` array. Used to authorize channel-scoped actions.
- */
-async function userOwnsChannel(
-  userId: string,
-  channelId: string,
-): Promise<boolean> {
-  const db = await getDb();
-  const result = await db.query<[{ c: number }[]]>(
-    `SELECT count() AS c FROM user
-     WHERE id = $uid AND channels CONTAINS $cid GROUP ALL`,
-    { uid: rid(userId), cid: rid(channelId) },
-  );
-  return (result[0]?.[0]?.c ?? 0) > 0;
-}
-
 async function getHandler(_req: Request, ctx: RequestContext) {
   const userId = ctx.claims!.actorId;
   const channels = await listChannelsByOwner(userId, "user");
@@ -100,7 +84,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
   const userId = ctx.claims!.actorId;
-  const db = await getDb();
 
   if (action === "resend-verification") {
     const body = await req.json();
@@ -140,11 +123,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const profileRow = await db.query<[{ profile: { name: string } }[]]>(
-      `SELECT profile FROM $uid FETCH profile`,
-      { uid: rid(userId) },
-    );
-    const name = profileRow[0]?.[0]?.profile?.name ?? "";
+    const name = await getUserProfileName(userId);
 
     // Pending confirmation: unverified channel still needs an initial
     // verified channel on the account to distinguish register from add.
@@ -252,11 +231,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const profileRow = await db.query<[{ profile: { name: string } }[]]>(
-    `SELECT profile FROM $uid FETCH profile`,
-    { uid: rid(userId) },
-  );
-  const name = profileRow[0]?.[0]?.profile?.name ?? "";
+  const name = await getUserProfileName(userId);
 
   await sendChannelConfirmation(
     userId,

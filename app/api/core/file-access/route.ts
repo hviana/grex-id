@@ -2,12 +2,18 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
+import { rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { updateCache } from "@/server/utils/cache";
+import {
+  createFileAccessRule,
+  deleteFileAccessRule,
+  listFileAccessRules,
+  updateFileAccessRule,
+} from "@/server/db/queries/file-access";
 
 const defaultSection = () => ({
   isolateSystem: false,
@@ -22,38 +28,12 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const db = await getDb();
-  let query = "SELECT * FROM file_access";
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
-  const conditions: string[] = [];
-
-  if (search) {
-    conditions.push("name @@ $search");
-    bindings.search = search;
-  }
-
-  if (cursor) {
-    conditions.push("id < $cursor");
-    bindings.cursor = cursor;
-  }
-
-  if (conditions.length > 0) {
-    query += " WHERE " + conditions.join(" AND ");
-  }
-
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
+  const result = await listFileAccessRules({ search, cursor, limit });
 
   return Response.json({
     success: true,
-    data,
-    nextCursor: hasMore && data.length > 0
-      ? data[data.length - 1]?.id ?? null
-      : null,
+    data: result.data,
+    nextCursor: result.nextCursor,
   });
 }
 
@@ -123,25 +103,17 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `CREATE file_access SET
-        name = $name,
-        categoryPattern = $categoryPattern,
-        download = $download,
-        upload = $upload`,
-      {
-        name: sanitizedName,
-        categoryPattern: sanitizedPattern,
-        download: download ?? defaultSection(),
-        upload: upload ?? defaultSection(),
-      },
-    );
+    const rule = await createFileAccessRule({
+      name: sanitizedName,
+      categoryPattern: sanitizedPattern,
+      download: download ?? defaultSection(),
+      upload: upload ?? defaultSection(),
+    });
 
     await updateCache("core", "file-access");
 
     return Response.json(
-      { success: true, data: result[0]?.[0] },
+      { success: true, data: rule },
       { status: 201 },
     );
   } catch {
@@ -170,9 +142,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
     const sets: string[] = [];
-    const bindings: Record<string, unknown> = { id: rid(String(id)) };
+    const bindings: Record<string, unknown> = {};
 
     if (name !== undefined) {
       const sanitizedName = standardizeField("name", sanitizeString(name));
@@ -229,14 +200,11 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `UPDATE $id SET ${sets.join(", ")} RETURN AFTER`,
-      bindings,
-    );
+    const updated = await updateFileAccessRule(id, sets, bindings);
 
     await updateCache("core", "file-access");
 
-    return Response.json({ success: true, data: result[0]?.[0] });
+    return Response.json({ success: true, data: updated });
   } catch {
     return Response.json(
       {
@@ -270,8 +238,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    await db.query("DELETE $id", { id: rid(id) });
+    await deleteFileAccessRule(id);
 
     await updateCache("core", "file-access");
 

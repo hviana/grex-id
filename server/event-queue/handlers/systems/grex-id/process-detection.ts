@@ -1,6 +1,11 @@
-import { getDb, rid } from "@/server/db/connection";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
 import { getLocationById } from "@/server/db/queries/locations";
+import {
+  batchCreateDetections,
+  detectionExistsForEvent,
+  searchMatchingFace,
+} from "@/server/db/queries/systems/grex-id/detections";
+import { rid } from "@/server/db/connection";
 import type { HandlerFn } from "@/server/event-queue/worker";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
 
@@ -24,40 +29,22 @@ export const processDetection: HandlerFn = async (payload) => {
     ),
   );
 
-  const db = await getDb();
-
   // Idempotency: check if detections for this event already exist
   if (eventId) {
-    const existing = await db.query<[{ id: unknown }[]]>(
-      `SELECT id FROM grexid_detection
-       WHERE locationId = $locationId
-         AND eventId = $eventId
-       LIMIT 1`,
-      { locationId: rid(locationId), eventId },
-    );
-    if ((existing[0] ?? []).length > 0) {
+    const exists = await detectionExistsForEvent(locationId, eventId);
+    if (exists) {
       return;
     }
   }
 
-  // Process each embedding and batch all creates into a single db.query (§7.2)
+  // Process each embedding and batch all creates into a single query (§7.2)
   const statements: string[] = [];
   const bindings: Record<string, unknown> = {
     locationId: rid(locationId),
   };
 
   for (let i = 0; i < embeddings.length; i++) {
-    // Search for matching face
-    const matchResult = await db.query<
-      [{ id: unknown; leadId: unknown; score: number }[]]
-    >(
-      `SELECT id, leadId, vector::distance::knn() AS score
-       FROM face
-       WHERE embedding_type1 <|1,40|> $embedding_${i}
-       ORDER BY score`,
-      { [`embedding_${i}`]: embeddings[i] },
-    );
-    const bestMatch = matchResult[0]?.[0];
+    const bestMatch = await searchMatchingFace(embeddings[i], i);
     const score = bestMatch?.score ?? 0;
 
     if (bestMatch && score >= sensitivity) {
@@ -95,7 +82,5 @@ export const processDetection: HandlerFn = async (payload) => {
     bindings.eventId = eventId;
   }
 
-  if (statements.length > 0) {
-    await db.query(statements.join(";\n"), bindings);
-  }
+  await batchCreateDetections(statements, bindings);
 };

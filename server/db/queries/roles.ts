@@ -65,7 +65,7 @@ export async function createRole(data: {
 
 export async function updateRole(
   id: string,
-  data: Partial<{ name: string; permissions: string[] }>,
+  data: Partial<{ name: string; permissions: string[]; isBuiltIn: boolean }>,
 ): Promise<Role> {
   const db = await getDb();
   const sets: string[] = [];
@@ -78,6 +78,10 @@ export async function updateRole(
   if (data.permissions !== undefined) {
     sets.push("permissions = $permissions");
     bindings.permissions = data.permissions;
+  }
+  if (data.isBuiltIn !== undefined) {
+    sets.push("isBuiltIn = $isBuiltIn");
+    bindings.isBuiltIn = data.isBuiltIn;
   }
 
   const result = await db.query<[Role[]]>(

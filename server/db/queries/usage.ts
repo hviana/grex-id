@@ -142,3 +142,125 @@ export async function getCoreCreditExpenses(params: {
 
   return result[0] ?? [];
 }
+
+export interface TenantUsageConfig {
+  systemSlug: string | null;
+  subscriptionStorageLimit: number | null;
+  subscriptionCacheLimit: number | null;
+  voucherStorageModifier: number;
+  voucherCacheModifier: number;
+  creditExpenses: CoreCreditExpenseRow[];
+}
+
+/**
+ * Fetches the tenant-mode usage configuration and credit expenses in one
+ * batched query: system slug, subscription limits (plan + voucher), and
+ * per-resource credit expense aggregation.
+ */
+/**
+ * Upserts a usage record atomically (§12.2).
+ * Creates or increments the value for the given actor + resource + period.
+ */
+export async function upsertUsageRecord(params: {
+  actorType: string;
+  actorId: string;
+  companyId: string;
+  systemId: string;
+  resource: string;
+  value: number;
+  period: string;
+}): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `UPSERT usage_record SET
+      actorType = $actorType,
+      actorId = $actorId,
+      companyId = $companyId,
+      systemId = $systemId,
+      resource = $resource,
+      value += $value,
+      period = $period
+    WHERE actorType = $actorType
+      AND actorId = $actorId
+      AND companyId = $companyId
+      AND systemId = $systemId
+      AND resource = $resource
+      AND period = $period`,
+    {
+      actorType: params.actorType,
+      actorId: params.actorId,
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      resource: params.resource,
+      value: params.value,
+      period: params.period,
+    },
+  );
+}
+
+export async function getTenantUsageConfig(params: {
+  systemId: string;
+  companyId: string;
+  startDate: string;
+  endDate: string;
+}): Promise<TenantUsageConfig> {
+  const db = await getDb();
+  const result = await db.query<
+    [
+      { slug: string }[],
+      {
+        storageLimitBytes: number;
+        fileCacheLimitBytes: number;
+        voucherId: string | null;
+      }[],
+      { storageLimitModifier: number; fileCacheLimitModifier: number }[],
+      { resourceKey: string; totalAmount: number; totalCount: number }[],
+    ]
+  >(
+    `SELECT slug FROM ONLY $systemId;
+     SELECT plan.storageLimitBytes AS storageLimitBytes, plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
+       FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       LIMIT 1
+       FETCH plan;
+     LET $voucherId = (SELECT VALUE voucherId FROM subscription
+       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       LIMIT 1)[0];
+     IF $voucherId != NONE {
+       SELECT storageLimitModifier, fileCacheLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+     } ELSE {
+       SELECT NONE FROM NONE;
+     };
+     SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount FROM credit_expense
+       WHERE companyId = $companyId AND systemId = $systemId
+         AND day >= $startDate AND day <= $endDate
+       GROUP BY resourceKey
+       ORDER BY totalAmount DESC`,
+    {
+      systemId: rid(params.systemId),
+      companyId: rid(params.companyId),
+      startDate: params.startDate,
+      endDate: params.endDate,
+    },
+  );
+
+  const systemSlug = (result[0] as unknown as { slug?: string }[])
+    ?.[0]?.slug ?? null;
+  const subRow = (result[1] as unknown[])?.[0] as {
+    storageLimitBytes?: number;
+    fileCacheLimitBytes?: number;
+  } | undefined;
+  const voucherRow = (result[2]?.[0] as unknown as {
+    storageLimitModifier?: number;
+    fileCacheLimitModifier?: number;
+  }) ?? {};
+
+  return {
+    systemSlug,
+    subscriptionStorageLimit: subRow?.storageLimitBytes ?? null,
+    subscriptionCacheLimit: subRow?.fileCacheLimitBytes ?? null,
+    voucherStorageModifier: voucherRow.storageLimitModifier ?? 0,
+    voucherCacheModifier: voucherRow.fileCacheLimitModifier ?? 0,
+    creditExpenses: result[3] ?? [],
+  };
+}

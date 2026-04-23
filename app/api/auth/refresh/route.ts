@@ -7,7 +7,7 @@ import {
   ensureActorValidityLoaded,
   isActorValid,
 } from "@/server/utils/actor-validity";
-import { getDb, rid } from "@/server/db/connection";
+import { getUserForRefresh } from "@/server/db/queries/auth";
 
 function withAuthRateLimit() {
   return async (
@@ -75,23 +75,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // Fetch the fields the client needs to re-hydrate its UI state. Roles
     // and permissions are preserved from the current claims — role changes
     // evict the user (§12.8) and would have rejected this refresh.
-    const db = await getDb();
-    const userResult = await db.query<
-      [{
-        id: string;
-        stayLoggedIn: boolean;
-        roles: string[];
-        twoFactorEnabled: boolean;
-        profile?: unknown;
-      }[]]
-    >(
-      `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profile, channels
-         FROM $userId LIMIT 1
-         FETCH profile, channels;`,
-      { userId: rid(claims.actorId) },
-    );
-
-    const user = userResult[0]?.[0];
+    const user = await getUserForRefresh(String(claims.actorId));
     if (!user) {
       return Response.json(
         {

@@ -1,6 +1,7 @@
 import { getCache, updateCache } from "./cache.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
 import { assertServerOnly } from "./server-only.ts";
+import { fetchAllFrontSettings } from "../db/queries/front-settings.ts";
 
 assertServerOnly("FrontCore");
 
@@ -17,14 +18,10 @@ const CACHE_SLUG = "core";
 const CACHE_NAME = "front-data";
 
 export async function loadFrontCoreData(): Promise<FrontCoreData> {
-  const { getDb } = await import("../db/connection.ts");
-  const db = await getDb();
-  const results = await db.query<[FrontCoreSetting[]]>(
-    "SELECT * FROM front_setting;",
-  );
+  const rows = await fetchAllFrontSettings();
 
   const settings = new Map<string, FrontCoreSetting>();
-  for (const setting of results[0] ?? []) {
+  for (const setting of rows) {
     const mapKey = (setting.systemSlug ?? "") + ":" + setting.key;
     settings.set(mapKey, setting);
   }

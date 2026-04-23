@@ -1,6 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { MenuItem } from "@/src/contracts/menu";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { assertServerOnly } from "../../utils/server-only.ts";
+import { paginatedQuery } from "./pagination.ts";
 
 assertServerOnly("menus");
 
@@ -19,6 +21,40 @@ export async function listMenuItems(systemId?: string): Promise<MenuItem[]> {
 
   const result = await db.query<[MenuItem[]]>(query, bindings);
   return result[0] ?? [];
+}
+
+export async function paginatedListMenuItems(params: {
+  search?: string;
+  systemId?: string;
+  cursor?: string;
+  limit: number;
+  direction?: "next" | "prev";
+}): Promise<PaginatedResult<MenuItem>> {
+  const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
+
+  if (params.search) {
+    conditions.push("label @@ $search");
+    bindings.search = params.search;
+  }
+  if (params.systemId) {
+    conditions.push("systemId = $systemId");
+    bindings.systemId = rid(params.systemId);
+  }
+
+  const cursorParams: CursorParams = {
+    cursor: params.cursor,
+    limit: params.limit,
+    direction: params.direction,
+  };
+
+  return paginatedQuery<MenuItem>({
+    table: "menu_item",
+    conditions,
+    bindings,
+    params: cursorParams,
+    orderBy: "sortOrder ASC, createdAt DESC",
+  });
 }
 
 export async function createMenuItem(data: {

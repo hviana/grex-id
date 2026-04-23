@@ -1,5 +1,12 @@
-import { getDb } from "../db/connection.ts";
 import type { WorkerConfig } from "@/src/contracts/event-queue";
+import {
+  claimCandidateDeliveries,
+  getEventPayload,
+  leaseDelivery,
+  markDeliveryDead,
+  markDeliveryDone,
+  retryDelivery,
+} from "../db/queries/event-queue.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("worker");
@@ -50,25 +57,12 @@ export class Worker {
     }
 
     const batchSize = Math.min(freeSlots, this.config.batchSize);
-    const db = await getDb();
 
-    const claimed = await db.query<[{
-      id: string;
-      eventId: string;
-      attempts: number;
-      maxAttempts: number;
-    }[]]>(
-      `SELECT id, eventId, attempts, maxAttempts, availableAt FROM delivery
-       WHERE handler = $handler
-         AND status = "pending"
-         AND availableAt <= time::now()
-         AND (leaseUntil IS NONE OR leaseUntil <= time::now())
-       ORDER BY availableAt ASC
-       LIMIT $limit`,
-      { handler: this.config.handler, limit: batchSize },
+    const deliveries = await claimCandidateDeliveries(
+      this.config.handler,
+      batchSize,
     );
 
-    const deliveries = claimed[0] ?? [];
     if (deliveries.length === 0) {
       await this.sleep(this.config.idleDelayMs);
       return;
@@ -77,63 +71,31 @@ export class Worker {
     const leaseUntil = new Date(Date.now() + this.config.leaseDurationMs);
 
     const promises = deliveries.map(async (delivery) => {
-      const updated = await db.query<[Record<string, unknown>[]]>(
-        `UPDATE $id SET
-          status = "processing",
-          leaseUntil = $leaseUntil,
-          workerId = $workerId,
-          attempts = attempts + 1,
-          startedAt = time::now()
-        WHERE status = "pending"
-        RETURN AFTER`,
-        { id: delivery.id, leaseUntil, workerId: this.workerId },
+      const leased = await leaseDelivery(
+        delivery.id,
+        leaseUntil,
+        this.workerId,
       );
 
-      if (!updated[0]?.length) return;
+      if (!leased) return;
 
       this.activeCount++;
       try {
-        const events = await db.query<[{ payload: Record<string, unknown> }[]]>(
-          "SELECT payload FROM queue_event WHERE id = $eventId LIMIT 1",
-          { eventId: delivery.eventId },
-        );
-
-        const payload = events[0]?.[0]?.payload ?? {};
+        const payload = await getEventPayload(delivery.eventId);
         await this.handlerFn(payload);
 
-        await db.query(
-          `UPDATE $id SET
-            status = "done",
-            leaseUntil = NONE,
-            finishedAt = time::now(),
-            lastError = NONE`,
-          { id: delivery.id },
-        );
+        await markDeliveryDone(delivery.id);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         const newAttempts = delivery.attempts + 1;
 
         if (newAttempts >= delivery.maxAttempts) {
-          await db.query(
-            `UPDATE $id SET
-              status = "dead",
-              leaseUntil = NONE,
-              lastError = $error,
-              finishedAt = time::now()`,
-            { id: delivery.id, error: errorMsg },
-          );
+          await markDeliveryDead(delivery.id, errorMsg);
         } else {
           const backoff = this.config.retryBackoffBaseMs *
             Math.pow(2, newAttempts - 1);
           const nextAvailable = new Date(Date.now() + backoff);
-          await db.query(
-            `UPDATE $id SET
-              status = "pending",
-              leaseUntil = NONE,
-              availableAt = $nextAvailable,
-              lastError = $error`,
-            { id: delivery.id, nextAvailable, error: errorMsg },
-          );
+          await retryDelivery(delivery.id, nextAvailable, errorMsg);
         }
       } finally {
         this.activeCount--;

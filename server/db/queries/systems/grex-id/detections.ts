@@ -471,3 +471,60 @@ export async function getDetectionStats(params: {
     dailyUnique,
   };
 }
+
+// ─── process-detection handler queries ────────────────────────────────────────
+
+/**
+ * Check idempotency: whether detections already exist for a given event.
+ * Returns true if a detection already exists.
+ */
+export async function detectionExistsForEvent(
+  locationId: string,
+  eventId: string,
+): Promise<boolean> {
+  const db = await getDb();
+  const existing = await db.query<[{ id: unknown }[]]>(
+    `SELECT id FROM grexid_detection
+     WHERE locationId = $locationId
+       AND eventId = $eventId
+     LIMIT 1`,
+    { locationId: rid(locationId), eventId },
+  );
+  return (existing[0] ?? []).length > 0;
+}
+
+export interface FaceMatchResult {
+  id: unknown;
+  leadId: unknown;
+  score: number;
+}
+
+/**
+ * Search for a matching face by embedding using KNN vector search.
+ */
+export async function searchMatchingFace(
+  embedding: number[],
+  index: number,
+): Promise<FaceMatchResult | undefined> {
+  const db = await getDb();
+  const result = await db.query<[FaceMatchResult[]]>(
+    `SELECT id, leadId, vector::distance::knn() AS score
+     FROM face
+     WHERE embedding_type1 <|1,40|> $embedding_${index}
+     ORDER BY score`,
+    { [`embedding_${index}`]: embedding },
+  );
+  return result[0]?.[0];
+}
+
+/**
+ * Execute a batch of detection create statements (known faces + unknown faces).
+ */
+export async function batchCreateDetections(
+  statements: string[],
+  bindings: Record<string, unknown>,
+): Promise<void> {
+  if (statements.length === 0) return;
+  const db = await getDb();
+  await db.query(statements.join(";\n"), bindings);
+}

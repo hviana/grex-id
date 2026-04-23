@@ -4,19 +4,22 @@ import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import {
   applyPasswordHash,
+  disableTwoFactor,
   findUserByVerifiedChannel,
   findVerificationRequest,
   markVerificationUsed,
+  promoteTwoFactorSecret,
+  resolveUserMembership,
 } from "@/server/db/queries/auth";
 import { verifyChannels } from "@/server/db/queries/entity-channels";
 import {
   associateLeadWithCompanySystem,
   isLeadAssociated,
+  syncLeadChannels,
   syncLeadCompanyIds,
   updateLead,
 } from "@/server/db/queries/leads";
 import { runLifecycleHooks } from "@/server/module-registry";
-import { getDb, rid } from "@/server/db/connection";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
 
@@ -184,30 +187,9 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     // Promote the user's pendingTwoFactorSecret (set by `setup-totp` and
     // validated by `confirm-totp`) to twoFactorSecret. The secret never
     // travels through the verification_request payload (§15.1 rule 5).
-    // The entire read-then-conditional-write is a single batched query per
-    // §7.2 so the user can't slip in between.
-    const db = await getDb();
-    await db.query(
-      `LET $u = (SELECT pendingTwoFactorSecret FROM $userId LIMIT 1);
-       IF array::len($u) > 0 AND $u[0].pendingTwoFactorSecret != NONE {
-         UPDATE $userId SET
-           twoFactorEnabled = true,
-           twoFactorSecret = $u[0].pendingTwoFactorSecret,
-           pendingTwoFactorSecret = NONE,
-           updatedAt = time::now();
-       };`,
-      { userId: rid(request.ownerId) },
-    );
+    await promoteTwoFactorSecret(request.ownerId);
   } else if (actionKey === "auth.action.twoFactorDisable") {
-    const db = await getDb();
-    await db.query(
-      `UPDATE $userId SET
-        twoFactorEnabled = false,
-        twoFactorSecret = NONE,
-        pendingTwoFactorSecret = NONE,
-        updatedAt = time::now()`,
-      { userId: rid(request.ownerId) },
-    );
+    await disableTwoFactor(request.ownerId);
   } else if (actionKey === "auth.action.loginFallback") {
     // Issue a System API Token for the user, bypassing TOTP since the click
     // on a time-bound single-use confirmation link already proved control of
@@ -225,34 +207,8 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     if (user && String(user.id) === String(request.ownerId)) {
       await markVerificationUsed(request.id);
 
-      const db = await getDb();
-      const membership = await db.query<
-        [{
-          companyId: string;
-          systemId: string;
-          systemSlug: string;
-          roles: string[];
-          permissions: string[];
-        }[]]
-      >(
-        `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
-         IF array::len($ucs) > 0 {
-           LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
-           LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
-           SELECT
-             $ucs[0].companyId AS companyId,
-             $ucs[0].systemId AS systemId,
-             $sys[0].slug AS systemSlug,
-             (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
-             array::flatten($roleRecs[*].permissions) AS permissions
-           FROM system WHERE id = $ucs[0].systemId LIMIT 1;
-         } ELSE {
-           RETURN [];
-         };`,
-        { userId: rid(String(user.id)) },
-      );
+      const mem = await resolveUserMembership(String(user.id));
 
-      const mem = membership[0]?.[0];
       const tenant = mem
         ? {
           systemId: String(mem.systemId),
@@ -316,40 +272,9 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     });
 
     // Apply any verified channel updates included in the payload. Channels
-    // live on `lead.channels` (composable rows — no back-pointer). Each
-    // update: if the lead already references a matching (type, value) row,
-    // flip it to verified; otherwise create a new verified channel and
-    // append its id to `lead.channels`. One batched query per channel.
+    // live on `lead.channels` (composable rows — no back-pointer).
     if (leadPayload.channels && leadPayload.channels.length > 0) {
-      const db = await getDb();
-      for (const ch of leadPayload.channels) {
-        await db.query(
-          `LET $lead = (SELECT channels FROM lead WHERE id = $owner)[0];
-           LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channels END;
-           LET $existing = (SELECT id FROM entity_channel
-             WHERE id IN $ids AND type = $type AND value = $value
-             LIMIT 1);
-           LET $new = IF $lead != NONE AND array::len($existing) = 0 THEN (
-             CREATE entity_channel SET
-               type = $type, value = $value, verified = true
-           ) ELSE [] END;
-           LET $appended = IF array::len($new) > 0 THEN (
-             UPDATE $owner SET
-               channels += $new[0].id,
-               updatedAt = time::now()
-           ) ELSE [] END;
-           LET $flipped = IF array::len($existing) > 0 THEN (
-             UPDATE $existing[0].id SET
-               verified = true,
-               updatedAt = time::now()
-           ) ELSE [] END;`,
-          {
-            owner: rid(leadId),
-            type: ch.type,
-            value: ch.value,
-          },
-        );
-      }
+      await syncLeadChannels(leadId, leadPayload.channels);
     }
 
     if (leadPayload.systemId && leadPayload.companyIds?.length) {

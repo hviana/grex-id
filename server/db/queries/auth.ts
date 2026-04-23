@@ -280,3 +280,273 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
     { userIds: ids },
   );
 }
+
+/**
+ * Resolve the first user_company_system membership for a user, including the
+ * system slug and flattened role permissions. Returns null when the user has
+ * no memberships (e.g. superuser without tenant).
+ *
+ * Used by login and login-fallback flows (§19.5, §19.15.3).
+ */
+export async function resolveUserMembership(userId: string): Promise<
+  {
+    companyId: string;
+    systemId: string;
+    systemSlug: string;
+    roles: string[];
+    permissions: string[];
+  } | null
+> {
+  const db = await getDb();
+  const membership = await db.query<
+    [{
+      companyId: string;
+      systemId: string;
+      systemSlug: string;
+      roles: string[];
+      permissions: string[];
+    }[]]
+  >(
+    `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
+     IF array::len($ucs) > 0 {
+       LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
+       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
+       SELECT
+         $ucs[0].companyId AS companyId,
+         $ucs[0].systemId AS systemId,
+         $sys[0].slug AS systemSlug,
+         (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
+         array::flatten($roleRecs[*].permissions) AS permissions
+       FROM system WHERE id = $ucs[0].systemId LIMIT 1;
+     } ELSE {
+       RETURN [];
+     };`,
+    { userId: rid(userId) },
+  );
+  return membership[0]?.[0] ?? null;
+}
+
+/**
+ * Verify company_system association exists and resolve system slug for
+ * superuser exchange bypass (§19.11.1).
+ */
+export async function resolveSuperuserExchange(
+  companyId: string,
+  systemId: string,
+): Promise<{ exists: boolean; slug: string }> {
+  const db = await getDb();
+  const result = await db.query<
+    [{ id: string }[], { slug: string }[]]
+  >(
+    `SELECT id FROM company_system
+       WHERE companyId = $companyId AND systemId = $systemId LIMIT 1;
+     SELECT slug FROM system WHERE id = $systemId LIMIT 1;`,
+    {
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+    },
+  );
+  return {
+    exists: result[0] != null && result[0].length > 0,
+    slug: result[1]?.[0]?.slug ?? "core",
+  };
+}
+
+/**
+ * Verify user membership in a (company, system) and resolve slug + flattened
+ * role permissions. Used by the token exchange flow (§19.11).
+ */
+export async function resolveUserExchange(
+  userId: string,
+  companyId: string,
+  systemId: string,
+): Promise<{
+  membership: { id: string; roles: string[] } | null;
+  slug: string;
+  permissions: string[];
+}> {
+  const db = await getDb();
+  const result = await db.query<
+    [
+      { id: string; roles: string[] }[],
+      { slug: string }[],
+      { permissions: string[] }[],
+    ]
+  >(
+    `SELECT id, roles FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+       LIMIT 1;
+     SELECT slug FROM system WHERE id = $systemId LIMIT 1;
+     SELECT permissions FROM role WHERE id IN (SELECT VALUE roles FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
+    {
+      userId: rid(userId),
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+    },
+  );
+  const mem = result[0]?.[0] ?? null;
+  const permissions = [
+    ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
+  ];
+  return {
+    membership: mem ? { id: String(mem.id), roles: mem.roles ?? [] } : null,
+    slug: result[1]?.[0]?.slug ?? "core",
+    permissions,
+  };
+}
+
+/**
+ * Promote the user's pendingTwoFactorSecret to twoFactorSecret and enable 2FA
+ * (§19.15.2). The secret stays on the user row — it never travels through
+ * verification_request.payload (§15.1 rule 5).
+ */
+export async function promoteTwoFactorSecret(userId: string): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `LET $u = (SELECT pendingTwoFactorSecret FROM $userId LIMIT 1);
+     IF array::len($u) > 0 AND $u[0].pendingTwoFactorSecret != NONE {
+       UPDATE $userId SET
+         twoFactorEnabled = true,
+         twoFactorSecret = $u[0].pendingTwoFactorSecret,
+         pendingTwoFactorSecret = NONE,
+         updatedAt = time::now();
+     };`,
+    { userId: rid(userId) },
+  );
+}
+
+/**
+ * Disable two-factor authentication for a user (§19.15.2).
+ * Clears the secret and the pending secret in one batched update.
+ */
+export async function disableTwoFactor(userId: string): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `UPDATE $userId SET
+      twoFactorEnabled = false,
+      twoFactorSecret = NONE,
+      pendingTwoFactorSecret = NONE,
+      updatedAt = time::now()`,
+    { userId: rid(userId) },
+  );
+}
+
+/**
+ * Fetch a user row with profile and channels resolved. Used by routes that
+ * need the user's profile (name, locale) or channel values for communication
+ * dispatch.
+ */
+export async function getUserWithProfile(userId: string): Promise<
+  {
+    profile: { name: string; locale?: string };
+    channels: { value: string }[];
+  } | null
+> {
+  const db = await getDb();
+  const result = await db.query<
+    [{
+      profile: { name: string; locale?: string };
+      channels: { value: string }[];
+    }[]]
+  >(
+    `SELECT * FROM $userId FETCH profile, channels LIMIT 1`,
+    { userId: rid(userId) },
+  );
+  return result[0]?.[0] ?? null;
+}
+
+/**
+ * Get only the profile fields (name, locale) for a user. Used by routes that
+ * only need the profile for communication template data.
+ */
+export async function getUserProfile(userId: string): Promise<
+  {
+    name: string;
+    locale?: string;
+  } | null
+> {
+  const db = await getDb();
+  const result = await db.query<
+    [{ profile: { name: string; locale?: string } }[]]
+  >(
+    `SELECT profile FROM $userId FETCH profile`,
+    { userId: rid(userId) },
+  );
+  const profile = result[0]?.[0]?.profile;
+  return profile ?? null;
+}
+
+/**
+ * Read the pending two-factor secret envelope from the user row.
+ * Returns the AES-256-GCM envelope string (or undefined if not set).
+ */
+export async function getPendingTwoFactorSecret(
+  userId: string,
+): Promise<string | undefined> {
+  const db = await getDb();
+  const result = await db.query<[{ pendingTwoFactorSecret?: string }[]]>(
+    `SELECT pendingTwoFactorSecret FROM $userId LIMIT 1`,
+    { userId: rid(userId) },
+  );
+  return result[0]?.[0]?.pendingTwoFactorSecret;
+}
+
+/**
+ * Store an AES-256-GCM envelope as the user's pendingTwoFactorSecret.
+ * The plaintext base32 secret never touches the DB (§7.1.1, §12.15).
+ */
+export async function storePendingTwoFactorSecret(
+  userId: string,
+  encrypted: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `UPDATE $userId SET pendingTwoFactorSecret = $secret, updatedAt = time::now()`,
+    { userId: rid(userId), secret: encrypted },
+  );
+}
+
+/**
+ * Fetch user fields needed by the refresh-token flow: stayLoggedIn, roles,
+ * twoFactorEnabled, profile, and channels — all in a single batched query
+ * with FETCH resolution (§7.2).
+ */
+export async function getUserForRefresh(userId: string): Promise<
+  {
+    id: string;
+    stayLoggedIn: boolean;
+    roles: string[];
+    twoFactorEnabled: boolean;
+    profile?: unknown;
+  } | null
+> {
+  const db = await getDb();
+  const result = await db.query<
+    [{
+      id: string;
+      stayLoggedIn: boolean;
+      roles: string[];
+      twoFactorEnabled: boolean;
+      profile?: unknown;
+    }[]]
+  >(
+    `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profile, channels
+       FROM $userId LIMIT 1
+       FETCH profile, channels;`,
+    { userId: rid(userId) },
+  );
+  return result[0]?.[0] ?? null;
+}
+
+/**
+ * Look up a system id by its slug. Returns the system id string or null.
+ */
+export async function findSystemIdBySlug(slug: string): Promise<string | null> {
+  const db = await getDb();
+  const result = await db.query<[{ id: string }[]]>(
+    "SELECT id FROM system WHERE slug = $slug LIMIT 1",
+    { slug },
+  );
+  return result[0]?.[0]?.id ?? null;
+}

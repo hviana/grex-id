@@ -1,10 +1,10 @@
-import { getDb } from "../db/connection.ts";
 import type {
   FileAccess,
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access.ts";
 import { assertServerOnly } from "./server-only.ts";
+import { fetchAllFileAccessRules } from "../db/queries/file-access.ts";
 
 assertServerOnly("file-access-cache.ts");
 
@@ -76,17 +76,13 @@ export function compilePattern(pattern: string): RegExp {
 }
 
 export async function loadFileAccessData(): Promise<FileAccessCacheData> {
-  const db = await getDb();
-  const result = await db.query<[FileAccess[]]>(
-    "SELECT * FROM file_access ORDER BY createdAt ASC",
-  );
+  const records = await fetchAllFileAccessRules();
 
-  const records = result[0] ?? [];
   const rules: CompiledFileAccess[] = records.map((r) => ({
     id: String(r.id),
-    name: r.name,
-    categoryPattern: r.categoryPattern,
-    compiledPattern: compilePattern(r.categoryPattern),
+    name: String(r.name ?? ""),
+    categoryPattern: String(r.categoryPattern ?? ""),
+    compiledPattern: compilePattern(String(r.categoryPattern ?? "")),
     download: normalizeSection(
       r.download as Partial<FileAccessSection> | undefined,
     ),

@@ -39,6 +39,347 @@ export async function listUsers(
   });
 }
 
+/**
+ * Lists users scoped to a specific (company, system) tenant, including
+ * per-tenant context roles from `user_company_system`. Cursor-paginated.
+ */
+export async function getUsersForTenant(params: {
+  companyId: string;
+  systemId: string;
+  search?: string;
+  cursor?: string;
+  direction?: string;
+  limit: number;
+}): Promise<{
+  data: Record<string, unknown>[];
+  nextCursor: string | null;
+}> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    limit: params.limit + 1,
+  };
+
+  let query = `SELECT id, profile, channels, roles, createdAt,
+       (SELECT VALUE roles FROM user_company_system
+         WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
+     FROM user
+     WHERE id IN (SELECT VALUE userId FROM user_company_system
+       WHERE companyId = $companyId AND systemId = $systemId)`;
+
+  if (params.search) {
+    query += " AND profile.name @@ $search";
+    bindings.search = params.search;
+  }
+  if (params.cursor) {
+    query += " AND id > $cursor";
+    bindings.cursor = params.cursor;
+  }
+
+  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
+
+  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
+  const items = result[0] ?? [];
+  const hasMore = items.length > params.limit;
+  const data = hasMore ? items.slice(0, params.limit) : items;
+
+  return {
+    data,
+    nextCursor: hasMore && data.length > 0
+      ? String((data[data.length - 1] as Record<string, unknown>).id)
+      : null,
+  };
+}
+
+/**
+ * Lists users without tenant scoping (global list). Cursor-paginated.
+ */
+export async function getUsersNoTenant(params: {
+  search?: string;
+  cursor?: string;
+  limit: number;
+}): Promise<{
+  data: Record<string, unknown>[];
+  nextCursor: string | null;
+}> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = { limit: params.limit + 1 };
+  const conditions: string[] = [];
+
+  if (params.search) {
+    conditions.push("profile.name @@ $search");
+    bindings.search = params.search;
+  }
+  if (params.cursor) {
+    conditions.push("id > $cursor");
+    bindings.cursor = params.cursor;
+  }
+
+  let query = "SELECT id, profile, channels, roles, createdAt FROM user";
+  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
+  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
+
+  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
+  const items = result[0] ?? [];
+  const hasMore = items.length > params.limit;
+  const data = hasMore ? items.slice(0, params.limit) : items;
+
+  return {
+    data,
+    nextCursor: hasMore && data.length > 0
+      ? String((data[data.length - 1] as Record<string, unknown>).id)
+      : null,
+  };
+}
+
+/**
+ * Returns the context roles for a user in a specific (company, system) tenant.
+ */
+export async function getUserContext(
+  userId: string,
+  companyId: string,
+  systemId: string,
+): Promise<string[]> {
+  const db = await getDb();
+  const result = await db.query<[{ roles: string[] }[]]>(
+    `SELECT roles FROM user_company_system
+     WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+     LIMIT 1`,
+    {
+      userId: rid(userId),
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+    },
+  );
+  return result[0]?.[0]?.roles ?? [];
+}
+
+/**
+ * Result of inviting an existing user to a tenant, including data needed
+ * for the notification message.
+ */
+export interface InviteExistingUserResult {
+  systemName: string;
+  companyName: string;
+  inviterName: string;
+  inviteeName: string;
+}
+
+/**
+ * Idempotently associates an existing user with a (company, system) tenant,
+ * creating or updating the `user_company_system` roles. Returns notification
+ * metadata (system name, company name, inviter/invitee names).
+ */
+export async function inviteExistingUser(params: {
+  userId: string;
+  companyId: string;
+  systemId: string;
+  roles: string[];
+  inviterId: string;
+}): Promise<InviteExistingUserResult> {
+  const db = await getDb();
+  const batchResult = await db.query<
+    [
+      unknown,
+      unknown,
+      {
+        sys: { name: string }[];
+        comp: { name: string }[];
+        inviter: { profileName?: string }[];
+        invitee: { profileName?: string }[];
+      },
+    ]
+  >(
+    `IF array::len((SELECT id FROM company_user WHERE companyId = $companyId AND userId = $userId)) = 0 {
+       CREATE company_user SET companyId = $companyId, userId = $userId;
+     };
+     IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
+       CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = $roles;
+     } ELSE {
+       UPDATE user_company_system SET roles = $roles
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+     };
+     LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
+     LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
+     LET $inviter = (SELECT profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
+     LET $invitee = (SELECT profile.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profile);
+     RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      roles: params.roles,
+      inviterId: rid(params.inviterId),
+    },
+  );
+
+  const returnData = batchResult[2];
+  return {
+    systemName: returnData?.sys?.[0]?.name ?? "",
+    companyName: returnData?.comp?.[0]?.name ?? "",
+    inviterName: returnData?.inviter?.[0]?.profileName ?? "",
+    inviteeName: returnData?.invitee?.[0]?.profileName ?? "",
+  };
+}
+
+/**
+ * Creates `company_user` and `user_company_system` associations for a newly
+ * created user in a single batched query (§7.2).
+ */
+export async function createTenantAssociations(params: {
+  userId: string;
+  companyId: string;
+  systemId: string;
+  roles: string[];
+}): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `CREATE company_user SET companyId = $companyId, userId = $userId;
+     CREATE user_company_system SET
+       userId = $userId,
+       companyId = $companyId,
+       systemId = $systemId,
+       roles = $roles;`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      roles: params.roles,
+    },
+  );
+}
+
+/**
+ * Updates the roles for a user in a (company, system) tenant, enforcing the
+ * admin invariant: there must be at least one remaining admin after the update.
+ * Returns `null` on success, or an i18n error key when the update was blocked.
+ */
+export async function updateUserRolesWithAdminCheck(params: {
+  userId: string;
+  companyId: string;
+  systemId: string;
+  roles: string[];
+}): Promise<string | null> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $ac = (SELECT count() AS c FROM user_company_system
+       WHERE companyId = $companyId AND systemId = $systemId
+         AND roles CONTAINS "admin" AND userId != $userId)[0].c;
+     IF $ac > 0 OR $roles CONTAINS "admin" {
+       UPDATE user_company_system SET roles = $roles
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+     };
+     RETURN $ac;`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      roles: params.roles,
+    },
+  );
+  const otherAdmins = res[2] as number;
+  if (otherAdmins === 0 && !params.roles.includes("admin")) {
+    return "users.error.lastAdminRole";
+  }
+  return null;
+}
+
+/**
+ * Removes a user from a (company, system) tenant, enforcing the admin
+ * invariant: the sole admin cannot be removed. Returns `null` on success,
+ * or an i18n error key when the deletion was blocked.
+ */
+export async function deleteUserWithAdminCheck(params: {
+  userId: string;
+  companyId: string;
+  systemId: string;
+}): Promise<string | null> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $isTargetAdmin = (SELECT count() AS c FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
+         AND roles CONTAINS "admin" LIMIT 1)[0].c;
+     LET $ac = (SELECT count() AS c FROM user_company_system
+       WHERE companyId = $companyId AND systemId = $systemId
+         AND roles CONTAINS "admin" AND userId != $userId)[0].c;
+     IF $isTargetAdmin = 0 OR $ac > 0 {
+       DELETE user_company_system
+         WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+     };
+     RETURN [$isTargetAdmin, $ac];`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+    },
+  );
+  const [isTargetAdmin, otherAdmins] = res[3] as [number, number];
+
+  if (isTargetAdmin > 0 && otherAdmins === 0) {
+    return "users.error.lastAdminDelete";
+  }
+  return null;
+}
+
+/**
+ * Updates a user's profile name by following the `user → profile` record link.
+ */
+export async function updateUserProfileName(
+  userId: string,
+  name: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `LET $prof = (SELECT profile FROM $id);
+     UPDATE $prof[0].profile SET name = $name, updatedAt = time::now()`,
+    { id: rid(userId), name },
+  );
+}
+
+/**
+ * Updates multiple profile fields for the current user, returning the updated
+ * user row with profile and channels resolved.
+ */
+export async function updateCurrentUserProfile(params: {
+  userId: string;
+  name?: string;
+  avatarUri?: string;
+  age?: unknown;
+}): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  const profileSets: string[] = ["updatedAt = time::now()"];
+  const profileBindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+  };
+
+  if (params.name !== undefined) {
+    profileSets.push("name = $name");
+    profileBindings.name = params.name;
+  }
+  if (params.avatarUri !== undefined) {
+    profileSets.push("avatarUri = $avatarUri");
+    profileBindings.avatarUri = params.avatarUri || null;
+  }
+  if (params.age !== undefined) {
+    profileSets.push("age = $age");
+    profileBindings.age = params.age ? Number(params.age) : null;
+  }
+
+  const stmts = [
+    `LET $prof = (SELECT profile FROM user WHERE id = $userId)[0].profile`,
+    `UPDATE $prof SET ${profileSets.join(", ")}`,
+    `UPDATE $userId SET updatedAt = time::now()`,
+    `SELECT * FROM $userId FETCH profile, channels`,
+  ];
+  const result = await db.query<Record<string, unknown>[][]>(
+    stmts.join(";\n"),
+    profileBindings,
+  );
+  const updatedUser = result[result.length - 1]?.[0];
+  return updatedUser ?? null;
+}
+
 export async function getUser(id: string): Promise<User | null> {
   const db = await getDb();
   const result = await db.query<[User[]]>(

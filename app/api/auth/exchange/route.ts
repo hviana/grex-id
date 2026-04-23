@@ -5,7 +5,10 @@ import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
-import { getDb, rid } from "@/server/db/connection";
+import {
+  resolveSuperuserExchange,
+  resolveUserExchange,
+} from "@/server/db/queries/auth";
 
 function withAuthRateLimit() {
   return async (
@@ -66,7 +69,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const db = await getDb();
   const oldTenant = {
     companyId: String(claims.companyId),
     systemId: String(claims.systemId),
@@ -76,20 +78,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const isSuperuser = claims.roles.includes("superuser");
 
   if (isSuperuser) {
-    // Verify company_system association exists and resolve slug
-    const suResult = await db.query<
-      [{ id: string }[], { slug: string }[]]
-    >(
-      `SELECT id FROM company_system
-         WHERE companyId = $companyId AND systemId = $systemId LIMIT 1;
-       SELECT slug FROM system WHERE id = $systemId LIMIT 1;`,
-      {
-        companyId: rid(companyId),
-        systemId: rid(systemId),
-      },
-    );
+    const suResult = await resolveSuperuserExchange(companyId, systemId);
 
-    if (!suResult[0] || suResult[0].length === 0) {
+    if (!suResult.exists) {
       return Response.json(
         {
           success: false,
@@ -99,7 +90,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    const systemSlug = suResult[1]?.[0]?.slug ?? "core";
+    const systemSlug = suResult.slug;
     const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
 
     const newToken = await createTenantToken(
@@ -141,28 +132,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     });
   }
 
-  // Batch: verify membership + resolve slug/permissions — single query (§7.2, §19.11)
-  const result = await db.query<
-    [
-      { id: string; roles: string[] }[],
-      { slug: string }[],
-      { permissions: string[] }[],
-    ]
-  >(
-    `SELECT id, roles FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-       LIMIT 1;
-     SELECT slug FROM system WHERE id = $systemId LIMIT 1;
-     SELECT permissions FROM role WHERE id IN (SELECT VALUE roles FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
-    {
-      userId: rid(claims.actorId),
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-    },
+  // Verify membership + resolve slug/permissions (§7.2, §19.11)
+  const result = await resolveUserExchange(
+    claims.actorId,
+    companyId,
+    systemId,
   );
 
-  if (!result[0] || result[0].length === 0) {
+  if (!result.membership) {
     return Response.json(
       {
         success: false,
@@ -172,11 +149,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const userRoles = result[0][0].roles ?? [];
-  const systemSlug = result[1]?.[0]?.slug ?? "core";
-  const permissions = [
-    ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
-  ];
+  const userRoles = result.membership.roles ?? [];
+  const systemSlug = result.slug;
+  const permissions = result.permissions;
 
   // Carry over remaining lifetime from the old token (§19.11 step 6)
   const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;

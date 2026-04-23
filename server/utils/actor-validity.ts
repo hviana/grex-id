@@ -1,4 +1,3 @@
-import { getDb, rid } from "../db/connection.ts";
 import {
   getCache,
   getCacheIfLoaded,
@@ -6,6 +5,7 @@ import {
   updateCache,
 } from "./cache.ts";
 import { assertServerOnly } from "./server-only.ts";
+import { fetchActiveApiTokenIds } from "../db/queries/actor-validity.ts";
 
 assertServerOnly("actor-validity.ts");
 
@@ -40,23 +40,16 @@ async function loadTenantPartition(
   companyId: string,
   systemId: string,
 ): Promise<Set<string>> {
-  const db = await getDb();
-
   // Anonymous tenant (0:0) has no persisted actors — only live user
   // sessions, which are added through login/register. Skip the DB probe.
   if (companyId === "0" || systemId === "0") {
     return new Set<string>();
   }
 
-  const result = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM api_token
-       WHERE companyId = $companyId AND systemId = $systemId
-         AND revokedAt IS NONE`,
-    { companyId: rid(companyId), systemId: rid(systemId) },
-  );
+  const rows = await fetchActiveApiTokenIds({ companyId, systemId });
 
   const set = new Set<string>();
-  for (const row of result[0] ?? []) {
+  for (const row of rows) {
     set.add(String(row.id));
   }
   return set;

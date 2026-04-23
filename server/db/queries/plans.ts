@@ -18,13 +18,13 @@ export async function listPlans(
 
   if (params.systemId) {
     conditions.push("systemId = $systemId");
-    bindings.systemId = params.systemId;
+    bindings.systemId = rid(params.systemId);
   }
   if (params.activeOnly) {
     conditions.push("isActive = true");
   }
   if (params.search) {
-    conditions.push("name CONTAINS $search");
+    conditions.push("name @@ $search");
     bindings.search = params.search;
   }
 
@@ -54,7 +54,8 @@ export async function createPlan(data: {
   maxConcurrentUploads?: number;
   maxDownloadBandwidthMB?: number;
   maxUploadBandwidthMB?: number;
-  maxOperationCount?: number;
+  maxOperationCount?: Record<string, number>;
+  isActive?: boolean;
 }): Promise<Plan> {
   const db = await getDb();
   const hasEntityLimits = data.entityLimits &&
@@ -79,9 +80,10 @@ export async function createPlan(data: {
       maxDownloadBandwidthMB = $maxDownloadBandwidthMB,
       maxUploadBandwidthMB = $maxUploadBandwidthMB,
       maxOperationCount = $maxOperationCount,
-      isActive = true`,
+      isActive = $isActive`,
     {
       ...data,
+      systemId: rid(data.systemId),
       currency: data.currency ?? "USD",
       entityLimits: hasEntityLimits ? data.entityLimits : undefined,
       apiRateLimit: data.apiRateLimit ?? 1000,
@@ -92,7 +94,8 @@ export async function createPlan(data: {
       maxConcurrentUploads: data.maxConcurrentUploads ?? 0,
       maxDownloadBandwidthMB: data.maxDownloadBandwidthMB ?? 0,
       maxUploadBandwidthMB: data.maxUploadBandwidthMB ?? 0,
-      maxOperationCount: data.maxOperationCount ?? 0,
+      maxOperationCount: data.maxOperationCount || undefined,
+      isActive: data.isActive ?? true,
     },
   );
   return result[0][0];

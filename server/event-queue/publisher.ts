@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection.ts";
+import { createEventAndDelivery } from "../db/queries/event-queue.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("publisher");
@@ -12,23 +12,6 @@ export async function publish(
   payload: Record<string, unknown>,
   availableAt?: Date,
 ): Promise<string> {
-  const db = await getDb();
   const available = availableAt ?? new Date();
-
-  const result = await db.query<[null, unknown[], { id: string }[]]>(
-    `LET $event = (CREATE queue_event SET
-      name = $name,
-      payload = $payload,
-      availableAt = $availableAt RETURN id);
-     CREATE delivery SET
-       eventId = $event[0].id,
-       handler = $name,
-       status = "pending",
-       availableAt = $availableAt,
-       maxAttempts = 5;
-     SELECT id FROM $event[0].id;`,
-    { name, payload, availableAt: available },
-  );
-
-  return result[2]?.[0]?.id ?? "";
+  return createEventAndDelivery(name, payload, available);
 }

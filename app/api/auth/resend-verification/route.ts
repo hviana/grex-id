@@ -5,9 +5,14 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { publish } from "@/server/event-queue/publisher";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
-import { userHasVerifiedChannel } from "@/server/db/queries/auth";
-import { getDb, rid } from "@/server/db/connection";
+import {
+  findUserChannelByTypeValue,
+  listVerifiedChannelTypes,
+} from "@/server/db/queries/entity-channels";
+import {
+  getUserProfile,
+  userHasVerifiedChannel,
+} from "@/server/db/queries/auth";
 
 function withAuthRateLimit() {
   return async (
@@ -58,32 +63,7 @@ async function handler(
   // Locate the unverified channel belonging to a user that matches the
   // identifier. entity_channel rows have no back-pointer — resolve the owner
   // by checking which user references the matching channel id.
-  const db = await getDb();
-  const rowResult = await db.query<unknown[]>(
-    `LET $chIds = (SELECT VALUE id FROM entity_channel
-                    WHERE type = $type AND value = $value);
-     LET $users = IF array::len($chIds) = 0
-                  THEN []
-                  ELSE (SELECT id, channels FROM user
-                        WHERE channels ANYINSIDE $chIds)
-                  END;
-     LET $u = $users[0];
-     LET $match = IF $u = NONE
-                  THEN NONE
-                  ELSE (SELECT id, verified FROM entity_channel
-                        WHERE id IN $u.channels
-                          AND type = $type AND value = $value
-                        LIMIT 1)[0]
-                  END;
-     IF $match = NONE
-       THEN []
-       ELSE [{ id: $match.id, ownerId: $u.id, verified: $match.verified }]
-     END;`,
-    { type, value },
-  );
-  const row = (rowResult[rowResult.length - 1] as
-    | { id: string; ownerId: string; verified: boolean }[]
-    | undefined)?.[0];
+  const row = await findUserChannelByTypeValue(type, value);
   if (!row) return successResponse;
 
   if (row.verified) {
@@ -127,14 +107,9 @@ async function handler(
     ...otherVerified.filter((t) => t !== type),
   ];
 
-  const profile = await db.query<
-    [{ profile: { name: string; locale?: string } }[]]
-  >(
-    `SELECT profile FROM $userId FETCH profile`,
-    { userId: rid(String(row.ownerId)) },
-  );
-  const name = profile[0]?.[0]?.profile?.name ?? "";
-  const locale = profile[0]?.[0]?.profile?.locale;
+  const profileData = await getUserProfile(String(row.ownerId));
+  const name = profileData?.name ?? "";
+  const locale = profileData?.locale;
 
   await publish("send_communication", {
     channels,

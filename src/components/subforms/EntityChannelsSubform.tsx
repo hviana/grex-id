@@ -190,8 +190,7 @@ const EntityChannelsSubform = forwardRef<
       ? "tel"
       : "text";
 
-    const handleAddChannel = async (e: React.FormEvent) => {
-      e.preventDefault();
+    const handleAddChannel = async () => {
       const trimmed = channelValue.trim();
       if (!trimmed) return;
       clearFeedback();
@@ -421,10 +420,7 @@ const EntityChannelsSubform = forwardRef<
           )}
 
         {channels.length < DEFAULT_MAX && channelTypes.length > 0 && (
-          <form
-            onSubmit={handleAddChannel}
-            className="flex flex-col sm:flex-row gap-3"
-          >
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex gap-1 flex-wrap">
               {channelTypes.map((ct) => (
                 <button
@@ -445,13 +441,20 @@ const EntityChannelsSubform = forwardRef<
               type={inputType}
               value={channelValue}
               onChange={(e) => setChannelValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddChannel();
+                }
+              }}
               placeholder={t("common.placeholder.entityChannel")}
               required
               className="flex-1 rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
             />
             <button
-              type="submit"
+              type="button"
               disabled={addingChannel || !channelValue.trim()}
+              onClick={handleAddChannel}
               className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2.5 font-semibold text-black text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
             >
               {addingChannel && (
@@ -462,7 +465,7 @@ const EntityChannelsSubform = forwardRef<
               )}
               {t("common.entityChannels.add")}
             </button>
-          </form>
+          </div>
         )}
 
         {channels.length >= DEFAULT_MAX && (

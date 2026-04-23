@@ -1,4 +1,4 @@
-import { rid } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import type { Company } from "@/src/contracts/company";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { paginatedQuery } from "./pagination.ts";
@@ -99,4 +99,21 @@ export async function createCompany(data: {
     },
   );
   return result[2][0];
+}
+
+/**
+ * Get all systems subscribed by a company in a single batched query (§7.2).
+ * Returns the system rows resolved from the company_system associations.
+ */
+export async function getCompanySystems(
+  companyId: string,
+): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const result = await db.query<[Record<string, unknown>[]]>(
+    `SELECT * FROM system WHERE id IN (
+       SELECT VALUE systemId FROM company_system WHERE companyId = $companyId
+     )`,
+    { companyId: rid(companyId) },
+  );
+  return result[0] ?? [];
 }

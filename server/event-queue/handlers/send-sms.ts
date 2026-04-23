@@ -6,7 +6,7 @@ import {
   hasChannel,
 } from "../../module-registry.ts";
 import { publish } from "../publisher.ts";
-import { getDb, rid } from "../../db/connection.ts";
+import { resolveChannelRecipients } from "../../db/queries/communications.ts";
 import type { HandlerFn } from "../worker.ts";
 import type {
   TemplateBuilder,
@@ -17,39 +17,6 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("send-sms");
 
 const CHANNEL = "sms";
-
-function isRecordId(value: string): boolean {
-  return /^[a-z_][a-z0-9_]*:[^:\s]+$/i.test(value);
-}
-
-async function resolveRecipients(raw: string[]): Promise<string[]> {
-  const resolved: string[] = [];
-  const db = await getDb();
-  for (const entry of raw) {
-    if (typeof entry !== "string" || entry.length === 0) continue;
-    if (!isRecordId(entry)) {
-      resolved.push(entry);
-      continue;
-    }
-    const table = entry.split(":")[0];
-    if (table !== "user" && table !== "lead") continue;
-    // SMS delivery uses the dedicated "sms" entity_channel type, not "phone".
-    // A phone number may refuse SMS (VoIP / landline), and a text-only line
-    // is not suitable for voice calls — the two are distinct channels.
-    const result = await db.query<[{ value: string }[]]>(
-      `LET $owner = (SELECT channels FROM ${table} WHERE id = $ownerId)[0];
-       IF $owner = NONE { RETURN []; };
-       SELECT value FROM entity_channel
-       WHERE id IN $owner.channels AND type = $type AND verified = true
-       ORDER BY createdAt ASC;`,
-      { ownerId: rid(entry), type: CHANNEL },
-    );
-    for (const row of result[0] ?? []) {
-      if (row.value) resolved.push(row.value);
-    }
-  }
-  return [...new Set(resolved)];
-}
 
 async function cascade(
   payload: Record<string, unknown>,
@@ -97,7 +64,7 @@ export const sendSms: HandlerFn = async (payload) => {
       (await core.getSetting("communication.sms.senders")) ?? "[]",
     ) as string[];
 
-  const recipients = await resolveRecipients(rawRecipients);
+  const recipients = await resolveChannelRecipients(rawRecipients, CHANNEL);
   if (recipients.length === 0) {
     await cascade(payload, "no-recipients");
     return;

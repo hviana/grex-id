@@ -255,7 +255,7 @@ export async function updateLead(
     ? normalizeRecordIds(data.companyIds).map((companyId) =>
       requireRecordId(companyId, "companyId")
     )
-    : await getLeadCompanyIds(leadId);
+    : undefined;
   const sets: string[] = ["updatedAt = time::now()"];
   const bindings: Record<string, unknown> = { id: rid(leadId) };
 
@@ -267,8 +267,10 @@ export async function updateLead(
     sets.push("tags = $tags");
     bindings.tags = data.tags;
   }
-  sets.push("companyIds = $companyIds");
-  bindings.companyIds = companyIds.map((companyId) => rid(companyId));
+  if (companyIds !== undefined) {
+    sets.push("companyIds = $companyIds");
+    bindings.companyIds = companyIds.map((companyId) => rid(companyId));
+  }
 
   const statements: string[] = [];
 
@@ -354,12 +356,14 @@ export async function associateLeadWithCompanySystem(data: {
   const leadId = requireRecordId(data.leadId, "leadId");
   const companyId = requireRecordId(data.companyId, "companyId");
   const systemId = requireRecordId(data.systemId, "systemId");
-  const result = await db.query<[LeadCompanySystem[]]>(
+  const result = await db.query<[LeadCompanySystem[], unknown]>(
     `CREATE lead_company_system SET
       leadId = $leadId,
       companyId = $companyId,
       systemId = $systemId,
-      ownerId = $ownerId`,
+      ownerId = $ownerId;
+     LET $rows = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
+     UPDATE $leadId SET companyIds = $rows[*].companyId, updatedAt = time::now();`,
     {
       leadId: rid(leadId),
       companyId: rid(companyId),
@@ -369,7 +373,6 @@ export async function associateLeadWithCompanySystem(data: {
         : undefined,
     },
   );
-  await syncLeadCompanyIds(leadId);
   return result[0][0];
 }
 
@@ -427,18 +430,68 @@ export async function removeLeadFromCompanySystem(
   const normalizedLeadId = requireRecordId(leadId, "leadId");
   const normalizedCompanyId = requireRecordId(companyId, "companyId");
   const normalizedSystemId = requireRecordId(systemId, "systemId");
-  await db.query(
+  const result = await db.query<[{ companyId: unknown }[]]>(
     `DELETE FROM lead_company_system
-     WHERE leadId = $leadId AND companyId = $companyId AND systemId = $systemId`,
+     WHERE leadId = $leadId AND companyId = $companyId AND systemId = $systemId;
+     LET $remaining = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
+     UPDATE $leadId SET companyIds = $remaining[*].companyId, updatedAt = time::now();
+     SELECT companyId FROM lead_company_system WHERE leadId = $leadId`,
     {
       leadId: rid(normalizedLeadId),
       companyId: rid(normalizedCompanyId),
       systemId: rid(normalizedSystemId),
     },
   );
-  const remaining = await syncLeadCompanyIds(normalizedLeadId);
+  const remaining = normalizeRecordIds(
+    (result[0] ?? []).map((row: { companyId: unknown }) => row.companyId),
+  );
   if (remaining.length === 0) {
     await runLifecycleHooks("lead:delete", { leadId: normalizedLeadId });
+  }
+}
+
+/**
+ * Sync a lead's channels for the lead-update verification flow. For each
+ * channel in the payload: if the lead already references a matching
+ * `(type, value)` entity_channel row, flip it to verified; otherwise create a
+ * new verified channel and append its id to `lead.channels`.
+ *
+ * Each channel is synced in its own batched query (the loop is intentional —
+ * SurrealDB conditional branching inside a single query per channel is simpler
+ * than building a dynamic multi-channel batch).
+ */
+export async function syncLeadChannels(
+  leadId: string,
+  channels: { type: string; value: string }[],
+): Promise<void> {
+  const db = await getDb();
+  for (const ch of channels) {
+    await db.query(
+      `LET $lead = (SELECT channels FROM lead WHERE id = $owner)[0];
+         LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channels END;
+         LET $existing = (SELECT id FROM entity_channel
+           WHERE id IN $ids AND type = $type AND value = $value
+           LIMIT 1);
+         LET $new = IF $lead != NONE AND array::len($existing) = 0 THEN (
+           CREATE entity_channel SET
+             type = $type, value = $value, verified = true
+         ) ELSE [] END;
+         LET $appended = IF array::len($new) > 0 THEN (
+           UPDATE $owner SET
+             channels += $new[0].id,
+             updatedAt = time::now()
+         ) ELSE [] END;
+         LET $flipped = IF array::len($existing) > 0 THEN (
+           UPDATE $existing[0].id SET
+             verified = true,
+             updatedAt = time::now()
+         ) ELSE [] END;`,
+      {
+        owner: rid(leadId),
+        type: ch.type,
+        value: ch.value,
+      },
+    );
   }
 }
 

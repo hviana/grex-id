@@ -2,7 +2,7 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, normalizeRecordId } from "@/server/db/connection";
+import { searchUserCompaniesBySystem } from "@/server/db/queries/systems/grex-id/companies";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -13,37 +13,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    const result = await db.query<
-      [{ id: string; companyId: { id: string; name: string } }[]]
-    >(
-      `LET $sys = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1);
-       SELECT companyId FROM company_system
-       WHERE systemId = $sys[0].id
-         AND companyId IN (SELECT companyId FROM company_user WHERE userId = $userId)
-         AND companyId.name @@ $search
-       FETCH companyId
-       LIMIT 20`,
-      {
-        systemSlug: ctx.tenant.systemSlug,
-        userId: ctx.claims!.actorId,
-        search,
-      },
-    );
-
-    const rows = result[0] ?? [];
-    const data = rows
-      .map((row) => {
-        const company = row.companyId as
-          | { id: string; name: string }
-          | undefined;
-        if (!company?.id) return null;
-        return {
-          id: normalizeRecordId(company.id) ?? company.id,
-          label: company.name,
-        };
-      })
-      .filter((item): item is { id: string; label: string } => item !== null);
+    const data = await searchUserCompaniesBySystem({
+      systemSlug: ctx.tenant.systemSlug,
+      userId: ctx.claims!.actorId,
+      search,
+    });
 
     return Response.json({ success: true, data });
   } catch {

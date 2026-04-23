@@ -2,39 +2,22 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
-import type { ApiToken } from "@/src/contracts/token";
+import {
+  createApiToken,
+  listTokensFiltered,
+  revokeToken,
+} from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
-  const userId = url.searchParams.get("userId");
+  const userId = url.searchParams.get("userId") || undefined;
   const companyId = ctx.tenant.companyId;
 
-  const db = await getDb();
-  const bindings: Record<string, unknown> = {};
-  let query =
-    `SELECT id, name, description, permissions, monthlySpendLimit, maxOperationCount,
-            neverExpires, expiresAt, frontendUse, frontendDomains, createdAt
-     FROM api_token WHERE revokedAt IS NONE`;
-  const conditions: string[] = [];
-
-  if (userId) {
-    conditions.push("userId = $userId");
-    bindings.userId = rid(userId);
-  }
-  if (companyId && companyId !== "0") {
-    conditions.push("companyId = $companyId");
-    bindings.companyId = rid(companyId);
-  }
-
-  if (conditions.length) query += " AND " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT 50";
-
-  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  return Response.json({ success: true, data: result[0] ?? [] });
+  const data = await listTokensFiltered({ userId, companyId });
+  return Response.json({ success: true, data });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
@@ -103,40 +86,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
     permissions: permissions ?? [],
   };
 
-  const db = await getDb();
-  const result = await db.query<[ApiToken[]]>(
-    `CREATE api_token SET
-      userId = $userId,
-      companyId = $companyId,
-      systemId = $systemId,
-      tenant = $tenant,
-      name = $name,
-      description = $description,
-      permissions = $permissions,
-      monthlySpendLimit = $monthlySpendLimit,
-      maxOperationCount = $maxOperationCount,
-      neverExpires = $neverExpires,
-      expiresAt = $expiresAt,
-      frontendUse = $frontendUse,
-      frontendDomains = $frontendDomains`,
-    {
-      userId: rid(userId),
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      tenant,
-      name,
-      description: description ?? undefined,
-      permissions: permissions ?? [],
-      monthlySpendLimit: monthlySpendLimit ?? undefined,
-      maxOperationCount: maxOperationCount ?? undefined,
-      neverExpires: neverExpires === true,
-      expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
-      frontendUse: useFrontend,
-      frontendDomains: domains,
-    },
-  );
+  const createdToken = await createApiToken({
+    userId,
+    companyId,
+    systemId,
+    tenant,
+    name,
+    description: description ?? undefined,
+    permissions: permissions ?? [],
+    monthlySpendLimit: monthlySpendLimit ?? undefined,
+    maxOperationCount: maxOperationCount ?? undefined,
+    neverExpires: neverExpires === true,
+    expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
+    frontendUse: useFrontend,
+    frontendDomains: domains,
+  });
 
-  const createdToken = result[0]?.[0];
   if (!createdToken) {
     return Response.json(
       {
@@ -193,21 +158,9 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   // Resolve tenant + revoke in a single batched query (§7.2).
-  const db = await getDb();
-  const result = await db.query<
-    [{ companyId: string; systemId: string }[], unknown]
-  >(
-    `SELECT companyId, systemId FROM $id LIMIT 1;
-     UPDATE $id SET revokedAt = time::now() WHERE revokedAt IS NONE;`,
-    { id: rid(id) },
-  );
-
-  const row = result[0]?.[0];
-  if (row?.companyId && row?.systemId) {
-    await forgetActor(
-      { companyId: String(row.companyId), systemId: String(row.systemId) },
-      id,
-    );
+  const row = await revokeToken(id);
+  if (row) {
+    await forgetActor(row, id);
   }
 
   return Response.json({ success: true });

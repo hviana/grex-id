@@ -1,5 +1,4 @@
-import { getDb } from "../db/connection.ts";
-import { getSystemTenant } from "../utils/tenant.ts";
+import { cleanupRevokedTokens } from "../db/queries/tokens.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("token-cleanup");
@@ -15,19 +14,7 @@ const REVOKED_OLDER_THAN_DAYS = 90;
 export function startTokenCleanup(): void {
   async function runCleanup() {
     try {
-      const _tenant = getSystemTenant();
-      const db = await getDb();
-
-      const result = await db.query<
-        [unknown, { count: number }[], { count: number }[]]
-      >(
-        `LET $cutoff = time::now() - 90d;
-         DELETE FROM api_token WHERE revokedAt IS NOT NONE AND revokedAt < $cutoff RETURN count() AS count;
-         DELETE FROM connected_app WHERE apiTokenId NOT IN (SELECT VALUE id FROM api_token) RETURN count() AS count;`,
-      );
-
-      const tokensDeleted = result[1]?.[0]?.count ?? 0;
-      const appsDeleted = result[2]?.[0]?.count ?? 0;
+      const { tokensDeleted, appsDeleted } = await cleanupRevokedTokens();
 
       if (tokensDeleted > 0 || appsDeleted > 0) {
         // No actor-validity touch: rows hard-deleted here had

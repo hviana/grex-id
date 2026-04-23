@@ -2,13 +2,14 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
+import { rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { paginatedQuery } from "@/server/db/queries/pagination";
 import Core from "@/server/utils/Core";
+import { createRole, deleteRole, updateRole } from "@/server/db/queries/roles";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -79,25 +80,17 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       );
     }
 
-    const db = await getDb();
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `CREATE role SET
-        name = $name,
-        systemId = $systemId,
-        permissions = $permissions,
-        isBuiltIn = $isBuiltIn`,
-      {
-        name: stdName,
-        systemId: rid(systemId),
-        permissions: permissions ?? [],
-        isBuiltIn: isBuiltIn ?? false,
-      },
-    );
+    const role = await createRole({
+      name: stdName,
+      systemId,
+      permissions: permissions ?? [],
+      isBuiltIn: isBuiltIn ?? false,
+    });
 
     await Core.getInstance().reload();
 
     return Response.json(
-      { success: true, data: result[0]?.[0] },
+      { success: true, data: role },
       { status: 201 },
     );
   } catch {
@@ -126,9 +119,9 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    const sets: string[] = [];
-    const bindings: Record<string, unknown> = { id: rid(id) };
+    const updates: Partial<
+      { name: string; permissions: string[]; isBuiltIn: boolean }
+    > = {};
 
     if (data.name !== undefined) {
       const stdName = standardizeField("name", sanitizeString(data.name));
@@ -139,30 +132,24 @@ async function putHandler(req: Request, _ctx: RequestContext) {
           { status: 400 },
         );
       }
-      sets.push("name = $name");
-      bindings.name = stdName;
+      updates.name = stdName;
     }
     if (data.permissions !== undefined) {
-      sets.push("permissions = $permissions");
-      bindings.permissions = data.permissions;
+      updates.permissions = data.permissions;
     }
     if (data.isBuiltIn !== undefined) {
-      sets.push("isBuiltIn = $isBuiltIn");
-      bindings.isBuiltIn = data.isBuiltIn;
+      updates.isBuiltIn = data.isBuiltIn;
     }
 
-    if (sets.length === 0) {
+    if (Object.keys(updates).length === 0) {
       return Response.json({ success: true, data: null });
     }
 
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `UPDATE $id SET ${sets.join(", ")} RETURN AFTER`,
-      bindings,
-    );
+    const updated = await updateRole(id, updates);
 
     await Core.getInstance().reload();
 
-    return Response.json({ success: true, data: result[0]?.[0] });
+    return Response.json({ success: true, data: updated });
   } catch {
     return Response.json(
       {
@@ -189,8 +176,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    await db.query("DELETE $id", { id: rid(id) });
+    await deleteRole(id);
 
     await Core.getInstance().reload();
 

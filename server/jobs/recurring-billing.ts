@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection.ts";
+import { getDueSubscriptions } from "../db/queries/billing.ts";
 import { publish } from "../event-queue/publisher.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
@@ -9,22 +9,8 @@ const BILLING_CHECK_INTERVAL_MS = 3_600_000; // 1 hour
 export function startRecurringBilling(): void {
   async function checkDueSubscriptions() {
     try {
-      const db = await getDb();
+      const subs = await getDueSubscriptions();
 
-      const due = await db.query<[{
-        id: string;
-        companyId: string;
-        systemId: string;
-        planId: string;
-        paymentMethodId: string;
-        currentPeriodEnd: string;
-      }[]]>(
-        `SELECT * FROM subscription
-         WHERE status = "active"
-           AND currentPeriodEnd <= time::now()`,
-      );
-
-      const subs = due[0] ?? [];
       if (subs.length === 0) return;
 
       console.log(`[billing] Found ${subs.length} due subscriptions.`);

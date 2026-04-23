@@ -1,4 +1,4 @@
-import { getDb } from "../db/connection.ts";
+import { queryDuplicateChecks } from "../db/queries/deduplication.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/entity-deduplicator.ts");
@@ -39,22 +39,9 @@ export async function checkDuplicates(
     return { isDuplicate: false, conflicts: [] };
   }
 
-  const db = await getDb();
+  const results = await queryDuplicateChecks(entity, activeFields);
+
   const conflicts: DeduplicationConflict[] = [];
-
-  // Batch all checks into a single query to avoid transaction conflicts
-  const statements = activeFields
-    .map((f, i) =>
-      `SELECT id FROM type::table($entity) WHERE ${f.field} = $val_${i} LIMIT 1`
-    )
-    .join(";\n");
-  const bindings: Record<string, unknown> = { entity };
-  activeFields.forEach((f, i) => {
-    bindings[`val_${i}`] = f.value;
-  });
-
-  const results = await db.query<{ id: string }[][]>(statements, bindings);
-
   activeFields.forEach((f, i) => {
     const existing = results[i]?.[0];
     if (existing) {

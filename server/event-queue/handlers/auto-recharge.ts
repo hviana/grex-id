@@ -1,7 +1,11 @@
-import { getDb, rid } from "../../db/connection.ts";
 import { publish } from "../publisher.ts";
 import Core from "../../utils/Core.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
+import {
+  clearAutoRechargeFlag,
+  createAutoRechargePurchase,
+  getAutoRechargeContext,
+} from "../../db/queries/billing.ts";
 
 assertServerOnly("auto-recharge handler");
 
@@ -14,44 +18,18 @@ export async function handleAutoRecharge(
     systemId: string;
     resourceKey: string;
   };
-  const db = await getDb();
 
-  const result = await db.query<
-    [
-      {
-        id: string;
-        autoRechargeEnabled: boolean;
-        autoRechargeAmount: number;
-        autoRechargeInProgress: boolean;
-        companyId: string;
-        systemId: string;
-      }[],
-      { id: string }[],
-      { id: string; name: string }[],
-      { name: string; slug: string }[],
-    ]
-  >(
-    `SELECT id, autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
-            companyId, systemId
-     FROM subscription WHERE id = $subId LIMIT 1;
-     SELECT id FROM payment_method
-       WHERE companyId = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0]
-       AND isDefault = true LIMIT 1;
-     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1)[0];
-     SELECT id, profile.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
-     SELECT name, slug FROM system WHERE id = (SELECT VALUE systemId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1;`,
-    { subId: rid(payload.subscriptionId) },
-  );
+  const ctx = await getAutoRechargeContext(payload.subscriptionId);
 
-  const sub = result[0]?.[0];
+  const sub = ctx.sub;
   if (!sub || !sub.autoRechargeEnabled || !sub.autoRechargeInProgress) {
     return;
   }
 
-  const paymentMethod = result[1]?.[0];
-  const owner = result[2]?.[0];
+  const paymentMethod = ctx.paymentMethod;
+  const owner = ctx.owner;
   const ownerId = owner?.id ? String(owner.id) : "";
-  const systemInfo = result[3]?.[0];
+  const systemInfo = ctx.systemInfo;
   const systemName = systemInfo?.name ?? "";
   const systemSlug = systemInfo?.slug ?? "";
   const billingUrl = `/billing?system=${systemSlug}`;
@@ -82,10 +60,7 @@ export async function handleAutoRecharge(
       });
     }
 
-    await db.query(
-      `UPDATE $subId SET autoRechargeInProgress = false`,
-      { subId: rid(sub.id) },
-    );
+    await clearAutoRechargeFlag(sub.id);
 
     await Core.getInstance().reloadSubscription(
       String(sub.companyId),
@@ -112,23 +87,15 @@ export async function handleAutoRecharge(
     });
   }
 
-  const purchase = await db.query<[{ id: string }[]]>(
-    `CREATE credit_purchase SET
-       companyId = $companyId,
-       systemId = $systemId,
-       amount = $amount,
-       paymentMethodId = $paymentMethodId,
-       status = "pending"`,
-    {
-      companyId: rid(String(sub.companyId)),
-      systemId: rid(String(sub.systemId)),
-      amount: sub.autoRechargeAmount,
-      paymentMethodId: rid(String(paymentMethod.id)),
-    },
-  );
+  const purchaseId = await createAutoRechargePurchase({
+    companyId: String(sub.companyId),
+    systemId: String(sub.systemId),
+    amount: sub.autoRechargeAmount,
+    paymentMethodId: String(paymentMethod.id),
+  });
 
   await publish("process_payment", {
-    creditPurchaseId: String(purchase[0]?.[0]?.id ?? ""),
+    creditPurchaseId: purchaseId,
     subscriptionId: String(sub.id),
     companyId: String(sub.companyId),
     systemId: String(sub.systemId),

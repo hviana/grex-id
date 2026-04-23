@@ -2,11 +2,16 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getDb, rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
+import {
+  createVoucher,
+  deleteVoucher,
+  listVouchers,
+  updateVoucherWithCascade,
+} from "@/server/db/queries/vouchers";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -16,38 +21,12 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const db = await getDb();
-  let query = "SELECT * FROM voucher";
-  const bindings: Record<string, unknown> = { limit: limit + 1 };
-  const conditions: string[] = [];
-
-  if (search) {
-    conditions.push("code @@ $search");
-    bindings.search = search;
-  }
-
-  if (cursor) {
-    conditions.push(direction === "prev" ? "id < $cursor" : "id > $cursor");
-    bindings.cursor = cursor;
-  }
-
-  if (conditions.length > 0) {
-    query += " WHERE " + conditions.join(" AND ");
-  }
-
-  query += " ORDER BY createdAt DESC LIMIT $limit";
-
-  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
+  const result = await listVouchers({ limit, cursor, direction, search });
 
   return Response.json({
     success: true,
-    data,
-    nextCursor: hasMore && data.length > 0
-      ? data[data.length - 1]?.id ?? null
-      : null,
+    data: result.data,
+    nextCursor: result.nextCursor,
   });
 }
 
@@ -89,62 +68,36 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-    const hasEntityLimitModifiers = entityLimitModifiers &&
-      Object.keys(entityLimitModifiers).length > 0;
-
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `CREATE voucher SET
-        code = $code,
-        applicableCompanyIds = $applicableCompanyIds,
-        applicablePlanIds = $applicablePlanIds,
-        priceModifier = $priceModifier,
-        permissions = $permissions,
-        ${
-        hasEntityLimitModifiers
-          ? "entityLimitModifiers = $entityLimitModifiers,"
-          : ""
-      }
-        apiRateLimitModifier = $apiRateLimitModifier,
-        storageLimitModifier = $storageLimitModifier,
-        fileCacheLimitModifier = $fileCacheLimitModifier,
-        maxConcurrentDownloadsModifier = $maxConcurrentDownloadsModifier,
-        maxConcurrentUploadsModifier = $maxConcurrentUploadsModifier,
-        maxDownloadBandwidthModifier = $maxDownloadBandwidthModifier,
-        maxUploadBandwidthModifier = $maxUploadBandwidthModifier,
-        maxOperationCountModifier = $maxOperationCountModifier,
-        creditModifier = $creditModifier,
-        expiresAt = $expiresAt`,
-      {
-        code: standardizeField("name", sanitizeString(code)),
-        applicableCompanyIds: applicableCompanyIds ?? [],
-        applicablePlanIds: applicablePlanIds ?? [],
-        priceModifier: Number(priceModifier ?? 0),
-        permissions: permissions ?? [],
-        entityLimitModifiers: hasEntityLimitModifiers
-          ? entityLimitModifiers
-          : undefined,
-        apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
-        storageLimitModifier: Number(storageLimitModifier ?? 0),
-        fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
-        maxConcurrentDownloadsModifier: Number(
-          maxConcurrentDownloadsModifier ?? 0,
-        ),
-        maxConcurrentUploadsModifier: Number(maxConcurrentUploadsModifier ?? 0),
-        maxDownloadBandwidthModifier: Number(maxDownloadBandwidthModifier ?? 0),
-        maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
-        maxOperationCountModifier: maxOperationCountModifier || undefined,
-        creditModifier: Number(creditModifier ?? 0),
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-      },
-    );
+    const voucher = await createVoucher({
+      code: standardizeField("name", sanitizeString(code)),
+      applicableCompanyIds: applicableCompanyIds ?? [],
+      applicablePlanIds: applicablePlanIds ?? [],
+      priceModifier: Number(priceModifier ?? 0),
+      permissions: permissions ?? [],
+      entityLimitModifiers: entityLimitModifiers &&
+          Object.keys(entityLimitModifiers).length > 0
+        ? entityLimitModifiers
+        : undefined,
+      apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
+      storageLimitModifier: Number(storageLimitModifier ?? 0),
+      fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
+      maxConcurrentDownloadsModifier: Number(
+        maxConcurrentDownloadsModifier ?? 0,
+      ),
+      maxConcurrentUploadsModifier: Number(maxConcurrentUploadsModifier ?? 0),
+      maxDownloadBandwidthModifier: Number(maxDownloadBandwidthModifier ?? 0),
+      maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
+      maxOperationCountModifier: maxOperationCountModifier || undefined,
+      creditModifier: Number(creditModifier ?? 0),
+      expiresAt: expiresAt ? expiresAt : undefined,
+    });
 
     const core = Core.getInstance();
     await core.reload();
     core.evictAllSubscriptions();
 
     return Response.json(
-      { success: true, data: result[0]?.[0] },
+      { success: true, data: voucher },
       { status: 201 },
     );
   } catch {
@@ -197,9 +150,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
     const sets: string[] = [];
-    const bindings: Record<string, unknown> = { id: rid(String(id)) };
+    const bindings: Record<string, unknown> = {};
 
     if (code !== undefined) {
       sets.push("code = $code");
@@ -290,22 +242,18 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       Array.isArray(applicablePlanIds) &&
       applicablePlanIds.length > 0;
 
-    const cascadeQuery = shouldCascade
-      ? `UPDATE subscription SET voucherId = NONE
-         WHERE voucherId = $id
-           AND planId NOT IN $applicablePlanIds;`
-      : "";
-
-    const result = await db.query<[Record<string, unknown>[]]>(
-      `UPDATE $id SET ${sets.join(", ")} RETURN AFTER;${cascadeQuery}`,
+    const updated = await updateVoucherWithCascade(
+      id,
+      sets,
       bindings,
+      shouldCascade,
     );
 
     const core = Core.getInstance();
     await core.reload();
     core.evictAllSubscriptions();
 
-    return Response.json({ success: true, data: result[0]?.[0] });
+    return Response.json({ success: true, data: updated });
   } catch {
     return Response.json(
       {
@@ -332,14 +280,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const db = await getDb();
-
-    // Remove voucher reference from subscriptions + delete voucher in one batch
-    await db.query(
-      `UPDATE subscription SET voucherId = NONE WHERE voucherId = $id;
-       DELETE $id;`,
-      { id: rid(id) },
-    );
+    await deleteVoucher(id);
 
     const core = Core.getInstance();
     await core.reload();

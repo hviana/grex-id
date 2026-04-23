@@ -5,7 +5,11 @@ import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { publish } from "@/server/event-queue/publisher";
-import { getDb, rid } from "@/server/db/connection";
+import {
+  getPendingTwoFactorSecret,
+  getUserWithProfile,
+  storePendingTwoFactorSecret,
+} from "@/server/db/queries/auth";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { decryptField, encryptField } from "@/server/utils/crypto";
 import {
@@ -70,21 +74,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const userId = ctx.claims.actorId;
   const systemSlug = ctx.tenant.systemSlug;
 
-  const db = await getDb();
-
   if (action === "setup-totp") {
     // Generate a fresh TOTP secret and stash it on the user row as
     // `pendingTwoFactorSecret`. The secret never travels through
     // `verification_request.payload` (§15.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
-    const userRow = await db.query<
-      [{ profile: { name: string }; channels: { value: string }[] }[]]
-    >(
-      `SELECT profile, channels FROM $userId FETCH profile, channels`,
-      { userId: rid(userId) },
-    );
-    const accountLabel = userRow[0]?.[0]?.channels?.[0]?.value ??
-      userRow[0]?.[0]?.profile?.name ?? "user";
+    const userRow = await getUserWithProfile(userId);
+    const accountLabel = userRow?.channels?.[0]?.value ??
+      userRow?.profile?.name ?? "user";
 
     const secret = generateSecret({
       length: 20,
@@ -100,10 +97,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     // Store the AES-256-GCM envelope, never the raw base32 secret (§7.1.1).
     const secretEnvelope = await encryptField(secret);
-    await db.query(
-      `UPDATE $userId SET pendingTwoFactorSecret = $secret, updatedAt = time::now()`,
-      { userId: rid(userId), secret: secretEnvelope },
-    );
+    await storePendingTwoFactorSecret(userId, secretEnvelope);
 
     // Return only the provisioning URI to the browser. The raw secret is
     // embedded in that URI by design (otpauth:// format) so the authenticator
@@ -132,11 +126,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // Load the pending secret envelope we stashed on `setup-totp` and
     // decrypt once (§12.15) for the TOTP comparison. The plaintext stays
     // in request scope.
-    const pending = await db.query<[{ pendingTwoFactorSecret?: string }[]]>(
-      `SELECT pendingTwoFactorSecret FROM $userId LIMIT 1`,
-      { userId: rid(userId) },
-    );
-    const envelope = pending[0]?.[0]?.pendingTwoFactorSecret;
+    const envelope = await getPendingTwoFactorSecret(userId);
     if (!envelope) {
       return Response.json(
         {

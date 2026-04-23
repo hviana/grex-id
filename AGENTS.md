@@ -480,7 +480,8 @@ permission errors, and status messages.
   `limit`, capped server-side at 200.
 - **FULLTEXT search** for textual lookup fields (see migration files for the
   `FULLTEXT ANALYZER general_analyzer_fts BM25` indexes on names).
-- **Queries live in `server/db/queries/`**, never inlined in route handlers.
+- **Queries live in `server/db/queries/`**, never inlined in any file, except
+  agent skills, migrations and seeds.
 
 #### 7.1.1 Sensitive data must never be stored plainly
 
