@@ -41,7 +41,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const systemId = ctx.tenant.systemId;
 
   if (action === "context") {
-    if (!companyId || !systemId) {
+    if (!companyId || !systemId || companyId === "0" || systemId === "0") {
       return Response.json(
         {
           success: false,

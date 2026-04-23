@@ -44,6 +44,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true, data: lead });
   }
 
+  if (!companyId || companyId === "0" || !systemId || systemId === "0") {
+    return Response.json({ success: true, data: [], nextCursor: null });
+  }
+
   const result = await listLeads({
     limit,
     cursor,
@@ -92,7 +96,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
   if (channels.length === 0) errors.push("validation.channel.required");
 
-  if (!companyId || !systemId) {
+  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
     return Response.json(
       {
         success: false,
@@ -188,7 +192,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!companyId || !systemId) {
+  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
     return Response.json(
       {
         success: false,
