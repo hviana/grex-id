@@ -489,7 +489,9 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { userId, companyId, systemId } = body;
 
-  if (!userId || !companyId || !systemId) {
+  if (
+    !userId || !companyId || !systemId || companyId === "0" || systemId === "0"
+  ) {
     return Response.json(
       {
         success: false,
