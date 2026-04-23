@@ -75,7 +75,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const db = await getDb();
   const bindings: Record<string, unknown> = { limit: limit + 1 };
 
-  if (companyId && systemId) {
+  if (companyId && systemId && companyId !== "0" && systemId !== "0") {
     let userQuery = `SELECT id, profile, channels, roles, createdAt,
          (SELECT VALUE roles FROM user_company_system
            WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
