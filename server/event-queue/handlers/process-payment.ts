@@ -103,7 +103,7 @@ export const processPayment: HandlerFn = async (payload) => {
   const failureReason = providerResult.error ?? "";
   const invoiceUrl = providerResult.invoiceUrl ?? "";
 
-  const billingUrl = `/billing?system=${systemSlug}`;
+  const billingUrl = `/billing?systemSlug=${systemSlug}`;
   const ownerName = owner?.name ?? "";
   const ownerId = owner?.id ? String(owner.id) : "";
 

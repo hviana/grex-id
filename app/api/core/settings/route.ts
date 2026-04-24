@@ -37,14 +37,20 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const items = settings
-    .filter((s: Record<string, unknown>) => s.key)
-    .map((s: Record<string, unknown>) => ({
+  const items: {
+    key: string;
+    value: string;
+    description: string;
+    systemSlug?: string;
+  }[] = [];
+  for (const s of settings.filter((s: Record<string, unknown>) => s.key)) {
+    items.push({
       key: await standardizeField("name", String(s.key ?? "")),
       value: await standardizeField("name", String(s.value ?? "")),
       description: await standardizeField("name", String(s.description ?? "")),
       systemSlug: systemSlug || undefined,
-    }));
+    });
+  }
 
   await batchUpsertSettings(items);
   await Core.getInstance().reload();

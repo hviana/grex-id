@@ -19,7 +19,7 @@ interface SubmittedChannel {
   value: string;
 }
 
-function parseChannels(raw: unknown): SubmittedChannel[] {
+async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];
   const out: SubmittedChannel[] = [];
   for (const entry of raw) {
@@ -60,7 +60,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const tags = Array.isArray(parsedBody.tags) ? parsedBody.tags : undefined;
-    const channels = parseChannels(parsedBody.channels);
+    const channels = await parseChannels(parsedBody.channels);
     const name = parsedBody.name
       ? await standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
@@ -195,7 +195,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
         "http://localhost:3000";
       const confirmationLink =
-        `${baseUrl}/verify?token=${guardResult.token}&system=${
+        `${baseUrl}/verify?token=${guardResult.token}&systemSlug=${
           encodeURIComponent(systemSlug ?? "")
         }`;
 

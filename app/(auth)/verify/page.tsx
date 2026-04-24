@@ -18,7 +18,7 @@ function VerifyContent() {
   const { refresh } = useAuth();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const identifierParam = searchParams.get("identifier") ?? "";
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
@@ -30,7 +30,7 @@ function VerifyContent() {
   const [resent, setResent] = useState(false);
 
   const systemParam = systemSlug
-    ? `?system=${encodeURIComponent(systemSlug)}`
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
     : "";
   const loginHref = `/login${systemParam}`;
 

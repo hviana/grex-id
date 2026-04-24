@@ -109,7 +109,7 @@ function checkSyntaxWarnings(sql: string): SyntaxWarning[] {
   // SurrealDB requires: SELECT ... LIMIT n FETCH ... (FETCH after LIMIT is
   // silently ignored in some versions). Correct order is FETCH before LIMIT
   // in SurrealDB 3.0.
-  if (/\bLIMIT\b.*\bFETCH\b/is.test(stripped)) {
+  if (/\bLIMIT\b[\s\S]*\bFETCH\b/i.test(stripped)) {
     warnings.push({
       code: "W_FETCH_AFTER_LIMIT",
       message:

@@ -83,14 +83,14 @@ export async function standardizeField(
   if (entity) {
     const entityKey = `${entity}.${field}`;
     if (entityFieldStandardizers[entityKey]) {
-      result = entityFieldStandardizers[entityKey](value);
+      result = await entityFieldStandardizers[entityKey](value);
     } else if (fieldStandardizers[field]) {
-      result = fieldStandardizers[field](value);
+      result = await fieldStandardizers[field](value);
     } else {
       result = value.trim().replace(/[<>]/g, "");
     }
   } else if (fieldStandardizers[field]) {
-    result = fieldStandardizers[field](value);
+    result = await fieldStandardizers[field](value);
   } else {
     result = value.trim().replace(/[<>]/g, "");
   }

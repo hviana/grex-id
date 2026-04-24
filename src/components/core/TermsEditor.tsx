@@ -289,7 +289,7 @@ export default function TermsEditor() {
                   </div>
                   <div className="flex gap-2 ml-4 shrink-0">
                     <a
-                      href={`/terms?system=${encodeURIComponent(sys.slug)}`}
+                      href={`/terms?systemSlug=${encodeURIComponent(sys.slug)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-lg border border-[var(--color-dark-gray)] px-3 py-1.5 text-sm text-[var(--color-light-text)] hover:bg-white/5 transition-colors"

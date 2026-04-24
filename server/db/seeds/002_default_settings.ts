@@ -95,7 +95,7 @@ const defaults: DefaultSetting[] = [
     key: "app.defaultSystem",
     value: "grex-id",
     description:
-      "System slug shown on the homepage when no ?system= parameter is provided",
+      "System slug shown on the homepage when no ?systemSlug= parameter is provided",
   },
   {
     key: "app.baseUrl",

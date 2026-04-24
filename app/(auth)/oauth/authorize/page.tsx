@@ -17,7 +17,7 @@ function OAuthAuthorizeContent() {
 
   const clientName = searchParams.get("client_name") ?? "";
   const permissionsParam = searchParams.get("permissions") ?? "";
-  const systemSlug = searchParams.get("system_slug") ?? "";
+  const systemSlug = searchParams.get("systemSlug") ?? "";
   const redirectOrigin = searchParams.get("redirect_origin") ?? "";
 
   const permissions = permissionsParam
@@ -41,10 +41,9 @@ function OAuthAuthorizeContent() {
         oauth: "1",
         client_name: clientName,
         permissions: permissionsParam,
-        system_slug: systemSlug,
+        systemSlug: systemSlug,
         redirect_origin: redirectOrigin,
       });
-      if (systemSlug) params.set("system", systemSlug);
       router.replace(`/login?${params.toString()}`);
     }
   }, [

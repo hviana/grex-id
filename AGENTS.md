@@ -4,8 +4,8 @@ A serverless multi-tenant SaaS platform. **Users** authenticate once and belong
 to one or more **companies**, each subscribed via a **plan** to one or more
 **systems**. A **superuser** administers a Core layer (systems, roles, plans,
 vouchers, menus, terms, settings, data deletion, file-access rules). Each system
-ships its own UI, menus, and public homepage (`/?system=<slug>`), branded
-through a `?system=` query parameter on every public page.
+ships its own UI, menus, and public homepage (`/?systemSlug=<slug>`), branded
+through a `?systemSlug=` query parameter on every public page.
 
 **Subframeworks** (`frameworks/<name>/`) are design-time code bundles that
 extend Core at build time through a module registry. **Systems**
@@ -1253,8 +1253,8 @@ Flow:
 
 | Group    | Purpose                                      | Rules                                                                                                                                                                                          |
 | -------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Root     | `/` (public homepage router)                 | Reads `?system=` → registry → system homepage; else `app.defaultSystem`; else core inline homepage                                                                                             |
-| `(auth)` | Public auth surfaces + terms + OAuth consent | No sidebar; `?system=` preserved across links; `SystemBranding` top of forms                                                                                                                   |
+| Root     | `/` (public homepage router)                 | Reads `?systemSlug=` → registry → system homepage; else `app.defaultSystem`; else core inline homepage                                                                                         |
+| `(auth)` | Public auth surfaces + terms + OAuth consent | No sidebar; `?systemSlug=` preserved across links; `SystemBranding` top of forms                                                                                                               |
 | `(app)`  | Authenticated user workspace (scoped tenant) | Sidebar + `ProfileMenu`; onboarding guard on mount; cookie-persisted context                                                                                                                   |
 | `(core)` | Superuser admin                              | Hardcoded core sidebar (Companies, Systems, Roles, Plans, Vouchers, Menus, Terms, Data Deletion, Settings, Front Settings, File Access). Sidebar **never** displays "Core" in `(app)` context. |
 
@@ -1279,7 +1279,7 @@ Flow:
 
 ### 9.3 Public pages
 
-- **Homepage** (`app/page.tsx`): `?system=` → registry lookup → `<Suspense>`
+- **Homepage** (`app/page.tsx`): `?systemSlug=` → registry lookup → `<Suspense>`
   system component. Else core inline.
 - **Public system info**: `GET /api/public/system?slug=` or `?default=true`.
   Response: `{name, slug, logoUri, defaultLocale?, termsOfService?}` (terms
@@ -1437,7 +1437,7 @@ props/variants; cross-page duplication is forbidden.
 `src/components/systems/registry.ts` exports `registerHomePage(slug, loader)`
 and `getHomePage(slug)`. Homepages live at
 `src/components/systems/<slug>/HomePage.tsx`, receive no props, use `useLocale`,
-link to `/login?system=<slug>`.
+link to `/login?systemSlug=<slug>`.
 
 ### 10.6 Payment contracts (client & server)
 
@@ -1456,7 +1456,7 @@ link to `/login?system=<slug>`.
 app/                            # Next.js App Router
 ├── globals.css                 # CSS vars only (§2.2)
 ├── layout.tsx                  # LocaleProvider, FrontCoreProvider, AuthProvider, CookieConsent
-├── page.tsx                    # Public homepage router (?system=)
+├── page.tsx                    # Public homepage router (?systemSlug=)
 ├── (auth)/                     # login, register, verify, forgot/reset password, account-recovery,
 │                               # terms, oauth/authorize
 ├── (app)/                      # Onboarding, entry (spinner-only), [...slug]

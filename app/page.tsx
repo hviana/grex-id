@@ -11,7 +11,7 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLocale();
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
 
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(systemSlug);
   const [loading, setLoading] = useState<boolean>(true);

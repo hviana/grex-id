@@ -25,15 +25,15 @@ export default function CookieConsent() {
     if (getCookie(CONSENT_COOKIE) === undefined) setVisible(true);
   }, []);
 
-  // Resolve the terms link target. Prefer the ?system= query param (present
+  // Resolve the terms link target. Prefer the ?systemSlug= query param (present
   // on auth pages + public homepage). When absent, hit `/terms` without a
   // slug — the page will show the core generic terms (§25.1 resolution
   // order). `app.defaultSystem` is a server-only setting and is not
   // consumable here; if the superuser wants the popup to point at a specific
-  // system by default, they should set `?system=` on the relevant links.
-  const systemFromUrl = searchParams.get("system");
+  // system by default, they should set `?systemSlug=` on the relevant links.
+  const systemFromUrl = searchParams.get("systemSlug");
   const termsHref = systemFromUrl
-    ? `/terms?system=${encodeURIComponent(systemFromUrl)}`
+    ? `/terms?systemSlug=${encodeURIComponent(systemFromUrl)}`
     : "/terms";
 
   const decide = (accepted: boolean) => {

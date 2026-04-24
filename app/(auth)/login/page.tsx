@@ -15,11 +15,11 @@ import Link from "next/link";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const isOAuth = searchParams.get("oauth") === "1";
   const oauthClientName = searchParams.get("client_name") ?? "";
   const oauthPermissions = searchParams.get("permissions") ?? "";
-  const oauthSystemSlug = searchParams.get("system_slug") ?? systemSlug ?? "";
+  const oauthSystemSlug = searchParams.get("systemSlug") ?? systemSlug ?? "";
   const oauthRedirectOrigin = searchParams.get("redirect_origin") ?? "";
   const { login } = useAuth();
   const { t } = useLocale();
@@ -37,11 +37,11 @@ function LoginContent() {
   const [error, setError] = useState<string | null>(null);
 
   const systemParam = systemSlug
-    ? `?system=${encodeURIComponent(systemSlug)}`
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
     : "";
   const verifyParams = new URLSearchParams();
   if (systemSlug) {
-    verifyParams.set("system", systemSlug);
+    verifyParams.set("systemSlug", systemSlug);
   }
   if (identifier) {
     verifyParams.set("identifier", identifier);
@@ -90,7 +90,7 @@ function LoginContent() {
         const params = new URLSearchParams({
           client_name: oauthClientName,
           permissions: oauthPermissions,
-          system_slug: oauthSystemSlug,
+          systemSlug: oauthSystemSlug,
           redirect_origin: oauthRedirectOrigin,
         });
         router.push(`/oauth/authorize?${params.toString()}`);

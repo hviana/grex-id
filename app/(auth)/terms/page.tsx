@@ -10,7 +10,7 @@ import SystemBranding from "@/src/components/shared/SystemBranding";
 
 function TermsContent() {
   const searchParams = useSearchParams();
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const { t } = useLocale();
   const { systemInfo, loading } = usePublicSystem(systemSlug);
 

@@ -37,7 +37,7 @@ interface SubmittedChannel {
   value: string;
 }
 
-function parseChannels(raw: unknown): SubmittedChannel[] {
+async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];
   const out: SubmittedChannel[] = [];
   for (const entry of raw) {
@@ -78,7 +78,7 @@ async function handler(
     ? await standardizeField("name", body.name, "user")
     : undefined;
 
-  const channels = parseChannels(body.channels);
+  const channels = await parseChannels(body.channels);
   if (channels.length === 0) {
     return Response.json(
       {

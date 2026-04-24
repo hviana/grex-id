@@ -64,7 +64,7 @@ interface SubmittedChannel {
   value: string;
 }
 
-function parseChannels(raw: unknown): SubmittedChannel[] {
+async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];
   const out: SubmittedChannel[] = [];
   for (const entry of raw) {
@@ -85,7 +85,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const systemId = ctx.tenant.systemId;
   const inferredCompanyIds = companyId && companyId !== "0" ? [companyId] : [];
   const { profile, ownerId } = body;
-  const channels = parseChannels(body.channels);
+  const channels = await parseChannels(body.channels);
   const name = body.name
     ? await standardizeField("name", body.name, "lead")
     : undefined;

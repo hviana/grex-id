@@ -13,7 +13,7 @@ import Link from "next/link";
 
 function ForgotPasswordContent() {
   const searchParams = useSearchParams();
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const { t } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
@@ -24,7 +24,7 @@ function ForgotPasswordContent() {
   const [sent, setSent] = useState(false);
 
   const systemParam = systemSlug
-    ? `?system=${encodeURIComponent(systemSlug)}`
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
     : "";
 
   const handleSubmit = async (e: React.FormEvent) => {

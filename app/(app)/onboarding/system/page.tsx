@@ -40,7 +40,7 @@ interface PlanOption {
 export default function OnboardingSystemPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preselectedSlug = searchParams.get("system");
+  const preselectedSlug = searchParams.get("systemSlug");
   const { t } = useLocale();
   const { systemToken } = useAuth();
 

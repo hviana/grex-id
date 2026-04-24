@@ -29,7 +29,7 @@ interface SubmittedChannel {
   value: string;
 }
 
-function parseChannels(raw: unknown): SubmittedChannel[] {
+async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];
   const out: SubmittedChannel[] = [];
   for (const entry of raw) {
@@ -97,7 +97,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { password, name, roles } = body;
-  const channels = parseChannels(body.channels);
+  const channels = await parseChannels(body.channels);
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
@@ -180,7 +180,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         systemName: inviteResult.systemName,
         resources: (roles ?? []).map((r: string) => `roles.${r}.name`),
         ctaKey: "templates.notification.cta.goToDashboard",
-        ctaUrl: `${baseUrl}/login?system=${ctx.tenant.systemSlug}`,
+        ctaUrl: `${baseUrl}/login?systemSlug=${ctx.tenant.systemSlug}`,
         systemSlug: ctx.tenant.systemSlug,
         inviterName: inviteResult.inviterName,
       },

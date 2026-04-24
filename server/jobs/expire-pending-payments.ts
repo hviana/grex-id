@@ -45,7 +45,7 @@ export function startPaymentExpiry(): void {
                 currency: payment.currency ?? "USD",
               },
               ctaKey: "templates.notification.cta.viewBilling",
-              ctaUrl: `/billing?system=${systemSlug}`,
+              ctaUrl: `/billing?systemSlug=${systemSlug}`,
               resources: [`billing.paymentKind.${payment.kind}`],
               systemSlug,
             },

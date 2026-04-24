@@ -168,7 +168,9 @@ export default function ProfileMenu() {
               handleClose();
               logout();
               router.push(
-                slug ? `/login?system=${encodeURIComponent(slug)}` : "/login",
+                slug
+                  ? `/login?systemSlug=${encodeURIComponent(slug)}`
+                  : "/login",
               );
             }}
             className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 transition-colors border-t border-[var(--color-dark-gray)]"

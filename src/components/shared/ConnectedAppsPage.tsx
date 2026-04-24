@@ -83,7 +83,7 @@ export default function ConnectedAppsPage() {
   };
 
   const authorizeUrl = typeof window !== "undefined"
-    ? `${globalThis.location.origin}/oauth/authorize?system_slug=${
+    ? `${globalThis.location.origin}/oauth/authorize?systemSlug=${
       encodeURIComponent(systemSlug ?? "")
     }&client_name=YOUR_APP_NAME&permissions=read:*&redirect_origin=https://yourapp.com`
     : "";

@@ -14,7 +14,7 @@ function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
   const [password, setPassword] = useState("");
@@ -23,7 +23,7 @@ function ResetPasswordContent() {
   const [error, setError] = useState<string | null>(null);
 
   const systemParam = systemSlug
-    ? `?system=${encodeURIComponent(systemSlug)}`
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
     : "";
 
   const handleSubmit = async (e: React.FormEvent) => {

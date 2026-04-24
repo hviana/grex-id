@@ -16,7 +16,7 @@ import Link from "next/link";
 function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const systemSlug = searchParams.get("system");
+  const systemSlug = searchParams.get("systemSlug");
   const { t, locale } = useLocale();
   const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
 
@@ -32,7 +32,7 @@ function RegisterContent() {
   const [errors, setErrors] = useState<string[]>([]);
 
   const systemParam = systemSlug
-    ? `?system=${encodeURIComponent(systemSlug)}`
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
     : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,7 +89,7 @@ function RegisterContent() {
 
       const verifyParams = new URLSearchParams();
       if (systemSlug) {
-        verifyParams.set("system", systemSlug);
+        verifyParams.set("systemSlug", systemSlug);
       }
       // Prefill the verify/resend form with any channel value submitted —
       // prefer email for convenience, else the first channel regardless.

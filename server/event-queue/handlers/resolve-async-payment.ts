@@ -54,7 +54,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const chargeAmount = payment.amount;
   const isRecurring = kind === "recurring";
 
-  const billingUrl = `/billing?system=${systemSlug}`;
+  const billingUrl = `/billing?systemSlug=${systemSlug}`;
   const ownerName = owner?.name ?? "";
   const ownerId = owner?.id ? String(owner.id) : "";
 

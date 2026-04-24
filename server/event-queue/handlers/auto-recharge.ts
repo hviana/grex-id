@@ -32,7 +32,7 @@ export async function handleAutoRecharge(
   const systemInfo = ctx.systemInfo;
   const systemName = systemInfo?.name ?? "";
   const systemSlug = systemInfo?.slug ?? "";
-  const billingUrl = `/billing?system=${systemSlug}`;
+  const billingUrl = `/billing?systemSlug=${systemSlug}`;
   const amountValue = {
     amount: sub.autoRechargeAmount,
     currency: "USD",

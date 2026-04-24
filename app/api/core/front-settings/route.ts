@@ -50,14 +50,20 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const items = settings
-    .filter((s) => s.key)
-    .map((s) => ({
+  const items: {
+    key: string;
+    value: string;
+    description: string;
+    systemSlug?: string;
+  }[] = [];
+  for (const s of settings.filter((s) => s.key)) {
+    items.push({
       key: await standardizeField("name", s.key),
       value: s.value ?? "",
       description: s.description ?? "",
       systemSlug: systemSlug || undefined,
-    }));
+    });
+  }
 
   await batchUpsertFrontSettings(items);
   await FrontCore.getInstance().reload();

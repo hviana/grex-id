@@ -225,7 +225,7 @@ export default function GrexIdHomePage() {
           {/* CTA Buttons */}
           <div className="flex flex-wrap items-center justify-center gap-4 mt-12">
             <Link
-              href="/login?system=grex-id"
+              href="/login?systemSlug=grex-id"
               className="group relative inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-hover-green)] px-8 py-4 text-lg font-bold text-black transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_40px_-12px_rgba(2,208,125,0.4)]"
             >
               <span>🚀</span>
@@ -651,7 +651,7 @@ export default function GrexIdHomePage() {
               {t("systems.grex-id.home.registerCta")}
             </button>
             <Link
-              href="/login?system=grex-id"
+              href="/login?systemSlug=grex-id"
               className="rounded-xl border-2 border-[var(--color-primary-green)]/50 px-8 py-4 text-lg font-bold text-[var(--color-primary-green)] transition-all duration-300 hover:border-[var(--color-primary-green)] hover:bg-[var(--color-primary-green)]/5 hover:-translate-y-1"
             >
               {t("systems.grex-id.home.loginCta")}
@@ -723,7 +723,7 @@ export default function GrexIdHomePage() {
               </span>
             </label>
             <a
-              href="/terms?system=grex-id"
+              href="/terms?systemSlug=grex-id"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block text-sm text-[var(--color-primary-green)] hover:text-[var(--color-light-green)] transition-colors font-medium underline underline-offset-2"
