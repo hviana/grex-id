@@ -1460,7 +1460,7 @@ above (with `.gitkeep` where empty). Same for new frameworks.
 
 ---
 
-## 12. Phased Roadmap (compressed)
+## 12. Phased Roadmap
 
 Each phase builds on the previous; nothing later violates earlier invariants.
 
