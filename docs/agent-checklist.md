@@ -75,6 +75,9 @@ file crosses a boundary (§2.7).
       link, child has no back-pointer (§2.4, §3.3).
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
+- [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
+      bespoke query. Only write custom SQL when generics cannot express the
+      logic (compositional creates, lifecycle hooks, complex subqueries).
 - [ ] Single-batched-query rule: one `db.query()` per function — no sequential
       awaits, no `Promise.all` of `db.query()` (§2.4).
 - [ ] CREATE flow: `standardizeField` → `validateField(s)` → `checkDuplicates` →

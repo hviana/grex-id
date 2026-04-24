@@ -105,7 +105,12 @@ user-facing informational surfaces show translation only.
   `LET`, use `UPSERT … WHERE` instead of read-then-write. The final
   `SELECT … FETCH` for record-link resolution is part of the same batch.
 - **Queries live in `server/db/queries/`** (or the namespaced equivalent for
-  systems/frameworks), never inlined in route handlers.
+  systems/frameworks), never inlined in route handlers. **Generic queries
+  first:** before writing a custom query, check whether
+  `server/db/queries/generics.ts` (§2.4.1) already covers the operation. Only
+  write a bespoke query when the generic helpers cannot express the required
+  logic (multi-table compositional creates, complex subqueries, lifecycle hooks,
+  etc.).
 - **Cursor-based pagination everywhere.** Never `SKIP`. Frontend supplies
   `limit`, capped server-side at 200.
 - **Sensitive data never stored plainly at rest.** Three options in order of
@@ -118,6 +123,54 @@ user-facing informational surfaces show translation only.
 - **Mandatory query-layer pipeline** before every create/update:
   `standardizeField` → `validateField(s)` → `checkDuplicates` → entity-limit
   check → write. No ad-hoc `trim()` / regex / duplicate SELECTs in handlers.
+
+#### 2.4.1 Generic queries (`server/db/queries/generics.ts`)
+
+Entity-agnostic CRUD helpers that enforce every §2.4 rule automatically. Every
+new query **must** check these first; bespoke queries are only for logic the
+generics cannot express (compositional creates across multiple tables, lifecycle
+hooks, complex subqueries).
+
+**API surface:**
+
+| Function                           | Purpose                                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| `genericList<T>(opts, params)`     | Cursor-based paginated list with FULLTEXT search, tenant isolation, tag filtering, FETCH |
+| `genericGetById<T>(opts, id)`      | Single-record fetch with optional tenant guard                                           |
+| `genericCreate<T>(opts, data)`     | Standardize → validate → deduplicate → encrypt → CREATE                                  |
+| `genericUpdate<T>(opts, id, data)` | Same pipeline on provided fields → UPDATE with `updatedAt`                               |
+| `genericDelete(opts, id)`          | DELETE with tenant guard; returns `{ deleted }`                                          |
+| `genericCount(opts)`               | `SELECT count()` with tenant isolation                                                   |
+
+**Key interfaces:**
+
+- `FieldSpec { field, entity?, unique?, encryption? }` — per-field processing.
+  `encryption` accepts `"aes-256-gcm"` (calls `encryptField` before write) or
+  `"argon2-hash"` (defers to `crypto::argon2::generate` inside SurrealQL —
+  plaintext never leaves the query layer).
+- `TenantIsolation { companyId?, systemId?, userId? }` — optional ID-based
+  scoping. When `userId` is provided, its value is the **column name** in the
+  table (e.g. `"ownerId"`). Any omitted ID is silently skipped.
+- `GenericListOptions` — table, select, fetch, cursorField, orderBy,
+  searchFields, extraConditions, extraBindings.
+- `GenericCrudOptions` — table, ensureTenant, fields (FieldSpec[]), fetch.
+- `TagFilter { tagsColumn?, tagNames: string[] }` — optional tag-name filtering
+  on `genericList`. Produces one AND-combined `CONTAINS` subquery per tag name
+  (all must match). `tagsColumn` defaults to `"tags"`.
+
+**Processing pipeline (create / update):**
+
+1. For each `FieldSpec` present in `data`:
+   `standardizeField(field, value, entity?, encryption?)`. Standardization runs
+   first (trim, format, entity-specific overrides); then, if `encryption` is
+   set, the value is transformed in-place: `"aes-256-gcm"` calls `encryptField`
+   and returns the ciphertext envelope; `"argon2-hash"` calls
+   `crypto::argon2::generate` via SurrealDB and returns the hash. The query
+   builder writes every value as a plain `$binding` — it has zero encryption
+   logic.
+2. `validateFields([...])` — returns i18n error keys; aborts on failure.
+3. `checkDuplicates(table, uniqueFields)` — aborts on conflict.
+4. Single batched `db.query()` with all values parameterized.
 
 ### 2.5 Tenant & authorization
 

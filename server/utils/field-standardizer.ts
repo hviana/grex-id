@@ -1,4 +1,6 @@
 import { assertServerOnly } from "./server-only.ts";
+import { encryptField } from "./crypto.ts";
+import { getDb } from "../db/connection.ts";
 
 assertServerOnly("server/utils/field-standardizer.ts");
 
@@ -36,36 +38,73 @@ const fieldStandardizers: Record<string, StandardizerFn> = {
 };
 
 /**
- * Standardizes a field value based on the entity and field name.
+ * Encryption modes supported by `standardizeField`.
  *
- * Resolution order:
+ * - `aes-256-gcm` — encrypts via the AES-256-GCM wrapper (§4.7).
+ * - `argon2-hash` — hashes via `crypto::argon2::generate` inside SurrealDB.
+ *
+ * In both cases `standardizeField` returns the final value (ciphertext envelope
+ * or argon2 hash string).  The caller writes it as a plain `$binding`.
+ */
+export type FieldEncryptionMode =
+  | "aes-256-gcm"
+  | "argon2-hash";
+
+/**
+ * Standardizes a field value, then encrypts/hashes if requested.
+ *
+ * Resolution order for standardization:
  * 1. Entity+field specific standardizer (e.g. "user.email")
  * 2. Generic field standardizer (e.g. "email")
  * 3. Default: trim + sanitize angle brackets
  *
+ * After standardization, if `encryption` is specified:
+ * - `aes-256-gcm` → `encryptField(standardized)`.
+ * - `argon2-hash` → `crypto::argon2::generate(standardized)` via SurrealDB.
+ *
  * @param field - The field name (e.g. "email", "phone")
  * @param value - The raw value from the frontend
  * @param entity - Optional entity name (e.g. "user", "lead")
- * @returns The standardized value
+ * @param encryption - Optional encryption mode to apply after standardization
+ * @returns The standardized (and possibly encrypted/hashed) value
  */
-export function standardizeField(
+export async function standardizeField(
   field: string,
   value: string,
   entity?: string,
-): string {
+  encryption?: FieldEncryptionMode,
+): Promise<string> {
+  let result: string;
+
   if (entity) {
     const entityKey = `${entity}.${field}`;
     if (entityFieldStandardizers[entityKey]) {
-      return entityFieldStandardizers[entityKey](value);
+      result = entityFieldStandardizers[entityKey](value);
+    } else if (fieldStandardizers[field]) {
+      result = fieldStandardizers[field](value);
+    } else {
+      result = value.trim().replace(/[<>]/g, "");
     }
+  } else if (fieldStandardizers[field]) {
+    result = fieldStandardizers[field](value);
+  } else {
+    result = value.trim().replace(/[<>]/g, "");
   }
 
-  if (fieldStandardizers[field]) {
-    return fieldStandardizers[field](value);
+  if (encryption === "aes-256-gcm") {
+    return encryptField(result);
   }
 
-  // Default: trim and remove angle brackets
-  return value.trim().replace(/[<>]/g, "");
+  if (encryption === "argon2-hash") {
+    const db = await getDb();
+    const hashed = await db.query<[string]>(
+      "SELECT VALUE crypto::argon2::generate($plain)",
+      { plain: result },
+    );
+    return hashed[0];
+  }
+
+  return result;
 }
 
 /**
