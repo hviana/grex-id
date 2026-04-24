@@ -97,8 +97,8 @@ user-facing informational surfaces show translation only.
   link (scalar for one-to-one, `array<record<>>` for collections). To create:
   create composable first, then parent referencing it. To delete: delete both in
   the same batched query.
-- **Optimization.** Any field used in queries to return data or used as a cursor
-  should be indexed.
+- **Optimization.** Any field used in queries to select/filter data or used as a
+  cursor should be indexed.
 - **Single-batched-query rule.** Every query function batches all statements
   into one `db.query()` call. Never sequential `await db.query()`, never
   `Promise.all` of multiple `db.query()`. Pass values between statements with

@@ -14,3 +14,4 @@ DEFINE INDEX idx_det_face          ON grexid_detection FIELDS faceId;
 DEFINE INDEX idx_det_date          ON grexid_detection FIELDS detectedAt;
 DEFINE INDEX idx_det_location_date ON grexid_detection FIELDS locationId, detectedAt;
 DEFINE INDEX idx_det_event         ON grexid_detection FIELDS eventId;
+DEFINE INDEX idx_det_location_event ON grexid_detection FIELDS locationId, eventId;

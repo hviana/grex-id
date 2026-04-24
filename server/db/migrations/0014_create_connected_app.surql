@@ -9,3 +9,4 @@ DEFINE FIELD apiTokenId       ON connected_app TYPE option<record<api_token>>;
 DEFINE FIELD createdAt       ON connected_app TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_ca_company_system ON connected_app FIELDS companyId, systemId;
+DEFINE INDEX idx_ca_api_token      ON connected_app FIELDS apiTokenId;

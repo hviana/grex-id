@@ -8,4 +8,5 @@ DEFINE FIELD systemSlug  ON front_setting TYPE string DEFAULT "core" ASSERT $val
 DEFINE FIELD createdAt   ON front_setting TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt   ON front_setting TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_front_setting_unique ON front_setting FIELDS key, systemSlug UNIQUE;
+DEFINE INDEX idx_front_setting_unique     ON front_setting FIELDS key, systemSlug UNIQUE;
+DEFINE INDEX idx_front_setting_systemslug ON front_setting FIELDS systemSlug;

@@ -16,7 +16,14 @@ DEFINE FIELD autoRechargeInProgress ON subscription TYPE option<bool> DEFAULT fa
 DEFINE FIELD remainingOperationCount ON subscription TYPE option<object> FLEXIBLE;
 DEFINE FIELD operationCountAlertSent ON subscription TYPE option<object> FLEXIBLE;
 DEFINE FIELD createdAt              ON subscription TYPE datetime DEFAULT time::now();
+DEFINE FIELD updatedAt              ON subscription TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_sub_company_system ON subscription FIELDS companyId, systemId;
-DEFINE INDEX idx_sub_status         ON subscription FIELDS status;
-DEFINE INDEX idx_sub_period_end     ON subscription FIELDS currentPeriodEnd;
+DEFINE INDEX idx_sub_company_system          ON subscription FIELDS companyId, systemId;
+DEFINE INDEX idx_sub_company_system_status   ON subscription FIELDS companyId, systemId, status;
+DEFINE INDEX idx_sub_status                  ON subscription FIELDS status;
+DEFINE INDEX idx_sub_period_end              ON subscription FIELDS currentPeriodEnd;
+DEFINE INDEX idx_sub_status_period           ON subscription FIELDS status, currentPeriodEnd;
+DEFINE INDEX idx_sub_status_period_start     ON subscription FIELDS status, currentPeriodStart;
+DEFINE INDEX idx_sub_voucher                 ON subscription FIELDS voucherId;
+DEFINE INDEX idx_sub_plan                    ON subscription FIELDS planId;
+DEFINE INDEX idx_sub_updated                 ON subscription FIELDS updatedAt;

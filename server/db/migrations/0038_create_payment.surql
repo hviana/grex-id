@@ -20,5 +20,6 @@ DEFINE INDEX idx_payment_company_system ON payment FIELDS companyId, systemId;
 DEFINE INDEX idx_payment_created        ON payment FIELDS createdAt;
 DEFINE INDEX idx_payment_kind           ON payment FIELDS kind;
 DEFINE INDEX idx_payment_expires        ON payment FIELDS status, expiresAt;
+DEFINE INDEX idx_payment_transaction    ON payment FIELDS transactionId;
 
 DEFINE FIELD retryPaymentInProgress ON subscription TYPE bool DEFAULT false;

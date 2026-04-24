@@ -12,3 +12,4 @@ DEFINE FIELD createdAt      ON menu_item TYPE datetime DEFAULT time::now();
 DEFINE INDEX idx_menu_system    ON menu_item FIELDS systemId;
 DEFINE INDEX idx_menu_parent    ON menu_item FIELDS parentId;
 DEFINE INDEX idx_menu_sort      ON menu_item FIELDS systemId, parentId, sortOrder;
+DEFINE INDEX idx_menu_label_fts ON TABLE menu_item FIELDS label FULLTEXT ANALYZER general_analyzer_fts BM25;

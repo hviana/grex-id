@@ -4,3 +4,4 @@ DEFINE FIELD systemId  ON company_system TYPE record<system>;
 DEFINE FIELD createdAt ON company_system TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_cs_unique ON company_system FIELDS companyId, systemId UNIQUE;
+DEFINE INDEX idx_cs_system   ON company_system FIELDS systemId;
