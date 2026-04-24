@@ -56,6 +56,8 @@ interface GenericListProps<T extends Record<string, unknown>> {
   fetchOneRoute?: (id: string) => string;
   authToken?: string | null;
   extraData?: Record<string, unknown>;
+  onCreateClick?: () => void;
+  reloadKey?: number | string;
 }
 
 export default function GenericList<T extends Record<string, unknown>>({
@@ -76,6 +78,8 @@ export default function GenericList<T extends Record<string, unknown>>({
   fetchOneRoute,
   authToken,
   extraData,
+  onCreateClick,
+  reloadKey,
 }: GenericListProps<T>) {
   const { t } = useLocale();
   const [items, setItems] = useState<T[]>([]);
@@ -110,7 +114,7 @@ export default function GenericList<T extends Record<string, unknown>>({
   useEffect(() => {
     load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterValues, fetchFn]);
+  }, [search, filterValues, fetchFn, reloadKey]);
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
@@ -178,9 +182,9 @@ export default function GenericList<T extends Record<string, unknown>>({
             onChange={setFilterValues}
           />
         )}
-        {createEnabled && createRoute && (
+        {createEnabled && (createRoute || onCreateClick) && (
           <CreateButton
-            onClick={() => setShowCreateModal(true)}
+            onClick={onCreateClick ?? (() => setShowCreateModal(true))}
             label={entityName}
           />
         )}

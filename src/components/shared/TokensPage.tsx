@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
-import Spinner from "@/src/components/shared/Spinner";
+import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
+import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface OpCountEntry {
   key: string;
@@ -49,6 +51,7 @@ interface ApiToken {
   maxOperationCount?: Record<string, number>;
   expiresAt?: string;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export default function TokensPage() {
@@ -56,18 +59,15 @@ export default function TokensPage() {
   const { systemToken, user } = useAuth();
   const { companyId, systemId, systemSlug } = useSystemContext();
 
-  const [tokens, setTokens] = useState<ApiToken[]>([]);
-  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteToken, setDeleteToken] = useState<ApiToken | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Created token display
   const [createdRawToken, setCreatedRawToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Create form
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newPerms, setNewPerms] = useState<string[]>([]);
@@ -77,29 +77,34 @@ export default function TokensPage() {
     OpCountEntry[]
   >([]);
 
-  const loadTokens = useCallback(async () => {
-    if (!systemToken || !companyId || !user) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
+  const fetchTokens = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<ApiToken>> => {
+      if (!systemToken || !companyId || !user) {
+        return { data: [], nextCursor: null, prevCursor: null };
+      }
+      const p = new URLSearchParams({
         userId: user.id,
         companyId,
       });
-      const res = await fetch(`/api/tokens?${params}`, {
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/tokens?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setTokens(json.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken, companyId, user]);
+      return {
+        data: (json.data ?? []) as ApiToken[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken, companyId, user],
+  );
 
-  useEffect(() => {
-    loadTokens();
-  }, [loadTokens]);
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   const resetCreateForm = () => {
     setNewName("");
@@ -111,7 +116,6 @@ export default function TokensPage() {
     setError(null);
   };
 
-  // Fetch all unique permissions available for this system from roles
   const fetchSystemPermissions = useCallback(async (search: string) => {
     if (!systemId) return [];
     try {
@@ -168,7 +172,7 @@ export default function TokensPage() {
       setCreatedRawToken(json.data.token);
       setCreateOpen(false);
       resetCreateForm();
-      await loadTokens();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -189,7 +193,7 @@ export default function TokensPage() {
         body: JSON.stringify({ id: deleteToken.id }),
       });
       setDeleteToken(null);
-      await loadTokens();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -227,89 +231,75 @@ export default function TokensPage() {
         </button>
       </div>
 
-      {loading
-        ? (
-          <div className="flex justify-center py-8">
-            <Spinner size="lg" />
-          </div>
-        )
-        : tokens.length === 0
-        ? (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">🔑</div>
-            <p className="text-[var(--color-light-text)]">
-              {t("common.empty")}
-            </p>
-          </div>
-        )
-        : (
-          <div className="space-y-3">
-            {tokens.map((token) => (
-              <div
-                key={token.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-semibold text-white">{token.name}</h3>
-                  <div className="flex items-center gap-2">
-                    {token.expiresAt && (
-                      <span className="text-xs text-[var(--color-light-text)]">
-                        {t("common.expires")}:{" "}
-                        {new Date(token.expiresAt).toLocaleDateString()}
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setDeleteToken(token)}
-                      className="text-sm px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-                {token.description && (
-                  <p className="text-sm text-[var(--color-light-text)] mb-2">
-                    {token.description}
-                  </p>
+      <GenericList<ApiToken>
+        entityName={t("common.menu.tokens")}
+        searchEnabled={false}
+        createEnabled={false}
+        controlButtons={[]}
+        fetchFn={fetchTokens}
+        reloadKey={reloadKey}
+        renderItem={(token) => (
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-white">{token.name}</h3>
+              <div className="flex items-center gap-2">
+                {token.expiresAt && (
+                  <span className="text-xs text-[var(--color-light-text)]">
+                    {t("common.expires")}:{" "}
+                    {new Date(token.expiresAt).toLocaleDateString()}
+                  </span>
                 )}
-                <div className="flex gap-1.5 flex-wrap">
-                  {token.permissions.map((perm) => (
+                <button
+                  onClick={() => setDeleteToken(token)}
+                  className="text-sm px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+            {token.description && (
+              <p className="text-sm text-[var(--color-light-text)] mb-2">
+                {token.description}
+              </p>
+            )}
+            <div className="flex gap-1.5 flex-wrap">
+              {token.permissions.map((perm) => (
+                <TranslatedBadge
+                  key={perm}
+                  kind="permission"
+                  token={perm}
+                  systemSlug={systemSlug ?? undefined}
+                />
+              ))}
+            </div>
+            {token.maxOperationCount &&
+              Object.keys(token.maxOperationCount).length > 0 && (
+              <div className="mt-2 flex gap-1.5 flex-wrap items-center">
+                <span className="text-xs text-[var(--color-light-text)] mr-1">
+                  🔢
+                </span>
+                {Object.entries(token.maxOperationCount).map((
+                  [key, val],
+                ) => (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1"
+                  >
                     <TranslatedBadge
-                      key={perm}
-                      kind="permission"
-                      token={perm}
+                      kind="resource"
+                      token={key}
                       systemSlug={systemSlug ?? undefined}
                     />
-                  ))}
-                </div>
-                {token.maxOperationCount &&
-                  Object.keys(token.maxOperationCount).length > 0 && (
-                  <div className="mt-2 flex gap-1.5 flex-wrap items-center">
-                    <span className="text-xs text-[var(--color-light-text)] mr-1">
-                      🔢
+                    <span className="text-xs text-[var(--color-light-text)]">
+                      : {val}
                     </span>
-                    {Object.entries(token.maxOperationCount).map((
-                      [key, val],
-                    ) => (
-                      <span
-                        key={key}
-                        className="inline-flex items-center gap-1"
-                      >
-                        <TranslatedBadge
-                          kind="resource"
-                          token={key}
-                          systemSlug={systemSlug ?? undefined}
-                        />
-                        <span className="text-xs text-[var(--color-light-text)]">
-                          : {val}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                  </span>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
+      />
 
       {/* Create modal */}
       <Modal

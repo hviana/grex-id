@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import Spinner from "@/src/components/shared/Spinner";
 import DownloadData from "@/src/components/shared/DownloadData";
+import GenericList from "@/src/components/shared/GenericList";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { Bar, Pie } from "react-chartjs-2";
 import {
   ArcElement,
@@ -54,6 +56,7 @@ interface DetectionIndividual {
   locationName: string;
   ownerId?: string;
   ownerName?: string;
+  [key: string]: unknown;
 }
 
 interface DetectionStats {
@@ -122,6 +125,8 @@ export default function DetectionReportPage() {
       end: string;
     } | null
   >(null);
+  const [listReloadKey, setListReloadKey] = useState(0);
+  const prevStatsRef = useRef<DetectionStats | null>(null);
 
   const fetchStats = useCallback(
     async () => {
@@ -156,8 +161,15 @@ export default function DetectionReportPage() {
     }
   }, [fetchStats]);
 
+  // Bump reload key when stats change (after fetch completes)
+  useEffect(() => {
+    if (stats !== prevStatsRef.current) {
+      prevStatsRef.current = stats;
+      setListReloadKey((k) => k + 1);
+    }
+  }, [stats]);
+
   const handleDateChange = (start: Date, end: Date) => {
-    setPage(0);
     setDateRange({
       start: start.toISOString(),
       end: end.toISOString(),
@@ -172,6 +184,32 @@ export default function DetectionReportPage() {
       unknown: stats?.uniqueUnknowns ?? 0,
     }),
     [stats],
+  );
+
+  const fetchIndividuals = useCallback(
+    async (
+      params: CursorParams,
+    ): Promise<PaginatedResult<DetectionIndividual>> => {
+      const all = stats?.individuals ?? [];
+      const limit = params.limit || 20;
+      let startIndex = 0;
+
+      if (params.cursor) {
+        const cursorIndex = parseInt(params.cursor, 10);
+        if (!isNaN(cursorIndex)) startIndex = cursorIndex;
+      }
+
+      const sliced = all.slice(startIndex, startIndex + limit);
+      const nextIndex = startIndex + limit;
+      const nextCursor = nextIndex < all.length ? String(nextIndex) : null;
+
+      return {
+        data: sliced as DetectionIndividual[],
+        nextCursor,
+        prevCursor: null,
+      };
+    },
+    [stats?.individuals],
   );
 
   const pieData = useMemo(
@@ -337,14 +375,6 @@ export default function DetectionReportPage() {
     }));
   }, [individuals, t, locale]);
 
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 20;
-  const paginatedIndividuals = individuals.slice(
-    page * PAGE_SIZE,
-    (page + 1) * PAGE_SIZE,
-  );
-  const totalPages = Math.ceil(individuals.length / PAGE_SIZE);
-
   const hasChartData = individuals.length > 0;
 
   return (
@@ -485,13 +515,16 @@ export default function DetectionReportPage() {
         </div>
       )}
 
-      {individuals.length > 0 && (
-        <div className="space-y-3">
-          {paginatedIndividuals.map((item) => (
-            <div
-              key={item.faceId}
-              className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300"
-            >
+      {dateRange && !loading && (
+        <GenericList<DetectionIndividual>
+          entityName="systems.grex-id.report.title"
+          searchEnabled={false}
+          createEnabled={false}
+          controlButtons={[]}
+          fetchFn={fetchIndividuals}
+          reloadKey={listReloadKey}
+          renderItem={(item) => (
+            <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--color-light-green)]/20 transition-all duration-300">
               <div className="flex items-start gap-4">
                 {/* Avatar */}
                 <div className="flex-shrink-0">
@@ -594,37 +627,8 @@ export default function DetectionReportPage() {
                 </div>
               </div>
             </div>
-          ))}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-xs font-medium text-[var(--color-light-text)] hover:border-[var(--color-primary-green)]/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                ← {t("common.previous")}
-              </button>
-              <span className="text-xs text-[var(--color-light-text)]">
-                {page + 1} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2 text-xs font-medium text-[var(--color-light-text)] hover:border-[var(--color-primary-green)]/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {t("common.next")} →
-              </button>
-            </div>
           )}
-        </div>
-      )}
-
-      {dateRange && !loading && individuals.length === 0 && (
-        <div className="text-center py-12 text-[var(--color-light-text)]">
-          {t("common.noResults")}
-        </div>
+        />
       )}
     </div>
   );

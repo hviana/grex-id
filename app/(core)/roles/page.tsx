@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
+import GenericList from "@/src/components/shared/GenericList";
+import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
-import CreateButton from "@/src/components/shared/CreateButton";
+import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
-import Modal from "@/src/components/shared/Modal";
-import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface RoleItem {
   id: string;
@@ -21,6 +21,7 @@ interface RoleItem {
   permissions: string[];
   isBuiltIn: boolean;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 interface SystemOption {
@@ -32,10 +33,8 @@ interface SystemOption {
 export default function RolesPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const [roles, setRoles] = useState<RoleItem[]>([]);
   const [systems, setSystems] = useState<SystemOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [loadingSystems, setLoadingSystems] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<RoleItem | null>(null);
   const [formName, setFormName] = useState("");
@@ -45,10 +44,10 @@ export default function RolesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [loadingSystems, setLoadingSystems] = useState(true);
   const [formSystemSelected, setFormSystemSelected] = useState<
     { id: string; label: string }[]
   >([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const loadSystems = async () => {
     setLoadingSystems(true);
@@ -78,31 +77,32 @@ export default function RolesPage() {
     [systems],
   );
 
-  const load = useCallback(async (q?: string) => {
-    if (!systemToken) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("search", q);
-      const res = await fetch(`/api/core/roles?${params}`, {
+  const fetchRoles = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<RoleItem>> => {
+      const p = new URLSearchParams();
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/core/roles?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setRoles(json.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken]);
+      return {
+        data: (json.data ?? []) as RoleItem[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken],
+  );
+
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
-    load();
     loadSystems();
-  }, [load]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearch(q);
-    load(q);
-  }, [load]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => {
     setFormName("");
@@ -164,7 +164,7 @@ export default function RolesPage() {
       }
       setShowCreate(false);
       setEditItem(null);
-      load(search);
+      triggerReload();
     } finally {
       setSaving(false);
     }
@@ -179,7 +179,7 @@ export default function RolesPage() {
       },
       body: JSON.stringify({ id }),
     });
-    load(search);
+    triggerReload();
   };
 
   const getSystemName = (sysId: string) => {
@@ -201,77 +201,60 @@ export default function RolesPage() {
         {t("core.roles.title")}
       </h1>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-48">
-          <SearchField onSearch={handleSearch} />
-        </div>
-        <CreateButton onClick={openCreate} label={t("core.roles.create")} />
-      </div>
-
-      {loading
-        ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
-          </div>
-        )
-        : roles.length === 0
-        ? (
-          <p className="text-center py-12 text-[var(--color-light-text)]">
-            {t("core.roles.empty")}
-          </p>
-        )
-        : (
-          <div className="space-y-3">
-            {roles.map((role) => {
-              const sysSlug = getSystemSlug(role.systemId);
-              return (
-                <div
-                  key={role.id}
-                  className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">🛡️</span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <TranslatedBadge
-                            kind="role"
-                            token={role.name}
-                            systemSlug={sysSlug}
-                          />
-                          {role.isBuiltIn && (
-                            <span className="shrink-0 rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-                              {t("core.roles.builtIn")}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-sm text-[var(--color-light-text)]">
-                          {getSystemName(role.systemId)}
-                        </p>
-                      </div>
+      <GenericList<RoleItem>
+        entityName={t("core.roles.create")}
+        searchEnabled
+        createEnabled
+        controlButtons={[]}
+        onCreateClick={openCreate}
+        fetchFn={fetchRoles}
+        reloadKey={reloadKey}
+        renderItem={(role) => {
+          const sysSlug = getSystemSlug(role.systemId);
+          return (
+            <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🛡️</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <TranslatedBadge
+                        kind="role"
+                        token={role.name}
+                        systemSlug={sysSlug}
+                      />
+                      {role.isBuiltIn && (
+                        <span className="shrink-0 rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
+                          {t("core.roles.builtIn")}
+                        </span>
+                      )}
                     </div>
-                    {role.permissions.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {role.permissions.map((perm) => (
-                          <TranslatedBadge
-                            key={perm}
-                            kind="permission"
-                            token={perm}
-                            systemSlug={sysSlug}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2 ml-3 shrink-0">
-                    <EditButton onClick={() => openEdit(role)} />
-                    <DeleteButton onConfirm={() => handleDelete(role.id)} />
+                    <p className="mt-1 text-sm text-[var(--color-light-text)]">
+                      {getSystemName(role.systemId)}
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                {role.permissions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {role.permissions.map((perm) => (
+                      <TranslatedBadge
+                        key={perm}
+                        kind="permission"
+                        token={perm}
+                        systemSlug={sysSlug}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 ml-3 shrink-0">
+                <EditButton onClick={() => openEdit(role)} />
+                <DeleteButton onConfirm={() => handleDelete(role.id)} />
+              </div>
+            </div>
+          );
+        }}
+      />
 
       {/* Create/Edit Modal */}
       <Modal

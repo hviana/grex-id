@@ -1,17 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
-import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
+import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
+import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface ChannelRow {
   id: string;
@@ -30,18 +31,11 @@ interface UserItem {
   roles: string[];
   contextRoles?: string[];
   createdAt: string;
-}
-
-function channelOf(user: UserItem, type: string): ChannelRow | undefined {
-  const list = user.channels ?? [];
-  return list.find((c) => c.type === type);
+  [key: string]: unknown;
 }
 
 function primaryChannelLabel(user: UserItem): string {
-  // Prefer the verified email, then any verified channel, then the first
-  // channel regardless of verification. This is only for display — the user
-  // object still drives identity via `user.channels` (§8.7).
-  const email = channelOf(user, "email");
+  const email = (user.channels ?? []).find((c) => c.type === "email");
   if (email?.value) return email.value;
   const verified = (user.channels ?? []).find((c) => c.verified);
   if (verified?.value) return verified.value;
@@ -56,26 +50,22 @@ export default function UsersPage() {
 
   const isAdmin = myRoles.includes("admin") || myRoles.includes("superuser");
 
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserItem | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Create form state
   const newChannelsRef = useRef<SubformRef>(null);
   const [newName, setNewName] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRoles, setNewRoles] = useState<string[]>([]);
 
-  // Edit form state
   const [editName, setEditName] = useState("");
   const [editRoles, setEditRoles] = useState<string[]>([]);
 
-  // Fetch available role names for this system
   const fetchSystemRoles = useCallback(async (search: string) => {
     if (!systemId) return [];
     try {
@@ -93,41 +83,34 @@ export default function UsersPage() {
     }
   }, [systemId]);
 
-  const loadUsers = useCallback(
-    async (searchQuery?: string) => {
-      if (!systemToken || !companyId || !systemId) return;
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({
-          limit: "20",
-          companyId,
-          systemId,
-        });
-        if (searchQuery) params.set("search", searchQuery);
-        const res = await fetch(`/api/users?${params}`, {
-          headers: { Authorization: `Bearer ${systemToken}` },
-        });
-        const json = await res.json();
-        if (json.success) setUsers(json.data ?? []);
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
+  const fetchUsers = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<UserItem>> => {
+      if (!systemToken || !companyId || !systemId) {
+        return { data: [], nextCursor: null, prevCursor: null };
       }
+      const p = new URLSearchParams({
+        limit: String(params.limit),
+        companyId,
+        systemId,
+      });
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      const res = await fetch(`/api/users?${p}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
+      const json = await res.json();
+      return {
+        data: (json.data ?? []) as UserItem[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
     },
     [systemToken, companyId, systemId],
   );
 
-  useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
-
-  const handleSearch = useCallback(
-    (value: string) => {
-      loadUsers(value);
-    },
-    [loadUsers],
-  );
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   const handleCreate = async () => {
     if (!systemToken || !companyId || !systemId) return;
@@ -176,7 +159,7 @@ export default function UsersPage() {
       if (json.invited) {
         setSuccessMsg("common.users.inviteExisting");
       }
-      await loadUsers();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -209,7 +192,7 @@ export default function UsersPage() {
         return;
       }
       setEditUser(null);
-      await loadUsers();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -234,7 +217,7 @@ export default function UsersPage() {
         }),
       });
       setDeleteUser(null);
-      await loadUsers();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -272,11 +255,6 @@ export default function UsersPage() {
         )}
       </div>
 
-      <SearchField
-        onSearch={handleSearch}
-        placeholder={t("common.placeholder.search")}
-      />
-
       {successMsg && (
         <div className="rounded-lg bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 p-3 text-sm text-[var(--color-primary-green)]">
           {t(successMsg)}
@@ -285,73 +263,59 @@ export default function UsersPage() {
 
       <ErrorDisplay message={error} />
 
-      {loading
-        ? (
-          <div className="flex justify-center py-8">
-            <Spinner size="lg" />
-          </div>
-        )
-        : users.length === 0
-        ? (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">👥</div>
-            <p className="text-[var(--color-light-text)]">
-              {t("common.empty")}
-            </p>
-          </div>
-        )
-        : (
-          <div className="space-y-3">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
-                    {(user.profile?.name ?? primaryChannelLabel(user))
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white truncate">
-                      {user.profile?.name ?? primaryChannelLabel(user)}
-                    </h3>
-                    <p className="text-sm text-[var(--color-light-text)] truncate">
-                      {primaryChannelLabel(user)}
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5 flex-wrap shrink-0">
-                    {(user.contextRoles ?? user.roles).map((role) => (
-                      <TranslatedBadge
-                        key={role}
-                        kind="role"
-                        token={role}
-                        systemSlug={systemSlug ?? undefined}
-                      />
-                    ))}
-                  </div>
-                  {isAdmin && (
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={() => openEdit(user)}
-                        className="text-sm px-2 py-1 rounded border border-[var(--color-dark-gray)] text-[var(--color-light-text)] hover:bg-white/5 transition-colors"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => setDeleteUser(user)}
-                        className="text-sm px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  )}
-                </div>
+      <GenericList<UserItem>
+        entityName={t("common.menu.users")}
+        searchEnabled={false}
+        createEnabled={false}
+        controlButtons={[]}
+        fetchFn={fetchUsers}
+        reloadKey={reloadKey}
+        renderItem={(user) => (
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
+                {(user.profile?.name ?? primaryChannelLabel(user))
+                  .charAt(0)
+                  .toUpperCase()}
               </div>
-            ))}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-white truncate">
+                  {user.profile?.name ?? primaryChannelLabel(user)}
+                </h3>
+                <p className="text-sm text-[var(--color-light-text)] truncate">
+                  {primaryChannelLabel(user)}
+                </p>
+              </div>
+              <div className="flex gap-1.5 flex-wrap shrink-0">
+                {(user.contextRoles ?? user.roles).map((role) => (
+                  <TranslatedBadge
+                    key={role}
+                    kind="role"
+                    token={role}
+                    systemSlug={systemSlug ?? undefined}
+                  />
+                ))}
+              </div>
+              {isAdmin && (
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    onClick={() => openEdit(user)}
+                    className="text-sm px-2 py-1 rounded border border-[var(--color-dark-gray)] text-[var(--color-light-text)] hover:bg-white/5 transition-colors"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => setDeleteUser(user)}
+                    className="text-sm px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
+      />
 
       {/* Create modal */}
       {createOpen && (

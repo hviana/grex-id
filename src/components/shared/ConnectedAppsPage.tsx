@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
-import Spinner from "@/src/components/shared/Spinner";
+import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
+import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface ConnectedApp {
   id: string;
@@ -15,6 +17,7 @@ interface ConnectedApp {
   permissions: string[];
   monthlySpendLimit?: number;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export default function ConnectedAppsPage() {
@@ -22,32 +25,36 @@ export default function ConnectedAppsPage() {
   const { systemToken } = useAuth();
   const { companyId, systemId, systemSlug } = useSystemContext();
 
-  const [apps, setApps] = useState<ConnectedApp[]>([]);
-  const [loading, setLoading] = useState(true);
   const [revokeApp, setRevokeApp] = useState<ConnectedApp | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const loadApps = useCallback(async () => {
-    if (!systemToken || !companyId || !systemId) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ companyId, systemId });
-      const res = await fetch(`/api/connected-apps?${params}`, {
+  const fetchApps = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<ConnectedApp>> => {
+      if (!systemToken || !companyId || !systemId) {
+        return { data: [], nextCursor: null, prevCursor: null };
+      }
+      const p = new URLSearchParams({ companyId, systemId });
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/connected-apps?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setApps(json.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken, companyId, systemId]);
+      return {
+        data: (json.data ?? []) as ConnectedApp[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken, companyId, systemId],
+  );
 
-  useEffect(() => {
-    loadApps();
-  }, [loadApps]);
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   const handleRevoke = async () => {
     if (!systemToken || !revokeApp) return;
@@ -67,7 +74,7 @@ export default function ConnectedAppsPage() {
         return;
       }
       setRevokeApp(null);
-      await loadApps();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -75,7 +82,6 @@ export default function ConnectedAppsPage() {
     }
   };
 
-  // Build the OAuth authorize URL so external developers can copy it
   const authorizeUrl = typeof window !== "undefined"
     ? `${globalThis.location.origin}/oauth/authorize?system_slug=${
       encodeURIComponent(systemSlug ?? "")
@@ -90,7 +96,6 @@ export default function ConnectedAppsPage() {
         </h1>
       </div>
 
-      {/* How to connect info box */}
       <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-primary-green)]/40 rounded-xl p-5 space-y-3">
         <h2 className="font-semibold text-[var(--color-primary-green)] flex items-center gap-2">
           🔌 {t("common.connectedApps.howTitle")}
@@ -116,72 +121,58 @@ export default function ConnectedAppsPage() {
 
       <ErrorDisplay message={error} />
 
-      {loading
-        ? (
-          <div className="flex justify-center py-8">
-            <Spinner size="lg" />
-          </div>
-        )
-        : apps.length === 0
-        ? (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">🔗</div>
-            <p className="text-[var(--color-light-text)]">
-              {t("common.connectedApps.empty")}
-            </p>
-          </div>
-        )
-        : (
-          <div className="space-y-3">
-            {apps.map((app) => (
-              <div
-                key={app.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-white">{app.name}</h3>
-                      <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full">
-                        {t("common.connectedApps.authorized")}
-                      </span>
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap mt-2">
-                      {app.permissions.map((perm) => (
-                        <TranslatedBadge
-                          key={perm}
-                          kind="permission"
-                          token={perm}
-                          systemSlug={systemSlug ?? undefined}
-                        />
-                      ))}
-                    </div>
-                    {app.monthlySpendLimit != null && (
-                      <p className="text-xs text-[var(--color-light-text)] mt-1">
-                        {t("common.connectedApps.spendLimit")}:{" "}
-                        {app.monthlySpendLimit.toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <span className="text-xs text-[var(--color-light-text)]">
-                      {new Date(app.createdAt).toLocaleDateString()}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setError(null);
-                        setRevokeApp(app);
-                      }}
-                      className="text-sm px-3 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      {t("common.connectedApps.revoke")}
-                    </button>
-                  </div>
+      <GenericList<ConnectedApp>
+        entityName={t("common.menu.connectedApps")}
+        searchEnabled={false}
+        createEnabled={false}
+        controlButtons={[]}
+        fetchFn={fetchApps}
+        reloadKey={reloadKey}
+        renderItem={(app) => (
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-white">{app.name}</h3>
+                  <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full">
+                    {t("common.connectedApps.authorized")}
+                  </span>
                 </div>
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {app.permissions.map((perm) => (
+                    <TranslatedBadge
+                      key={perm}
+                      kind="permission"
+                      token={perm}
+                      systemSlug={systemSlug ?? undefined}
+                    />
+                  ))}
+                </div>
+                {app.monthlySpendLimit != null && (
+                  <p className="text-xs text-[var(--color-light-text)] mt-1">
+                    {t("common.connectedApps.spendLimit")}:{" "}
+                    {app.monthlySpendLimit.toLocaleString()}
+                  </p>
+                )}
               </div>
-            ))}
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                <span className="text-xs text-[var(--color-light-text)]">
+                  {new Date(app.createdAt).toLocaleDateString()}
+                </span>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setRevokeApp(app);
+                  }}
+                  className="text-sm px-3 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  {t("common.connectedApps.revoke")}
+                </button>
+              </div>
+            </div>
           </div>
         )}
+      />
 
       {/* Revoke confirmation modal */}
       <Modal

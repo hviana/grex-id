@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
-import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
-import CreateButton from "@/src/components/shared/CreateButton";
+import GenericList from "@/src/components/shared/GenericList";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
+import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
@@ -15,6 +14,7 @@ import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import PlanCard from "@/src/components/shared/PlanCard";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface PlanItem {
   id: string;
@@ -38,6 +38,7 @@ interface PlanItem {
   maxOperationCount: Record<string, number> | null;
   isActive: boolean;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 interface SystemOption {
@@ -78,15 +79,13 @@ function kvToEntityLimits(
 export default function PlansPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const [plans, setPlans] = useState<PlanItem[]>([]);
   const [systems, setSystems] = useState<SystemOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<PlanItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Form fields
   const [formName, setFormName] = useState("");
@@ -149,31 +148,32 @@ export default function PlansPage() {
     [systems],
   );
 
-  const load = useCallback(async (q?: string) => {
-    if (!systemToken) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("search", q);
-      const res = await fetch(`/api/core/plans?${params}`, {
+  const fetchPlans = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<PlanItem>> => {
+      const p = new URLSearchParams();
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/core/plans?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setPlans(json.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken]);
+      return {
+        data: (json.data ?? []) as PlanItem[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken],
+  );
+
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
-    load();
     loadSystems();
-  }, [load]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearch(q);
-    load(q);
-  }, [load]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => {
     setFormName("");
@@ -287,7 +287,7 @@ export default function PlansPage() {
       }
       setShowCreate(false);
       setEditItem(null);
-      load(search);
+      triggerReload();
     } finally {
       setSaving(false);
     }
@@ -302,12 +302,17 @@ export default function PlansPage() {
       },
       body: JSON.stringify({ id }),
     });
-    load(search);
+    triggerReload();
   };
 
   const getSystemName = (sysId: string) => {
     const sys = systems.find((s) => s.id === sysId);
     return sys?.name ?? sysId;
+  };
+
+  const getSystemSlug = (sysId: string): string | undefined => {
+    const sys = systems.find((s) => s.id === sysId);
+    return sys?.slug;
   };
 
   const inputCls =
@@ -319,57 +324,42 @@ export default function PlansPage() {
         {t("core.plans.title")}
       </h1>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-48">
-          <SearchField onSearch={handleSearch} />
-        </div>
-        <CreateButton onClick={openCreate} label={t("core.plans.create")} />
-      </div>
-
-      {loading
-        ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
-          </div>
-        )
-        : plans.length === 0
-        ? (
-          <p className="text-center py-12 text-[var(--color-light-text)]">
-            {t("core.plans.empty")}
-          </p>
-        )
-        : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                variant="core"
-                systemSlug={systems.find((s) => s.id === plan.systemId)?.slug}
-                badges={
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                      plan.isActive
-                        ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
-                        : "bg-red-500/20 text-red-400"
-                    }`}
-                  >
-                    {plan.isActive
-                      ? t("core.plans.active")
-                      : t("core.plans.inactive")}
-                  </span>
-                }
-                actions={
-                  <div className="mt-4 flex gap-2 justify-end">
-                    <EditButton onClick={() => openEdit(plan)} />
-                    <DeleteButton onConfirm={() => handleDelete(plan.id)} />
-                  </div>
-                }
-                systemName={getSystemName(plan.systemId)}
-              />
-            ))}
-          </div>
+      <GenericList<PlanItem>
+        entityName={t("core.plans.create")}
+        searchEnabled
+        createEnabled
+        controlButtons={[]}
+        onCreateClick={openCreate}
+        fetchFn={fetchPlans}
+        reloadKey={reloadKey}
+        renderItem={(plan) => (
+          <PlanCard
+            plan={plan}
+            variant="core"
+            systemSlug={getSystemSlug(plan.systemId)}
+            badges={
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                  plan.isActive
+                    ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
+                    : "bg-red-500/20 text-red-400"
+                }`}
+              >
+                {plan.isActive
+                  ? t("core.plans.active")
+                  : t("core.plans.inactive")}
+              </span>
+            }
+            actions={
+              <div className="mt-4 flex gap-2 justify-end">
+                <EditButton onClick={() => openEdit(plan)} />
+                <DeleteButton onConfirm={() => handleDelete(plan.id)} />
+              </div>
+            }
+            systemName={getSystemName(plan.systemId)}
+          />
         )}
+      />
 
       {/* Create/Edit Modal */}
       <Modal
@@ -487,7 +477,7 @@ export default function PlansPage() {
               <TranslatedBadge
                 kind="permission"
                 token={typeof item === "string" ? item : item.name}
-                systemSlug={systems.find((s) => s.id === formSystemId)?.slug}
+                systemSlug={getSystemSlug(formSystemId)}
                 onRemove={remove}
               />
             )}

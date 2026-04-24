@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
-import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
-import CreateButton from "@/src/components/shared/CreateButton";
+import GenericList from "@/src/components/shared/GenericList";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
+import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
@@ -34,6 +34,7 @@ interface VoucherItem {
   creditModifier: number;
   expiresAt: string | null;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 interface EntityLimitEntry {
@@ -72,9 +73,7 @@ function kvToModifiers(kv: EntityLimitEntry[]): Record<string, number> | null {
 export default function VouchersPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<VoucherItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -115,30 +114,37 @@ export default function VouchersPage() {
   >([]);
   const [formExpiresAt, setFormExpiresAt] = useState("");
 
-  const load = useCallback(async (q?: string) => {
-    if (!systemToken) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("search", q);
-      const res = await fetch(`/api/core/vouchers?${params}`, {
+  const triggerReload = () => setReloadKey((k) => k + 1);
+
+  const fetchVouchers = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<VoucherItem>> => {
+      if (!systemToken) return { data: [], nextCursor: null, prevCursor: null };
+      const query = new URLSearchParams();
+      if (params.search) query.set("search", params.search);
+      if (params.cursor) query.set("cursor", params.cursor);
+      query.set("limit", String(params.limit));
+      const res = await fetch(`/api/core/vouchers?${query}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setVouchers(json.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken]);
+      if (json.success) {
+        return {
+          data: json.data ?? [],
+          nextCursor: json.nextCursor ?? null,
+          prevCursor: json.prevCursor ?? null,
+        };
+      }
+      return { data: [], nextCursor: null, prevCursor: null };
+    },
+    [systemToken],
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearch(q);
-    load(q);
-  }, [load]);
+  const isExpired = (expiresAt: string | null) => {
+    if (!expiresAt) return false;
+    return new Date(expiresAt) < new Date();
+  };
 
   const openCreate = () => {
     setFormCode("");
@@ -248,7 +254,7 @@ export default function VouchersPage() {
       }
       setShowCreate(false);
       setEditItem(null);
-      load(search);
+      triggerReload();
     } finally {
       setSaving(false);
     }
@@ -263,13 +269,153 @@ export default function VouchersPage() {
       },
       body: JSON.stringify({ id }),
     });
-    load(search);
+    triggerReload();
   };
 
-  const isExpired = (expiresAt: string | null) => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
-  };
+  const renderVoucher = (voucher: VoucherItem, _controls: React.ReactNode) => (
+    <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">🎟️</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-mono font-semibold text-white text-lg">
+                {voucher.code}
+              </h3>
+              {isExpired(voucher.expiresAt) && (
+                <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                  {t("core.vouchers.expired")}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-[var(--color-light-text)]">
+              <span>
+                {t("core.vouchers.priceModifier")}:{" "}
+                <span
+                  className={voucher.priceModifier < 0
+                    ? "text-[var(--color-primary-green)]"
+                    : voucher.priceModifier > 0
+                    ? "text-red-400"
+                    : "text-white"}
+                >
+                  {formatModifier(voucher.priceModifier)}
+                </span>
+              </span>
+              {voucher.apiRateLimitModifier !== 0 && (
+                <span>
+                  {t("core.vouchers.apiRate")}:{" "}
+                  {voucher.apiRateLimitModifier > 0 ? "+" : ""}
+                  {voucher.apiRateLimitModifier}
+                </span>
+              )}
+              {voucher.storageLimitModifier !== 0 && (
+                <span>
+                  {t("core.vouchers.storage")}:{" "}
+                  {voucher.storageLimitModifier > 0 ? "+" : ""}
+                  {(voucher.storageLimitModifier / 1073741824).toFixed(1)} GB
+                </span>
+              )}
+              {voucher.fileCacheLimitModifier !== 0 && (
+                <span>
+                  🗂️ {t("core.vouchers.fileCache")}:{" "}
+                  {voucher.fileCacheLimitModifier > 0 ? "+" : ""}
+                  {(voucher.fileCacheLimitModifier / 1048576).toFixed(1)} MB
+                </span>
+              )}
+              {voucher.creditModifier !== 0 && (
+                <span>
+                  {t("core.vouchers.creditModifier")}:{" "}
+                  {voucher.creditModifier > 0 ? "+" : ""}
+                  {voucher.creditModifier}
+                </span>
+              )}
+              {voucher.maxConcurrentDownloadsModifier !== 0 && (
+                <span>
+                  ⬇️ {t("core.vouchers.maxConcurrentDownloadsModifier")}:{" "}
+                  {voucher.maxConcurrentDownloadsModifier > 0 ? "+" : ""}
+                  {voucher.maxConcurrentDownloadsModifier}
+                </span>
+              )}
+              {voucher.maxConcurrentUploadsModifier !== 0 && (
+                <span>
+                  ⬆️ {t("core.vouchers.maxConcurrentUploadsModifier")}:{" "}
+                  {voucher.maxConcurrentUploadsModifier > 0 ? "+" : ""}
+                  {voucher.maxConcurrentUploadsModifier}
+                </span>
+              )}
+              {voucher.maxDownloadBandwidthModifier !== 0 && (
+                <span>
+                  📶 {t("core.vouchers.maxDownloadBandwidthModifier")}:{" "}
+                  {voucher.maxDownloadBandwidthModifier > 0 ? "+" : ""}
+                  {voucher.maxDownloadBandwidthModifier}
+                </span>
+              )}
+              {voucher.maxUploadBandwidthModifier !== 0 && (
+                <span>
+                  📶 {t("core.vouchers.maxUploadBandwidthModifier")}:{" "}
+                  {voucher.maxUploadBandwidthModifier > 0 ? "+" : ""}
+                  {voucher.maxUploadBandwidthModifier}
+                </span>
+              )}
+              {voucher.maxOperationCountModifier &&
+                Object.keys(voucher.maxOperationCountModifier).length > 0 &&
+                Object.entries(voucher.maxOperationCountModifier).map(
+                  ([key, val]) => (
+                    <span key={key}>
+                      🔢 {t(`billing.limits.${key}`) !== `billing.limits.${key}`
+                        ? t(`billing.limits.${key}`)
+                        : key}: {val > 0 ? "+" : ""}
+                      {val}
+                    </span>
+                  ),
+                )}
+              {voucher.applicablePlanIds &&
+                voucher.applicablePlanIds.length > 0 && (
+                <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
+                  {voucher.applicablePlanIds.length}{" "}
+                  {t("core.vouchers.applicablePlanIds").toLowerCase()}
+                </span>
+              )}
+              {voucher.expiresAt && !isExpired(voucher.expiresAt) && (
+                <span>
+                  {t("core.vouchers.expires")}:{" "}
+                  {new Date(voucher.expiresAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 ml-3 shrink-0">
+          <EditButton onClick={() => openEdit(voucher)} />
+          <DeleteButton onConfirm={() => handleDelete(voucher.id)} />
+        </div>
+      </div>
+
+      {voucher.permissions.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {voucher.permissions.map((perm) => (
+            <TranslatedBadge key={perm} kind="permission" token={perm} />
+          ))}
+        </div>
+      )}
+
+      {voucher.entityLimitModifiers &&
+        Object.keys(voucher.entityLimitModifiers).length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {Object.entries(voucher.entityLimitModifiers).map(([key, val]) => (
+            <span
+              key={key}
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary-blue)]/15 px-2.5 py-0.5 text-xs text-[var(--color-secondary-blue)]"
+            >
+              <TranslatedBadge kind="entity" token={key} />
+              {val > 0 ? "+" : ""}
+              {val}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const inputCls =
     "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
@@ -280,202 +426,14 @@ export default function VouchersPage() {
         {t("core.vouchers.title")}
       </h1>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-48">
-          <SearchField onSearch={handleSearch} />
-        </div>
-        <CreateButton
-          onClick={openCreate}
-          label={t("core.vouchers.create")}
-        />
-      </div>
-
-      {loading
-        ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
-          </div>
-        )
-        : vouchers.length === 0
-        ? (
-          <p className="text-center py-12 text-[var(--color-light-text)]">
-            {t("core.vouchers.empty")}
-          </p>
-        )
-        : (
-          <div className="space-y-3">
-            {vouchers.map((voucher) => (
-              <div
-                key={voucher.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">🎟️</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-mono font-semibold text-white text-lg">
-                          {voucher.code}
-                        </h3>
-                        {isExpired(voucher.expiresAt) && (
-                          <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
-                            {t("core.vouchers.expired")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-[var(--color-light-text)]">
-                        <span>
-                          {t("core.vouchers.priceModifier")}:{" "}
-                          <span
-                            className={voucher.priceModifier < 0
-                              ? "text-[var(--color-primary-green)]"
-                              : voucher.priceModifier > 0
-                              ? "text-red-400"
-                              : "text-white"}
-                          >
-                            {formatModifier(voucher.priceModifier)}
-                          </span>
-                        </span>
-                        {voucher.apiRateLimitModifier !== 0 && (
-                          <span>
-                            {t("core.vouchers.apiRate")}:{" "}
-                            {voucher.apiRateLimitModifier > 0 ? "+" : ""}
-                            {voucher.apiRateLimitModifier}
-                          </span>
-                        )}
-                        {voucher.storageLimitModifier !== 0 && (
-                          <span>
-                            {t("core.vouchers.storage")}:{" "}
-                            {voucher.storageLimitModifier > 0 ? "+" : ""}
-                            {(voucher.storageLimitModifier / 1073741824)
-                              .toFixed(1)} GB
-                          </span>
-                        )}
-                        {voucher.fileCacheLimitModifier !== 0 && (
-                          <span>
-                            🗂️ {t("core.vouchers.fileCache")}:{" "}
-                            {voucher.fileCacheLimitModifier > 0 ? "+" : ""}
-                            {(voucher.fileCacheLimitModifier / 1048576)
-                              .toFixed(1)} MB
-                          </span>
-                        )}
-                        {voucher.creditModifier !== 0 && (
-                          <span>
-                            {t("core.vouchers.creditModifier")}:{" "}
-                            {voucher.creditModifier > 0 ? "+" : ""}
-                            {voucher.creditModifier}
-                          </span>
-                        )}
-                        {voucher.maxConcurrentDownloadsModifier !== 0 && (
-                          <span>
-                            ⬇️{" "}
-                            {t("core.vouchers.maxConcurrentDownloadsModifier")}:
-                            {" "}
-                            {voucher.maxConcurrentDownloadsModifier > 0
-                              ? "+"
-                              : ""}
-                            {voucher.maxConcurrentDownloadsModifier}
-                          </span>
-                        )}
-                        {voucher.maxConcurrentUploadsModifier !== 0 && (
-                          <span>
-                            ⬆️{" "}
-                            {t("core.vouchers.maxConcurrentUploadsModifier")}:
-                            {" "}
-                            {voucher.maxConcurrentUploadsModifier > 0
-                              ? "+"
-                              : ""}
-                            {voucher.maxConcurrentUploadsModifier}
-                          </span>
-                        )}
-                        {voucher.maxDownloadBandwidthModifier !== 0 && (
-                          <span>
-                            📶{" "}
-                            {t("core.vouchers.maxDownloadBandwidthModifier")}:
-                            {" "}
-                            {voucher.maxDownloadBandwidthModifier > 0
-                              ? "+"
-                              : ""}
-                            {voucher.maxDownloadBandwidthModifier}
-                          </span>
-                        )}
-                        {voucher.maxUploadBandwidthModifier !== 0 && (
-                          <span>
-                            📶 {t("core.vouchers.maxUploadBandwidthModifier")}:
-                            {" "}
-                            {voucher.maxUploadBandwidthModifier > 0 ? "+" : ""}
-                            {voucher.maxUploadBandwidthModifier}
-                          </span>
-                        )}
-                        {voucher.maxOperationCountModifier &&
-                          Object.keys(voucher.maxOperationCountModifier)
-                              .length > 0 &&
-                          Object.entries(voucher.maxOperationCountModifier).map(
-                            ([key, val]) => (
-                              <span key={key}>
-                                🔢 {t(`billing.limits.${key}`) !==
-                                    `billing.limits.${key}`
-                                  ? t(`billing.limits.${key}`)
-                                  : key}: {val > 0 ? "+" : ""}
-                                {val}
-                              </span>
-                            ),
-                          )}
-                        {voucher.applicablePlanIds &&
-                          voucher.applicablePlanIds.length > 0 && (
-                          <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-                            {voucher.applicablePlanIds.length}{" "}
-                            {t("core.vouchers.applicablePlanIds").toLowerCase()}
-                          </span>
-                        )}
-                        {voucher.expiresAt && !isExpired(voucher.expiresAt) && (
-                          <span>
-                            {t("core.vouchers.expires")}:{" "}
-                            {new Date(voucher.expiresAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 ml-3 shrink-0">
-                    <EditButton onClick={() => openEdit(voucher)} />
-                    <DeleteButton onConfirm={() => handleDelete(voucher.id)} />
-                  </div>
-                </div>
-
-                {voucher.permissions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {voucher.permissions.map((perm) => (
-                      <TranslatedBadge
-                        key={perm}
-                        kind="permission"
-                        token={perm}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {voucher.entityLimitModifiers &&
-                  Object.keys(voucher.entityLimitModifiers).length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {Object.entries(voucher.entityLimitModifiers).map((
-                      [key, val],
-                    ) => (
-                      <span
-                        key={key}
-                        className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary-blue)]/15 px-2.5 py-0.5 text-xs text-[var(--color-secondary-blue)]"
-                      >
-                        <TranslatedBadge kind="entity" token={key} />
-                        {val > 0 ? "+" : ""}
-                        {val}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+      <GenericList<VoucherItem>
+        entityName={t("core.vouchers.create")}
+        controlButtons={[]}
+        onCreateClick={openCreate}
+        reloadKey={reloadKey}
+        fetchFn={fetchVouchers}
+        renderItem={renderVoucher}
+      />
 
       {/* Create/Edit Modal */}
       <Modal

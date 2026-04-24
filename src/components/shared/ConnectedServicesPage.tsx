@@ -1,19 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
-import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
+import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
+import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface ConnectedService {
   id: string;
   name: string;
   userName?: string;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export default function ConnectedServicesPage() {
@@ -22,46 +24,39 @@ export default function ConnectedServicesPage() {
   const { companyId, systemId, roles } = useSystemContext();
   const isAdmin = roles.includes("admin") || roles.includes("superuser");
 
-  const [services, setServices] = useState<ConnectedService[]>([]);
-  const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ConnectedService | null>(
     null,
   );
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const loadServices = useCallback(
-    async (searchQuery?: string) => {
-      if (!systemToken || !companyId || !systemId) return;
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({ companyId, systemId });
-        if (searchQuery) params.set("search", searchQuery);
-        const res = await fetch(`/api/connected-services?${params}`, {
-          headers: { Authorization: `Bearer ${systemToken}` },
-        });
-        const json = await res.json();
-        if (json.success) setServices(json.data ?? []);
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
+  const fetchServices = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<ConnectedService>> => {
+      if (!systemToken || !companyId || !systemId) {
+        return { data: [], nextCursor: null, prevCursor: null };
       }
+      const p = new URLSearchParams({ companyId, systemId });
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/connected-services?${p}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
+      const json = await res.json();
+      return {
+        data: (json.data ?? []) as ConnectedService[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
     },
     [systemToken, companyId, systemId],
   );
 
-  useEffect(() => {
-    loadServices();
-  }, [loadServices]);
-
-  const handleSearch = useCallback(
-    (value: string) => {
-      loadServices(value);
-    },
-    [loadServices],
-  );
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   const handleConnect = async (serviceName: string) => {
     if (!systemToken) return;
@@ -82,7 +77,7 @@ export default function ConnectedServicesPage() {
         return;
       }
       setConnectOpen(false);
-      await loadServices();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -108,7 +103,7 @@ export default function ConnectedServicesPage() {
         return;
       }
       setDeleteTarget(null);
-      await loadServices();
+      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
@@ -116,7 +111,6 @@ export default function ConnectedServicesPage() {
     }
   };
 
-  // Initially empty — expandable later with service catalog
   const serviceCatalog: string[] = [];
 
   return (
@@ -136,62 +130,46 @@ export default function ConnectedServicesPage() {
         </button>
       </div>
 
-      <SearchField onSearch={handleSearch} />
-
       <ErrorDisplay message={error} />
 
-      {loading
-        ? (
-          <div className="flex justify-center py-8">
-            <Spinner size="lg" />
-          </div>
-        )
-        : services.length === 0
-        ? (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">🔗</div>
-            <p className="text-[var(--color-light-text)]">
-              {t("common.connectedServices.empty")}
-            </p>
-          </div>
-        )
-        : (
-          <div className="space-y-3">
-            {services.map((service) => (
-              <div
-                key={service.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-white">
-                      {service.name}
-                    </h3>
-                    {isAdmin && service.userName && (
-                      <p className="text-xs text-[var(--color-light-text)] mt-1">
-                        {t("common.connectedServices.user")}: {service.userName}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <span className="text-xs text-[var(--color-light-text)]">
-                      {new Date(service.createdAt).toLocaleDateString()}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setError(null);
-                        setDeleteTarget(service);
-                      }}
-                      className="text-sm px-3 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      {t("common.delete")}
-                    </button>
-                  </div>
-                </div>
+      <GenericList<ConnectedService>
+        entityName={t("common.menu.connectedServices")}
+        searchEnabled={false}
+        createEnabled={false}
+        controlButtons={[]}
+        fetchFn={fetchServices}
+        reloadKey={reloadKey}
+        renderItem={(service) => (
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="font-semibold text-white">
+                  {service.name}
+                </h3>
+                {isAdmin && service.userName && (
+                  <p className="text-xs text-[var(--color-light-text)] mt-1">
+                    {t("common.connectedServices.user")}: {service.userName}
+                  </p>
+                )}
               </div>
-            ))}
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                <span className="text-xs text-[var(--color-light-text)]">
+                  {new Date(service.createdAt).toLocaleDateString()}
+                </span>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setDeleteTarget(service);
+                  }}
+                  className="text-sm px-3 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  {t("common.delete")}
+                </button>
+              </div>
+            </div>
           </div>
         )}
+      />
 
       {/* Connect service modal */}
       <Modal

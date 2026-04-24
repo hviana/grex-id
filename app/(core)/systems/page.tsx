@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
-
+import GenericList from "@/src/components/shared/GenericList";
+import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
-import SearchField from "@/src/components/shared/SearchField";
-import CreateButton from "@/src/components/shared/CreateButton";
+import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
-import Modal from "@/src/components/shared/Modal";
-import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import FileUploadField from "@/src/components/fields/FileUploadField";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface SystemItem {
   id: string;
@@ -19,14 +18,12 @@ interface SystemItem {
   slug: string;
   logoUri: string;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export default function SystemsPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
-  const [systems, setSystems] = useState<SystemItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<SystemItem | null>(null);
   const [formName, setFormName] = useState("");
@@ -35,31 +32,30 @@ export default function SystemsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const load = useCallback(async (q?: string) => {
-    if (!systemToken) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("search", q);
-      const res = await fetch(`/api/core/systems?${params}`, {
+  const fetchSystems = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<SystemItem>> => {
+      const p = new URLSearchParams();
+      if (params.search) p.set("search", params.search);
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/core/systems?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
-      if (json.success) setSystems(json.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [systemToken]);
+      return {
+        data: (json.data ?? []) as SystemItem[],
+        nextCursor: json.nextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken],
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearch(q);
-    load(q);
-  }, [load]);
+  const triggerReload = () => setReloadKey((k) => k + 1);
 
   const openCreate = () => {
     setFormName("");
@@ -109,7 +105,7 @@ export default function SystemsPage() {
       }
       setShowCreate(false);
       setEditItem(null);
-      load(search);
+      triggerReload();
     } finally {
       setSaving(false);
     }
@@ -124,7 +120,7 @@ export default function SystemsPage() {
       },
       body: JSON.stringify({ id }),
     });
-    load(search);
+    triggerReload();
   };
 
   const inputCls =
@@ -136,63 +132,46 @@ export default function SystemsPage() {
         {t("core.systems.title")}
       </h1>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-48">
-          <SearchField onSearch={handleSearch} />
-        </div>
-        <CreateButton onClick={openCreate} label={t("core.systems.create")} />
-      </div>
-
-      {loading
-        ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
-          </div>
-        )
-        : systems.length === 0
-        ? (
-          <p className="text-center py-12 text-[var(--color-light-text)]">
-            {t("core.systems.empty")}
-          </p>
-        )
-        : (
-          <div className="space-y-3">
-            {systems.map((sys) => (
-              <div
-                key={sys.id}
-                className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  {sys.logoUri
-                    ? (
-                      <img
-                        src={`/api/files/download?uri=${
-                          encodeURIComponent(sys.logoUri)
-                        }`}
-                        alt={sys.name}
-                        className="w-10 h-10 rounded"
-                      />
-                    )
-                    : (
-                      <div className="w-10 h-10 rounded bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold">
-                        {sys.name[0]}
-                      </div>
-                    )}
-                  <div>
-                    <h3 className="font-semibold text-white">{sys.name}</h3>
-                    <p className="text-sm text-[var(--color-light-text)]">
-                      {sys.slug}
-                    </p>
+      <GenericList<SystemItem>
+        entityName={t("core.systems.create")}
+        searchEnabled
+        createEnabled
+        controlButtons={[]}
+        onCreateClick={openCreate}
+        fetchFn={fetchSystems}
+        reloadKey={reloadKey}
+        renderItem={(sys) => (
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
+            <div className="flex items-center gap-4">
+              {sys.logoUri
+                ? (
+                  <img
+                    src={`/api/files/download?uri=${
+                      encodeURIComponent(sys.logoUri)
+                    }`}
+                    alt={sys.name}
+                    className="w-10 h-10 rounded"
+                  />
+                )
+                : (
+                  <div className="w-10 h-10 rounded bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold">
+                    {sys.name[0]}
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <EditButton onClick={() => openEdit(sys)} />
-                  <DeleteButton onConfirm={() => handleDelete(sys.id)} />
-                </div>
+                )}
+              <div>
+                <h3 className="font-semibold text-white">{sys.name}</h3>
+                <p className="text-sm text-[var(--color-light-text)]">
+                  {sys.slug}
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="flex gap-2">
+              <EditButton onClick={() => openEdit(sys)} />
+              <DeleteButton onConfirm={() => handleDelete(sys.id)} />
+            </div>
           </div>
         )}
+      />
 
       {/* Create/Edit Modal */}
       <Modal

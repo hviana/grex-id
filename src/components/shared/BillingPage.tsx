@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
+import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
+import GenericList from "@/src/components/shared/GenericList";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import PlanCard, {
   formatBytes,
@@ -86,149 +88,7 @@ interface PaymentRecord {
   continuityData?: Record<string, any>;
   expiresAt?: string;
   createdAt: string;
-}
-
-function PaymentHistoryList({
-  systemToken,
-  companyId,
-  systemId,
-  startDate,
-  endDate,
-  formatPrice,
-  formatDate,
-}: {
-  systemToken: string | null;
-  companyId: string;
-  systemId: string;
-  startDate?: Date;
-  endDate?: Date;
-  formatPrice: (price: number, currency: string) => string;
-  formatDate: (dateStr: string) => string;
-}) {
-  const { t } = useLocale();
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [cursor, setCursor] = useState<string | undefined>();
-
-  const loadPayments = useCallback(async (reset: boolean = false) => {
-    if (!companyId || !systemId || !systemToken) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("include", "payments");
-      if (startDate) {
-        params.set("startDate", startDate.toISOString().slice(0, 10));
-      }
-      if (endDate) params.set("endDate", endDate.toISOString().slice(0, 10));
-      if (!reset && cursor) params.set("cursor", cursor);
-      const res = await fetch(`/api/billing?${params}`, {
-        headers: { Authorization: `Bearer ${systemToken}` },
-      });
-      const json = await res.json();
-      if (json.success) {
-        const newPayments = (json.data?.payments ?? []) as PaymentRecord[];
-        setPayments(reset ? newPayments : (prev) => [...prev, ...newPayments]);
-        setNextCursor(json.data?.paymentsNextCursor ?? null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId, systemId, systemToken, cursor, startDate, endDate]);
-
-  useEffect(() => {
-    setCursor(undefined);
-    loadPayments(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, systemToken]);
-
-  useEffect(() => {
-    if (!cursor) return;
-    loadPayments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor]);
-
-  if (loading && payments.length === 0) {
-    return (
-      <div className="flex justify-center py-8">
-        <Spinner size="md" />
-      </div>
-    );
-  }
-
-  if (payments.length === 0) {
-    return (
-      <div className="text-center py-8 text-[var(--color-light-text)]">
-        {t("common.noResults")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {payments.map((p) => (
-        <div
-          key={p.id}
-          className="flex items-center justify-between backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-4 flex-wrap gap-2"
-        >
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-white font-medium">
-              {formatPrice(p.amount, p.currency)}
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-xs ${
-                p.status === "completed"
-                  ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
-                  : p.status === "failed"
-                  ? "bg-red-500/20 text-red-400"
-                  : p.status === "expired"
-                  ? "bg-orange-500/20 text-orange-400"
-                  : "bg-yellow-500/20 text-yellow-400"
-              }`}
-            >
-              {t("billing.paymentHistory.status." + p.status)}
-            </span>
-            <span className="text-xs text-[var(--color-light-text)]">
-              {t("billing.paymentHistory.kind." + p.kind)}
-            </span>
-            <span className="text-sm text-[var(--color-light-text)]">
-              {formatDate(p.createdAt)}
-            </span>
-          </div>
-          <div>
-            {p.invoiceUrl
-              ? (
-                <a
-                  href={p.invoiceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-[var(--color-primary-green)] hover:underline"
-                >
-                  {t("billing.paymentHistory.viewInvoice")}
-                </a>
-              )
-              : (
-                <span className="text-xs text-[var(--color-light-text)]">
-                  {t("billing.paymentHistory.invoiceNotAvailable")}
-                </span>
-              )}
-          </div>
-        </div>
-      ))}
-      {nextCursor && (
-        <div className="flex justify-center pt-4">
-          <button
-            onClick={() => setCursor(nextCursor)}
-            disabled={loading}
-            className="rounded-lg border border-[var(--color-dark-gray)] px-6 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors flex items-center gap-2"
-          >
-            {loading ? <Spinner size="sm" /> : null}
-            {t("common.loadMore")}
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  [key: string]: unknown;
 }
 
 export default function BillingPage() {
@@ -283,6 +143,37 @@ export default function BillingPage() {
   const [paymentHistoryEnd, setPaymentHistoryEnd] = useState<
     Date | undefined
   >();
+  const [paymentHistoryReloadKey, setPaymentHistoryReloadKey] = useState(0);
+
+  const fetchPaymentHistory = useCallback(
+    async (
+      params: CursorParams & { search?: string },
+    ): Promise<PaginatedResult<PaymentRecord>> => {
+      if (!companyId || !systemId || !systemToken) {
+        return { data: [], nextCursor: null, prevCursor: null };
+      }
+      const p = new URLSearchParams();
+      p.set("include", "payments");
+      if (paymentHistoryStart) {
+        p.set("startDate", paymentHistoryStart.toISOString().slice(0, 10));
+      }
+      if (paymentHistoryEnd) {
+        p.set("endDate", paymentHistoryEnd.toISOString().slice(0, 10));
+      }
+      if (params.cursor) p.set("cursor", params.cursor);
+      p.set("limit", String(params.limit));
+      const res = await fetch(`/api/billing?${p}`, {
+        headers: { Authorization: `Bearer ${systemToken}` },
+      });
+      const json = await res.json();
+      return {
+        data: (json.data?.payments ?? []) as PaymentRecord[],
+        nextCursor: json.data?.paymentsNextCursor ?? null,
+        prevCursor: null,
+      };
+    },
+    [systemToken, companyId, systemId, paymentHistoryStart, paymentHistoryEnd],
+  );
 
   const loadData = useCallback(async (silent?: boolean) => {
     if (!companyId || !systemId || !systemToken) return;
@@ -1418,20 +1309,64 @@ export default function BillingPage() {
             onChange={(start, end) => {
               setPaymentHistoryStart(start);
               setPaymentHistoryEnd(end);
+              setPaymentHistoryReloadKey((k) => k + 1);
             }}
           />
         </div>
-        {companyId && systemId && (
-          <PaymentHistoryList
-            systemToken={systemToken}
-            companyId={companyId}
-            systemId={systemId}
-            startDate={paymentHistoryStart}
-            endDate={paymentHistoryEnd}
-            formatPrice={formatPrice}
-            formatDate={formatDate}
-          />
-        )}
+        <GenericList<PaymentRecord>
+          entityName={t("billing.paymentHistory.title")}
+          searchEnabled={false}
+          createEnabled={false}
+          controlButtons={[]}
+          fetchFn={fetchPaymentHistory}
+          reloadKey={paymentHistoryReloadKey}
+          renderItem={(p) => (
+            <div className="flex items-center justify-between backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-4 flex-wrap gap-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="text-white font-medium">
+                  {formatPrice(p.amount as number, p.currency as string)}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs ${
+                    p.status === "completed"
+                      ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
+                      : p.status === "failed"
+                      ? "bg-red-500/20 text-red-400"
+                      : p.status === "expired"
+                      ? "bg-orange-500/20 text-orange-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                  }`}
+                >
+                  {t("billing.paymentHistory.status." + p.status)}
+                </span>
+                <span className="text-xs text-[var(--color-light-text)]">
+                  {t("billing.paymentHistory.kind." + p.kind)}
+                </span>
+                <span className="text-sm text-[var(--color-light-text)]">
+                  {formatDate(p.createdAt as string)}
+                </span>
+              </div>
+              <div>
+                {p.invoiceUrl
+                  ? (
+                    <a
+                      href={p.invoiceUrl as string}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[var(--color-primary-green)] hover:underline"
+                    >
+                      {t("billing.paymentHistory.viewInvoice")}
+                    </a>
+                  )
+                  : (
+                    <span className="text-xs text-[var(--color-light-text)]">
+                      {t("billing.paymentHistory.invoiceNotAvailable")}
+                    </span>
+                  )}
+              </div>
+            </div>
+          )}
+        />
       </div>
 
       {/* Cancel confirmation modal */}

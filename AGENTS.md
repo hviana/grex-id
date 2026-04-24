@@ -1480,7 +1480,7 @@ Each phase builds on the previous; nothing later violates earlier invariants.
    `GenericList`, action buttons, filters, `FormModal`, all fields
    (`FileUploadField`, `SearchableSelectField`, `DynamicKeyValueField`,
    `MultiBadgeField`), all subforms, `DownloadData`, `SystemBranding`,
-   `TagSearch`, `TranslatedBadge`, `CookieConsent`.
+   `TagSearch`, `TranslatedBadge`, `TranslatedBadgeList`, `CookieConsent`.
 5. **Core admin** — middleware composer; core API routes; entity forms; menu
    tree editor; settings editors (both tables); terms editor; data deletion;
    public terms page.
