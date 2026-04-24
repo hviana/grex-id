@@ -644,7 +644,7 @@ export async function genericVerify(
   if (!hash) return false;
 
   const verified = await db.query<[boolean]>(
-    "SELECT VALUE crypto::argon2::compare($hash, $plain)",
+    "RETURN crypto::argon2::compare($hash, $plain)",
     { hash, plain: plaintext },
   );
   return verified[0] === true;
