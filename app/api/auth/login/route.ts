@@ -111,7 +111,7 @@ async function handler(
     );
   }
 
-  // Second-factor gate — per-user only (§19.15). No global toggle.
+  // Second-factor gate — per-user only (§8.8). No global toggle.
   if (user.twoFactorEnabled) {
     if (!twoFactorCode) {
       // Client should either collect a TOTP code or call
@@ -214,7 +214,7 @@ async function handler(
     stayLoggedIn ?? false,
   );
 
-  // Register the user in the tenant's actor-validity partition (§12.8).
+  // Register the user in the tenant's actor-validity partition (§8.11).
   // This is the only signal withAuth consults on subsequent requests.
   await rememberActor(tenant, String(user.id));
 

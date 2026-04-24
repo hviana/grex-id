@@ -32,7 +32,7 @@ function withAuthRateLimit() {
  *
  * Called by the OAuth authorize page after the user approves access.
  * Creates a connected_app + its backing api_token in a single batched
- * query, then returns the JWT (§19.10) the client will use as the bearer.
+ * query, then returns the JWT (§8.1) the client will use as the bearer.
  */
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const claims = ctx.claims;

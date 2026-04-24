@@ -145,7 +145,7 @@
   "users.inviteExisting": "Usuário já existe e foi convidado para este sistema",
   "users.rolesHint": "Busque funções disponíveis para este sistema",
   "users.inviteHint": "Se o usuário já possui uma conta, ele será convidado para este sistema sem criar uma nova conta.",
-  "users.channelsReadOnlyHint": "Canais só podem ser alterados pelo próprio usuário, a partir do perfil dele, com confirmação humana (§19.13).",
+  "users.channelsReadOnlyHint": "Canais só podem ser alterados pelo próprio usuário, a partir do perfil dele, com confirmação humana (§8.7).",
   "error.scopeMismatch": "Incompatibilidade de escopo",
   "error.cors": "Origem CORS não permitida",
   "entityChannels.title": "Canais de Comunicação",

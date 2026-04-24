@@ -43,7 +43,7 @@ function channelOrder(
  * POST /api/auth/two-factor/login-link
  *
  * Issues a confirmation link that — when clicked — bypasses TOTP and finishes
- * the login flow (§19.15.3). Unauthenticated by design: authenticates by
+ * the login flow (§8.8.3). Unauthenticated by design: authenticates by
  * (identifier, password). All negative paths return a generic success so the
  * endpoint cannot be used to probe for account existence or 2FA status.
  */
@@ -96,7 +96,7 @@ async function handler(
     ownerType: "user",
     actionKey: "auth.action.loginFallback",
     // `identifier` is public (user submitted it); `stayLoggedIn` is a plain
-    // boolean flag. No password / hash is stored in the payload per §15.1.5.
+    // boolean flag. No password / hash is stored in the payload per §5.1.5.
     payload: { identifier: value, stayLoggedIn: !!stayLoggedIn },
     tenant: {
       actorId: String(user.id),

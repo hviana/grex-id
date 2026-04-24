@@ -55,7 +55,7 @@ function VerifyContent() {
 
         if (json.success) {
           setSuccess(true);
-          // Login-link fallback (§19.15.3) — a fresh System API Token arrives
+          // Login-link fallback (§8.8.3) — a fresh System API Token arrives
           // in the response. Store it via useAuth so the user is seamlessly
           // signed in, then route to the normal post-login landing.
           if (

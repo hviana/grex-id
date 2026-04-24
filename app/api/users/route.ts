@@ -126,7 +126,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   // Try to find an existing user by any submitted channel value. Resolved
   // in a single batched query (§7.2). entity_channel rows carry no back-
-  // pointer (§1.1.10) — the query returns (channel, owner) pairs where the
+  // pointer (§3.1.10) — the query returns (channel, owner) pairs where the
   // owner's `channels` array references the matching channel id.
   const matches = await findChannelOwners(channels, "user");
   const existingUserId = matches[0]?.ownerId ?? null;
@@ -158,7 +158,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     // Roles changed for the invited user — evict from this tenant's
     // partition so their next request re-authenticates with fresh
-    // roles/permissions (§12.8).
+    // roles/permissions (§8.11).
     await forgetActor(
       { companyId: String(companyId), systemId: String(systemId) },
       String(existingUserId),
@@ -346,7 +346,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     }
 
     // Roles changed — evict from this tenant's partition so the user's
-    // next request re-authenticates with fresh roles/permissions (§12.8).
+    // next request re-authenticates with fresh roles/permissions (§8.11).
     await forgetActor(
       { companyId: String(companyId), systemId: String(systemId) },
       String(id),
@@ -392,7 +392,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   // Membership removed — evict the user from this tenant's partition so
-  // the user's next request fails at withAuth (§12.8). The user's
+  // the user's next request fails at withAuth (§8.11). The user's
   // api_tokens scoped to this tenant are not affected here (still live
   // according to `revokedAt`); if they should also be revoked, the caller
   // is the admin UI which handles token revocation separately.

@@ -8,7 +8,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import { isValidPassword } from "@/src/lib/validators";
 
 /**
- * Password-change subform (§19.14). Unlike the generic {@link PasswordSubform}
+ * Password-change subform (§8.7). Unlike the generic {@link PasswordSubform}
  * used in register/edit flows, this one requires the current password for
  * verification and triggers a human-confirmation flow — the new password only
  * takes effect after the user clicks the confirmation link.

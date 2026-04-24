@@ -29,7 +29,7 @@ file crosses a boundary (§2.7).
 
 - [ ] New UI goes to the correct shared dir
       (`src/components/shared|fields|subforms|core`) or system/framework subtree
-      (§2.7, §10.3, §11).
+      (§2.7, §10.3, §10.1).
 - [ ] System code under `[slug]` subfolders of every root; framework code under
       `frameworks/<name>/` (§2.7).
 - [ ] New system → `systems/<slug>/register.ts` wired into `systems/index.ts`;
@@ -243,7 +243,7 @@ Before calling done, answer:
 - [ ] **Write invalidates cache?** Mutation path lists its
       `updateCache`/`reload()` call (§2.8).
 - [ ] **Relies on per-instance state?** Acknowledge in-memory rate limit /
-      actor-validity / file-cache caveat (§13).
+      actor-validity / file-cache caveat (§4.4).
 
 ---
 

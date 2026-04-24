@@ -133,7 +133,7 @@ user-facing informational surfaces show translation only.
 ### 2.6 Generic-first UI
 
 Every piece of UI reuses an existing shared primitive before writing ad-hoc
-markup. Classes of reusable primitives (§10) each have one authoritative
+markup. Classes of reusable primitives (§10.3) each have one authoritative
 implementation; new needs extend it with a `variant`/prop or extract a new
 primitive under the appropriate shared folder. Forbidden: bespoke lists with
 their own pagination, hand-rolled email/phone inputs, plain comma-separated

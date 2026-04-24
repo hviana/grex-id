@@ -63,7 +63,7 @@ export const POST = compose(
       );
     }
 
-    // Resolve companyId and userId directly from tenant (§9, §13.2)
+    // Resolve companyId and userId directly from tenant (§9.1, §9.2)
     const companyId = ctx.tenant.companyId;
     const userId = ctx.claims?.actorId ?? "0";
 
@@ -112,7 +112,7 @@ export const POST = compose(
     const accessMaxFileSizeBytes = accessCheck.maxFileSizeBytes;
     const accessAllowedExtensions = accessCheck.allowedExtensions;
 
-    // Resolve transfer limits from plan + voucher + Core settings (§13.2)
+    // Resolve transfer limits from plan + voucher + Core settings (§9.2)
     const core = Core.getInstance();
     const system = await core.getSystemBySlug(systemSlug);
     const systemId = system?.id ?? "";
@@ -173,7 +173,7 @@ export const POST = compose(
       );
     }
 
-    // Cache invalidation on replacement (§13.2 step 7)
+    // Cache invalidation on replacement (§9.2 step 7)
     const uri = fs.pathToURIComponent(path);
     let cacheTenantKey = "core";
     if (system) {

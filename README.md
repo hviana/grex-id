@@ -189,7 +189,7 @@ unless `database.json` has `"test": true`).
 2. Read the AGENTS.md section(s) covering the area you're changing.
 3. If a framework is involved, read its nested `AGENTS.md` too.
 4. Implement the change, reusing shared components / queries / utilities
-   (generic-first, see §3.1).
+   (generic-first, see §2.6).
 5. Verify with the matching skill (DB queries, routes, or browser).
 6. Walk through [docs/agent-checklist.md](docs/agent-checklist.md) before
    calling the task done.

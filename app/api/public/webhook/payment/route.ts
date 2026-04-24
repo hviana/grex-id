@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return Response.json({ success: true, action: "ignored" });
   }
 
-  // Idempotency (§14.5): already resolved
+  // Idempotency (§7.6): already resolved
   if (
     payment.status === "completed" ||
     payment.status === "failed" ||

@@ -62,7 +62,7 @@ export interface PlanCardProps {
    * System slug used to scope entity/resource token translations (§5.6.1).
    * Under `variant === "core"` (operator surface) both the raw token and its
    * translation render. Under `variant === "billing" | "onboarding"`
-   * (end-user surface) only the translation renders — see §18.1.2 rules.
+   * (end-user surface) only the translation renders — see §2.3.1 rules.
    */
   systemSlug?: string;
 }

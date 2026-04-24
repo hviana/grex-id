@@ -54,7 +54,7 @@ interface TranslatedBadgeProps {
    * Human mode — renders ONLY the translation, hiding the raw token. Use on
    * end-user surfaces (plan cards, usage panel, OAuth consent). Operator
    * surfaces (forms, admin lists, token cards) must omit this prop so both
-   * the raw token and the translation are visible (§18.1.2).
+   * the raw token and the translation are visible (§2.3.1).
    */
   compact?: boolean;
 }

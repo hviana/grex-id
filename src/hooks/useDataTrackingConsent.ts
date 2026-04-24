@@ -17,7 +17,7 @@ export interface DataTrackingConsentState {
 
 /**
  * Gates access to the characteristics listed in
- * `front.dataTracking.trackedCharacteristics` (§10.2.6, §25.6). Call-site:
+ * `front.dataTracking.trackedCharacteristics` (§9.8, §9.8). Call-site:
  * any code that captures a characteristic from that list MUST bail when
  * `accepted` is false.
  */

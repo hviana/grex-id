@@ -9,7 +9,7 @@ const CONSENT_COOKIE = "core_data_tracking_consent";
 const SIX_MONTHS_DAYS = 180;
 
 /**
- * Global data-tracking consent popup (§18.1.3, §25.6). Mounted once at the
+ * Global data-tracking consent popup (§9.8, §9.8). Mounted once at the
  * root layout so it covers every page — public and authenticated. Decision
  * persists for 6 months in the `core_data_tracking_consent` cookie.
  */

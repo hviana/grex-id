@@ -113,7 +113,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   // Issue the JWT bearer for this api_token. The actor id is the row id
-  // (§12.8); exp comes from expiresAt or a far-future date for
+  // (§8.11); exp comes from expiresAt or a far-future date for
   // never-expires tokens.
   const far = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
   const exp = createdToken.neverExpires

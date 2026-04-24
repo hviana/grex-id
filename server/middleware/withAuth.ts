@@ -11,7 +11,7 @@ import { assertServerOnly } from "../utils/server-only.ts";
 assertServerOnly("withAuth");
 
 /**
- * Authenticates a request without touching the database (§12.8).
+ * Authenticates a request without touching the database (§8.11).
  *
  * Flow:
  *   1. No `Authorization: Bearer` → synthesize anonymous Tenant (§9.2).
@@ -87,7 +87,7 @@ export function withAuth(
       );
     }
 
-    // Cache-only validity check (§12.8). One call covers every actor
+    // Cache-only validity check (§8.11). One call covers every actor
     // type because the cache is keyed by (tenant, actorId).
     await ensureActorValidityLoaded(claims);
     if (!claims.actorId || !isActorValid(claims, claims.actorId)) {
@@ -103,7 +103,7 @@ export function withAuth(
       );
     }
 
-    // CORS policy lives on the JWT itself for non-user actors (§12.7).
+    // CORS policy lives on the JWT itself for non-user actors (§8.12).
     const corsError = enforceCors(req, claims);
     if (corsError) return corsError;
 

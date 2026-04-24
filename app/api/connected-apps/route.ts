@@ -22,7 +22,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
 
 /**
  * POST — creates a connected_app AND its backing api_token in one batched
- * query, then issues a JWT (§19.10) whose `actorId` is the api_token id.
+ * query, then issues a JWT (§8.1) whose `actorId` is the api_token id.
  */
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
@@ -122,7 +122,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 /**
  * DELETE — revokes the linked api_token AND deletes the connected_app in a
  * single batched query; evicts the api_token id from the tenant's
- * actor-validity partition (§12.8 / §19.12).
+ * actor-validity partition (§8.11 / §8.11).
  */
 async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();

@@ -117,7 +117,7 @@ export const GET = compose(
       );
     }
 
-    // Resolve cache context (§13.3, §13.6)
+    // Resolve cache context (§6.3, §6.3)
     const core = Core.getInstance();
     const hitWindowMs =
       Number((await core.getSetting("cache.file.hitWindowHours")) || "1") *
@@ -161,7 +161,7 @@ export const GET = compose(
       }
     }
 
-    // Resolve transfer limits from plan + voucher + Core settings (§13.3)
+    // Resolve transfer limits from plan + voucher + Core settings (§6.3)
     const systemId = system?.id ?? "";
     const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = systemId
       ? await Promise.all([
@@ -239,7 +239,7 @@ export const GET = compose(
       "Content-Length": String(fileSize),
     };
 
-    // Background cache insertion (non-blocking, deduplicated — §13.3 step 7)
+    // Background cache insertion (non-blocking, deduplicated — §6.3 step 7)
     if (
       cacheMaxSize > 0 && fileSize <= cacheMaxSize &&
       !pendingInsertions.has(uri)

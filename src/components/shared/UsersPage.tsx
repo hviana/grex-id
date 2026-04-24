@@ -40,7 +40,7 @@ function channelOf(user: UserItem, type: string): ChannelRow | undefined {
 function primaryChannelLabel(user: UserItem): string {
   // Prefer the verified email, then any verified channel, then the first
   // channel regardless of verification. This is only for display — the user
-  // object still drives identity via `user.channels` (§19.13).
+  // object still drives identity via `user.channels` (§8.7).
   const email = channelOf(user, "email");
   if (email?.value) return email.value;
   const verified = (user.channels ?? []).find((c) => c.verified);

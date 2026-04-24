@@ -23,7 +23,7 @@ import {
 /**
  * POST /api/auth/two-factor
  *
- * User-level 2FA management (§19.15). All actions require authentication as a
+ * User-level 2FA management (§8.8). All actions require authentication as a
  * `user` actor; other actor types (api_token, connected_app) are rejected.
  *
  *   action: "setup-totp"    → generate a provisioning URI + secret
@@ -77,7 +77,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   if (action === "setup-totp") {
     // Generate a fresh TOTP secret and stash it on the user row as
     // `pendingTwoFactorSecret`. The secret never travels through
-    // `verification_request.payload` (§15.1 rule 5 — no secrets in payload).
+    // `verification_request.payload` (§5.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
     const userRow = await getUserWithProfile(userId);
     const accountLabel = userRow?.channels?.[0]?.value ??
@@ -124,7 +124,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     }
 
     // Load the pending secret envelope we stashed on `setup-totp` and
-    // decrypt once (§12.15) for the TOTP comparison. The plaintext stays
+    // decrypt once (§8.8) for the TOTP comparison. The plaintext stays
     // in request scope.
     const envelope = await getPendingTwoFactorSecret(userId);
     if (!envelope) {

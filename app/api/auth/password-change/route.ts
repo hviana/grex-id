@@ -60,7 +60,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  // Verify the current password via SurrealDB's argon2 compare (§19.14 step 1).
+  // Verify the current password via SurrealDB's argon2 compare (§8.7 step 1).
   const currentValid = await verifyPassword(userId, currentPassword);
   if (!currentValid) {
     return Response.json(
@@ -76,7 +76,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   // Pre-hash the new password inside SurrealDB so the plaintext never enters
-  // the verification_request payload (§15.1 rule 5, §19.14 step 3).
+  // the verification_request payload (§5.1 rule 5, §8.7 step 3).
   const newPasswordHash = await hashPassword(newPassword);
   if (!newPasswordHash) {
     return Response.json(

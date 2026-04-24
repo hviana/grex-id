@@ -18,7 +18,7 @@ const DEFAULT_MAX = 10;
 /**
  * EntityChannelsSubform
  *
- * Shared UI for collecting entity_channel rows (§19.13, §18.5). Two modes:
+ * Shared UI for collecting entity_channel rows (§8.7, §10.5). Two modes:
  *
  * - `"authenticated"` (default): talks to `/api/entity-channels` for an
  *   authenticated user — fetches, adds, removes, resends confirmation. Used

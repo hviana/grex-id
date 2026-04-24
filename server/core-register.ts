@@ -33,7 +33,7 @@ export function registerCore(): void {
   registerCache("core", "front-data", loadFrontCoreData);
   registerCache("core", "jwt-secret", loadJwtSecret);
   registerCache("core", "file-access", loadFileAccessData);
-  // The actor-validity cache (§12.8) is sharded per tenant and registers
+  // The actor-validity cache (§8.11) is sharded per tenant and registers
   // partitions lazily on first access — no boot-time registration here.
 
   // Event handlers — one name is both the event and the handler function key

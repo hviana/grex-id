@@ -193,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentToken = getCookie(TOKEN_COOKIE_NAME);
     if (currentToken) {
       // Fire-and-forget: server removes the user from the actor-validity
-      // cache (§12.8). Failure does not block the client-side teardown.
+      // cache (§8.11). Failure does not block the client-side teardown.
       fetch("/api/auth/logout", {
         method: "POST",
         headers: { Authorization: `Bearer ${currentToken}` },

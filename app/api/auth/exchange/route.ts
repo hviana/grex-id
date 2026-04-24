@@ -39,7 +39,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  // Only user tokens can be exchanged (§19.11)
+  // Only user tokens can be exchanged (§8.6)
   if (claims.actorType !== "user" || !claims.exchangeable) {
     return Response.json(
       {
@@ -51,7 +51,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   // Note: withAuth has already validated the current token against the
-  // actor-validity cache (§12.8). No additional revocation check here.
+  // actor-validity cache (§8.11). No additional revocation check here.
 
   const body = await req.json();
   const { companyId, systemId } = body;
@@ -74,7 +74,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     systemId: String(claims.systemId),
   };
 
-  // Superuser company-access bypass (§19.11.1)
+  // Superuser company-access bypass (§8.6.1)
   const isSuperuser = claims.roles.includes("superuser");
 
   if (isSuperuser) {
@@ -109,7 +109,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
 
     // Move the user id from the old tenant's partition to the new one
-    // (§12.8, §19.11 step 6).
+    // (§8.11, §8.6 step 6).
     const newTenant = {
       companyId: String(companyId),
       systemId: String(systemId),
@@ -132,7 +132,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     });
   }
 
-  // Verify membership + resolve slug/permissions (§7.2, §19.11)
+  // Verify membership + resolve slug/permissions (§7.2, §8.6)
   const result = await resolveUserExchange(
     claims.actorId,
     companyId,
@@ -153,7 +153,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const systemSlug = result.slug;
   const permissions = result.permissions;
 
-  // Carry over remaining lifetime from the old token (§19.11 step 6)
+  // Carry over remaining lifetime from the old token (§8.6 step 6)
   const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
 
   const newToken = await createTenantToken(
@@ -172,7 +172,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   );
 
   // Move the user id from the old tenant's partition to the new one
-  // (§12.8, §19.11 step 6).
+  // (§8.11, §8.6 step 6).
   const newTenant = {
     companyId: String(companyId),
     systemId: String(systemId),

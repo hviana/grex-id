@@ -81,7 +81,7 @@ async function handler(
   const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 
   // Channel preference: the matched channel type first, then the user's
-  // remaining verified channels (§19.7).
+  // remaining verified channels (§8.7).
   const matchedType = match.channel.type;
   const allTypes = await listVerifiedChannelTypes(match.ownerId, "user");
   const channelOrder = [

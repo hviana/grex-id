@@ -19,7 +19,7 @@ export function startTokenCleanup(): void {
       if (tokensDeleted > 0 || appsDeleted > 0) {
         // No actor-validity touch: rows hard-deleted here had
         // `revokedAt IS NOT NONE` for >90 days, so `forgetActor` was
-        // already called on each at revocation time (§12.8). The in-memory
+        // already called on each at revocation time (§8.11). The in-memory
         // partitions do not hold these ids.
         console.log(
           `[token-cleanup] Removed ${tokensDeleted} revoked tokens (>${REVOKED_OLDER_THAN_DAYS}d) and ${appsDeleted} orphaned connected apps.`,

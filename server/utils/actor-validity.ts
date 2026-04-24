@@ -10,7 +10,7 @@ import { fetchActiveApiTokenIds } from "../db/queries/actor-validity.ts";
 assertServerOnly("actor-validity.ts");
 
 /**
- * Actor-validity cache (§12.8).
+ * Actor-validity cache (§8.11).
  *
  * Per-tenant `Set<actorId>` holding the ids of every actor that is
  * currently allowed to authenticate against the tenant. An actor id is
@@ -24,7 +24,7 @@ assertServerOnly("actor-validity.ts");
  * The universal actor id is `user.id` for user sessions and `api_token.id`
  * for API tokens and connected-app tokens. Every bearer is a JWT whose
  * `actorId` claim is this id; verification by `withAuth` is uniform across
- * actor types (§12.8 rules, §19.10).
+ * actor types (§8.11 rules, §8.1).
  */
 
 const SLUG = "actor-validity";

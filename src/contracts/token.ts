@@ -1,8 +1,8 @@
 import type { Tenant } from "./tenant.ts";
 
 /**
- * API token row. The row id is the universal actor id (§12.8); the bearer
- * is a JWT (§19.10) embedding it. There is no separate token hash or jti.
+ * API token row. The row id is the universal actor id (§8.11); the bearer
+ * is a JWT (§8.1) embedding it. There is no separate token hash or jti.
  */
 export interface ApiToken {
   id: string;

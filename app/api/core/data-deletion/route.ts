@@ -79,7 +79,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Rebuild this tenant's actor-validity partition — the batched deletion
   // removed api_tokens and user_company_system rows for (companyId,
-  // systemId) (§12.8 rule 2, §20.6.1).
+  // systemId) (§8.11 rule 2, §9.8).
   await reloadTenant({
     companyId: String(companyId),
     systemId: String(systemId),

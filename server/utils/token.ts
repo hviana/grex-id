@@ -23,13 +23,13 @@ async function getJwtSecret(): Promise<Uint8Array> {
 
 /**
  * Creates the universal tenant-bearing JWT used by every authenticating
- * actor (§19.10). The claims include the full Tenant, the `actorId` used
- * by the actor-validity cache (§12.8), and — for non-user actors — the
+ * actor (§8.1). The claims include the full Tenant, the `actorId` used
+ * by the actor-validity cache (§8.11), and — for non-user actors — the
  * CORS policy (`frontendUse`, `frontendDomains`) so `withAuth` does not
  * need a DB read.
  *
  * @param expiresAt - When provided, uses this explicit expiry (for token
- *   exchange lifetime carry-over per §19.11, or for `api_token` expiries
+ *   exchange lifetime carry-over per §8.6, or for `api_token` expiries
  *   that are configured on the row). Otherwise calculates from Core
  *   settings.
  */
@@ -107,7 +107,7 @@ export async function verifyTenantToken(
 
 /**
  * Cryptographically random 32-byte hex string. Used for non-JWT flows —
- * e.g. verification-request confirmation URLs (§12.13).
+ * e.g. verification-request confirmation URLs (§5.2).
  */
 export function generateSecureToken(): string {
   const bytes = new Uint8Array(32);

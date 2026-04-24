@@ -58,7 +58,7 @@ const templateRegistry: Record<string, TemplateFunction> = {};
 // Templates typed with a specific data shape are stored as generic
 // TemplateFunctions — the runtime contract is "receive the templateData
 // from the dispatcher", and type-checking the individual data shape happens
-// inside the template itself (§15.4).
+// inside the template itself (§5.3).
 // deno-lint-ignore no-explicit-any
 export function registerTemplate(
   channel: string,

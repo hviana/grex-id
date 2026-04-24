@@ -9,7 +9,7 @@ description: PRIORITY 1 — run BEFORE every other skill and before writing, edi
 
 Every file in this project belongs to exactly one namespace — Core, one
 subsystem, or one framework. Mixing them is forbidden by the root `AGENTS.md`
-(§6, §26). This skill is the gate that keeps that invariant alive.
+(§2.7). This skill is the gate that keeps that invariant alive.
 
 ## Decision tree
 

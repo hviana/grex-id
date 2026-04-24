@@ -176,7 +176,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await verifyChannels(ids);
     }
   } else if (actionKey === "auth.action.passwordChange") {
-    // Apply the precomputed argon2 hash stored on the request payload (§19.14).
+    // Apply the precomputed argon2 hash stored on the request payload (§8.7).
     const hash = typeof payload?.newPasswordHash === "string"
       ? payload!.newPasswordHash
       : "";
@@ -186,14 +186,14 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   } else if (actionKey === "auth.action.twoFactorEnable") {
     // Promote the user's pendingTwoFactorSecret (set by `setup-totp` and
     // validated by `confirm-totp`) to twoFactorSecret. The secret never
-    // travels through the verification_request payload (§15.1 rule 5).
+    // travels through the verification_request payload (§5.1 rule 5).
     await promoteTwoFactorSecret(request.ownerId);
   } else if (actionKey === "auth.action.twoFactorDisable") {
     await disableTwoFactor(request.ownerId);
   } else if (actionKey === "auth.action.loginFallback") {
     // Issue a System API Token for the user, bypassing TOTP since the click
     // on a time-bound single-use confirmation link already proved control of
-    // a verified channel (§19.15.3).
+    // a verified channel (§8.8.3).
     const identifier = typeof payload?.identifier === "string"
       ? (payload!.identifier as string)
       : "";

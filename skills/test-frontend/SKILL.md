@@ -213,7 +213,7 @@ you build on top of the skill.
 
 Recognised challenges today:
 
-- `cookie-consent` — LGPD / cookie banner blocking clicks (§25.6). Auto-accept.
+- `cookie-consent` — LGPD / cookie banner blocking clicks (§9.8). Auto-accept.
 - `bot-protection` — "Não sou um robô" / "I'm not a robot" stub button.
   Auto-click. If a real reCAPTCHA / hCaptcha iframe opens after the click, the
   resolver reports `humanActionRequired: true` with a hint pointing at

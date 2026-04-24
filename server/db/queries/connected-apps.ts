@@ -38,7 +38,7 @@ export async function listConnectedApps(params: {
 /**
  * Create a connected_app AND its backing api_token in one batched query
  * (§7.2). Returns both the app row and the token row so the route handler
- * can issue a JWT (§19.10) whose actorId is the api_token id.
+ * can issue a JWT (§8.1) whose actorId is the api_token id.
  */
 export async function createConnectedAppWithToken(data: {
   userId: string;
@@ -135,7 +135,7 @@ export async function updateConnectedApp(data: {
  * Revoke the linked api_token AND delete the connected_app in a single
  * batched query (§7.2). Returns the linked apiTokenId, companyId, and
  * systemId so the caller can evict the actor from the validity cache
- * (§12.8 / §19.12).
+ * (§8.11 / §8.11).
  */
 export async function revokeConnectedApp(id: string): Promise<
   {

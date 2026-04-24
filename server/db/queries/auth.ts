@@ -69,7 +69,7 @@ function normalizeVerificationRequest(
 }
 
 /**
- * Look up a user by a verified entity_channel value (§19.5).
+ * Look up a user by a verified entity_channel value (§8.4).
  *
  * Returns the user with its profile + channels resolved. Ignores unverified
  * channels. Traverses `user.channels` (never `profile.*`).
@@ -124,7 +124,7 @@ export async function verifyPassword(
 /**
  * Create a new user + profile + initial entity_channel rows in one batched
  * query (§7.2). The entity_channel rows are created first (composable rows
- * carry no back-pointer — §1.1.10), then the profile (with empty
+ * carry no back-pointer — §3.1.10), then the profile (with empty
  * recovery_channels), then the user whose `channels` array references all
  * the created entity_channel rows. Channels are created unverified; caller
  * issues the human confirmation via communicationGuard +
@@ -255,7 +255,7 @@ export async function markVerificationUsed(requestId: string): Promise<void> {
 
 /**
  * Hard-delete abandoned user accounts before registration reuses their
- * channel values (§19.4). "Abandoned" means:
+ * channel values (§8.3). "Abandoned" means:
  *   - the user has no verified entity_channel in its `channels` array, AND
  *   - the user has no unused, non-expired verification_request with
  *     actionKey = "auth.action.register".
@@ -286,7 +286,7 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
  * system slug and flattened role permissions. Returns null when the user has
  * no memberships (e.g. superuser without tenant).
  *
- * Used by login and login-fallback flows (§19.5, §19.15.3).
+ * Used by login and login-fallback flows (§8.4, §8.8.3).
  */
 export async function resolveUserMembership(userId: string): Promise<
   {
@@ -328,7 +328,7 @@ export async function resolveUserMembership(userId: string): Promise<
 
 /**
  * Verify company_system association exists and resolve system slug for
- * superuser exchange bypass (§19.11.1).
+ * superuser exchange bypass (§8.6).
  */
 export async function resolveSuperuserExchange(
   companyId: string,
@@ -354,7 +354,7 @@ export async function resolveSuperuserExchange(
 
 /**
  * Verify user membership in a (company, system) and resolve slug + flattened
- * role permissions. Used by the token exchange flow (§19.11).
+ * role permissions. Used by the token exchange flow (§8.6).
  */
 export async function resolveUserExchange(
   userId: string,
@@ -399,8 +399,8 @@ export async function resolveUserExchange(
 
 /**
  * Promote the user's pendingTwoFactorSecret to twoFactorSecret and enable 2FA
- * (§19.15.2). The secret stays on the user row — it never travels through
- * verification_request.payload (§15.1 rule 5).
+ * (§8.8.2). The secret stays on the user row — it never travels through
+ * verification_request.payload (§5.1 rule 5).
  */
 export async function promoteTwoFactorSecret(userId: string): Promise<void> {
   const db = await getDb();
@@ -418,7 +418,7 @@ export async function promoteTwoFactorSecret(userId: string): Promise<void> {
 }
 
 /**
- * Disable two-factor authentication for a user (§19.15.2).
+ * Disable two-factor authentication for a user (§8.8.2).
  * Clears the secret and the pending secret in one batched update.
  */
 export async function disableTwoFactor(userId: string): Promise<void> {

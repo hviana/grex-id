@@ -145,7 +145,7 @@
   "users.inviteExisting": "User already exists and was invited to this system",
   "users.rolesHint": "Search available roles for this system",
   "users.inviteHint": "If the user already has an account, they will be invited to this system without creating a new account.",
-  "users.channelsReadOnlyHint": "Channels can only be changed by the user from their own profile, via a human confirmation link (§19.13).",
+  "users.channelsReadOnlyHint": "Channels can only be changed by the user from their own profile, via a human confirmation link (§8.7).",
   "error.scopeMismatch": "Scope mismatch",
   "error.cors": "CORS origin not allowed",
   "entityChannels.title": "Entity Channels",

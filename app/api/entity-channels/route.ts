@@ -275,7 +275,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Required-type invariant: removing a verified channel of a required type
-  // must leave at least one other verified channel of that type (§19.13).
+  // must leave at least one other verified channel of that type (§8.7).
   if (channel.verified && requiredTypes?.includes(channel.type)) {
     const remaining = await countVerifiedChannelsOfType(
       userId,

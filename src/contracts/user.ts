@@ -11,7 +11,7 @@ export interface User {
   /**
    * Temporary secret staged by `POST /api/auth/two-factor action:setup-totp`
    * and promoted to `twoFactorSecret` by the verify handler when the user
-   * clicks the `auth.action.twoFactorEnable` confirmation link (§19.15).
+   * clicks the `auth.action.twoFactorEnable` confirmation link (§8.8).
    */
   pendingTwoFactorSecret?: string;
   stayLoggedIn: boolean;

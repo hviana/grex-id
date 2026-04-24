@@ -20,7 +20,7 @@ export type TemplateBuilder = (
   channel: string,
 ) => Promise<TemplateResult>;
 
-// Unified publish payload for `publish("send_communication", …)` (§15.1).
+// Unified publish payload for `publish("send_communication", …)` (§5.1).
 export interface CommunicationPayload {
   channels?: string[];
   senders?: string[];
@@ -39,7 +39,7 @@ export interface ChannelDispatchResult {
     | string;
 }
 
-// Shared tenant display fields placed inside `templateData` (§15.5).
+// Shared tenant display fields placed inside `templateData` (§5.3).
 export interface TemplateTenantContext {
   actorName?: string;
   companyName?: string;

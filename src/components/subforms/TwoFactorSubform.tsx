@@ -12,7 +12,7 @@ interface TwoFactorSubformProps {
 }
 
 /**
- * Profile-page 2FA section (§19.15.4). Owns the setup-totp + confirm-totp
+ * Profile-page 2FA section (§8.8.4). Owns the setup-totp + confirm-totp
  * dance for enable, and the direct "disable" request for disable. All state
  * changes are gated through a server-issued confirmation link.
  */
