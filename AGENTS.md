@@ -109,8 +109,7 @@ user-facing informational surfaces show translation only.
   first:** before writing a custom query, check whether
   `server/db/queries/generics.ts` (§2.4.1) already covers the operation. Only
   write a bespoke query when the generic helpers cannot express the required
-  logic (multi-table compositional creates, complex subqueries, lifecycle hooks,
-  etc.).
+  logic (multi-table compositional creates, complex subqueries, etc.).
 - **Cursor-based pagination everywhere.** Never `SKIP`. Frontend supplies
   `limit`, capped server-side at 200.
 - **Sensitive data never stored plainly at rest.** Three options in order of
@@ -128,19 +127,19 @@ user-facing informational surfaces show translation only.
 
 Entity-agnostic CRUD helpers that enforce every §2.4 rule automatically. Every
 new query **must** check these first; bespoke queries are only for logic the
-generics cannot express (compositional creates across multiple tables, lifecycle
-hooks, complex subqueries).
+generics cannot express (compositional creates across multiple tables, complex
+subqueries).
 
 **API surface:**
 
-| Function                           | Purpose                                                                                  |
-| ---------------------------------- | ---------------------------------------------------------------------------------------- |
-| `genericList<T>(opts, params)`     | Cursor-based paginated list with FULLTEXT search, tenant isolation, tag filtering, FETCH |
-| `genericGetById<T>(opts, id)`      | Single-record fetch with optional tenant guard                                           |
-| `genericCreate<T>(opts, data)`     | Standardize → validate → deduplicate → encrypt → CREATE                                  |
-| `genericUpdate<T>(opts, id, data)` | Same pipeline on provided fields → UPDATE with `updatedAt`                               |
-| `genericDelete(opts, id)`          | DELETE with tenant guard; returns `{ deleted }`                                          |
-| `genericCount(opts)`               | `SELECT count()` with tenant isolation                                                   |
+| Function                           | Purpose                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `genericList<T>(opts, params)`     | Cursor-based paginated list with FULLTEXT search, tenant isolation, tag filtering, date range, FETCH |
+| `genericGetById<T>(opts, id)`      | Single-record fetch with optional tenant guard                                                       |
+| `genericCreate<T>(opts, data)`     | Standardize → validate → deduplicate → encrypt → CREATE                                              |
+| `genericUpdate<T>(opts, id, data)` | Same pipeline on provided fields → UPDATE with `updatedAt`                                           |
+| `genericDelete(opts, id)`          | DELETE with tenant guard; returns `{ deleted }`                                                      |
+| `genericCount(opts)`               | `SELECT count()` with tenant isolation, date range                                                   |
 
 **Key interfaces:**
 
@@ -152,11 +151,15 @@ hooks, complex subqueries).
   scoping. When `userId` is provided, its value is the **column name** in the
   table (e.g. `"ownerId"`). Any omitted ID is silently skipped.
 - `GenericListOptions` — table, select, fetch, cursorField, orderBy,
-  searchFields, extraConditions, extraBindings.
+  searchFields, dateRangeField, extraConditions, extraBindings.
 - `GenericCrudOptions` — table, ensureTenant, fields (FieldSpec[]), fetch.
 - `TagFilter { tagsColumn?, tagNames: string[] }` — optional tag-name filtering
   on `genericList`. Produces one AND-combined `CONTAINS` subquery per tag name
   (all must match). `tagsColumn` defaults to `"tags"`.
+- `DateRangeFilter { start?, end? }` — optional inclusive date-range filtering
+  on `genericList` and `genericCount`. Applied against the column named in
+  `GenericListOptions.dateRangeField` (e.g. `"createdAt"`). Each bound is an
+  ISO-8601 datetime; either or both may be omitted.
 
 **Processing pipeline (create / update):**
 

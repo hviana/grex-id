@@ -4,10 +4,10 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
-import { paginatedQuery } from "@/server/db/queries/pagination";
 import {
   genericCreate,
   genericDelete,
+  genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
 import Core from "@/server/utils/Core";
@@ -22,24 +22,15 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const systemId = url.searchParams.get("systemId") ?? undefined;
 
-  const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
-
-  if (search) {
-    conditions.push("name @@ $search");
-    bindings.search = search;
-  }
-  if (systemId) {
-    conditions.push("systemId = $systemId");
-    bindings.systemId = rid(systemId);
-  }
-
-  const result = await paginatedQuery({
-    table: "role",
-    conditions,
-    bindings,
-    params: { cursor, limit, direction },
-  });
+  const result = await genericList<Role>(
+    {
+      table: "role",
+      searchFields: ["name"],
+      extraConditions: systemId ? ["systemId = $systemId"] : undefined,
+      extraBindings: systemId ? { systemId: rid(systemId) } : undefined,
+    },
+    { cursor, limit, direction, search },
+  );
 
   return Response.json({
     success: true,

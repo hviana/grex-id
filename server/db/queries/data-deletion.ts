@@ -2,6 +2,7 @@ import { getDb, rid } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { assertServerOnly } from "../../utils/server-only.ts";
+import { genericVerify } from "./generics.ts";
 
 assertServerOnly("data-deletion");
 
@@ -51,11 +52,9 @@ export async function verifyUserPassword(
   userId: string,
   password: string,
 ): Promise<boolean> {
-  const db = await getDb();
-  const result = await db.query<[{ valid: boolean }[]]>(
-    `SELECT crypto::argon2::compare(passwordHash, $password) AS valid
-     FROM $userId LIMIT 1`,
-    { userId: rid(userId), password },
+  return genericVerify(
+    { table: "user", hashField: "passwordHash" },
+    userId,
+    password,
   );
-  return result[0]?.[0]?.valid === true;
 }

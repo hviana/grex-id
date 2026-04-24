@@ -6,12 +6,12 @@ import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { publish } from "@/server/event-queue/publisher";
 import {
-  getPendingTwoFactorSecret,
   getUserWithProfile,
   storePendingTwoFactorSecret,
 } from "@/server/db/queries/auth";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
-import { decryptField, encryptField } from "@/server/utils/crypto";
+import { genericDecrypt } from "@/server/db/queries/generics";
+import { encryptField } from "@/server/utils/crypto";
 import {
   generateSecret,
   generateURI,
@@ -123,26 +123,16 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Load the pending secret envelope we stashed on `setup-totp` and
-    // decrypt once (§8.8) for the TOTP comparison. The plaintext stays
-    // in request scope.
-    const envelope = await getPendingTwoFactorSecret(userId);
-    if (!envelope) {
-      return Response.json(
-        {
-          success: false,
-          error: {
-            code: "VALIDATION",
-            errors: ["common.twoFactor.error.invalidCode"],
-          },
-        },
-        { status: 400 },
-      );
-    }
-
+    // Decrypt the pending secret envelope stashed on `setup-totp` (§8.8).
+    // Plaintext stays in request scope.
     let secret: string;
     try {
-      secret = await decryptField(envelope);
+      const decrypted = await genericDecrypt(
+        { table: "user", decryptFields: [{ field: "pendingTwoFactorSecret" }] },
+        userId,
+      );
+      secret = decrypted.pendingTwoFactorSecret ?? "";
+      if (!secret) throw new Error("empty");
     } catch {
       return Response.json(
         {

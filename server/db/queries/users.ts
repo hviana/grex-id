@@ -1,43 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { User } from "@/src/contracts/user";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { paginatedQuery } from "./pagination.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("users");
-
-export async function listUsers(
-  params: CursorParams & { search?: string; companyId?: string },
-): Promise<
-  PaginatedResult<
-    Omit<User, "twoFactorEnabled" | "stayLoggedIn">
-  >
-> {
-  const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
-
-  if (params.companyId) {
-    conditions.push(
-      "id INSIDE (SELECT VALUE userId FROM company_user WHERE companyId = $companyId)",
-    );
-    bindings.companyId = rid(params.companyId);
-  }
-  if (params.search) {
-    conditions.push("profile.name @@ $search");
-    bindings.search = params.search;
-  }
-
-  return paginatedQuery<
-    Omit<User, "twoFactorEnabled" | "stayLoggedIn">
-  >({
-    table: "user",
-    select: "id, profile, roles, createdAt, updatedAt",
-    conditions,
-    bindings,
-    fetch: "profile, channels",
-    params,
-  });
-}
 
 /**
  * Lists users scoped to a specific (company, system) tenant, including

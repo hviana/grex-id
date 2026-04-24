@@ -77,7 +77,7 @@ file crosses a boundary (§2.7).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
-      logic (compositional creates, lifecycle hooks, complex subqueries).
+      logic (compositional creates, complex subqueries).
 - [ ] Single-batched-query rule: one `db.query()` per function — no sequential
       awaits, no `Promise.all` of `db.query()` (§2.4).
 - [ ] CREATE flow: `standardizeField` → `validateField(s)` → `checkDuplicates` →

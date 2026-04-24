@@ -77,6 +77,12 @@ export interface GenericListOptions {
   orderBy?: string;
   /** FULLTEXT searchable columns (will use `@@` with `$search`). */
   searchFields?: string[];
+  /**
+   * Column used for date-range filtering (e.g. "createdAt", "updatedAt").
+   * When set, callers may pass `dateRange` in params with optional
+   * `start` / `end` ISO-8601 datetime strings.
+   */
+  dateRangeField?: string;
   /** Extra WHERE conditions appended via AND. */
   extraConditions?: string[];
   /** Extra query bindings merged into the parameterized query. */
@@ -185,12 +191,24 @@ export interface TagFilter {
   tagNames: string[];
 }
 
+export interface DateRangeFilter {
+  /**
+   * Inclusive lower bound (ISO-8601 datetime).  Omit for no lower bound.
+   */
+  start?: string;
+  /**
+   * Inclusive upper bound (ISO-8601 datetime).  Omit for no upper bound.
+   */
+  end?: string;
+}
+
 export async function genericList<T = Record<string, unknown>>(
   opts: GenericListOptions,
   params: CursorParams & {
     search?: string;
     ensureTenant?: TenantIsolation;
     tagFilter?: TagFilter;
+    dateRange?: DateRangeFilter;
   },
 ): Promise<PaginatedResult<T>> {
   const conditions: string[] = [...(opts.extraConditions ?? [])];
@@ -208,6 +226,17 @@ export async function genericList<T = Record<string, unknown>>(
 
   if (params.ensureTenant) {
     conditions.push(...buildTenantConditions(params.ensureTenant, bindings));
+  }
+
+  if (params.dateRange && opts.dateRangeField) {
+    if (params.dateRange.start) {
+      conditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
+      bindings.dateRangeStart = params.dateRange.start;
+    }
+    if (params.dateRange.end) {
+      conditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
+      bindings.dateRangeEnd = params.dateRange.end;
+    }
   }
 
   if (params.tagFilter && params.tagFilter.tagNames.length > 0) {
@@ -488,6 +517,7 @@ export async function genericCount(
     search?: string;
     ensureTenant?: TenantIsolation;
     tagFilter?: TagFilter;
+    dateRange?: DateRangeFilter;
   },
 ): Promise<number> {
   const db = await getDb();
@@ -506,6 +536,17 @@ export async function genericCount(
 
   if (params.ensureTenant) {
     conditions.push(...buildTenantConditions(params.ensureTenant, bindings));
+  }
+
+  if (params.dateRange && opts.dateRangeField) {
+    if (params.dateRange.start) {
+      conditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
+      bindings.dateRangeStart = params.dateRange.start;
+    }
+    if (params.dateRange.end) {
+      conditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
+      bindings.dateRangeEnd = params.dateRange.end;
+    }
   }
 
   if (params.tagFilter && params.tagFilter.tagNames.length > 0) {

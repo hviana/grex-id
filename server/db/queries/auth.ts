@@ -11,6 +11,7 @@ export type {
   VerificationOwnerType,
 } from "@/src/contracts/verification-request";
 import { assertServerOnly } from "../../utils/server-only.ts";
+import { genericVerify } from "./generics.ts";
 
 assertServerOnly("auth");
 
@@ -112,13 +113,11 @@ export async function verifyPassword(
   userId: string,
   password: string,
 ): Promise<boolean> {
-  const db = await getDb();
-  const result = await db.query<[{ valid: boolean }[]]>(
-    `SELECT crypto::argon2::compare(passwordHash, $password) AS valid
-     FROM user WHERE id = $id LIMIT 1`,
-    { id: rid(userId), password },
+  return genericVerify(
+    { table: "user", hashField: "passwordHash" },
+    userId,
+    password,
   );
-  return result[0]?.[0]?.valid === true;
 }
 
 /**
@@ -476,21 +475,6 @@ export async function getUserProfile(userId: string): Promise<
   );
   const profile = result[0]?.[0]?.profile;
   return profile ?? null;
-}
-
-/**
- * Read the pending two-factor secret envelope from the user row.
- * Returns the AES-256-GCM envelope string (or undefined if not set).
- */
-export async function getPendingTwoFactorSecret(
-  userId: string,
-): Promise<string | undefined> {
-  const db = await getDb();
-  const result = await db.query<[{ pendingTwoFactorSecret?: string }[]]>(
-    `SELECT pendingTwoFactorSecret FROM $userId LIMIT 1`,
-    { userId: rid(userId) },
-  );
-  return result[0]?.[0]?.pendingTwoFactorSecret;
 }
 
 /**

@@ -4,8 +4,11 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
-import { listConnectedServices } from "@/server/db/queries/connected-services";
-import { genericCreate, genericDelete } from "@/server/db/queries/generics";
+import {
+  genericCreate,
+  genericDelete,
+  genericList,
+} from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import type { ConnectedService } from "@/src/contracts/connected-service";
 
@@ -15,15 +18,27 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const isAdmin = ctx.tenant.roles.includes("admin") ||
     ctx.tenant.roles.includes("superuser");
 
-  const userId = isAdmin ? undefined : ctx.claims?.actorId;
-
-  const data = await listConnectedServices({
+  const ensureTenant = {
     companyId: ctx.tenant.companyId,
     systemId: ctx.tenant.systemId,
-    userId,
-    search,
-  });
-  return Response.json({ success: true, data });
+    ...(isAdmin ? {} : { userId: "userId" }),
+  };
+
+  const result = await genericList<ConnectedService>(
+    {
+      table: "connected_service",
+      select: "*, userId.profile.name AS userName",
+      searchFields: ["name"],
+      fetch: "userId.profile",
+      limit: 50,
+    },
+    {
+      ensureTenant,
+      search,
+      limit: 50,
+    },
+  );
+  return Response.json({ success: true, data: result.data });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {

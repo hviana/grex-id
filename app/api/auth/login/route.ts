@@ -9,7 +9,7 @@ import {
 } from "@/server/db/queries/auth";
 import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
-import { decryptField } from "@/server/utils/crypto";
+import { genericDecrypt } from "@/server/db/queries/generics";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { rememberActor } from "@/server/utils/actor-validity";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
@@ -133,7 +133,12 @@ async function handler(
       // Decrypt at the verify boundary; plaintext stays in request scope.
       let plainSecret: string;
       try {
-        plainSecret = await decryptField(user.twoFactorSecret);
+        const decrypted = await genericDecrypt(
+          { table: "user", decryptFields: [{ field: "twoFactorSecret" }] },
+          String(user.id),
+        );
+        plainSecret = decrypted.twoFactorSecret ?? "";
+        if (!plainSecret) throw new Error("empty");
       } catch {
         return Response.json(
           {
