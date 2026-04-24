@@ -1,29 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { Voucher } from "@/src/contracts/voucher";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { paginatedQuery } from "./pagination.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("vouchers");
-
-export async function listVouchers(
-  params: CursorParams & { search?: string },
-): Promise<PaginatedResult<Voucher>> {
-  const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
-
-  if (params.search) {
-    conditions.push("code @@ $search");
-    bindings.search = params.search;
-  }
-
-  return paginatedQuery<Voucher>({
-    table: "voucher",
-    conditions,
-    bindings,
-    params,
-  });
-}
 
 export async function findVoucherByCode(code: string): Promise<Voucher | null> {
   const db = await getDb();

@@ -6,12 +6,14 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
+import { rid } from "@/server/db/connection";
 import {
-  createMenuItem,
-  deleteMenuItem,
-  paginatedListMenuItems,
-  updateMenuItem,
-} from "@/server/db/queries/menus";
+  genericCreate,
+  genericDelete,
+  genericList,
+  genericUpdate,
+} from "@/server/db/queries/generics";
+import type { MenuItem } from "@/src/contracts/menu";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -22,13 +24,28 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "50"));
   const systemId = url.searchParams.get("systemId") ?? undefined;
 
-  const result = await paginatedListMenuItems({
-    search,
-    systemId,
-    cursor,
-    limit,
-    direction,
-  });
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+  if (systemId) {
+    extraConditions.push("systemId = $systemId");
+    extraBindings.systemId = rid(systemId);
+  }
+
+  const result = await genericList<MenuItem>(
+    {
+      table: "menu_item",
+      searchFields: ["label"],
+      orderBy: "sortOrder ASC, createdAt DESC",
+      extraConditions,
+      extraBindings,
+    },
+    {
+      search,
+      cursor,
+      limit,
+      direction,
+    },
+  );
 
   return Response.json({
     success: true,
@@ -65,21 +82,34 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const item = await createMenuItem({
-      systemId,
-      parentId,
-      label: await standardizeField("name", sanitizeString(label)),
-      emoji: emoji || undefined,
-      componentName: sanitizeString(componentName ?? ""),
-      sortOrder: Number(sortOrder ?? 0),
-      requiredRoles: requiredRoles ?? [],
-      hiddenInPlanIds: hiddenInPlanIds ?? [],
-    });
+    const result = await genericCreate<MenuItem>(
+      { table: "menu_item" },
+      {
+        systemId: rid(systemId),
+        parentId: parentId ? rid(parentId) : undefined,
+        label: await standardizeField("name", sanitizeString(label)),
+        emoji: emoji || undefined,
+        componentName: sanitizeString(componentName ?? ""),
+        sortOrder: Number(sortOrder ?? 0),
+        requiredRoles: requiredRoles ?? [],
+        hiddenInPlanIds: hiddenInPlanIds ?? [],
+      },
+    );
+
+    if (!result.success || !result.data) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.generic" },
+        },
+        { status: 500 },
+      );
+    }
 
     await Core.getInstance().reload();
 
     return Response.json(
-      { success: true, data: item },
+      { success: true, data: result.data },
       { status: 201 },
     );
   } catch {
@@ -108,18 +138,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const updates: Partial<{
-      parentId: string | null;
-      label: string;
-      emoji: string;
-      componentName: string;
-      sortOrder: number;
-      requiredRoles: string[];
-      hiddenInPlanIds: string[];
-    }> = {};
+    const updates: Record<string, unknown> = {};
 
     if (data.parentId !== undefined) {
-      updates.parentId = data.parentId;
+      updates.parentId = data.parentId ? rid(data.parentId) : undefined;
     }
     if (data.label !== undefined) {
       updates.label = await standardizeField(
@@ -128,7 +150,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       );
     }
     if (data.emoji !== undefined) {
-      updates.emoji = data.emoji;
+      updates.emoji = data.emoji || undefined;
     }
     if (data.componentName !== undefined) {
       updates.componentName = sanitizeString(data.componentName);
@@ -147,11 +169,25 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    const updated = await updateMenuItem(id, updates);
+    const result = await genericUpdate<MenuItem>(
+      { table: "menu_item" },
+      id,
+      updates,
+    );
+
+    if (!result.success || !result.data) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.generic" },
+        },
+        { status: 500 },
+      );
+    }
 
     await Core.getInstance().reload();
 
-    return Response.json({ success: true, data: updated });
+    return Response.json({ success: true, data: result.data });
   } catch {
     return Response.json(
       {
@@ -178,7 +214,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    await deleteMenuItem(id);
+    await genericDelete({ table: "menu_item" }, id);
 
     await Core.getInstance().reload();
 

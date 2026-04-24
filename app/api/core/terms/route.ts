@@ -2,12 +2,16 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { listSystems, updateSystem } from "@/server/db/queries/systems";
+import { genericList, genericUpdate } from "@/server/db/queries/generics";
+import type { System } from "@/src/contracts/system";
 import { getSetting, upsertSetting } from "@/server/db/queries/core-settings";
 import Core from "@/server/utils/Core";
 
 async function getHandler(_req: Request, _ctx: RequestContext) {
-  const result = await listSystems({ limit: 200 });
+  const result = await genericList<System>(
+    { table: "system" },
+    { limit: 200 },
+  );
   const genericSetting = await getSetting("terms.generic");
   const genericContent = genericSetting?.value ?? "";
 
@@ -56,10 +60,14 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  // Pass empty string to clear -- updateSystem converts "" to undefined for SurrealDB
-  await updateSystem(systemId, {
-    termsOfService: typeof termsOfService === "string" ? termsOfService : "",
-  });
+  // Pass empty string to clear -- genericUpdate converts "" to undefined for SurrealDB
+  await genericUpdate<System>(
+    { table: "system" },
+    systemId,
+    {
+      termsOfService: typeof termsOfService === "string" ? termsOfService : "",
+    },
+  );
   await Core.getInstance().reload();
 
   return Response.json({ success: true });

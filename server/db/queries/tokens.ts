@@ -1,6 +1,5 @@
 import { getDb, rid } from "../connection.ts";
 import type { ApiToken } from "@/src/contracts/token";
-import type { Tenant } from "@/src/contracts/tenant";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tokens");
@@ -68,60 +67,6 @@ export async function listTokensFiltered(params: {
 }
 
 /**
- * Creates a new api_token row with all fields. Returns the created record.
- * Single batched query (§7.2).
- */
-export async function createApiToken(params: {
-  userId: string;
-  companyId: string;
-  systemId: string;
-  tenant: Tenant;
-  name: string;
-  description?: string;
-  permissions: string[];
-  monthlySpendLimit?: number;
-  maxOperationCount?: Record<string, number>;
-  neverExpires: boolean;
-  expiresAt?: Date;
-  frontendUse: boolean;
-  frontendDomains: string[];
-}): Promise<ApiToken | undefined> {
-  const db = await getDb();
-  const result = await db.query<[ApiToken[]]>(
-    `CREATE api_token SET
-      userId = $userId,
-      companyId = $companyId,
-      systemId = $systemId,
-      tenant = $tenant,
-      name = $name,
-      description = $description,
-      permissions = $permissions,
-      monthlySpendLimit = $monthlySpendLimit,
-      maxOperationCount = $maxOperationCount,
-      neverExpires = $neverExpires,
-      expiresAt = $expiresAt,
-      frontendUse = $frontendUse,
-      frontendDomains = $frontendDomains`,
-    {
-      userId: rid(params.userId),
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
-      tenant: params.tenant,
-      name: params.name,
-      description: params.description ?? undefined,
-      permissions: params.permissions,
-      monthlySpendLimit: params.monthlySpendLimit ?? undefined,
-      maxOperationCount: params.maxOperationCount ?? undefined,
-      neverExpires: params.neverExpires,
-      expiresAt: params.expiresAt ?? undefined,
-      frontendUse: params.frontendUse,
-      frontendDomains: params.frontendDomains,
-    },
-  );
-  return result[0]?.[0];
-}
-
-/**
  * Revokes an api_token by setting revokedAt = time::now() in a single
  * batched query that first selects the token's companyId and systemId.
  * Returns the tenant info needed to update the actor-validity cache.
@@ -148,12 +93,6 @@ export async function revokeToken(id: string): Promise<
     };
   }
   return null;
-}
-
-/** Hard-delete — used by the token-cleanup job (§16). */
-export async function deleteToken(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
 }
 
 // ─── Token cleanup (used by token-cleanup job) ────────────────────────────

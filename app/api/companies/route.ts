@@ -2,7 +2,10 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { createCompany, listCompanies } from "@/server/db/queries/companies";
+import { createCompany } from "@/server/db/queries/companies";
+import { genericList } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
+import type { Company } from "@/src/contracts/company";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateFields } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
@@ -12,13 +15,25 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
+  const userId = ctx.claims?.actorId ?? "0";
 
-  const result = await listCompanies({
-    search,
-    cursor,
-    limit,
-    userId: ctx.claims?.actorId ?? "0",
-  });
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+  if (userId && userId !== "0") {
+    extraConditions.push(
+      "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
+    );
+    extraBindings.userId = rid(userId);
+  }
+
+  const result = await genericList<Company>({
+    table: "company",
+    searchFields: ["name"],
+    fetch: "billingAddress",
+    extraConditions,
+    extraBindings,
+  }, { search, cursor, limit });
+
   return Response.json({
     success: true,
     data: result.data,

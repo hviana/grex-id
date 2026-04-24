@@ -1,5 +1,5 @@
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
-import { getLocationById } from "@/server/db/queries/locations";
+import { genericGetById } from "@/server/db/queries/generics";
 import {
   batchCreateDetections,
   detectionExistsForEvent,
@@ -16,7 +16,9 @@ export const processDetection: HandlerFn = async (payload) => {
   const embeddings = payload.embeddings as number[][];
   const eventId = payload.eventId as string | undefined;
 
-  const location = await getLocationById(locationId);
+  const location = await genericGetById<
+    { companyId: string; systemId: string }
+  >({ table: "location" }, locationId);
   if (!location) {
     throw new Error(`Location not found: ${locationId}`);
   }

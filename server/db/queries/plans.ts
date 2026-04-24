@@ -1,40 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { Plan } from "@/src/contracts/plan";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { paginatedQuery } from "./pagination.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("plans");
-
-export async function listPlans(
-  params: CursorParams & {
-    search?: string;
-    systemId?: string;
-    activeOnly?: boolean;
-  },
-): Promise<PaginatedResult<Plan>> {
-  const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
-
-  if (params.systemId) {
-    conditions.push("systemId = $systemId");
-    bindings.systemId = rid(params.systemId);
-  }
-  if (params.activeOnly) {
-    conditions.push("isActive = true");
-  }
-  if (params.search) {
-    conditions.push("name @@ $search");
-    bindings.search = params.search;
-  }
-
-  return paginatedQuery<Plan>({
-    table: "plan",
-    conditions,
-    bindings,
-    params,
-  });
-}
 
 export async function createPlan(data: {
   name: string;
@@ -152,9 +120,4 @@ export async function updatePlan(
     bindings,
   );
   return result[0][0];
-}
-
-export async function deletePlan(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
 }

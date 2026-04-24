@@ -6,12 +6,10 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
-import {
-  createPlan,
-  deletePlan,
-  listPlans,
-  updatePlan,
-} from "@/server/db/queries/plans";
+import { rid } from "@/server/db/connection";
+import { genericDelete, genericList } from "@/server/db/queries/generics";
+import { createPlan, updatePlan } from "@/server/db/queries/plans";
+import type { Plan } from "@/src/contracts/plan";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -22,13 +20,28 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const systemId = url.searchParams.get("systemId") ?? undefined;
 
-  const result = await listPlans({
-    limit,
-    cursor,
-    direction,
-    search,
-    systemId,
-  });
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+
+  if (systemId) {
+    extraConditions.push("systemId = $systemId");
+    extraBindings.systemId = rid(systemId);
+  }
+
+  const result = await genericList<Plan>(
+    {
+      table: "plan",
+      searchFields: ["name"],
+      extraConditions,
+      extraBindings,
+    },
+    {
+      limit,
+      cursor,
+      direction,
+      search,
+    },
+  );
 
   return Response.json({
     success: true,
@@ -209,7 +222,17 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    await deletePlan(id);
+    const { deleted } = await genericDelete({ table: "plan" }, id);
+
+    if (!deleted) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.notFound" },
+        },
+        { status: 404 },
+      );
+    }
 
     await Core.getInstance().reload();
 

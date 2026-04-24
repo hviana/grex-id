@@ -3,13 +3,15 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { rid } from "@/server/db/connection";
-import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
-import { standardizeField } from "@/server/utils/field-standardizer";
-import { validateField } from "@/server/utils/field-validator";
-import { checkDuplicates } from "@/server/utils/entity-deduplicator";
+import { clampPageLimit } from "@/src/lib/validators";
 import { paginatedQuery } from "@/server/db/queries/pagination";
+import {
+  genericCreate,
+  genericDelete,
+  genericUpdate,
+} from "@/server/db/queries/generics";
 import Core from "@/server/utils/Core";
-import { createRole, deleteRole, updateRole } from "@/server/db/queries/roles";
+import type { Role } from "@/src/contracts/role";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -50,47 +52,61 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, systemId, permissions, isBuiltIn } = body;
 
-  const errors: string[] = [];
-  errors.push(...await validateField("name", name));
-  if (!systemId) errors.push("validation.system.required");
-
-  if (errors.length > 0) {
+  if (!systemId) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", errors },
+        error: { code: "VALIDATION", errors: ["validation.system.required"] },
       },
       { status: 400 },
     );
   }
 
   try {
-    const stdName = await standardizeField("name", sanitizeString(name));
-    const dup = await checkDuplicates("role", [
-      { field: "name", value: stdName },
-      { field: "systemId", value: systemId },
-    ]);
-    if (dup.isDuplicate) {
-      const conflictErrors = dup.conflicts.map((c) =>
-        `validation.${c.field}.duplicate`
-      );
+    const result = await genericCreate<Role>(
+      {
+        table: "role",
+        fields: [{ field: "name", unique: true }],
+      },
+      {
+        name,
+        systemId: rid(systemId),
+        permissions: permissions ?? [],
+        isBuiltIn: isBuiltIn ?? false,
+      },
+    );
+
+    if (!result.success) {
+      if (result.duplicateFields?.length) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "CONFLICT",
+              errors: result.duplicateFields.map(
+                (f) => `validation.${f}.duplicate`,
+              ),
+            },
+          },
+          { status: 409 },
+        );
+      }
       return Response.json(
-        { success: false, error: { code: "CONFLICT", errors: conflictErrors } },
-        { status: 409 },
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.errors?.flatMap((e) => e.errors) ?? [],
+          },
+        },
+        { status: 400 },
       );
     }
-
-    const role = await createRole({
-      name: stdName,
-      systemId,
-      permissions: permissions ?? [],
-      isBuiltIn: isBuiltIn ?? false,
-    });
 
     await Core.getInstance().reload();
 
     return Response.json(
-      { success: true, data: role },
+      { success: true, data: result.data },
       { status: 201 },
     );
   } catch {
@@ -119,20 +135,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const updates: Partial<
-      { name: string; permissions: string[]; isBuiltIn: boolean }
-    > = {};
+    const updates: Record<string, unknown> = {};
 
     if (data.name !== undefined) {
-      const stdName = await standardizeField("name", sanitizeString(data.name));
-      const nameErrors = await validateField("name", stdName);
-      if (nameErrors.length > 0) {
-        return Response.json(
-          { success: false, error: { code: "VALIDATION", errors: nameErrors } },
-          { status: 400 },
-        );
-      }
-      updates.name = stdName;
+      updates.name = data.name;
     }
     if (data.permissions !== undefined) {
       updates.permissions = data.permissions;
@@ -145,11 +151,52 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    const updated = await updateRole(id, updates);
+    const result = await genericUpdate<Role>(
+      { table: "role", fields: [{ field: "name", unique: true }] },
+      id,
+      updates,
+    );
+
+    if (!result.success) {
+      if (result.duplicateFields?.length) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "CONFLICT",
+              errors: result.duplicateFields.map(
+                (f) => `validation.${f}.duplicate`,
+              ),
+            },
+          },
+          { status: 409 },
+        );
+      }
+      const firstError = result.errors?.[0];
+      if (firstError?.field === "id") {
+        return Response.json(
+          {
+            success: false,
+            error: { code: "ERROR", message: "common.error.generic" },
+          },
+          { status: 404 },
+        );
+      }
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.errors?.flatMap((e) => e.errors) ?? [],
+          },
+        },
+        { status: 400 },
+      );
+    }
 
     await Core.getInstance().reload();
 
-    return Response.json({ success: true, data: updated });
+    return Response.json({ success: true, data: result.data });
   } catch {
     return Response.json(
       {
@@ -176,7 +223,17 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    await deleteRole(id);
+    const result = await genericDelete({ table: "role" }, id);
+
+    if (!result.deleted) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.generic" },
+        },
+        { status: 404 },
+      );
+    }
 
     await Core.getInstance().reload();
 

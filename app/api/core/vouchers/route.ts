@@ -9,9 +9,10 @@ import Core from "@/server/utils/Core";
 import {
   createVoucher,
   deleteVoucher,
-  listVouchers,
   updateVoucherWithCascade,
 } from "@/server/db/queries/vouchers";
+import { genericList } from "@/server/db/queries/generics";
+import type { Voucher } from "@/src/contracts/voucher";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
@@ -21,7 +22,10 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const result = await listVouchers({ limit, cursor, direction, search });
+  const result = await genericList<Voucher>(
+    { table: "voucher", searchFields: ["code"] },
+    { limit, cursor, direction, search },
+  );
 
   return Response.json({
     success: true,

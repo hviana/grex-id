@@ -4,12 +4,11 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
-import {
-  createApiToken,
-  listTokensFiltered,
-  revokeToken,
-} from "@/server/db/queries/tokens";
+import { listTokensFiltered, revokeToken } from "@/server/db/queries/tokens";
+import { genericCreate } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import type { Tenant } from "@/src/contracts/tenant";
+import type { ApiToken } from "@/src/contracts/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -86,23 +85,26 @@ async function postHandler(req: Request, ctx: RequestContext) {
     permissions: permissions ?? [],
   };
 
-  const createdToken = await createApiToken({
-    userId,
-    companyId,
-    systemId,
-    tenant,
-    name,
-    description: description ?? undefined,
-    permissions: permissions ?? [],
-    monthlySpendLimit: monthlySpendLimit ?? undefined,
-    maxOperationCount: maxOperationCount ?? undefined,
-    neverExpires: neverExpires === true,
-    expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
-    frontendUse: useFrontend,
-    frontendDomains: domains,
-  });
+  const result = await genericCreate<ApiToken>(
+    { table: "api_token" },
+    {
+      userId: rid(userId),
+      companyId: rid(companyId),
+      systemId: rid(systemId),
+      tenant,
+      name,
+      description: description ?? undefined,
+      permissions: permissions ?? [],
+      monthlySpendLimit: monthlySpendLimit ?? undefined,
+      maxOperationCount: maxOperationCount ?? undefined,
+      neverExpires: neverExpires === true,
+      expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
+      frontendUse: useFrontend,
+      frontendDomains: domains,
+    },
+  );
 
-  if (!createdToken) {
+  if (!result.success || !result.data) {
     return Response.json(
       {
         success: false,
@@ -111,6 +113,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       { status: 500 },
     );
   }
+
+  const createdToken = result.data;
 
   // Issue the JWT bearer for this api_token. The actor id is the row id
   // (§8.11); exp comes from expiresAt or a far-future date for

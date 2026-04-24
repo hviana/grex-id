@@ -3,13 +3,12 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  createSystem,
-  deleteSystem,
-  listSystems,
-  updateSystem,
-} from "@/server/db/queries/systems";
-import { standardizeField } from "@/server/utils/field-standardizer";
-import { validateField } from "@/server/utils/field-validator";
+  genericCreate,
+  genericDelete,
+  genericList,
+  genericUpdate,
+} from "@/server/db/queries/generics";
+import type { System } from "@/src/contracts/system";
 import Core from "@/server/utils/Core";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -18,7 +17,10 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
-  const result = await listSystems({ search, cursor, limit });
+  const result = await genericList<System>(
+    { table: "system", searchFields: ["name"] },
+    { search, cursor, limit },
+  );
   return Response.json({
     success: true,
     data: result.data,
@@ -30,30 +32,56 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, slug, logoUri, termsOfService } = body;
 
-  const nameErrors = await await validateField("name", name);
-  const slugErrors = await await validateField("slug", slug);
-  const allErrors = [...nameErrors, ...slugErrors];
+  const result = await genericCreate<System>(
+    {
+      table: "system",
+      fields: [
+        { field: "name", unique: true },
+        { field: "slug", unique: true },
+        { field: "logoUri" },
+        { field: "termsOfService" },
+      ],
+    },
+    {
+      name,
+      slug,
+      logoUri: logoUri ?? "",
+      termsOfService: termsOfService || undefined,
+    },
+  );
 
-  if (allErrors.length > 0) {
-    return Response.json(
-      {
-        success: false,
-        error: { code: "VALIDATION", errors: allErrors },
-      },
-      { status: 400 },
-    );
+  if (!result.success) {
+    if (result.errors) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.errors.flatMap((e) => e.errors),
+          },
+        },
+        { status: 400 },
+      );
+    }
+    if (result.duplicateFields) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.duplicateFields.map(
+              (f) => `validation.${f}.duplicate`,
+            ),
+          },
+        },
+        { status: 409 },
+      );
+    }
   }
-
-  const system = await createSystem({
-    name: await await standardizeField("name", name),
-    slug: await await standardizeField("slug", slug),
-    logoUri: logoUri ?? "",
-    termsOfService: termsOfService || undefined,
-  });
 
   await Core.getInstance().reload();
 
-  return Response.json({ success: true, data: system }, { status: 201 });
+  return Response.json({ success: true, data: result.data }, { status: 201 });
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
@@ -70,39 +98,58 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const errors: string[] = [];
-  if (name !== undefined) {
-    errors.push(...await await validateField("name", name));
-  }
-  if (slug !== undefined) {
-    errors.push(...await await validateField("slug", slug));
-  }
-
-  if (errors.length > 0) {
-    return Response.json(
-      {
-        success: false,
-        error: { code: "VALIDATION", errors },
-      },
-      { status: 400 },
-    );
-  }
-
-  const data: Record<string, string | undefined> = {};
-  if (name !== undefined) {
-    data.name = await await standardizeField("name", name);
-  }
-  if (slug !== undefined) {
-    data.slug = await await standardizeField("slug", slug);
-  }
+  const data: Record<string, unknown> = {};
+  if (name !== undefined) data.name = name;
+  if (slug !== undefined) data.slug = slug;
   if (logoUri !== undefined) data.logoUri = logoUri;
   if (termsOfService !== undefined) data.termsOfService = termsOfService;
 
-  const system = await updateSystem(id, data);
+  const result = await genericUpdate<System>(
+    {
+      table: "system",
+      fields: [
+        { field: "name", unique: true },
+        { field: "slug", unique: true },
+        { field: "logoUri" },
+        { field: "termsOfService" },
+      ],
+    },
+    id,
+    data,
+  );
+
+  if (!result.success) {
+    if (result.errors) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.errors.flatMap((e) => e.errors),
+          },
+        },
+        { status: 400 },
+      );
+    }
+    if (result.duplicateFields) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: result.duplicateFields.map(
+              (f) => `validation.${f}.duplicate`,
+            ),
+          },
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   await Core.getInstance().reload();
 
-  return Response.json({ success: true, data: system });
+  return Response.json({ success: true, data: result.data });
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
@@ -119,7 +166,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await deleteSystem(id);
+  await genericDelete({ table: "system" }, id);
 
   await Core.getInstance().reload();
 

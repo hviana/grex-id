@@ -1,36 +1,8 @@
 import { getDb, rid } from "../connection.ts";
 import type { Company } from "@/src/contracts/company";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { paginatedQuery } from "./pagination.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("companies");
-
-export async function listCompanies(
-  params: CursorParams & { search?: string; userId?: string },
-): Promise<PaginatedResult<Company>> {
-  const conditions: string[] = [];
-  const bindings: Record<string, unknown> = {};
-
-  if (params.userId) {
-    conditions.push(
-      "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
-    );
-    bindings.userId = rid(params.userId);
-  }
-  if (params.search) {
-    conditions.push("name @@ $search");
-    bindings.search = params.search;
-  }
-
-  return paginatedQuery<Company>({
-    table: "company",
-    conditions,
-    bindings,
-    fetch: "billingAddress",
-    params,
-  });
-}
 
 export async function createCompany(data: {
   name: string;

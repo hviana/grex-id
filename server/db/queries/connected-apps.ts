@@ -7,35 +7,6 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("connected-apps");
 
 /**
- * List connected apps, optionally filtered by companyId and/or systemId.
- * Used by the GET handler and the ConnectedAppsPage (§21.3).
- */
-export async function listConnectedApps(params: {
-  companyId?: string;
-  systemId?: string;
-}): Promise<ConnectedApp[]> {
-  const db = await getDb();
-  const bindings: Record<string, unknown> = {};
-  const conditions: string[] = [];
-
-  if (params.companyId && params.companyId !== "0") {
-    conditions.push("companyId = $companyId");
-    bindings.companyId = rid(params.companyId);
-  }
-  if (params.systemId && params.systemId !== "0") {
-    conditions.push("systemId = $systemId");
-    bindings.systemId = rid(params.systemId);
-  }
-
-  let query = "SELECT * FROM connected_app";
-  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT 50";
-
-  const result = await db.query<[ConnectedApp[]]>(query, bindings);
-  return result[0] ?? [];
-}
-
-/**
  * Create a connected_app AND its backing api_token in one batched query
  * (§7.2). Returns both the app row and the token row so the route handler
  * can issue a JWT (§8.1) whose actorId is the api_token id.
@@ -92,43 +63,6 @@ export async function createConnectedAppWithToken(data: {
   const app = result[2]?.[0];
   const token = result[3]?.[0];
   return { app, token };
-}
-
-/**
- * Update a connected_app's mutable fields. Only non-undefined fields are
- * SET; if nothing to update, returns null.
- */
-export async function updateConnectedApp(data: {
-  id: string;
-  name?: string;
-  permissions?: string[];
-  monthlySpendLimit?: number;
-}): Promise<ConnectedApp | null> {
-  const sets: string[] = [];
-  const bindings: Record<string, unknown> = { id: rid(data.id) };
-
-  if (data.name !== undefined) {
-    sets.push("name = $name");
-    bindings.name = data.name;
-  }
-  if (data.permissions !== undefined) {
-    sets.push("permissions = $permissions");
-    bindings.permissions = data.permissions;
-  }
-  if (data.monthlySpendLimit !== undefined) {
-    sets.push("monthlySpendLimit = $monthlySpendLimit");
-    bindings.monthlySpendLimit = data.monthlySpendLimit || undefined;
-  }
-
-  if (sets.length === 0) return null;
-
-  const db = await getDb();
-  const result = await db.query<[ConnectedApp[]]>(
-    `UPDATE $id SET ${sets.join(", ")} RETURN AFTER`,
-    bindings,
-  );
-
-  return result[0]?.[0] ?? null;
 }
 
 /**

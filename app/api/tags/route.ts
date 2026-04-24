@@ -2,45 +2,53 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { checkDuplicates } from "@/server/utils/entity-deduplicator";
-import { standardizeField } from "@/server/utils/field-standardizer";
-import { validateField } from "@/server/utils/field-validator";
 import {
-  createTag,
-  deleteTag,
-  listTags,
-  searchTags,
-  updateTag,
-} from "@/server/db/queries/tags";
+  genericCreate,
+  genericDelete,
+  genericList,
+  genericUpdate,
+} from "@/server/db/queries/generics";
+import type { Tag } from "@/src/contracts/tag";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search");
+  const { companyId, systemId } = ctx.tenant;
 
-  if (search) {
-    const tags = await searchTags(
-      ctx.tenant.companyId,
-      ctx.tenant.systemId,
-      search,
-    );
-    return Response.json({ success: true, data: tags });
+  if (companyId === "0" || systemId === "0") {
+    return Response.json({ success: true, data: [] });
   }
 
-  const tags = await listTags(ctx.tenant.companyId, ctx.tenant.systemId);
-  return Response.json({ success: true, data: tags });
+  const result = await genericList<Tag>(
+    {
+      table: "tag",
+      searchFields: ["name"],
+      ...(search ? {} : { orderBy: "name ASC" }),
+    },
+    {
+      search: search ?? undefined,
+      limit: search ? 20 : 200,
+      ensureTenant: { companyId, systemId },
+    },
+  );
+
+  return Response.json({ success: true, data: result.data });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const name = body.name
-    ? await standardizeField("name", body.name, "tag")
-    : undefined;
+  const name = body.name?.trim();
   const color = body.color?.trim() ?? "";
 
-  const nameErrors = await validateField("name", name, "tag");
-  if (nameErrors.length > 0) {
+  if (!name) {
     return Response.json(
-      { success: false, error: { code: "VALIDATION", errors: nameErrors } },
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          errors: ["validation.name.required"],
+        },
+      },
       { status: 400 },
     );
   }
@@ -58,27 +66,41 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const dup = await checkDuplicates("tag", [
-    { field: "name", value: name },
-  ]);
-  if (dup.isDuplicate) {
+  const result = await genericCreate<Tag>(
+    {
+      table: "tag",
+      ensureTenant: {
+        companyId: ctx.tenant.companyId,
+        systemId: ctx.tenant.systemId,
+      },
+      fields: [{ field: "name", unique: true, entity: "tag" }],
+    },
+    { name, color },
+  );
+
+  if (!result.success) {
+    if (result.duplicateFields?.length) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "DUPLICATE", message: "validation.tag.duplicate" },
+        },
+        { status: 409 },
+      );
+    }
     return Response.json(
       {
         success: false,
-        error: { code: "DUPLICATE", message: "validation.tag.duplicate" },
+        error: {
+          code: "VALIDATION",
+          errors: result.errors?.flatMap((e) => e.errors) ?? [],
+        },
       },
-      { status: 409 },
+      { status: 400 },
     );
   }
 
-  const tag = await createTag({
-    name: name!,
-    color,
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
-  });
-
-  return Response.json({ success: true, data: tag }, { status: 201 });
+  return Response.json({ success: true, data: result.data }, { status: 201 });
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
@@ -95,9 +117,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const name = body.name
-    ? await standardizeField("name", body.name, "tag")
-    : undefined;
+  const name = body.name?.trim();
   const color = body.color?.trim();
 
   if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
@@ -113,8 +133,43 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const tag = await updateTag(id, { name, color });
-  return Response.json({ success: true, data: tag });
+  const updates: Record<string, string> = {};
+  if (name !== undefined) updates.name = name;
+  if (color !== undefined) updates.color = color;
+
+  if (Object.keys(updates).length === 0) {
+    return Response.json({ success: true, data: null });
+  }
+
+  const result = await genericUpdate<Tag>(
+    {
+      table: "tag",
+      fields: name ? [{ field: "name", unique: true, entity: "tag" }] : [],
+    },
+    id,
+    updates,
+  );
+
+  if (!result.success) {
+    if (result.duplicateFields?.length) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "DUPLICATE", message: "validation.tag.duplicate" },
+        },
+        { status: 409 },
+      );
+    }
+    return Response.json(
+      {
+        success: false,
+        error: { code: "ERROR", message: "common.error.generic" },
+      },
+      { status: 500 },
+    );
+  }
+
+  return Response.json({ success: true, data: result.data });
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
@@ -131,7 +186,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await deleteTag(id);
+  await genericDelete({ table: "tag" }, id);
   return Response.json({ success: true });
 }
 

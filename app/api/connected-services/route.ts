@@ -4,11 +4,10 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
-import {
-  createConnectedService,
-  deleteConnectedService,
-  listConnectedServices,
-} from "@/server/db/queries/connected-services";
+import { listConnectedServices } from "@/server/db/queries/connected-services";
+import { genericCreate, genericDelete } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
+import type { ConnectedService } from "@/src/contracts/connected-service";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -57,15 +56,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const created = await createConnectedService({
-    userId: ctx.claims.actorId,
-    name: stdName,
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
-    serviceData,
-  });
+  const result = await genericCreate<ConnectedService>(
+    {
+      table: "connected_service",
+      ensureTenant: {
+        companyId: ctx.tenant.companyId,
+        systemId: ctx.tenant.systemId,
+      },
+    },
+    {
+      userId: rid(ctx.claims.actorId),
+      name: stdName,
+      data: serviceData ?? undefined,
+    },
+  );
 
-  if (!created) {
+  if (!result.success || !result.data) {
     return Response.json(
       {
         success: false,
@@ -75,7 +81,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  return Response.json({ success: true, data: created }, { status: 201 });
+  return Response.json({ success: true, data: result.data }, { status: 201 });
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
@@ -92,7 +98,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await deleteConnectedService(id);
+  await genericDelete({ table: "connected_service" }, id);
   return Response.json({ success: true });
 }
 

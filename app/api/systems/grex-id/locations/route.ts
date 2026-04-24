@@ -3,12 +3,23 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  createLocation,
-  deleteLocation,
-  getLocationById,
-  listLocations,
-  updateLocation,
-} from "@/server/db/queries/locations";
+  genericCreate,
+  genericDelete,
+  genericGetById,
+  genericList,
+  genericUpdate,
+} from "@/server/db/queries/generics";
+
+interface Location {
+  id: string;
+  name: string;
+  description?: string;
+  companyId: string;
+  systemId: string;
+  address: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -16,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
-    const location = await getLocationById(id);
+    const location = await genericGetById<Location>({ table: "location" }, id);
     return Response.json({ success: true, data: location });
   }
 
@@ -31,13 +42,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true, data: [], nextCursor: null });
   }
 
-  const result = await listLocations({
-    limit,
-    cursor,
-    search,
-    companyId,
-    systemId,
-  });
+  const result = await genericList<Location>(
+    {
+      table: "location",
+      searchFields: ["name"],
+    },
+    { limit, cursor, search, ensureTenant: { companyId, systemId } },
+  );
 
   return Response.json({ success: true, ...result });
 }
@@ -72,16 +83,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const location = await createLocation({
-    name,
-    description,
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
-    address,
-  });
+  const result = await genericCreate<Location>(
+    {
+      table: "location",
+      ensureTenant: {
+        companyId: ctx.tenant.companyId,
+        systemId: ctx.tenant.systemId,
+      },
+    },
+    { name, description: description || null, address },
+  );
 
   return Response.json(
-    { success: true, data: location },
+    { success: true, data: result.data },
     { status: 201 },
   );
 }
@@ -100,8 +114,18 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const location = await updateLocation(id, { name, description, address });
-  return Response.json({ success: true, data: location });
+  const data: Record<string, unknown> = {};
+  if (name !== undefined) data.name = name;
+  if (description !== undefined) data.description = description || null;
+  if (address !== undefined) data.address = address;
+
+  const result = await genericUpdate<Location>(
+    { table: "location" },
+    id,
+    data,
+  );
+
+  return Response.json({ success: true, data: result.data });
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
@@ -118,7 +142,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await deleteLocation(id);
+  await genericDelete({ table: "location" }, id);
   return Response.json({ success: true });
 }
 

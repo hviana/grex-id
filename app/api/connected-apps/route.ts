@@ -7,17 +7,35 @@ import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
 import type { Tenant } from "@/src/contracts/tenant";
 import {
   createConnectedAppWithToken,
-  listConnectedApps,
   revokeConnectedApp,
-  updateConnectedApp,
 } from "@/server/db/queries/connected-apps";
+import {
+  genericList,
+  genericUpdate,
+  type TenantIsolation,
+} from "@/server/db/queries/generics";
+import type { ConnectedApp } from "@/src/contracts/connected-app";
 
 async function getHandler(_req: Request, ctx: RequestContext) {
-  const data = await listConnectedApps({
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
-  });
-  return Response.json({ success: true, data });
+  const ensureTenant: TenantIsolation = {};
+  if (ctx.tenant.companyId && ctx.tenant.companyId !== "0") {
+    ensureTenant.companyId = ctx.tenant.companyId;
+  }
+  if (ctx.tenant.systemId && ctx.tenant.systemId !== "0") {
+    ensureTenant.systemId = ctx.tenant.systemId;
+  }
+
+  const result = await genericList<ConnectedApp>(
+    {
+      table: "connected_app",
+      limit: 50,
+    },
+    {
+      limit: 50,
+      ensureTenant: Object.keys(ensureTenant).length ? ensureTenant : undefined,
+    },
+  );
+  return Response.json({ success: true, data: result.data });
 }
 
 /**
@@ -105,18 +123,28 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const updated = await updateConnectedApp({
-    id,
-    name,
-    permissions,
-    monthlySpendLimit,
-  });
+  const data: Record<string, unknown> = {};
+  if (name !== undefined) data.name = name;
+  if (permissions !== undefined) data.permissions = permissions;
+  if (monthlySpendLimit !== undefined) {
+    data.monthlySpendLimit = monthlySpendLimit || undefined;
+  }
 
-  if (!updated) {
+  if (Object.keys(data).length === 0) {
     return Response.json({ success: true });
   }
 
-  return Response.json({ success: true, data: updated });
+  const result = await genericUpdate<ConnectedApp>(
+    { table: "connected_app" },
+    id,
+    data,
+  );
+
+  if (!result.success || !result.data) {
+    return Response.json({ success: true });
+  }
+
+  return Response.json({ success: true, data: result.data });
 }
 
 /**

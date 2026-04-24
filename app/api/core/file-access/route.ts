@@ -8,12 +8,12 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import { updateCache } from "@/server/utils/cache";
+import { updateFileAccessRule } from "@/server/db/queries/file-access";
 import {
-  createFileAccessRule,
-  deleteFileAccessRule,
-  listFileAccessRules,
-  updateFileAccessRule,
-} from "@/server/db/queries/file-access";
+  genericCreate,
+  genericDelete,
+  genericList,
+} from "@/server/db/queries/generics";
 
 const defaultSection = () => ({
   isolateSystem: false,
@@ -28,7 +28,10 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const result = await listFileAccessRules({ search, cursor, limit });
+  const result = await genericList(
+    { table: "file_access", searchFields: ["name"] },
+    { search, cursor, limit },
+  );
 
   return Response.json({
     success: true,
@@ -103,12 +106,16 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const rule = await createFileAccessRule({
-      name: sanitizedName,
-      categoryPattern: sanitizedPattern,
-      download: download ?? defaultSection(),
-      upload: upload ?? defaultSection(),
-    });
+    const createResult = await genericCreate(
+      { table: "file_access", fields: [{ field: "name", unique: true }] },
+      {
+        name: sanitizedName,
+        categoryPattern: sanitizedPattern,
+        download: download ?? defaultSection(),
+        upload: upload ?? defaultSection(),
+      },
+    );
+    const rule = createResult.data;
 
     await updateCache("core", "file-access");
 
@@ -241,7 +248,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    await deleteFileAccessRule(id);
+    await genericDelete({ table: "file_access" }, id);
 
     await updateCache("core", "file-access");
 

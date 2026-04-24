@@ -39,34 +39,3 @@ export async function listConnectedServices(params: {
   const result = await db.query<[ConnectedService[]]>(query, bindings);
   return result[0] ?? [];
 }
-
-export async function createConnectedService(data: {
-  userId: string;
-  name: string;
-  companyId: string;
-  systemId: string;
-  serviceData?: Record<string, unknown>;
-}): Promise<ConnectedService | undefined> {
-  const db = await getDb();
-  const result = await db.query<[ConnectedService[]]>(
-    `CREATE connected_service SET
-      userId = $userId,
-      name = $name,
-      companyId = $companyId,
-      systemId = $systemId,
-      data = $data`,
-    {
-      userId: rid(data.userId),
-      name: data.name,
-      companyId: rid(data.companyId),
-      systemId: rid(data.systemId),
-      data: data.serviceData ?? undefined,
-    },
-  );
-  return result[0]?.[0];
-}
-
-export async function deleteConnectedService(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
-}
