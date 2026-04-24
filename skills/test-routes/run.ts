@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { randomBytes } from "node:crypto";
 import dbConfig from "../../database.json" with { type: "json" };
 
 /**
@@ -386,6 +387,17 @@ function readCachedToken(): string | null {
   return raw || null;
 }
 
+interface FormField {
+  key: string;
+  value: string;
+}
+
+interface FormFile {
+  key: string;
+  fileName: string;
+  data: Uint8Array;
+}
+
 interface RequestFlags {
   method: string;
   path: string;
@@ -400,6 +412,8 @@ interface RequestFlags {
   compact: boolean;
   includeResponseHeaders: boolean;
   followRedirects: boolean;
+  formFields: FormField[];
+  formFiles: FormFile[];
 }
 
 function prettyBody(text: string, contentType: string): unknown {
@@ -453,7 +467,22 @@ async function cmdRequest(flags: RequestFlags): Promise<number> {
     redirect: flags.followRedirects ? "follow" : "manual",
   };
 
-  if (flags.body !== undefined && flags.body !== null) {
+  const hasForm = flags.formFields.length > 0 || flags.formFiles.length > 0;
+
+  if (hasForm) {
+    const fd = new FormData();
+    for (const f of flags.formFields) fd.append(f.key, f.value);
+    for (const f of flags.formFiles) {
+      fd.append(
+        f.key,
+        new Blob([f.data], { type: "application/octet-stream" }),
+        f.fileName,
+      );
+    }
+    init.body = fd;
+    // Let fetch set Content-Type with boundary automatically.
+    delete headers["content-type"];
+  } else if (flags.body !== undefined && flags.body !== null) {
     init.body = flags.body;
     if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) {
       headers["content-type"] = "application/json";
@@ -581,6 +610,19 @@ function printHelp(): void {
       "  --compact                    One-line JSON output.",
       "  --follow-redirects           Follow 3xx responses.",
       "",
+      "FORM / FILE UPLOAD OPTIONS",
+      "  --form key=value             Add a text field to a multipart/form-data request.",
+      "                               Repeatable. When any --form or --form-file is present,",
+      "                               the body is sent as FormData instead of JSON.",
+      "  --form-file filename.ext     Attach a generated file with random data.",
+      '                               Always uses form key "file". Repeatable.',
+      "                               The file content is random bytes generated in memory.",
+      "                               Use --file-size to control size.",
+      "  --form-real-file path        Attach an existing file from disk.",
+      '                               Always uses form key "file". Repeatable.',
+      "  --file-size <N>              Size in bytes for --form-file (default: 1024).",
+      "                               Suffix: K=KB, M=MB (e.g. 512K, 2M).",
+      "",
       "SERVER OPTIONS",
       "  --port <N>                   Port to bind (default: 3000).",
       "  --timeout <ms>               Readiness timeout for start (default: 120000).",
@@ -603,6 +645,29 @@ function printHelp(): void {
       "",
       "  # Inline body as a positional argument (convenient for one-liners)",
       '  tsx skills/test-routes/run.ts POST /api/auth/login \'{"identifier":"core@admin.com","password":"core1234"}\'',
+      "",
+      "  # Form submission with text fields",
+      "  tsx skills/test-routes/run.ts POST /api/some-form \\",
+      '      --form "name=Alice" --form "email=alice@test.com" --as-superuser',
+      "",
+      "  # File upload with generated random file",
+      "  tsx skills/test-routes/run.ts POST /api/files/upload \\",
+      '      --form "systemSlug=grex-id" \\',
+      '      --form "category=[\\"avatars\\"]" \\',
+      '      --form "fileUuid=$(uuidgen)" \\',
+      "      --form-file photo.png --as-superuser",
+      "",
+      "  # Upload with a 2MB random file",
+      "  tsx skills/test-routes/run.ts POST /api/files/upload \\",
+      '      --form "systemSlug=grex-id" --form "category=[\\"docs\\"]" \\',
+      '      --form "fileUuid=$(uuidgen)" --form-file report.pdf \\',
+      "      --file-size 2M --as-superuser",
+      "",
+      "  # Upload a real file from disk",
+      "  tsx skills/test-routes/run.ts POST /api/files/upload \\",
+      '      --form "systemSlug=grex-id" --form "category=[\\"docs\\"]" \\',
+      '      --form "fileUuid=$(uuidgen)" --form-real-file /tmp/data.csv \\',
+      "      --as-superuser",
       "",
       "RULES",
       '  - database.json must carry `"test": true` (refuses otherwise).',
@@ -722,6 +787,13 @@ async function handleLogin(args: string[]): Promise<number> {
   return cmdLogin(email, password, persist);
 }
 
+function parseFileSize(raw: string): number {
+  const upper = raw.toUpperCase();
+  if (upper.endsWith("M")) return Math.floor(parseFloat(upper) * 1024 * 1024);
+  if (upper.endsWith("K")) return Math.floor(parseFloat(upper) * 1024);
+  return Math.floor(Number(raw));
+}
+
 async function handleRequest(args: string[]): Promise<number> {
   const flags: RequestFlags = {
     method: "GET",
@@ -735,8 +807,11 @@ async function handleRequest(args: string[]): Promise<number> {
     compact: false,
     includeResponseHeaders: false,
     followRedirects: false,
+    formFields: [],
+    formFiles: [],
   };
 
+  let fileSize = 1024;
   const positionals: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -784,6 +859,47 @@ async function handleRequest(args: string[]): Promise<number> {
         break;
       case "--follow-redirects":
         flags.followRedirects = true;
+        break;
+      case "--form": {
+        const fv = args[++i];
+        const eqIdx = fv.indexOf("=");
+        if (eqIdx <= 0) {
+          console.error(
+            `[test-routes] --form requires key=value format, got: ${fv}`,
+          );
+          return 1;
+        }
+        flags.formFields.push({
+          key: fv.slice(0, eqIdx),
+          value: fv.slice(eqIdx + 1),
+        });
+        break;
+      }
+      case "--form-file": {
+        const fileName = args[++i];
+        flags.formFiles.push({
+          key: "file",
+          fileName,
+          data: randomBytes(fileSize),
+        });
+        break;
+      }
+      case "--form-real-file": {
+        const filePath = resolve(process.cwd(), args[++i]);
+        const fileName = filePath.split("/").pop() ?? "file";
+        if (!existsSync(filePath)) {
+          console.error(`[test-routes] file not found: ${filePath}`);
+          return 1;
+        }
+        flags.formFiles.push({
+          key: "file",
+          fileName,
+          data: new Uint8Array(readFileSync(filePath)),
+        });
+        break;
+      }
+      case "--file-size":
+        fileSize = parseFileSize(args[++i]);
         break;
       default:
         positionals.push(a);

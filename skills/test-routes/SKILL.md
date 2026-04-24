@@ -133,23 +133,81 @@ print the response body verbatim with no wrapping JSON.
 
 Flags:
 
-| Flag                           | Meaning                                                  |
-| ------------------------------ | -------------------------------------------------------- |
-| `--body <json>` / `-b <json>`  | JSON body (overrides any positional body arg).           |
-| `--body-file <path>`           | Read body from a file.                                   |
-| `-H` / `--header 'Key: Value'` | Add a request header (repeatable).                       |
-| `--as-superuser`               | Login as the seeded superuser, attach `Bearer` token.    |
-| `--token <jwt>`                | Attach an explicit bearer (use for non-superuser tests). |
-| `--base-url <url>`             | Override base URL (default: `.server.port` or `:3000`).  |
-| `--include-response-headers`   | Include response headers in the JSON envelope.           |
-| `--raw`                        | Print body verbatim; skip the JSON envelope.             |
-| `--compact`                    | Emit minified JSON (default is pretty-printed).          |
-| `--follow-redirects`           | Follow 3xx redirects (default: `manual`).                |
-| `--superuser-email <addr>`     | Override the seeded email used by `--as-superuser`.      |
-| `--superuser-password <pwd>`   | Override the seeded password used by `--as-superuser`.   |
+| Flag                           | Meaning                                                            |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `--body <json>` / `-b <json>`  | JSON body (overrides any positional body arg).                     |
+| `--body-file <path>`           | Read body from a file.                                             |
+| `-H` / `--header 'Key: Value'` | Add a request header (repeatable).                                 |
+| `--as-superuser`               | Login as the seeded superuser, attach `Bearer` token.              |
+| `--token <jwt>`                | Attach an explicit bearer (use for non-superuser tests).           |
+| `--base-url <url>`             | Override base URL (default: `.server.port` or `:3000`).            |
+| `--include-response-headers`   | Include response headers in the JSON envelope.                     |
+| `--raw`                        | Print body verbatim; skip the JSON envelope.                       |
+| `--compact`                    | Emit minified JSON (default is pretty-printed).                    |
+| `--follow-redirects`           | Follow 3xx redirects (default: `manual`).                          |
+| `--superuser-email <addr>`     | Override the seeded email used by `--as-superuser`.                |
+| `--superuser-password <pwd>`   | Override the seeded password used by `--as-superuser`.             |
+| `--form key=value`             | Text field for `multipart/form-data` (repeatable).                 |
+| `--form-file name.ext`         | Random-bytes file for multipart (repeatable). Always key `"file"`. |
+| `--form-real-file path`        | Disk file for multipart (repeatable). Always key `"file"`.         |
+| `--file-size <N>`              | Size for `--form-file` (default `1024`; suffix K/M).               |
 
 `Content-Type: application/json` is set automatically whenever a body is
 supplied and you haven't added your own `content-type` header.
+
+### Form submissions & file uploads
+
+When any `--form` or `--form-file` flag is present, the request body is sent as
+`multipart/form-data` instead of JSON. This lets you test any route that expects
+FormData — file uploads, form submissions, etc. — without manually constructing
+the multipart body.
+
+| Flag                       | Meaning                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `--form key=value`         | Add a text field. Repeatable. The value is sent as-is.                              |
+| `--form-file filename.ext` | Generate a file with **random bytes** and attach it under key `"file"`. Repeatable. |
+| `--form-real-file path`    | Attach an existing file from disk under key `"file"`. Repeatable.                   |
+| `--file-size <N>`          | Size in bytes for `--form-file` (default: `1024`). Suffixes: `K` = KB, `M` = MB.    |
+
+**Random file generation** (`--form-file`): the skill generates `N` random bytes
+in memory and attaches them as a Blob with `application/octet-stream` mime type.
+You control the size with `--file-size` (place it **before** `--form-file` in
+the command line). The filename you specify is sent as-is — the extension is
+cosmetic (the server reads the actual content).
+
+**Real file from disk** (`--form-real-file`): reads the file at the given path
+and attaches it with the filename derived from the path.
+
+When form flags are present, the `Content-Type` header is **not** set manually —
+`fetch()` sets it automatically with the correct multipart boundary. Do not pass
+`-H 'Content-Type: ...'` when using form flags.
+
+#### Examples
+
+```bash
+# Simple form submission (text fields only)
+tsx skills/test-routes/run.ts POST /api/some-form \
+    --form "name=Alice" --form "email=alice@test.com" --as-superuser
+
+# File upload with a 1 KB random file (default size)
+tsx skills/test-routes/run.ts POST /api/files/upload \
+    --form "systemSlug=grex-id" \
+    --form 'category=["avatars"]' \
+    --form "fileUuid=test-uuid-001" \
+    --form-file photo.png --as-superuser
+
+# Upload with a 2 MB random file
+tsx skills/test-routes/run.ts POST /api/files/upload \
+    --form "systemSlug=grex-id" --form 'category=["docs"]' \
+    --form "fileUuid=test-uuid-002" --form-file report.pdf \
+    --file-size 2M --as-superuser
+
+# Upload a real file from disk
+tsx skills/test-routes/run.ts POST /api/files/upload \
+    --form "systemSlug=grex-id" --form 'category=["docs"]' \
+    --form "fileUuid=test-uuid-003" \
+    --form-real-file /tmp/data.csv --as-superuser
+```
 
 ## How `--as-superuser` works
 
