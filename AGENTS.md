@@ -353,6 +353,22 @@ interface TenantClaims extends Tenant {
 `getAnonymousTenant(systemSlug)`, `assertScope(tenant,{companyId?,systemId?})`.
 These are the only places such tenants are constructed.
 
+> **SurrealDB `rid("0")` trap.** SurrealDB record IDs cannot be the bare string
+> `"0"` — attempting to use it as a record ID (e.g. `record<user>"0"`,
+> `company:0`, or passing `"0"` where a record link is expected) raises an
+> `Invalid record id` / `rid("0")` error. The sentinel values `companyId:"0"`,
+> `systemId:"0"`, and `actorId:"0"` are **application- level markers** meaning
+> "none / unauthenticated". They must **never** be passed directly as SurrealDB
+> record IDs or used in `record<>` comparisons. Every query that builds a record
+> link or filters by these IDs must coerce `"0"` to a safe representation (e.g.
+> `NONE`, a conditional branch, or a separate query path) before the value
+> reaches SurrealQL. This applies to: file-storage paths (`path[0]`/`path[2]`
+> for companyId/userId in §6), `usage_record` / `credit_expense` upserts,
+> tenant-isolation WHERE clauses, actor-validity partition keys, and any other
+> place tenant IDs flow into SurrealQL. When in doubt, guard with
+> `IF $id != "0"` or route anonymous requests through a separate code path that
+> avoids the record-id coercion entirely.
+
 ### 4.2 JWT & actor-validity model
 
 Every bearer (user session, API token, connected-app token) is a JWT produced
