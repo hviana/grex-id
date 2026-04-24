@@ -8,7 +8,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface ConnectedApp {
@@ -138,16 +138,12 @@ export default function ConnectedAppsPage() {
                     {t("common.connectedApps.authorized")}
                   </span>
                 </div>
-                <div className="flex gap-1.5 flex-wrap mt-2">
-                  {app.permissions.map((perm) => (
-                    <TranslatedBadge
-                      key={perm}
-                      kind="permission"
-                      token={perm}
-                      systemSlug={systemSlug ?? undefined}
-                    />
-                  ))}
-                </div>
+                <TranslatedBadgeList
+                  kind="permission"
+                  tokens={app.permissions}
+                  systemSlug={systemSlug ?? undefined}
+                  className="mt-2"
+                />
                 {app.monthlySpendLimit != null && (
                   <p className="text-xs text-[var(--color-light-text)] mt-1">
                     {t("common.connectedApps.spendLimit")}:{" "}

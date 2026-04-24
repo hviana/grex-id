@@ -10,6 +10,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
@@ -286,16 +287,12 @@ export default function UsersPage() {
                   {primaryChannelLabel(user)}
                 </p>
               </div>
-              <div className="flex gap-1.5 flex-wrap shrink-0">
-                {(user.contextRoles ?? user.roles).map((role) => (
-                  <TranslatedBadge
-                    key={role}
-                    kind="role"
-                    token={role}
-                    systemSlug={systemSlug ?? undefined}
-                  />
-                ))}
-              </div>
+              <TranslatedBadgeList
+                kind="role"
+                tokens={user.contextRoles ?? user.roles}
+                systemSlug={systemSlug ?? undefined}
+                className="shrink-0"
+              />
               {isAdmin && (
                 <div className="flex gap-1 shrink-0">
                   <button

@@ -12,6 +12,7 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
@@ -391,29 +392,21 @@ export default function VouchersPage() {
         </div>
       </div>
 
-      {voucher.permissions.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {voucher.permissions.map((perm) => (
-            <TranslatedBadge key={perm} kind="permission" token={perm} />
-          ))}
-        </div>
-      )}
+      <TranslatedBadgeList
+        kind="permission"
+        tokens={voucher.permissions}
+        className="mt-3"
+      />
 
-      {voucher.entityLimitModifiers &&
-        Object.keys(voucher.entityLimitModifiers).length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {Object.entries(voucher.entityLimitModifiers).map(([key, val]) => (
-            <span
-              key={key}
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--color-secondary-blue)]/15 px-2.5 py-0.5 text-xs text-[var(--color-secondary-blue)]"
-            >
-              <TranslatedBadge kind="entity" token={key} />
-              {val > 0 ? "+" : ""}
-              {val}
-            </span>
-          ))}
-        </div>
-      )}
+      <TranslatedBadgeList
+        kind="entity"
+        entries={voucher.entityLimitModifiers}
+        className="mt-2"
+        formatValue={(v) => {
+          const n = Number(v);
+          return n > 0 ? `+${n}` : String(n);
+        }}
+      />
     </div>
   );
 

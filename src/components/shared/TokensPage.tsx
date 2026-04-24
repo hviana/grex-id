@@ -10,6 +10,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
@@ -262,41 +263,22 @@ export default function TokensPage() {
                 {token.description}
               </p>
             )}
-            <div className="flex gap-1.5 flex-wrap">
-              {token.permissions.map((perm) => (
-                <TranslatedBadge
-                  key={perm}
-                  kind="permission"
-                  token={perm}
-                  systemSlug={systemSlug ?? undefined}
-                />
-              ))}
-            </div>
-            {token.maxOperationCount &&
-              Object.keys(token.maxOperationCount).length > 0 && (
-              <div className="mt-2 flex gap-1.5 flex-wrap items-center">
+            <TranslatedBadgeList
+              kind="permission"
+              tokens={token.permissions}
+              systemSlug={systemSlug ?? undefined}
+            />
+            <TranslatedBadgeList
+              kind="resource"
+              entries={token.maxOperationCount}
+              systemSlug={systemSlug ?? undefined}
+              leading={
                 <span className="text-xs text-[var(--color-light-text)] mr-1">
                   🔢
                 </span>
-                {Object.entries(token.maxOperationCount).map((
-                  [key, val],
-                ) => (
-                  <span
-                    key={key}
-                    className="inline-flex items-center gap-1"
-                  >
-                    <TranslatedBadge
-                      kind="resource"
-                      token={key}
-                      systemSlug={systemSlug ?? undefined}
-                    />
-                    <span className="text-xs text-[var(--color-light-text)]">
-                      : {val}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            )}
+              }
+              className="mt-2 items-center"
+            />
           </div>
         )}
       />

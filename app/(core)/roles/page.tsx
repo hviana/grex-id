@@ -11,6 +11,7 @@ import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
@@ -234,18 +235,12 @@ export default function RolesPage() {
                     </p>
                   </div>
                 </div>
-                {role.permissions.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {role.permissions.map((perm) => (
-                      <TranslatedBadge
-                        key={perm}
-                        kind="permission"
-                        token={perm}
-                        systemSlug={sysSlug}
-                      />
-                    ))}
-                  </div>
-                )}
+                <TranslatedBadgeList
+                  kind="permission"
+                  tokens={role.permissions}
+                  systemSlug={sysSlug}
+                  className="mt-2"
+                />
               </div>
               <div className="flex gap-2 ml-3 shrink-0">
                 <EditButton onClick={() => openEdit(role)} />

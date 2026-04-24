@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale } from "@/src/hooks/useLocale";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -102,19 +102,16 @@ function LimitsFull(
             </p>
           )
           : null}
-        {plan.entityLimits &&
-          Object.entries(plan.entityLimits).map(([key, val]) => (
-            <p key={key} className="flex items-center gap-2">
-              {limitEmoji(key)}
-              <TranslatedBadge
-                kind="entity"
-                token={key}
-                systemSlug={systemSlug}
-                compact
-              />
-              <span>: {val.toLocaleString()}</span>
-            </p>
-          ))}
+        {!!plan.entityLimits && (
+          <TranslatedBadgeList
+            kind="entity"
+            entries={plan.entityLimits}
+            systemSlug={systemSlug}
+            compact
+            mode="column"
+            prefix={(key) => limitEmoji(key)}
+          />
+        )}
         <p>
           ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
           {plan.maxConcurrentDownloads
@@ -141,18 +138,16 @@ function LimitsFull(
         </p>
         {plan.maxOperationCount &&
             Object.keys(plan.maxOperationCount).length > 0
-          ? Object.entries(plan.maxOperationCount).map(([key, val]) => (
-            <p key={key} className="flex items-center gap-2">
-              🔢
-              <TranslatedBadge
-                kind="resource"
-                token={key}
-                systemSlug={systemSlug}
-                compact
-              />
-              <span>: {val.toLocaleString()}</span>
-            </p>
-          ))
+          ? (
+            <TranslatedBadgeList
+              kind="resource"
+              entries={plan.maxOperationCount}
+              systemSlug={systemSlug}
+              compact
+              mode="column"
+              prefix="🔢"
+            />
+          )
           : (
             <p>
               🔢 {t("billing.limits.maxOperationCount")}:{" "}
@@ -217,19 +212,16 @@ function LimitsCompact(
         </span>
       </div>
       {plan.maxOperationCount && Object.keys(plan.maxOperationCount).length > 0
-        ? Object.entries(plan.maxOperationCount).map(([key, val]) => (
-          <div key={key} className="flex justify-between items-center gap-2">
-            <span className="flex items-center gap-1">
-              🔢
-              <TranslatedBadge
-                kind="resource"
-                token={key}
-                systemSlug={systemSlug}
-              />
-            </span>
-            <span className="text-white">{val.toLocaleString()}</span>
-          </div>
-        ))
+        ? (
+          <TranslatedBadgeList
+            kind="resource"
+            entries={plan.maxOperationCount}
+            systemSlug={systemSlug}
+            mode="column"
+            prefix="🔢"
+            justifyValues
+          />
+        )
         : (
           <div className="flex justify-between">
             <span>🔢 {t("core.plans.maxOperationCount")}</span>
@@ -238,23 +230,14 @@ function LimitsCompact(
             </span>
           </div>
         )}
-      {plan.entityLimits && Object.keys(plan.entityLimits).length > 0 &&
-        Object.entries(plan.entityLimits).map(([key, val]) => (
-          <div
-            key={`el-${key}`}
-            className="flex justify-between items-center gap-2"
-          >
-            <span className="flex items-center gap-1">
-              📦
-              <TranslatedBadge
-                kind="entity"
-                token={key}
-                systemSlug={systemSlug}
-              />
-            </span>
-            <span className="text-white">{val.toLocaleString()}</span>
-          </div>
-        ))}
+      <TranslatedBadgeList
+        kind="entity"
+        entries={plan.entityLimits}
+        systemSlug={systemSlug}
+        mode="column"
+        prefix="📦"
+        justifyValues
+      />
     </div>
   );
 }
@@ -368,17 +351,13 @@ export default function PlanCard({
         : <LimitsFull plan={plan} systemSlug={systemSlug} />}
 
       {/* Permissions (core only — operator surface, shows both lines) */}
-      {variant === "core" && (plan.permissions?.length ?? 0) > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {(plan.permissions ?? []).map((perm) => (
-            <TranslatedBadge
-              key={perm}
-              kind="permission"
-              token={perm}
-              systemSlug={systemSlug}
-            />
-          ))}
-        </div>
+      {variant === "core" && (
+        <TranslatedBadgeList
+          kind="permission"
+          tokens={plan.permissions}
+          systemSlug={systemSlug}
+          className="mt-3"
+        />
       )}
 
       {/* Actions */}

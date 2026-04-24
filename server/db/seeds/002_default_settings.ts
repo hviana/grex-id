@@ -93,7 +93,7 @@ const defaults: DefaultSetting[] = [
   },
   {
     key: "app.defaultSystem",
-    value: "",
+    value: "grex-id",
     description:
       "System slug shown on the homepage when no ?system= parameter is provided",
   },

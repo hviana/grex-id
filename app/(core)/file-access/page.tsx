@@ -4,7 +4,7 @@ import React from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
@@ -135,17 +135,11 @@ export default function FileAccessPage() {
                       {t("core.fileAccess.anonymous")}
                     </span>
                   )}
-                {sec.permissions.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {sec.permissions.map((p) => (
-                      <TranslatedBadge
-                        key={p}
-                        kind="permission"
-                        token={p}
-                      />
-                    ))}
-                  </div>
-                )}
+                <TranslatedBadgeList
+                  kind="permission"
+                  tokens={sec.permissions}
+                  className="mt-1"
+                />
               </div>
             );
           })}
