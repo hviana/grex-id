@@ -11,6 +11,9 @@ const componentRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
     () => import("@/src/components/shared/ConnectedAppsPage"),
   ),
   tokens: lazy(() => import("@/src/components/shared/TokensPage")),
+  "connected-services": lazy(
+    () => import("@/src/components/shared/ConnectedServicesPage"),
+  ),
   "grexid-locations": lazy(
     () => import("@/src/components/systems/grex-id/LocationsPage"),
   ),

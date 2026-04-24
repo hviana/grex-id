@@ -21,5 +21,6 @@ DEFINE FIELD isActive         ON plan TYPE bool DEFAULT true;
 DEFINE FIELD createdAt        ON plan TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt        ON plan TYPE datetime DEFAULT time::now();
 
+DEFINE INDEX idx_plan_name ON TABLE plan FIELDS name FULLTEXT ANALYZER general_analyzer_fts BM25;
 DEFINE INDEX idx_plan_system ON plan FIELDS systemId;
 DEFINE INDEX idx_plan_active ON plan FIELDS systemId, isActive;

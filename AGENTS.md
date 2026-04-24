@@ -239,6 +239,7 @@ It is independent of `user.channels`.
 | `credit_purchase`      | Status `pending                                                                                                                                                                                                                                 |
 | `payment`              | Unified payment ledger (§7.5)                                                                                                                                                                                                                   |
 | `connected_app`        | Scoped per (company, system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                        |
+| `connected_service`    | Scoped per (company, system, user). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                 |
 | `api_token`            | Row id = universal actor id. Bearer is a JWT carrying that id. Fields: tenant (flexible), `neverExpires` XOR `expiresAt`, `frontendUse`, `frontendDomains`, `revokedAt`, per-resource `maxOperationCount`, `monthlySpendLimit`                  |
 | `usage_record`         | `actorType ∈ user                                                                                                                                                                                                                               |
 | `credit_expense`       | Daily container; unique `(companyId, systemId, resourceKey, day)`; fields `amount` (cents total), `count` (ops), `actorId` optional — both increment via UPSERT                                                                                 |
@@ -1210,8 +1211,8 @@ Flow:
    system `name`. No system yet → show spinner. Never "Core".
 4. **Menu loading**: custom menus for the system (filtered by user roles +
    plan's hidden list) + **hardcoded shared defaults** (usage, billing, users,
-   company-edit, connected-apps, tokens) appended with `sortOrder` offset by
-   `max(custom)+1`. Defaults always follow custom.
+   company-edit, connected-apps, tokens, connected-services) appended with
+   `sortOrder` offset by `max(custom)+1`. Defaults always follow custom.
 5. **Initial page rule**: first menu item with non-empty `componentName`
    (depth-first). Frontend navigates to `/<componentName>` on initial login,
    company switch, system switch. Login redirects to `/entry` first
@@ -1256,14 +1257,15 @@ Per-concern rules:
 
 Each uses shared primitives. Per-concern rules:
 
-| Concern        | Rule                                                                                                                                                                                                                                                                                                                                                                             |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Users (admin)  | Invite flow: existing user (channel match) → no new account, creates/updates `user_company_system` + notification with `eventKey="auth.event.tenantInvite"`. Admin invariant enforced in same batched query on role-update and user-remove (last-admin rejection).                                                                                                               |
-| Tokens         | Create modal: name, description, permissions (`MultiBadgeField mode:"search"` aggregating from system roles), `monthlySpendLimit`, `maxOperationCount` (`DynamicKeyValueField`), `neverExpires` XOR `expiresAt`, `frontendUse` + required `frontendDomains` when on. Issued JWT shown **once** in a modal. Delete sets `revokedAt`.                                              |
-| Connected apps | No manual create; only via OAuth flow. Revoke deletes `connected_app` + sets `revokedAt` on linked `api_token` in one batch.                                                                                                                                                                                                                                                     |
-| Billing        | Sections: Current Plan (with Cancel), Available Plans, Payment Methods, Credits (balance + per-resourceKey op count + purchase + history + auto-recharge toggle), Voucher (inline feedback, never global error), Past-due Retry (guarded by `retryPaymentInProgress`), Payment History (`GenericList` with `DateRangeFilter` ≤ 365 days). Pending-async banner polls every 30 s. |
-| Usage          | Dual-mode (`tenant`/`core`). Tenant: Storage bar, File Cache bar, Credit Expenses column chart (`DateRangeFilter` ≤ 31 days) + summary table, Operation Count per-resourceKey bars. **No API-call metric.** Core mode (superuser only) adds filters (company/system/plan/actor) and dual-axis stacked chart with clickable columns.                                              |
-| Profile        | Password change subform → §8.7. Entity channels managed via shared subform in `authenticated` mode. 2FA card (enable/disable flows per §8.8).                                                                                                                                                                                                                                    |
+| Concern            | Rule                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Users (admin)      | Invite flow: existing user (channel match) → no new account, creates/updates `user_company_system` + notification with `eventKey="auth.event.tenantInvite"`. Admin invariant enforced in same batched query on role-update and user-remove (last-admin rejection).                                                                                                               |
+| Tokens             | Create modal: name, description, permissions (`MultiBadgeField mode:"search"` aggregating from system roles), `monthlySpendLimit`, `maxOperationCount` (`DynamicKeyValueField`), `neverExpires` XOR `expiresAt`, `frontendUse` + required `frontendDomains` when on. Issued JWT shown **once** in a modal. Delete sets `revokedAt`.                                              |
+| Connected apps     | No manual create; only via OAuth flow. Revoke deletes `connected_app` + sets `revokedAt` on linked `api_token` in one batch.                                                                                                                                                                                                                                                     |
+| Connected services | List with search (FULLTEXT). "Connect service" button opens catalog modal (initially empty, expandable). Admin sees all users' services + user name; regular users see only their own. Delete with confirmation modal. Component: `ConnectedServicesPage`.                                                                                                                       |
+| Billing            | Sections: Current Plan (with Cancel), Available Plans, Payment Methods, Credits (balance + per-resourceKey op count + purchase + history + auto-recharge toggle), Voucher (inline feedback, never global error), Past-due Retry (guarded by `retryPaymentInProgress`), Payment History (`GenericList` with `DateRangeFilter` ≤ 365 days). Pending-async banner polls every 30 s. |
+| Usage              | Dual-mode (`tenant`/`core`). Tenant: Storage bar, File Cache bar, Credit Expenses column chart (`DateRangeFilter` ≤ 31 days) + summary table, Operation Count per-resourceKey bars. **No API-call metric.** Core mode (superuser only) adds filters (company/system/plan/actor) and dual-axis stacked chart with clickable columns.                                              |
+| Profile            | Password change subform → §8.7. Entity channels managed via shared subform in `authenticated` mode. 2FA card (enable/disable flows per §8.8).                                                                                                                                                                                                                                    |
 
 ### 9.6 Plan cards (`variant: "billing" | "onboarding" | "core"`)
 
@@ -1410,7 +1412,7 @@ app/                            # Next.js App Router
     ├── core/{systems,roles,plans,vouchers,menus,terms,companies,
     │         data-deletion,settings,settings/missing,front-settings,file-access}/
     ├── users, companies, companies/[id]/systems, billing, usage,
-    ├── connected-apps, tokens, entity-channels, leads, leads/public, tags,
+    ├── connected-apps, tokens, connected-services, entity-channels, leads, leads/public, tags,
     └── files/{upload,download}, systems/[slug]/...
 
 src/

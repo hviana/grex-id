@@ -6,7 +6,6 @@ DEFINE FIELD name            ON api_token TYPE string;
 DEFINE FIELD description     ON api_token TYPE option<string>;
 DEFINE FIELD permissions     ON api_token TYPE array<string>;
 DEFINE FIELD monthlySpendLimit ON api_token TYPE option<int>;
-DEFINE FIELD tenant         ON api_token TYPE option<object> FLEXIBLE;
 DEFINE FIELD neverExpires   ON api_token TYPE option<bool> DEFAULT false;
 DEFINE FIELD frontendUse    ON api_token TYPE option<bool> DEFAULT false;
 DEFINE FIELD frontendDomains ON api_token TYPE option<array<string>> DEFAULT [];

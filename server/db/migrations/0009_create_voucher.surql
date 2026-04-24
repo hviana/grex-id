@@ -17,4 +17,5 @@ DEFINE FIELD creditModifier         ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD expiresAt             ON voucher TYPE option<datetime>;
 DEFINE FIELD createdAt             ON voucher TYPE datetime DEFAULT time::now();
 
+DEFINE INDEX idx_voucher_code ON TABLE voucher FIELDS code FULLTEXT ANALYZER general_analyzer_fts BM25;
 DEFINE INDEX idx_voucher_code ON voucher FIELDS code UNIQUE;

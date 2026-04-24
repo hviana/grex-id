@@ -8,3 +8,5 @@ DEFINE FIELD status          ON credit_purchase TYPE string
 DEFINE FIELD createdAt       ON credit_purchase TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_cp_company_system ON credit_purchase FIELDS companyId, systemId;
+DEFINE FIELD subscriptionId ON credit_purchase TYPE option<record<subscription>>;
+DEFINE INDEX idx_cp_subscription ON credit_purchase FIELDS subscriptionId;

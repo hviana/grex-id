@@ -97,6 +97,18 @@ function getDefaultMenus(): MenuItem[] {
       hiddenInPlanIds: [],
       createdAt: "",
     },
+    {
+      id: "_default_connected_services",
+      systemId: "",
+      parentId: undefined,
+      label: "common.menu.connectedServices",
+      emoji: "🔗",
+      componentName: "connected-services",
+      sortOrder: 6,
+      requiredRoles: [],
+      hiddenInPlanIds: [],
+      createdAt: "",
+    },
   ];
 }
 
