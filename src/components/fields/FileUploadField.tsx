@@ -94,10 +94,9 @@ export default function FileUploadField({
 
       const formData = new FormData();
       formData.append("file", uploadFile);
-      formData.append("companyId", companyId);
       formData.append("systemSlug", systemSlug);
-      formData.append("userId", userId);
       formData.append("category", JSON.stringify(category));
+      formData.append("fileUuid", crypto.randomUUID());
       if (description) formData.append("description", description);
 
       // Simulate progress

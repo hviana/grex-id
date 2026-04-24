@@ -32,6 +32,12 @@ function checkSection(
   section: FileAccessSection,
   params: FileAccessCheckParams,
 ): boolean {
+  // Superuser or wildcard permission bypasses all checks (§6.4)
+  if (params.claims) {
+    if (params.tenant.roles.includes("superuser")) return true;
+    if (params.tenant.permissions.includes("*")) return true;
+  }
+
   const { isolateSystem, isolateCompany, isolateUser, permissions } = section;
 
   const needsAuth = isolateSystem || isolateCompany || isolateUser;
@@ -47,8 +53,6 @@ function checkSection(
 
   if (permissions.length > 0) {
     if (!params.claims) return false;
-    if (params.tenant.roles.includes("superuser")) return true;
-    if (params.tenant.permissions.includes("*")) return true;
     const hasPermission = permissions.some((p) =>
       params.tenant.permissions.includes(p)
     );

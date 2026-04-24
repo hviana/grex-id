@@ -127,7 +127,7 @@ export const GET = compose(
       Number((await core.getSetting("cache.core.size")) || "20") * 1048576;
 
     const system = await core.getSystemBySlug(fileSystemSlug);
-    if (system) {
+    if (system && fileCompanyId !== "0") {
       const limit = await resolveFileCacheLimit({
         companyId: fileCompanyId,
         systemId: system.id,
@@ -163,7 +163,8 @@ export const GET = compose(
 
     // Resolve transfer limits from plan + voucher + Core settings (§6.3)
     const systemId = system?.id ?? "";
-    const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = systemId
+    const hasSubscription = fileCompanyId !== "0" && systemId;
+    const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = hasSubscription
       ? await Promise.all([
         resolveMaxConcurrentDownloads({ companyId: fileCompanyId, systemId }),
         resolveMaxDownloadBandwidth({ companyId: fileCompanyId, systemId }),

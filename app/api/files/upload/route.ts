@@ -116,19 +116,21 @@ export const POST = compose(
     const core = Core.getInstance();
     const system = await core.getSystemBySlug(systemSlug);
     const systemId = system?.id ?? "";
-    const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] = systemId
-      ? await Promise.all([
-        resolveMaxConcurrentUploads({ companyId, systemId }),
-        resolveMaxUploadBandwidth({ companyId, systemId }),
-        core.getSetting("transfer.default.maxConcurrentUploads"),
-        core.getSetting("transfer.default.maxUploadBandwidthMB"),
-      ])
-      : [
-        { max: 0, planLimit: 0, voucherModifier: 0 },
-        { max: 0, planLimit: 0, voucherModifier: 0 },
-        undefined,
-        undefined,
-      ];
+    const hasSubscription = companyId !== "0" && systemId;
+    const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] =
+      hasSubscription
+        ? await Promise.all([
+          resolveMaxConcurrentUploads({ companyId, systemId }),
+          resolveMaxUploadBandwidth({ companyId, systemId }),
+          core.getSetting("transfer.default.maxConcurrentUploads"),
+          core.getSetting("transfer.default.maxUploadBandwidthMB"),
+        ])
+        : [
+          { max: 0, planLimit: 0, voucherModifier: 0 },
+          { max: 0, planLimit: 0, voucherModifier: 0 },
+          undefined,
+          undefined,
+        ];
 
     const resolvedMaxConcurrent = uploadLimits.max ||
       Number(defaultConcurrent) || 0;
@@ -176,7 +178,7 @@ export const POST = compose(
     // Cache invalidation on replacement (§9.2 step 7)
     const uri = fs.pathToURIComponent(path);
     let cacheTenantKey = "core";
-    if (system) {
+    if (system && companyId !== "0") {
       const limit = await resolveFileCacheLimit({
         companyId,
         systemId: system.id,
