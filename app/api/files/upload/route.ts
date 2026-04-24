@@ -13,6 +13,7 @@ import {
 import { checkFileAccess } from "@/server/utils/file-access-guard";
 
 const MB = 1048576;
+const activeUploads = new Map<string, number>();
 
 export const POST = compose(
   withAuth(),
@@ -37,10 +38,7 @@ export const POST = compose(
       return Response.json(
         {
           success: false,
-          error: {
-            code: "VALIDATION",
-            errors: ["files.upload.missingFields"],
-          },
+          error: { code: "VALIDATION", errors: ["files.upload.missingFields"] },
         },
         { status: 400 },
       );
@@ -63,10 +61,8 @@ export const POST = compose(
       );
     }
 
-    // Resolve companyId and userId directly from tenant (§9.1, §9.2)
     const companyId = ctx.tenant.companyId;
     const userId = ctx.claims?.actorId ?? "0";
-
     const fileName = file.name || "unnamed";
     const mimeType = file.type || "application/octet-stream";
     const path = [
@@ -77,7 +73,6 @@ export const POST = compose(
       fileUuid,
       fileName,
     ];
-
     const metadata: Record<string, unknown> = {
       companyId,
       systemSlug,
@@ -89,7 +84,6 @@ export const POST = compose(
     };
     if (description) metadata.description = description;
 
-    // File access control guard
     const accessCheck = await checkFileAccess({
       categoryPath: category,
       fileCompanyId: companyId,
@@ -109,10 +103,38 @@ export const POST = compose(
       );
     }
 
-    const accessMaxFileSizeBytes = accessCheck.maxFileSizeBytes;
-    const accessAllowedExtensions = accessCheck.allowedExtensions;
+    if (
+      accessCheck.allowedExtensions && accessCheck.allowedExtensions.length > 0
+    ) {
+      const ext = fileName.includes(".")
+        ? fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase()
+        : "";
+      if (!ext || !accessCheck.allowedExtensions.includes(ext)) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              errors: ["files.upload.extensionNotAllowed"],
+            },
+          },
+          { status: 400 },
+        );
+      }
+    }
 
-    // Resolve transfer limits from plan + voucher + Core settings (§9.2)
+    if (
+      accessCheck.maxFileSizeBytes && file.size > accessCheck.maxFileSizeBytes
+    ) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: ["files.upload.fileTooLarge"] },
+        },
+        { status: 400 },
+      );
+    }
+
     const core = Core.getInstance();
     const system = await core.getSystemBySlug(systemSlug);
     const systemId = system?.id ?? "";
@@ -132,72 +154,79 @@ export const POST = compose(
           undefined,
         ];
 
-    const resolvedMaxConcurrent = uploadLimits.max ||
-      Number(defaultConcurrent) || 0;
-    const resolvedMaxBWMB = bwLimits.max || Number(defaultBW) || 0;
+    const maxConcurrent = uploadLimits.max || Number(defaultConcurrent) || 0;
+    const maxBWMB = bwLimits.max || Number(defaultBW) || 0;
+    const concurrencyKey = `${companyId}/${systemSlug}`;
 
-    const fs = await getFS();
-    const result = await fs.save({
-      path,
-      content: file.stream(),
-      metadata,
-      control: (_path, concurrencyMap): SaveControlResult => {
-        const userUploads = concurrencyMap[userId] ?? 0;
-        if (resolvedMaxConcurrent > 0 && userUploads >= resolvedMaxConcurrent) {
-          return {
-            accessAllowed: false,
-            concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
-          };
-        }
-
-        const tenantUploads = concurrencyMap[`${companyId}/${systemSlug}`] ?? 1;
-        const kbytesPerSecond = resolvedMaxBWMB > 0
-          ? Math.floor((resolvedMaxBWMB * 1024) / tenantUploads)
-          : 16384;
-
-        return {
-          accessAllowed: true,
-          kbytesPerSecond,
-          concurrencyIdentifiers: [companyId, `${companyId}/${systemSlug}`],
-          maxFileSizeBytes: accessMaxFileSizeBytes ?? 50 * MB,
-          allowedExtensions: accessAllowedExtensions ?? [],
-        };
-      },
-    });
-
-    if ("status" in result && result.status === "error") {
+    const current = activeUploads.get(concurrencyKey) ?? 0;
+    if (maxConcurrent > 0 && current >= maxConcurrent) {
       return Response.json(
         {
           success: false,
-          error: { code: "ERROR", message: "files.upload.failed" },
+          error: {
+            code: "RATE_LIMITED",
+            message: "files.upload.concurrentLimit",
+          },
         },
-        { status: 500 },
+        { status: 429 },
       );
     }
 
-    // Cache invalidation on replacement (§9.2 step 7)
-    const uri = fs.pathToURIComponent(path);
-    let cacheTenantKey = "core";
-    if (system && companyId !== "0") {
-      const limit = await resolveFileCacheLimit({
-        companyId,
-        systemId: system.id,
+    activeUploads.set(concurrencyKey, current + 1);
+    try {
+      const fs = await getFS();
+      const result = await fs.save({
+        path,
+        content: file.stream(),
+        metadata,
+        control: (_path, concurrencyMap): SaveControlResult => {
+          const tenantUploads = concurrencyMap[concurrencyKey] ?? 1;
+          return {
+            kbytesPerSecond: maxBWMB > 0
+              ? Math.floor((maxBWMB * 1024) / tenantUploads)
+              : 16384,
+            concurrencyIdentifiers: [companyId, concurrencyKey],
+            maxFileSizeBytes: accessCheck.maxFileSizeBytes ?? 50 * MB,
+            allowedExtensions: accessCheck.allowedExtensions ?? [],
+          };
+        },
       });
-      if (limit.maxBytes > 0) {
-        cacheTenantKey = `${companyId}:${systemSlug}`;
-      }
-    }
-    FileCacheManager.getInstance().evict(cacheTenantKey, uri);
 
-    return Response.json({
-      success: true,
-      data: {
-        uri,
-        fileUuid,
-        fileName,
-        sizeBytes: "size" in result ? (result as any).size : 0,
-        mimeType,
-      },
-    });
+      if ("status" in result && result.status === "error") {
+        return Response.json(
+          {
+            success: false,
+            error: { code: "ERROR", message: "files.upload.failed" },
+          },
+          { status: 500 },
+        );
+      }
+
+      const uri = fs.pathToURIComponent(path);
+      let cacheTenantKey = "core";
+      if (system && companyId !== "0") {
+        const limit = await resolveFileCacheLimit({
+          companyId,
+          systemId: system.id,
+        });
+        if (limit.maxBytes > 0) cacheTenantKey = `${companyId}:${systemSlug}`;
+      }
+      FileCacheManager.getInstance().evict(cacheTenantKey, uri);
+
+      return Response.json({
+        success: true,
+        data: {
+          uri,
+          fileUuid,
+          fileName,
+          sizeBytes: "size" in result ? (result as any).size : 0,
+          mimeType,
+        },
+      });
+    } finally {
+      const remaining = (activeUploads.get(concurrencyKey) ?? 1) - 1;
+      if (remaining <= 0) activeUploads.delete(concurrencyKey);
+      else activeUploads.set(concurrencyKey, remaining);
+    }
   },
 );

@@ -25,6 +25,7 @@ import { getAnonymousTenant } from "@/server/utils/tenant";
 
 const DEFAULT_MIME = "application/octet-stream";
 const pendingInsertions = new Set<string>();
+const activeDownloads = new Map<string, number>();
 
 async function resolveTokenParam(
   tokenStr: string,
@@ -36,14 +37,16 @@ async function resolveTokenParam(
     await ensureActorValidityLoaded(claims);
     if (!isActorValid(claims, claims.actorId)) return null;
 
-    const tenant: Tenant = {
-      systemId: claims.systemId,
-      companyId: claims.companyId,
-      systemSlug: claims.systemSlug,
-      roles: claims.roles,
-      permissions: claims.permissions,
+    return {
+      tenant: {
+        systemId: claims.systemId,
+        companyId: claims.companyId,
+        systemSlug: claims.systemSlug,
+        roles: claims.roles,
+        permissions: claims.permissions,
+      },
+      claims,
     };
-    return { tenant, claims };
   } catch {
     return null;
   }
@@ -81,7 +84,6 @@ export const GET = compose(
     const fileUserId = path[2] ?? "0";
     const fileCategory = path.slice(3, path.length - 2);
 
-    // Resolve effective tenant — from query param token or middleware context
     const tokenParam = url.searchParams.get("token");
     let effectiveTenant = ctx.tenant;
     let effectiveClaims = ctx.claims;
@@ -97,7 +99,6 @@ export const GET = compose(
       }
     }
 
-    // File access control guard
     const accessCheck = await checkFileAccess({
       categoryPath: fileCategory,
       fileCompanyId,
@@ -117,7 +118,6 @@ export const GET = compose(
       );
     }
 
-    // Resolve cache context (§6.3, §6.3)
     const core = Core.getInstance();
     const hitWindowMs =
       Number((await core.getSetting("cache.file.hitWindowHours")) || "1") *
@@ -138,7 +138,6 @@ export const GET = compose(
       }
     }
 
-    // Cache HIT — skip SurrealFS entirely
     if (cacheMaxSize > 0) {
       const cache = FileCacheManager.getInstance();
       const probe = cache.access(
@@ -161,7 +160,6 @@ export const GET = compose(
       }
     }
 
-    // Resolve transfer limits from plan + voucher + Core settings (§6.3)
     const systemId = system?.id ?? "";
     const hasSubscription = fileCompanyId !== "0" && systemId;
     const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = hasSubscription
@@ -178,99 +176,95 @@ export const GET = compose(
         undefined,
       ];
 
-    const resolvedMaxConcurrent = dlLimits.max || Number(defaultConcurrent) ||
-      0;
-    const resolvedMaxBWMB = bwLimits.max || Number(defaultBW) || 0;
+    const maxConcurrent = dlLimits.max || Number(defaultConcurrent) || 0;
+    const maxBWMB = bwLimits.max || Number(defaultBW) || 0;
+    const concurrencyKey = `${fileCompanyId}/${fileSystemSlug}`;
 
-    // Read from SurrealFS with control callback
-    const file = await fs.read({
-      path,
-      control: (_path, concurrencyMap): ReadControlResult => {
-        const userDownloads = concurrencyMap[fileUserId] ?? 0;
-        if (
-          resolvedMaxConcurrent > 0 && userDownloads >= resolvedMaxConcurrent
-        ) {
-          return {
-            accessAllowed: false,
-            concurrencyIdentifiers: [
-              fileCompanyId,
-              `${fileCompanyId}/${fileSystemSlug}`,
-            ],
-          };
-        }
-
-        const tenantDownloads =
-          concurrencyMap[`${fileCompanyId}/${fileSystemSlug}`] ??
-            1;
-        const kbytesPerSecond = resolvedMaxBWMB > 0
-          ? Math.floor((resolvedMaxBWMB * 1024) / tenantDownloads)
-          : 16384;
-
-        return {
-          accessAllowed: true,
-          kbytesPerSecond,
-          concurrencyIdentifiers: [
-            fileCompanyId,
-            `${fileCompanyId}/${fileSystemSlug}`,
-          ],
-        };
-      },
-    });
-
-    if (
-      !file || "status" in file || !("content" in file) || !file.content
-    ) {
+    const current = activeDownloads.get(concurrencyKey) ?? 0;
+    if (maxConcurrent > 0 && current >= maxConcurrent) {
       return Response.json(
         {
           success: false,
-          error: { code: "ERROR", message: "files.download.notFound" },
+          error: {
+            code: "RATE_LIMITED",
+            message: "files.download.concurrentLimit",
+          },
         },
-        { status: 404 },
+        { status: 429 },
       );
     }
 
-    const sfsFile = file as SFSFile;
-    const fileName = (sfsFile.metadata?.fileName as string) ||
-      path[path.length - 1];
-    const mimeType = (sfsFile.metadata?.mimeType as string) || DEFAULT_MIME;
-    const fileSize = sfsFile.size;
-    const headers: Record<string, string> = {
-      "Content-Type": mimeType,
-      "Content-Disposition": `inline; filename="${fileName}"`,
-      "Content-Length": String(fileSize),
-    };
+    activeDownloads.set(concurrencyKey, current + 1);
+    try {
+      const file = await fs.read({
+        path,
+        control: (_path, concurrencyMap): ReadControlResult => {
+          const tenantDownloads = concurrencyMap[concurrencyKey] ?? 1;
+          return {
+            kbytesPerSecond: maxBWMB > 0
+              ? Math.floor((maxBWMB * 1024) / tenantDownloads)
+              : 16384,
+            concurrencyIdentifiers: [fileCompanyId, concurrencyKey],
+          };
+        },
+      });
 
-    // Background cache insertion (non-blocking, deduplicated — §6.3 step 7)
-    if (
-      cacheMaxSize > 0 && fileSize <= cacheMaxSize &&
-      !pendingInsertions.has(uri)
-    ) {
-      pendingInsertions.add(uri);
-      const cache = FileCacheManager.getInstance();
-      const [clientStream, cacheStream] = sfsFile.content!.tee();
+      if (!file || "status" in file || !("content" in file) || !file.content) {
+        return Response.json(
+          {
+            success: false,
+            error: { code: "ERROR", message: "files.download.notFound" },
+          },
+          { status: 404 },
+        );
+      }
 
-      (async () => {
-        try {
-          const buffer = await SurrealFS.readStream(cacheStream);
-          cache.access(
-            cacheTenantKey,
-            uri,
-            fileSize,
-            cacheMaxSize,
-            buffer,
-            hitWindowMs,
-            mimeType,
-          );
-        } catch {
-          // Cache insertion failure is non-fatal
-        } finally {
-          pendingInsertions.delete(uri);
-        }
-      })();
+      const sfsFile = file as SFSFile;
+      const fileName = (sfsFile.metadata?.fileName as string) ||
+        path[path.length - 1];
+      const mimeType = (sfsFile.metadata?.mimeType as string) || DEFAULT_MIME;
+      const fileSize = sfsFile.size;
+      const headers: Record<string, string> = {
+        "Content-Type": mimeType,
+        "Content-Disposition": `inline; filename="${fileName}"`,
+        "Content-Length": String(fileSize),
+      };
 
-      return new Response(clientStream, { headers });
+      if (
+        cacheMaxSize > 0 && fileSize <= cacheMaxSize &&
+        !pendingInsertions.has(uri)
+      ) {
+        pendingInsertions.add(uri);
+        const cache = FileCacheManager.getInstance();
+        const [clientStream, cacheStream] = sfsFile.content!.tee();
+
+        (async () => {
+          try {
+            const buffer = await SurrealFS.readStream(cacheStream);
+            cache.access(
+              cacheTenantKey,
+              uri,
+              fileSize,
+              cacheMaxSize,
+              buffer,
+              hitWindowMs,
+              mimeType,
+            );
+          } catch {
+            // non-fatal
+          } finally {
+            pendingInsertions.delete(uri);
+          }
+        })();
+
+        return new Response(clientStream, { headers });
+      }
+
+      return new Response(sfsFile.content, { headers });
+    } finally {
+      const remaining = (activeDownloads.get(concurrencyKey) ?? 1) - 1;
+      if (remaining <= 0) activeDownloads.delete(concurrencyKey);
+      else activeDownloads.set(concurrencyKey, remaining);
     }
-
-    return new Response(sfsFile.content, { headers });
   },
 );

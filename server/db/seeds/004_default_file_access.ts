@@ -3,26 +3,7 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("004_default_file_access");
 
-interface FileAccessSeed {
-  name: string;
-  categoryPattern: string;
-  download: {
-    isolateSystem: boolean;
-    isolateCompany: boolean;
-    isolateUser: boolean;
-    permissions: string[];
-  };
-  upload: {
-    isolateSystem: boolean;
-    isolateCompany: boolean;
-    isolateUser: boolean;
-    permissions: string[];
-    maxFileSizeMB: number;
-    allowedExtensions: string[];
-  };
-}
-
-const seeds: FileAccessSeed[] = [
+const seeds = [
   {
     name: "core.fileAccess.names.companyLogos",
     categoryPattern: "/logos/",
@@ -69,10 +50,10 @@ const seeds: FileAccessSeed[] = [
       permissions: [],
     },
     upload: {
-      isolateSystem: true,
-      isolateCompany: true,
-      isolateUser: true,
-      permissions: ["core.files.upload.leadAvatars"],
+      isolateSystem: false,
+      isolateCompany: false,
+      isolateUser: false,
+      permissions: [],
       maxFileSizeMB: 2,
       allowedExtensions: ["png", "jpg", "jpeg", "webp"],
     },
@@ -80,20 +61,18 @@ const seeds: FileAccessSeed[] = [
 ];
 
 export async function seed(db: Surreal): Promise<void> {
-  for (const seed of seeds) {
-    await db.query(
-      `CREATE file_access SET
-        name = $name,
-        categoryPattern = $categoryPattern,
-        download = $download,
-        upload = $upload`,
-      {
-        name: seed.name,
-        categoryPattern: seed.categoryPattern,
-        download: seed.download,
-        upload: seed.upload,
-      },
-    );
-    console.log(`[seed] file_access created: ${seed.name}`);
-  }
+  const stmts = seeds.map((_s, i) =>
+    `IF array::len((SELECT id FROM file_access WHERE name = $n${i})) = 0 {
+      CREATE file_access SET name = $n${i}, categoryPattern = $p${i}, download = $d${i}, upload = $u${i}
+    }`
+  );
+  const vars: Record<string, unknown> = {};
+  seeds.forEach((s, i) => {
+    vars[`n${i}`] = s.name;
+    vars[`p${i}`] = s.categoryPattern;
+    vars[`d${i}`] = s.download;
+    vars[`u${i}`] = s.upload;
+  });
+  await db.query(stmts.join(";\n"), vars);
+  console.log(`[seed] file_access: ${seeds.length} rules ensured`);
 }
