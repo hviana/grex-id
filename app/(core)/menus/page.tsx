@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import MenuTreeEditor from "@/src/components/core/MenuTreeEditor";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 interface SystemOption {
   id: string;
@@ -42,6 +43,19 @@ export default function MenusPage() {
     };
   }, [systemToken]);
 
+  const systemFetchFn = useCallback(
+    async (search: string) => {
+      const q = search.toLowerCase();
+      return systems
+        .filter((s) =>
+          !q || s.name.toLowerCase().includes(q) ||
+          s.slug.toLowerCase().includes(q)
+        )
+        .map((s) => ({ id: s.id, label: s.name }));
+    },
+    [systems],
+  );
+
   const inputCls =
     "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
@@ -66,20 +80,24 @@ export default function MenusPage() {
         : (
           <>
             <div className="max-w-xs">
-              <select
-                value={selectedSystemId}
-                onChange={(e) => setSelectedSystemId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="" disabled>
-                  {t("core.menus.selectSystem")}
-                </option>
-                {systems.map((sys) => (
-                  <option key={sys.id} value={sys.id}>
-                    {sys.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelectField
+                key={selectedSystemId}
+                fetchFn={systemFetchFn}
+                showAllOnEmpty
+                initialSelected={selectedSystemId
+                  ? [{
+                    id: selectedSystemId,
+                    label: systems.find((s) => s.id === selectedSystemId)
+                      ?.name ?? "",
+                  }]
+                  : []}
+                onChange={(items) => {
+                  setSelectedSystemId(
+                    items.length > 0 ? items[0].id : "",
+                  );
+                }}
+                placeholder={t("core.menus.selectSystem")}
+              />
             </div>
 
             {selectedSystemId && (

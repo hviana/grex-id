@@ -12,6 +12,7 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 interface RoleItem {
   id: string;
@@ -45,6 +46,9 @@ export default function RolesPage() {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [loadingSystems, setLoadingSystems] = useState(true);
+  const [formSystemSelected, setFormSystemSelected] = useState<
+    { id: string; label: string }[]
+  >([]);
 
   const loadSystems = async () => {
     setLoadingSystems(true);
@@ -60,6 +64,19 @@ export default function RolesPage() {
       setLoadingSystems(false);
     }
   };
+
+  const systemFetchFn = useCallback(
+    async (search: string) => {
+      const q = search.toLowerCase();
+      return systems
+        .filter((s) =>
+          !q || s.name.toLowerCase().includes(q) ||
+          s.slug.toLowerCase().includes(q)
+        )
+        .map((s) => ({ id: s.id, label: s.name }));
+    },
+    [systems],
+  );
 
   const load = useCallback(async (q?: string) => {
     if (!systemToken) return;
@@ -89,7 +106,11 @@ export default function RolesPage() {
 
   const openCreate = () => {
     setFormName("");
-    setFormSystemId(systems[0]?.id ?? "");
+    const firstSys = systems[0];
+    setFormSystemId(firstSys?.id ?? "");
+    setFormSystemSelected(
+      firstSys ? [{ id: firstSys.id, label: firstSys.name }] : [],
+    );
     setFormPermissions([]);
     setFormIsBuiltIn(false);
     setError(null);
@@ -99,6 +120,10 @@ export default function RolesPage() {
   const openEdit = (item: RoleItem) => {
     setFormName(item.name);
     setFormSystemId(item.systemId);
+    const sys = systems.find((s) => s.id === item.systemId);
+    setFormSystemSelected(
+      sys ? [{ id: sys.id, label: sys.name }] : [],
+    );
     setFormPermissions([...item.permissions]);
     setFormIsBuiltIn(item.isBuiltIn);
     setError(null);
@@ -276,29 +301,16 @@ export default function RolesPage() {
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
               {t("core.roles.system")} *
             </label>
-            <div className="relative">
-              <select
-                value={formSystemId}
-                onChange={(e) => setFormSystemId(e.target.value)}
-                required
-                disabled={loadingSystems}
-                className={inputCls}
-              >
-                <option value="" disabled>
-                  {t("core.roles.selectSystem")}
-                </option>
-                {systems.map((sys) => (
-                  <option key={sys.id} value={sys.id}>
-                    {sys.name}
-                  </option>
-                ))}
-              </select>
-              {loadingSystems && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Spinner size="sm" />
-                </div>
-              )}
-            </div>
+            <SearchableSelectField
+              key={editItem?.id ?? "create"}
+              fetchFn={systemFetchFn}
+              showAllOnEmpty
+              initialSelected={formSystemSelected}
+              onChange={(items) => {
+                setFormSystemId(items.length > 0 ? items[0].id : "");
+              }}
+              placeholder={t("core.roles.selectSystem")}
+            />
           </div>
           <MultiBadgeField
             name={t("core.roles.permissions")}

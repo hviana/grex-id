@@ -6,6 +6,7 @@ import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 interface SystemTerms {
   id: string;
@@ -42,14 +43,20 @@ export default function TermsEditor() {
 
   // System search for "add new" mode
   const [showAddModal, setShowAddModal] = useState(false);
-  const [systemSearch, setSystemSearch] = useState("");
-  const [systemResults, setSystemResults] = useState<SystemTerms[]>([]);
-  const [searchingSystem, setSearchingSystem] = useState(false);
-  const [selectedSystem, setSelectedSystem] = useState<SystemTerms | null>(
-    null,
-  );
+  const [selectedSystem, setSelectedSystem] = useState<
+    {
+      id: string;
+      name: string;
+      slug: string;
+    } | null
+  >(null);
   const [addTermsContent, setAddTermsContent] = useState("");
-  const systemDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const systemsCacheRef = useRef<
+    Map<
+      string,
+      { id: string; name: string; slug: string; termsOfService: string | null }
+    >
+  >(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,53 +149,30 @@ export default function TermsEditor() {
 
   const openAddSystem = () => {
     setSelectedSystem(null);
-    setSystemSearch("");
-    setSystemResults([]);
     setAddTermsContent("");
     setError(null);
     setSuccess(null);
     setShowAddModal(true);
   };
 
-  const searchSystems = useCallback(
-    (query: string) => {
-      setSystemSearch(query);
-      if (systemDebounceRef.current) clearTimeout(systemDebounceRef.current);
-      if (!query.trim()) {
-        setSystemResults([]);
-        return;
+  const systemFetchFn = useCallback(
+    async (search: string): Promise<{ id: string; label: string }[]> => {
+      const res = await fetch(
+        `/api/core/systems?search=${encodeURIComponent(search)}&limit=10`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
+      );
+      const json = await res.json();
+      const items: { id: string; label: string }[] = [];
+      for (const s of json.data ?? []) {
+        systemsCacheRef.current.set(s.id, {
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          termsOfService: s.termsOfService ?? null,
+        });
+        items.push({ id: s.id, label: s.name });
       }
-      systemDebounceRef.current = setTimeout(async () => {
-        setSearchingSystem(true);
-        try {
-          const res = await fetch(
-            `/api/core/systems?search=${encodeURIComponent(query)}&limit=10`,
-            { headers: { Authorization: `Bearer ${systemToken}` } },
-          );
-          const json = await res.json();
-          setSystemResults(
-            (json.data ?? []).map((
-              s: {
-                id: string;
-                name: string;
-                slug: string;
-                termsOfService?: string;
-              },
-            ) => ({
-              id: s.id,
-              name: s.name,
-              slug: s.slug,
-              termsOfService: s.termsOfService ?? null,
-              hasCustomTerms: !!s.termsOfService,
-              effectiveTerms: s.termsOfService || data?.generic || "",
-            })),
-          );
-        } catch {
-          setSystemResults([]);
-        } finally {
-          setSearchingSystem(false);
-        }
-      }, 300);
+      return items;
     },
     [systemToken],
   );
@@ -441,68 +425,31 @@ export default function TermsEditor() {
           <ErrorDisplay message={error} />
 
           {/* System Search */}
-          {selectedSystem
-            ? (
-              <div className="flex items-center gap-3 backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg p-3">
-                <span className="text-sm text-white font-medium">
-                  {selectedSystem.name}
-                </span>
-                <span className="text-xs text-[var(--color-light-text)]/60">
-                  {selectedSystem.slug}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSystem(null);
-                    setSystemSearch("");
-                  }}
-                  className="ml-auto text-xs text-red-400 hover:text-red-300"
-                >
-                  ✕
-                </button>
-              </div>
-            )
-            : (
-              <div className="relative">
-                <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                  {t("core.terms.selectSystem")}
-                </label>
-                <input
-                  type="text"
-                  value={systemSearch}
-                  onChange={(e) => searchSystems(e.target.value)}
-                  placeholder={t("core.terms.selectSystem")}
-                  className={inputCls}
-                />
-                {searchingSystem && (
-                  <div className="absolute right-3 top-[2.1rem]">
-                    <Spinner size="sm" />
-                  </div>
-                )}
-                {systemResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-[var(--color-dark-gray)] bg-[#111]/95 backdrop-blur-md shadow-lg max-h-48 overflow-y-auto">
-                    {systemResults.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSystem(s);
-                          setSystemResults([]);
-                          setSystemSearch("");
-                          setAddTermsContent(s.termsOfService ?? "");
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/5 transition-colors"
-                      >
-                        {s.name}{" "}
-                        <span className="text-xs text-[var(--color-light-text)]/60">
-                          {s.slug}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("core.terms.selectSystem")}
+            </label>
+            <SearchableSelectField
+              key={selectedSystem?.id ?? "none"}
+              fetchFn={systemFetchFn}
+              onChange={(items) => {
+                if (items.length > 0) {
+                  const cached = systemsCacheRef.current.get(items[0].id);
+                  if (cached) {
+                    setSelectedSystem({
+                      id: cached.id,
+                      name: cached.name,
+                      slug: cached.slug,
+                    });
+                    setAddTermsContent(cached.termsOfService ?? "");
+                  }
+                } else {
+                  setSelectedSystem(null);
+                }
+              }}
+              placeholder={t("core.terms.selectSystem")}
+            />
+          </div>
 
           {/* Terms Textarea */}
           <div>

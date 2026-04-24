@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import SearchField from "@/src/components/shared/SearchField";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useDebounce } from "@/src/hooks/useDebounce";
 
 interface SettingItem {
@@ -14,11 +15,6 @@ interface SettingItem {
   value: string;
   description: string;
   updatedAt?: string;
-}
-
-interface SystemOption {
-  slug: string;
-  name: string;
 }
 
 interface SettingsEditorProps {
@@ -35,7 +31,6 @@ export default function SettingsEditor(
   const titleKey = isFront ? "core.frontSettings.title" : "core.settings.title";
 
   const [settings, setSettings] = useState<SettingItem[]>([]);
-  const [systems, setSystems] = useState<SystemOption[]>([]);
   const [selectedSystem, setSelectedSystem] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -64,23 +59,20 @@ export default function SettingsEditor(
     }
   };
 
-  useEffect(() => {
-    fetch("/api/core/systems", {
-      headers: { Authorization: `Bearer ${systemToken}` },
-    })
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success) {
-          setSystems(
-            (json.data ?? []).map((s: Record<string, unknown>) => ({
-              slug: String(s.slug ?? ""),
-              name: String(s.name ?? ""),
-            })),
-          );
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const systemFetchFn = useCallback(
+    async (search: string) => {
+      const res = await fetch(
+        `/api/core/systems?search=${encodeURIComponent(search)}&limit=50`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
+      );
+      const json = await res.json();
+      return (json.data ?? []).map((s: Record<string, unknown>) => ({
+        id: String(s.slug ?? ""),
+        label: String(s.name ?? ""),
+      }));
+    },
+    [systemToken],
+  );
 
   useEffect(() => {
     load();
@@ -190,9 +182,6 @@ export default function SettingsEditor(
   const inputCls =
     "w-full rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
 
-  const selectCls =
-    "rounded border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-primary-green)] transition-colors placeholder-white/30";
-
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -216,23 +205,17 @@ export default function SettingsEditor(
       <ErrorDisplay message={error} />
 
       <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={selectedSystem}
-          onChange={(e) => {
-            setSelectedSystem(e.target.value);
-            setEdits(new Map());
-          }}
-          className={selectCls}
-        >
-          <option value="">
-            {t("core.settings.scope.core")}
-          </option>
-          {systems.map((sys) => (
-            <option key={sys.slug} value={sys.slug}>
-              {sys.name}
-            </option>
-          ))}
-        </select>
+        <div className="w-64">
+          <SearchableSelectField
+            fetchFn={systemFetchFn}
+            showAllOnEmpty
+            onChange={(items) => {
+              setSelectedSystem(items.length > 0 ? items[0].id : "");
+              setEdits(new Map());
+            }}
+            placeholder={t("core.settings.scope.core")}
+          />
+        </div>
 
         <div className="flex-1 min-w-48">
           <SearchField onSearch={setSearch} />

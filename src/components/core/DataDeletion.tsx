@@ -1,34 +1,29 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import SearchField from "@/src/components/shared/SearchField";
 import Modal from "@/src/components/shared/Modal";
-
-interface SearchResult {
-  id: string;
-  name: string;
-}
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 export default function DataDeletion() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
 
-  const [companySearch, setCompanySearch] = useState("");
-  const [systemSearch, setSystemSearch] = useState("");
-  const [companyResults, setCompanyResults] = useState<SearchResult[]>([]);
-  const [systemResults, setSystemResults] = useState<SearchResult[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<SearchResult | null>(
-    null,
-  );
-  const [selectedSystem, setSelectedSystem] = useState<SearchResult | null>(
-    null,
-  );
-  const [searchingCompanies, setSearchingCompanies] = useState(false);
-  const [searchingSystems, setSearchingSystems] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<
+    {
+      id: string;
+      name: string;
+    } | null
+  >(null);
+  const [selectedSystem, setSelectedSystem] = useState<
+    {
+      id: string;
+      name: string;
+    } | null
+  >(null);
   const [showModal, setShowModal] = useState(false);
   const [awareness, setAwareness] = useState(false);
   const [password, setPassword] = useState("");
@@ -36,73 +31,32 @@ export default function DataDeletion() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const companyDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const systemDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-
-  const searchCompanies = useCallback(
-    (query: string) => {
-      setCompanySearch(query);
-      if (companyDebounceRef.current) clearTimeout(companyDebounceRef.current);
-      if (!query.trim()) {
-        setCompanyResults([]);
-        return;
-      }
-      companyDebounceRef.current = setTimeout(async () => {
-        setSearchingCompanies(true);
-        try {
-          const compRes = await fetch(
-            `/api/companies?search=${encodeURIComponent(query)}&limit=10`,
-            {
-              headers: { Authorization: `Bearer ${systemToken}` },
-            },
-          );
-          const json = await compRes.json();
-          setCompanyResults(
-            (json.data ?? []).map((c: { id: string; name: string }) => ({
-              id: c.id,
-              name: c.name,
-            })),
-          );
-        } catch {
-          setCompanyResults([]);
-        } finally {
-          setSearchingCompanies(false);
-        }
-      }, 300);
+  const companyFetchFn = useCallback(
+    async (search: string) => {
+      const res = await fetch(
+        `/api/companies?search=${encodeURIComponent(search)}&limit=10`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
+      );
+      const json = await res.json();
+      return (json.data ?? []).map((c: { id: string; name: string }) => ({
+        id: c.id,
+        label: c.name,
+      }));
     },
     [systemToken],
   );
 
-  const searchSystems = useCallback(
-    (query: string) => {
-      setSystemSearch(query);
-      if (systemDebounceRef.current) clearTimeout(systemDebounceRef.current);
-      if (!query.trim()) {
-        setSystemResults([]);
-        return;
-      }
-      systemDebounceRef.current = setTimeout(async () => {
-        setSearchingSystems(true);
-        try {
-          const res = await fetch(
-            `/api/core/systems?search=${encodeURIComponent(query)}&limit=10`,
-            {
-              headers: { Authorization: `Bearer ${systemToken}` },
-            },
-          );
-          const json = await res.json();
-          setSystemResults(
-            (json.data ?? []).map((s: { id: string; name: string }) => ({
-              id: s.id,
-              name: s.name,
-            })),
-          );
-        } catch {
-          setSystemResults([]);
-        } finally {
-          setSearchingSystems(false);
-        }
-      }, 300);
+  const systemFetchFn = useCallback(
+    async (search: string) => {
+      const res = await fetch(
+        `/api/core/systems?search=${encodeURIComponent(search)}&limit=10`,
+        { headers: { Authorization: `Bearer ${systemToken}` } },
+      );
+      const json = await res.json();
+      return (json.data ?? []).map((s: { id: string; name: string }) => ({
+        id: s.id,
+        label: s.name,
+      }));
     },
     [systemToken],
   );
@@ -140,8 +94,6 @@ export default function DataDeletion() {
       setShowModal(false);
       setSelectedCompany(null);
       setSelectedSystem(null);
-      setCompanySearch("");
-      setSystemSearch("");
       resetModal();
     } catch {
       setError("common.error.network");
@@ -183,58 +135,17 @@ export default function DataDeletion() {
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-2">
             {t("core.dataDeletion.selectedCompany")}
           </label>
-          {selectedCompany
-            ? (
-              <div className="flex items-center gap-3">
-                <span className="text-white font-medium">
-                  {selectedCompany.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCompany(null);
-                    setCompanySearch("");
-                  }}
-                  className="text-xs text-red-400 hover:text-red-300"
-                >
-                  ✕
-                </button>
-              </div>
-            )
-            : (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={companySearch}
-                  onChange={(e) => searchCompanies(e.target.value)}
-                  placeholder={t("core.dataDeletion.selectCompany")}
-                  className={inputCls}
-                />
-                {searchingCompanies && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Spinner size="sm" />
-                  </div>
-                )}
-                {companyResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-[var(--color-dark-gray)] bg-[#111]/95 backdrop-blur-md shadow-lg max-h-48 overflow-y-auto">
-                    {companyResults.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCompany(c);
-                          setCompanyResults([]);
-                          setCompanySearch("");
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/5 transition-colors"
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+          <SearchableSelectField
+            fetchFn={companyFetchFn}
+            onChange={(items) => {
+              setSelectedCompany(
+                items.length > 0
+                  ? { id: items[0].id, name: items[0].label }
+                  : null,
+              );
+            }}
+            placeholder={t("core.dataDeletion.selectCompany")}
+          />
         </div>
 
         {/* System Search */}
@@ -242,58 +153,17 @@ export default function DataDeletion() {
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-2">
             {t("core.dataDeletion.selectedSystem")}
           </label>
-          {selectedSystem
-            ? (
-              <div className="flex items-center gap-3">
-                <span className="text-white font-medium">
-                  {selectedSystem.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSystem(null);
-                    setSystemSearch("");
-                  }}
-                  className="text-xs text-red-400 hover:text-red-300"
-                >
-                  ✕
-                </button>
-              </div>
-            )
-            : (
-              <div className="relative">
-                <input
-                  type="text"
-                  value={systemSearch}
-                  onChange={(e) => searchSystems(e.target.value)}
-                  placeholder={t("core.dataDeletion.selectSystem")}
-                  className={inputCls}
-                />
-                {searchingSystems && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Spinner size="sm" />
-                  </div>
-                )}
-                {systemResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-[var(--color-dark-gray)] bg-[#111]/95 backdrop-blur-md shadow-lg max-h-48 overflow-y-auto">
-                    {systemResults.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSystem(s);
-                          setSystemResults([]);
-                          setSystemSearch("");
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/5 transition-colors"
-                      >
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+          <SearchableSelectField
+            fetchFn={systemFetchFn}
+            onChange={(items) => {
+              setSelectedSystem(
+                items.length > 0
+                  ? { id: items[0].id, name: items[0].label }
+                  : null,
+              );
+            }}
+            placeholder={t("core.dataDeletion.selectSystem")}
+          />
         </div>
 
         {/* Delete Button */}

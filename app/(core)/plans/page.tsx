@@ -14,6 +14,7 @@ import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import PlanCard from "@/src/components/shared/PlanCard";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 
 interface PlanItem {
   id: string;
@@ -116,6 +117,9 @@ export default function PlansPage() {
   >([]);
   const [formIsActive, setFormIsActive] = useState(true);
   const [loadingSystems, setLoadingSystems] = useState(true);
+  const [formSystemSelected, setFormSystemSelected] = useState<
+    { id: string; label: string }[]
+  >([]);
 
   const loadSystems = async () => {
     setLoadingSystems(true);
@@ -131,6 +135,19 @@ export default function PlansPage() {
       setLoadingSystems(false);
     }
   };
+
+  const systemFetchFn = useCallback(
+    async (search: string) => {
+      const q = search.toLowerCase();
+      return systems
+        .filter((s) =>
+          !q || s.name.toLowerCase().includes(q) ||
+          s.slug.toLowerCase().includes(q)
+        )
+        .map((s) => ({ id: s.id, label: s.name }));
+    },
+    [systems],
+  );
 
   const load = useCallback(async (q?: string) => {
     if (!systemToken) return;
@@ -161,7 +178,11 @@ export default function PlansPage() {
   const openCreate = () => {
     setFormName("");
     setFormDescription("");
-    setFormSystemId(systems[0]?.id ?? "");
+    const firstSys = systems[0];
+    setFormSystemId(firstSys?.id ?? "");
+    setFormSystemSelected(
+      firstSys ? [{ id: firstSys.id, label: firstSys.name }] : [],
+    );
     setFormPrice("");
     setFormCurrency("USD");
     setFormRecurrenceDays("30");
@@ -186,6 +207,10 @@ export default function PlansPage() {
     setFormName(item.name ?? "");
     setFormDescription(item.description ?? "");
     setFormSystemId(String(item.systemId ?? ""));
+    const sys = systems.find((s) => s.id === item.systemId);
+    setFormSystemSelected(
+      sys ? [{ id: sys.id, label: sys.name }] : [],
+    );
     setFormPrice(String(item.price ?? 0));
     setFormCurrency(item.currency ?? "USD");
     setFormRecurrenceDays(String(item.recurrenceDays ?? 30));
@@ -375,29 +400,16 @@ export default function PlansPage() {
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
                 {t("core.plans.system")} *
               </label>
-              <div className="relative">
-                <select
-                  value={formSystemId}
-                  onChange={(e) => setFormSystemId(e.target.value)}
-                  required
-                  disabled={loadingSystems}
-                  className={inputCls}
-                >
-                  <option value="" disabled>
-                    {t("core.plans.selectSystem")}
-                  </option>
-                  {systems.map((sys) => (
-                    <option key={sys.id} value={sys.id}>
-                      {sys.name}
-                    </option>
-                  ))}
-                </select>
-                {loadingSystems && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Spinner size="sm" />
-                  </div>
-                )}
-              </div>
+              <SearchableSelectField
+                key={editItem?.id ?? "create"}
+                fetchFn={systemFetchFn}
+                showAllOnEmpty
+                initialSelected={formSystemSelected}
+                onChange={(items) => {
+                  setFormSystemId(items.length > 0 ? items[0].id : "");
+                }}
+                placeholder={t("core.plans.selectSystem")}
+              />
             </div>
           </div>
 
