@@ -51,7 +51,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     expiresAt,
   } = body;
 
-  const codeErrors = validateField("name", code);
+  const codeErrors = await validateField("name", code);
   if (codeErrors.length > 0 || !code) {
     return Response.json(
       {
@@ -69,7 +69,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
   try {
     const voucher = await createVoucher({
-      code: standardizeField("name", sanitizeString(code)),
+      code: await standardizeField("name", sanitizeString(code)),
       applicableCompanyIds: applicableCompanyIds ?? [],
       applicablePlanIds: applicablePlanIds ?? [],
       priceModifier: Number(priceModifier ?? 0),
@@ -155,7 +155,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
     if (code !== undefined) {
       sets.push("code = $code");
-      bindings.code = standardizeField("name", sanitizeString(code));
+      bindings.code = await standardizeField("name", sanitizeString(code));
     }
     if (applicableCompanyIds !== undefined) {
       sets.push("applicableCompanyIds = $applicableCompanyIds");

@@ -31,8 +31,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { name, data: serviceData } = body;
 
-  const stdName = standardizeField("name", name ?? "", "connected_service");
-  const errors = validateField("name", stdName, "connected_service");
+  const stdName = await standardizeField(
+    "name",
+    name ?? "",
+    "connected_service",
+  );
+  const errors = await validateField("name", stdName, "connected_service");
   if (errors.length > 0) {
     return Response.json(
       {

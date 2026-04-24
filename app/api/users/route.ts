@@ -37,7 +37,7 @@ function parseChannels(raw: unknown): SubmittedChannel[] {
     const t = (entry as { type?: unknown }).type;
     const v = (entry as { value?: unknown }).value;
     if (typeof t !== "string" || typeof v !== "string") continue;
-    const std = standardizeField(t, v, "entity_channel");
+    const std = await standardizeField(t, v, "entity_channel");
     if (std.length === 0) continue;
     out.push({ type: t, value: std });
   }
@@ -101,14 +101,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
-  const stdName = standardizeField("name", name ?? "", "user");
+  const stdName = await standardizeField("name", name ?? "", "user");
 
-  const errors: string[] = [...validateField("name", stdName, "user")];
+  const errors: string[] = [...await validateField("name", stdName, "user")];
   if (channels.length === 0) {
     errors.push("validation.channel.required");
   }
   for (const ch of channels) {
-    errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+    errors.push(...await validateField(ch.type, ch.value, "entity_channel"));
   }
   if (!companyId || companyId === "0") {
     errors.push("validation.companyId.required");
@@ -134,7 +134,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   // Password is only validated for the new-user path. Per AGENTS.md §21.1,
   // the password is silently ignored when inviting an existing user.
   if (!existingUserId) {
-    const passwordErrors = validateField("password", password, "user");
+    const passwordErrors = await validateField("password", password, "user");
     if (passwordErrors.length > 0) {
       return Response.json(
         {
@@ -283,8 +283,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     let stdName: string | undefined;
     if (name !== undefined) {
-      stdName = standardizeField("name", name, "user");
-      const nameErrors = validateField("name", stdName, "user");
+      stdName = await standardizeField("name", name, "user");
+      const nameErrors = await validateField("name", stdName, "user");
       if (nameErrors.length > 0) {
         return Response.json(
           { success: false, error: { code: "VALIDATION", errors: nameErrors } },
@@ -317,7 +317,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   if (name !== undefined) {
-    const stdName = standardizeField("name", name, "user");
+    const stdName = await standardizeField("name", name, "user");
     await updateUserProfileName(String(id), stdName);
   }
 

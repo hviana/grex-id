@@ -40,7 +40,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const passwordErrors = validateField("password", password, "user");
+  const passwordErrors = await validateField("password", password, "user");
   if (passwordErrors.length > 0) {
     return Response.json(
       { success: false, error: { code: "VALIDATION", errors: passwordErrors } },

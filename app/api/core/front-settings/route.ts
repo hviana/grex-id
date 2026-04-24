@@ -53,7 +53,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   const items = settings
     .filter((s) => s.key)
     .map((s) => ({
-      key: standardizeField("name", s.key),
+      key: await standardizeField("name", s.key),
       value: s.value ?? "",
       description: s.description ?? "",
       systemSlug: systemSlug || undefined,

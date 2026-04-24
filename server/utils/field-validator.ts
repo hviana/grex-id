@@ -2,20 +2,23 @@ import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/field-validator.ts");
 
-type ValidatorFn = (value: unknown) => string[];
+type ValidatorFn = (value: unknown) => Promise<string[]>;
 
 /**
  * Entity+field-specific validators override the generic field validator.
  * Key format: "entity.field" e.g. "user.password"
  */
-const entityFieldValidators: Record<string, ValidatorFn> = {};
+const entityFieldValidators: Record<string, ValidatorFn> = {} as Record<
+  string,
+  ValidatorFn
+>;
 
 /**
  * Generic field validators applied when no entity-specific override exists.
  * Key format: field name e.g. "email"
  */
 const fieldValidators: Record<string, ValidatorFn> = {
-  email: (value: unknown): string[] => {
+  email: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || value.trim().length === 0) {
       errors.push("validation.email.required");
@@ -27,7 +30,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  phone: (value: unknown): string[] => {
+  phone: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (value === undefined || value === null || value === "") return errors;
     if (typeof value !== "string") {
@@ -41,7 +44,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  password: (value: unknown): string[] => {
+  password: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || value.length === 0) {
       errors.push("validation.password.required");
@@ -53,7 +56,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  name: (value: unknown): string[] => {
+  name: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || value.trim().length === 0) {
       errors.push("validation.name.required");
@@ -61,7 +64,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  slug: (value: unknown): string[] => {
+  slug: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || value.length === 0) {
       errors.push("validation.slug.required");
@@ -73,7 +76,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  url: (value: unknown): string[] => {
+  url: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (value === undefined || value === null || value === "") return errors;
     if (typeof value !== "string") {
@@ -88,7 +91,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  currencyCode: (value: unknown): string[] => {
+  currencyCode: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value)) {
       errors.push("validation.currencyCode.invalid");
@@ -96,7 +99,7 @@ const fieldValidators: Record<string, ValidatorFn> = {
     return errors;
   },
 
-  cnpj: (value: unknown): string[] => {
+  cnpj: async (value: unknown): Promise<string[]> => {
     const errors: string[] = [];
     if (typeof value !== "string" || value.trim().length === 0) {
       errors.push("validation.cnpj.required");
@@ -142,11 +145,11 @@ const fieldValidators: Record<string, ValidatorFn> = {
  *   generic field validator.
  * @returns An empty array if valid, or an array of i18n error keys if invalid
  */
-export function validateField(
+export async function validateField(
   field: string,
   value: unknown,
   entity?: string,
-): string[] {
+): Promise<string[]> {
   if (entity) {
     const entityKey = `${entity}.${field}`;
     if (entityFieldValidators[entityKey]) {
@@ -165,13 +168,13 @@ export function validateField(
  * Validates multiple fields at once. Returns a map of field name to error keys.
  * Only fields with errors are included in the result.
  */
-export function validateFields(
+export async function validateFields(
   fields: { field: string; value: unknown }[],
   entity?: string,
-): Record<string, string[]> {
+): Promise<Record<string, string[]>> {
   const errors: Record<string, string[]> = {};
   for (const { field, value } of fields) {
-    const fieldErrors = validateField(field, value, entity);
+    const fieldErrors = await validateField(field, value, entity);
     if (fieldErrors.length > 0) {
       errors[field] = fieldErrors;
     }

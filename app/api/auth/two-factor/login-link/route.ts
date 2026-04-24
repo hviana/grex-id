@@ -74,7 +74,7 @@ async function handler(
 
   const channelType = guessChannelType(identifier);
   const value = channelType
-    ? standardizeField(channelType, identifier, "entity_channel")
+    ? await standardizeField(channelType, identifier, "entity_channel")
     : identifier.trim();
 
   const user = await findUserByVerifiedChannel(value, channelType);

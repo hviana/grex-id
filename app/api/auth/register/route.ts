@@ -45,7 +45,7 @@ function parseChannels(raw: unknown): SubmittedChannel[] {
     const t = (entry as { type?: unknown }).type;
     const v = (entry as { value?: unknown }).value;
     if (typeof t !== "string" || typeof v !== "string") continue;
-    const std = standardizeField(
+    const std = await standardizeField(
       t,
       v,
       "entity_channel",
@@ -75,7 +75,7 @@ async function handler(
   }
 
   const name = body.name
-    ? standardizeField("name", body.name, "user")
+    ? await standardizeField("name", body.name, "user")
     : undefined;
 
   const channels = parseChannels(body.channels);
@@ -93,12 +93,12 @@ async function handler(
   }
 
   const validationErrors: string[] = [
-    ...validateField("name", name, "user"),
-    ...validateField("password", password, "user"),
+    ...(await validateField("name", name, "user")),
+    ...(await validateField("password", password, "user")),
   ];
 
   for (const ch of channels) {
-    const errs = validateField(ch.type, ch.value, "entity_channel");
+    const errs = await validateField(ch.type, ch.value, "entity_channel");
     validationErrors.push(...errs);
   }
 

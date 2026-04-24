@@ -174,8 +174,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const stdValue = standardizeField(type, value, "entity_channel");
-  const valueErrors = validateField(type, stdValue, "entity_channel");
+  const stdValue = await standardizeField(type, value, "entity_channel");
+  const valueErrors = await validateField(type, stdValue, "entity_channel");
   if (valueErrors.length > 0) {
     return Response.json(
       { success: false, error: { code: "VALIDATION", errors: valueErrors } },

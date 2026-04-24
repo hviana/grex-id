@@ -4,37 +4,41 @@ import { getDb } from "../db/connection.ts";
 
 assertServerOnly("server/utils/field-standardizer.ts");
 
-type StandardizerFn = (value: string) => string;
+type StandardizerFn = (value: string) => Promise<string>;
 
 /**
  * Entity+field-specific standardizers override the generic field standardizer.
  * Key format: "entity.field" e.g. "user.email"
  */
-const entityFieldStandardizers: Record<string, StandardizerFn> = {};
+const entityFieldStandardizers: Record<string, StandardizerFn> = {} as Record<
+  string,
+  StandardizerFn
+>;
 
 /**
  * Generic field standardizers applied when no entity-specific override exists.
  * Key format: field name e.g. "email"
  */
 const fieldStandardizers: Record<string, StandardizerFn> = {
-  email: (value: string) => value.trim().toLowerCase().replace(/\s+/g, ""),
+  email: async (value: string) =>
+    value.trim().toLowerCase().replace(/\s+/g, ""),
 
-  phone: (value: string) => value.replace(/\D/g, ""),
+  phone: async (value: string) => value.replace(/\D/g, ""),
 
-  name: (value: string) =>
+  name: async (value: string) =>
     value
       .trim()
       .replace(/\s+/g, " ")
       .replace(/[<>]/g, ""),
 
-  slug: (value: string) =>
+  slug: async (value: string) =>
     value
       .trim()
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, ""),
 
-  document: (value: string) => value.replace(/\D/g, ""),
+  document: async (value: string) => value.replace(/\D/g, ""),
 };
 
 /**

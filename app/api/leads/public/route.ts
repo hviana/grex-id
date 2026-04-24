@@ -27,7 +27,7 @@ function parseChannels(raw: unknown): SubmittedChannel[] {
     const t = (entry as { type?: unknown }).type;
     const v = (entry as { value?: unknown }).value;
     if (typeof t !== "string" || typeof v !== "string") continue;
-    const std = standardizeField(t, v, "entity_channel");
+    const std = await standardizeField(t, v, "entity_channel");
     if (std.length === 0) continue;
     out.push({ type: t, value: std });
   }
@@ -62,7 +62,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const tags = Array.isArray(parsedBody.tags) ? parsedBody.tags : undefined;
     const channels = parseChannels(parsedBody.channels);
     const name = parsedBody.name
-      ? standardizeField("name", String(parsedBody.name), "lead")
+      ? await standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
     if (!botToken) {
@@ -89,10 +89,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     }
 
     const errors: string[] = [
-      ...validateField("name", name, "lead"),
+      ...await validateField("name", name, "lead"),
     ];
     for (const ch of channels) {
-      errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+      errors.push(...await validateField(ch.type, ch.value, "entity_channel"));
     }
     if (channels.length === 0) errors.push("validation.channel.required");
     if (!profile?.name || !systemSlug) {

@@ -54,7 +54,7 @@ async function handler(
 
   const type = guessChannelType(raw);
   const value = type
-    ? standardizeField(type, raw, "entity_channel")
+    ? await standardizeField(type, raw, "entity_channel")
     : raw.trim();
 
   const match = await findVerifiedOwnerByChannelValue(value);

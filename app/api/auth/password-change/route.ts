@@ -39,7 +39,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const newPasswordErrors = validateField("password", newPassword, "user");
+  const newPasswordErrors = await validateField(
+    "password",
+    newPassword,
+    "user",
+  );
   if (newPasswordErrors.length > 0) {
     return Response.json(
       {

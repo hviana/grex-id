@@ -30,8 +30,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, slug, logoUri, termsOfService } = body;
 
-  const nameErrors = validateField("name", name);
-  const slugErrors = validateField("slug", slug);
+  const nameErrors = await await validateField("name", name);
+  const slugErrors = await await validateField("slug", slug);
   const allErrors = [...nameErrors, ...slugErrors];
 
   if (allErrors.length > 0) {
@@ -45,8 +45,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   const system = await createSystem({
-    name: standardizeField("name", name),
-    slug: standardizeField("slug", slug),
+    name: await await standardizeField("name", name),
+    slug: await await standardizeField("slug", slug),
     logoUri: logoUri ?? "",
     termsOfService: termsOfService || undefined,
   });
@@ -71,8 +71,12 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   const errors: string[] = [];
-  if (name !== undefined) errors.push(...validateField("name", name));
-  if (slug !== undefined) errors.push(...validateField("slug", slug));
+  if (name !== undefined) {
+    errors.push(...await await validateField("name", name));
+  }
+  if (slug !== undefined) {
+    errors.push(...await await validateField("slug", slug));
+  }
 
   if (errors.length > 0) {
     return Response.json(
@@ -85,8 +89,12 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   const data: Record<string, string | undefined> = {};
-  if (name !== undefined) data.name = standardizeField("name", name);
-  if (slug !== undefined) data.slug = standardizeField("slug", slug);
+  if (name !== undefined) {
+    data.name = await await standardizeField("name", name);
+  }
+  if (slug !== undefined) {
+    data.slug = await await standardizeField("slug", slug);
+  }
   if (logoUri !== undefined) data.logoUri = logoUri;
   if (termsOfService !== undefined) data.termsOfService = termsOfService;
 

@@ -71,7 +71,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   const systemId = await findSystemIdBySlug(
-    standardizeField("slug", systemSlug),
+    await standardizeField("slug", systemSlug),
   );
   if (!systemId) {
     return Response.json(
@@ -91,7 +91,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   const userId = claims.actorId;
 
-  const resolvedSlug = standardizeField("slug", systemSlug);
+  const resolvedSlug = await standardizeField("slug", systemSlug);
   const tokenTenant: Tenant = {
     systemId: String(systemId),
     companyId: String(companyId),

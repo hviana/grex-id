@@ -51,7 +51,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   } = body;
 
   const errors: string[] = [];
-  errors.push(...validateField("name", label));
+  errors.push(...await validateField("name", label));
   if (!systemId) errors.push("validation.system.required");
 
   if (errors.length > 0) {
@@ -68,7 +68,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const item = await createMenuItem({
       systemId,
       parentId,
-      label: standardizeField("name", sanitizeString(label)),
+      label: await standardizeField("name", sanitizeString(label)),
       emoji: emoji || undefined,
       componentName: sanitizeString(componentName ?? ""),
       sortOrder: Number(sortOrder ?? 0),
@@ -122,7 +122,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       updates.parentId = data.parentId;
     }
     if (data.label !== undefined) {
-      updates.label = standardizeField("name", sanitizeString(data.label));
+      updates.label = await standardizeField(
+        "name",
+        sanitizeString(data.label),
+      );
     }
     if (data.emoji !== undefined) {
       updates.emoji = data.emoji;

@@ -30,12 +30,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { name, document, documentType, billingAddress } = body;
 
-  const stdName = name ? standardizeField("name", name, "company") : undefined;
+  const stdName = name
+    ? await standardizeField("name", name, "company")
+    : undefined;
   const stdDocument = document
-    ? standardizeField("document", document, "company")
+    ? await standardizeField("document", document, "company")
     : undefined;
 
-  const validationErrors = validateFields(
+  const validationErrors = await validateFields(
     [
       { field: "name", value: stdName },
       { field: "cnpj", value: stdDocument },

@@ -72,7 +72,7 @@ function parseChannels(raw: unknown): SubmittedChannel[] {
     const t = (entry as { type?: unknown }).type;
     const v = (entry as { value?: unknown }).value;
     if (typeof t !== "string" || typeof v !== "string") continue;
-    const std = standardizeField(t, v, "entity_channel");
+    const std = await standardizeField(t, v, "entity_channel");
     if (std.length === 0) continue;
     out.push({ type: t, value: std });
   }
@@ -87,12 +87,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const { profile, ownerId } = body;
   const channels = parseChannels(body.channels);
   const name = body.name
-    ? standardizeField("name", body.name, "lead")
+    ? await standardizeField("name", body.name, "lead")
     : undefined;
 
-  const errors: string[] = [...validateField("name", name, "lead")];
+  const errors: string[] = [...await validateField("name", name, "lead")];
   for (const ch of channels) {
-    errors.push(...validateField(ch.type, ch.value, "entity_channel"));
+    errors.push(...await validateField(ch.type, ch.value, "entity_channel"));
   }
   if (channels.length === 0) errors.push("validation.channel.required");
 
@@ -179,7 +179,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const systemId = ctx.tenant.systemId;
   const { id, profile, ownerId } = body;
   const name = body.name
-    ? standardizeField("name", body.name, "lead")
+    ? await standardizeField("name", body.name, "lead")
     : undefined;
 
   if (!id) {

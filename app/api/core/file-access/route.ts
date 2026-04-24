@@ -41,7 +41,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const { name, categoryPattern, download, upload } = body;
 
-  const nameErrors = validateField("name", name);
+  const nameErrors = await validateField("name", name);
   if (nameErrors.length > 0 || !name) {
     return Response.json(
       {
@@ -84,7 +84,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  const sanitizedName = standardizeField("name", sanitizeString(name));
+  const sanitizedName = await standardizeField("name", sanitizeString(name));
 
   const dupCheck = await checkDuplicates("file_access", [
     { field: "name", value: sanitizedName },
@@ -146,7 +146,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     const bindings: Record<string, unknown> = {};
 
     if (name !== undefined) {
-      const sanitizedName = standardizeField("name", sanitizeString(name));
+      const sanitizedName = await standardizeField(
+        "name",
+        sanitizeString(name),
+      );
       const dupCheck = await checkDuplicates("file_access", [
         { field: "name", value: sanitizedName },
       ]);

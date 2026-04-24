@@ -81,6 +81,11 @@ export interface GenericListOptions {
   extraConditions?: string[];
   /** Extra query bindings merged into the parameterized query. */
   extraBindings?: Record<string, unknown>;
+  /**
+   * Maximum page size for this entity.  When specified, the effective limit
+   * is `min(params.limit, limit)`, capped at 200 by the global clamp.
+   */
+  limit?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +221,13 @@ export async function genericList<T = Record<string, unknown>>(
     }
   }
 
+  const effectiveParams: CursorParams = {
+    ...params,
+    limit: opts.limit != null
+      ? Math.min(params.limit, opts.limit)
+      : params.limit,
+  };
+
   return paginatedQuery<T>({
     table: opts.table,
     select: opts.select,
@@ -224,7 +236,7 @@ export async function genericList<T = Record<string, unknown>>(
     orderBy: opts.orderBy,
     conditions,
     bindings,
-    params,
+    params: effectiveParams,
   });
 }
 
@@ -283,7 +295,7 @@ export async function genericCreate<
     });
   }
 
-  const validationErrors = validateFields(validationInput);
+  const validationErrors = await validateFields(validationInput);
   if (Object.keys(validationErrors).length > 0) {
     return {
       success: false,
@@ -378,7 +390,7 @@ export async function genericUpdate<
   }
 
   if (validationInput.length > 0) {
-    const validationErrors = validateFields(validationInput);
+    const validationErrors = await validateFields(validationInput);
     if (Object.keys(validationErrors).length > 0) {
       return {
         success: false,

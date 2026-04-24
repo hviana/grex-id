@@ -51,7 +51,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const { name, systemId, permissions, isBuiltIn } = body;
 
   const errors: string[] = [];
-  errors.push(...validateField("name", name));
+  errors.push(...await validateField("name", name));
   if (!systemId) errors.push("validation.system.required");
 
   if (errors.length > 0) {
@@ -65,7 +65,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const stdName = standardizeField("name", sanitizeString(name));
+    const stdName = await standardizeField("name", sanitizeString(name));
     const dup = await checkDuplicates("role", [
       { field: "name", value: stdName },
       { field: "systemId", value: systemId },
@@ -124,8 +124,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     > = {};
 
     if (data.name !== undefined) {
-      const stdName = standardizeField("name", sanitizeString(data.name));
-      const nameErrors = validateField("name", stdName);
+      const stdName = await standardizeField("name", sanitizeString(data.name));
+      const nameErrors = await validateField("name", stdName);
       if (nameErrors.length > 0) {
         return Response.json(
           { success: false, error: { code: "VALIDATION", errors: nameErrors } },

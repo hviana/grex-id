@@ -62,7 +62,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   } = body;
 
   const errors: string[] = [];
-  errors.push(...validateField("name", name));
+  errors.push(...await validateField("name", name));
   if (!systemId) errors.push("validation.system.required");
   if (price === undefined) errors.push("validation.plan.priceRequired");
   if (!recurrenceDays) errors.push("validation.plan.recurrenceRequired");
@@ -79,7 +79,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
   try {
     const plan = await createPlan({
-      name: standardizeField("name", sanitizeString(name)),
+      name: await standardizeField("name", sanitizeString(name)),
       description: sanitizeString(description ?? ""),
       systemId,
       price: Number(price),
@@ -168,7 +168,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
           updates[field] = null; // will be mapped to NONE in query
         } else {
           updates[field] = field === "name" || field === "description"
-            ? standardizeField(field, sanitizeString(value))
+            ? await standardizeField(field, sanitizeString(value))
             : value;
         }
       }

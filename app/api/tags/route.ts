@@ -33,11 +33,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const name = body.name
-    ? standardizeField("name", body.name, "tag")
+    ? await standardizeField("name", body.name, "tag")
     : undefined;
   const color = body.color?.trim() ?? "";
 
-  const nameErrors = validateField("name", name, "tag");
+  const nameErrors = await validateField("name", name, "tag");
   if (nameErrors.length > 0) {
     return Response.json(
       { success: false, error: { code: "VALIDATION", errors: nameErrors } },
@@ -96,7 +96,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   const name = body.name
-    ? standardizeField("name", body.name, "tag")
+    ? await standardizeField("name", body.name, "tag")
     : undefined;
   const color = body.color?.trim();
 

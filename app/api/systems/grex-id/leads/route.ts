@@ -36,13 +36,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const email = parsedBody.email
-      ? standardizeField("email", String(parsedBody.email), "lead")
+      ? await standardizeField("email", String(parsedBody.email), "lead")
       : undefined;
     const phone = parsedBody.phone
-      ? standardizeField("phone", String(parsedBody.phone), "lead")
+      ? await standardizeField("phone", String(parsedBody.phone), "lead")
       : undefined;
     const name = parsedBody.name
-      ? standardizeField("name", String(parsedBody.name), "lead")
+      ? await standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
     if (!companyId || !systemId) {
@@ -58,8 +58,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const emailErrors = validateField("email", email, "lead");
-    const nameErrors = validateField("name", name, "lead");
+    const emailErrors = await validateField("email", email, "lead");
+    const nameErrors = await validateField("name", name, "lead");
     const allErrors = [...emailErrors, ...nameErrors];
 
     if (!profile?.name || allErrors.length > 0) {
@@ -224,13 +224,13 @@ async function putHandler(req: Request, ctx: RequestContext) {
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
     const avatarUri = parsedBody.avatarUri as string | undefined;
     const email = parsedBody.email
-      ? standardizeField("email", String(parsedBody.email), "lead")
+      ? await standardizeField("email", String(parsedBody.email), "lead")
       : undefined;
     const phone = parsedBody.phone
-      ? standardizeField("phone", String(parsedBody.phone), "lead")
+      ? await standardizeField("phone", String(parsedBody.phone), "lead")
       : undefined;
     const name = parsedBody.name
-      ? standardizeField("name", String(parsedBody.name), "lead")
+      ? await standardizeField("name", String(parsedBody.name), "lead")
       : undefined;
 
     if (!id) {
