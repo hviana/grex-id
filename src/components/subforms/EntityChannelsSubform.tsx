@@ -77,12 +77,12 @@ function displayValue(channel: EntityChannel): string {
 function channelBadge(ch: EntityChannel, t: (k: string) => string) {
   return ch.verified
     ? (
-      <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full whitespace-nowrap">
+      <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-1.5 py-0.5 rounded-full whitespace-nowrap">
         ✅ {t("common.entityChannels.verified")}
       </span>
     )
     : (
-      <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full whitespace-nowrap">
+      <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">
         ⚠️ {t("common.entityChannels.unverified")}
       </span>
     );
@@ -196,9 +196,6 @@ const EntityChannelsSubform = forwardRef<
       clearFeedback();
 
       if (mode === "local") {
-        // Local mode: no network, no verification — we just accumulate the
-        // entry for the parent form to submit. Duplicate (type, value) guard
-        // keeps the list clean.
         if (
           channels.some((c) => c.type === channelType && c.value === trimmed)
         ) {
@@ -282,21 +279,6 @@ const EntityChannelsSubform = forwardRef<
       }
     };
 
-    const canRemove = (ch: EntityChannel): boolean => {
-      if (mode === "local") {
-        // Required invariant: at least one entry of each required type.
-        if (!required.includes(ch.type)) return true;
-        const sameTypeCount = channels.filter((c) => c.type === ch.type).length;
-        return sameTypeCount > 1;
-      }
-      if (!ch.verified) return true;
-      if (!required.includes(ch.type)) return true;
-      const sameTypeVerifiedCount = channels.filter(
-        (c) => c.verified && c.type === ch.type,
-      ).length;
-      return sameTypeVerifiedCount > 1;
-    };
-
     const handleRemoveChannel = async (channelId: string) => {
       clearFeedback();
       if (mode === "local") {
@@ -330,8 +312,8 @@ const EntityChannelsSubform = forwardRef<
     };
 
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-[var(--color-light-text)]">
+      <div className="space-y-2">
+        <p className="text-xs text-[var(--color-light-text)]">
           {mode === "local"
             ? t("common.entityChannels.description.local")
             : t("common.entityChannels.description")}
@@ -339,78 +321,78 @@ const EntityChannelsSubform = forwardRef<
 
         <ErrorDisplay message={channelError} />
         {channelSuccess && (
-          <div className="rounded-lg bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 px-4 py-3 text-sm text-[var(--color-primary-green)]">
+          <div className="rounded-lg bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 px-3 py-2 text-xs text-[var(--color-primary-green)]">
             {t(channelSuccess)}
           </div>
         )}
 
         {channelsLoading
           ? (
-            <div className="flex justify-center py-6">
+            <div className="flex justify-center py-4">
               <Spinner size="md" />
             </div>
           )
           : channels.length === 0
           ? (
-            <p className="text-sm text-[var(--color-light-text)] text-center py-4">
+            <p className="text-xs text-[var(--color-light-text)] text-center py-3">
               {t("common.empty")}
             </p>
           )
           : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {channels.map((ch) => {
                 const id = String(ch.id);
                 const isDeleting = deletingId === id;
                 const isResending = resendingId === id;
-                const removable = canRemove(ch);
 
                 return (
                   <div
                     key={id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4"
+                    className="flex items-center gap-2 backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-lg px-3 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10"
                   >
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      <span className="text-xl shrink-0">
-                        {iconForType(ch.type)}
-                      </span>
+                    <span className="text-base shrink-0">
+                      {iconForType(ch.type)}
+                    </span>
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5">
                       <span className="text-sm text-white truncate">
                         {displayValue(ch)}
                       </span>
                       {mode === "authenticated" && channelBadge(ch, t)}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
                       {mode === "authenticated" && !ch.verified && (
                         <button
                           type="button"
                           onClick={() => handleResendVerification(id)}
                           disabled={isResending}
-                          className="text-xs text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors disabled:opacity-50 flex items-center gap-1"
+                          title={t("common.entityChannels.resendVerification")}
+                          className="text-[var(--color-secondary-blue)] hover:text-[var(--color-primary-green)] transition-colors disabled:opacity-50 flex items-center justify-center w-6 h-6 rounded hover:bg-white/10"
                         >
-                          {isResending && (
-                            <Spinner
-                              size="sm"
-                              className="border-[var(--color-secondary-blue)] border-t-transparent"
-                            />
-                          )}
-                          {t("common.entityChannels.resendVerification")}
+                          {isResending
+                            ? (
+                              <Spinner
+                                size="sm"
+                                className="border-[var(--color-secondary-blue)] border-t-transparent"
+                              />
+                            )
+                            : "🔄"}
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => handleRemoveChannel(id)}
-                        disabled={isDeleting || !removable}
-                        title={!removable
-                          ? t("common.entityChannels.requiredHint")
-                          : undefined}
-                        className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        disabled={isDeleting}
+                        title={t("common.entityChannels.remove")}
+                        className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 flex items-center justify-center w-6 h-6 rounded hover:bg-white/10"
                       >
-                        {isDeleting && (
-                          <Spinner
-                            size="sm"
-                            className="border-red-400 border-t-transparent"
-                          />
-                        )}
-                        {t("common.entityChannels.remove")}
+                        {isDeleting
+                          ? (
+                            <Spinner
+                              size="sm"
+                              className="border-red-400 border-t-transparent"
+                            />
+                          )
+                          : "✕"}
                       </button>
                     </div>
                   </div>
@@ -420,56 +402,58 @@ const EntityChannelsSubform = forwardRef<
           )}
 
         {channels.length < DEFAULT_MAX && channelTypes.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="space-y-2 pt-1">
             <div className="flex gap-1 flex-wrap">
               {channelTypes.map((ct) => (
                 <button
                   key={ct}
                   type="button"
                   onClick={() => setChannelType(ct)}
-                  className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                  className={`px-2.5 py-1 text-xs rounded-md transition-all ${
                     channelType === ct
                       ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] border border-[var(--color-primary-green)]/30"
-                      : "bg-white/5 text-[var(--color-light-text)] border border-[var(--color-dark-gray)]"
+                      : "bg-white/5 text-[var(--color-light-text)] border border-transparent hover:border-[var(--color-dark-gray)]"
                   }`}
                 >
                   {iconForType(ct)} {t(`common.entityChannels.type.${ct}`)}
                 </button>
               ))}
             </div>
-            <input
-              type={inputType}
-              value={channelValue}
-              onChange={(e) => setChannelValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddChannel();
-                }
-              }}
-              placeholder={t("common.placeholder.entityChannel")}
-              required
-              className="flex-1 rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
-            />
-            <button
-              type="button"
-              disabled={addingChannel || !channelValue.trim()}
-              onClick={handleAddChannel}
-              className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2.5 font-semibold text-black text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
-            >
-              {addingChannel && (
-                <Spinner
-                  size="sm"
-                  className="border-black border-t-transparent"
-                />
-              )}
-              {t("common.entityChannels.add")}
-            </button>
+            <div className="flex gap-2">
+              <input
+                type={inputType}
+                value={channelValue}
+                onChange={(e) => setChannelValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddChannel();
+                  }
+                }}
+                placeholder={t("common.placeholder.entityChannel")}
+                required
+                className="flex-1 min-w-0 rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+              />
+              <button
+                type="button"
+                disabled={addingChannel || !channelValue.trim()}
+                onClick={handleAddChannel}
+                className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2 font-semibold text-black text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                {addingChannel && (
+                  <Spinner
+                    size="sm"
+                    className="border-black border-t-transparent"
+                  />
+                )}
+                {t("common.entityChannels.add")}
+              </button>
+            </div>
           </div>
         )}
 
         {channels.length >= DEFAULT_MAX && (
-          <p className="text-sm text-yellow-400 text-center">
+          <p className="text-xs text-yellow-400 text-center">
             {t("common.entityChannels.maxReached")}
           </p>
         )}
