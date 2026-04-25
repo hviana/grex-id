@@ -1,20 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
-import EditButton from "@/src/components/shared/EditButton";
-import DeleteButton from "@/src/components/shared/DeleteButton";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
-import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
-import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import VoucherCard from "@/src/components/core/VoucherCard";
+import VoucherSubform from "@/src/components/subforms/VoucherSubform";
+import type { SubformRef } from "@/src/components/shared/GenericList";
 
 interface VoucherItem {
   id: string;
@@ -38,39 +34,6 @@ interface VoucherItem {
   [key: string]: unknown;
 }
 
-interface EntityLimitEntry {
-  key: string;
-  value: string;
-  description: string;
-}
-
-function formatModifier(value: number): string {
-  if (value < 0) return `- ${(Math.abs(value) / 100).toFixed(2)}`;
-  if (value > 0) return `+ ${(value / 100).toFixed(2)}`;
-  return "0";
-}
-
-function modifiersToKV(
-  mods: Record<string, number> | null,
-): EntityLimitEntry[] {
-  if (!mods) return [];
-  return Object.entries(mods).map(([key, val]) => ({
-    key,
-    value: String(val),
-    description: "",
-  }));
-}
-
-function kvToModifiers(kv: EntityLimitEntry[]): Record<string, number> | null {
-  const filtered = kv.filter((e) => e.key.trim() && e.value.trim());
-  if (filtered.length === 0) return null;
-  const result: Record<string, number> = {};
-  for (const entry of filtered) {
-    result[entry.key.trim()] = Number(entry.value);
-  }
-  return result;
-}
-
 export default function VouchersPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
@@ -81,39 +44,10 @@ export default function VouchersPage() {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  // Form fields
-  const [formCode, setFormCode] = useState("");
-  const [formPriceModifier, setFormPriceModifier] = useState("0");
-  const [formPermissions, setFormPermissions] = useState<string[]>([]);
-  const [formEntityLimitModifiers, setFormEntityLimitModifiers] = useState<
-    EntityLimitEntry[]
-  >([]);
-  const [formApiRateLimitModifier, setFormApiRateLimitModifier] = useState("0");
-  const [formStorageLimitModifier, setFormStorageLimitModifier] = useState("0");
-  const [formFileCacheLimitModifier, setFormFileCacheLimitModifier] = useState(
-    "0",
-  );
-  const [
-    formMaxConcurrentDownloadsModifier,
-    setFormMaxConcurrentDownloadsModifier,
-  ] = useState("0");
-  const [
-    formMaxConcurrentUploadsModifier,
-    setFormMaxConcurrentUploadsModifier,
-  ] = useState("0");
-  const [
-    formMaxDownloadBandwidthModifier,
-    setFormMaxDownloadBandwidthModifier,
-  ] = useState("0");
-  const [formMaxUploadBandwidthModifier, setFormMaxUploadBandwidthModifier] =
-    useState("0");
-  const [formMaxOperationCountModifier, setFormMaxOperationCountModifier] =
-    useState<EntityLimitEntry[]>([]);
-  const [formCreditModifier, setFormCreditModifier] = useState("0");
-  const [formApplicablePlanIds, setFormApplicablePlanIds] = useState<
-    { id: string; label: string }[]
-  >([]);
-  const [formExpiresAt, setFormExpiresAt] = useState("");
+  const formRef = useRef<SubformRef>(null);
+  const [formInitial, setFormInitial] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 
@@ -142,64 +76,30 @@ export default function VouchersPage() {
     [systemToken],
   );
 
-  const isExpired = (expiresAt: string | null) => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
-  };
-
   const openCreate = () => {
-    setFormCode("");
-    setFormPriceModifier("0");
-    setFormPermissions([]);
-    setFormEntityLimitModifiers([]);
-    setFormApiRateLimitModifier("0");
-    setFormStorageLimitModifier("0");
-    setFormFileCacheLimitModifier("0");
-    setFormMaxConcurrentDownloadsModifier("0");
-    setFormMaxConcurrentUploadsModifier("0");
-    setFormMaxDownloadBandwidthModifier("0");
-    setFormMaxUploadBandwidthModifier("0");
-    setFormMaxOperationCountModifier([]);
-    setFormCreditModifier("0");
-    setFormApplicablePlanIds([]);
-    setFormExpiresAt("");
+    setFormInitial(undefined);
     setError(null);
     setShowCreate(true);
   };
 
   const openEdit = (item: VoucherItem) => {
-    setFormCode(item.code);
-    setFormPriceModifier(String(item.priceModifier));
-    setFormPermissions([...item.permissions]);
-    setFormEntityLimitModifiers(modifiersToKV(item.entityLimitModifiers));
-    setFormApiRateLimitModifier(String(item.apiRateLimitModifier));
-    setFormStorageLimitModifier(String(item.storageLimitModifier / 1073741824));
-    setFormFileCacheLimitModifier(
-      String((item.fileCacheLimitModifier ?? 0) / 1048576),
-    );
-    setFormMaxConcurrentDownloadsModifier(
-      String(item.maxConcurrentDownloadsModifier ?? 0),
-    );
-    setFormMaxConcurrentUploadsModifier(
-      String(item.maxConcurrentUploadsModifier ?? 0),
-    );
-    setFormMaxDownloadBandwidthModifier(
-      String(item.maxDownloadBandwidthModifier ?? 0),
-    );
-    setFormMaxUploadBandwidthModifier(
-      String(item.maxUploadBandwidthModifier ?? 0),
-    );
-    setFormMaxOperationCountModifier(
-      modifiersToKV(item.maxOperationCountModifier),
-    );
-    setFormCreditModifier(String(item.creditModifier));
-    setFormApplicablePlanIds(
-      (item.applicablePlanIds ?? []).map((id) => ({
-        id: String(id),
-        label: String(id),
-      })),
-    );
-    setFormExpiresAt(item.expiresAt ? item.expiresAt.slice(0, 16) : "");
+    setFormInitial({
+      code: item.code,
+      priceModifier: item.priceModifier,
+      applicablePlanIds: item.applicablePlanIds ?? [],
+      expiresAt: item.expiresAt,
+      permissions: item.permissions ?? [],
+      entityLimitModifiers: item.entityLimitModifiers,
+      apiRateLimitModifier: item.apiRateLimitModifier ?? 0,
+      storageLimitModifier: item.storageLimitModifier ?? 0,
+      fileCacheLimitModifier: item.fileCacheLimitModifier ?? 0,
+      creditModifier: item.creditModifier ?? 0,
+      maxConcurrentDownloadsModifier: item.maxConcurrentDownloadsModifier ?? 0,
+      maxConcurrentUploadsModifier: item.maxConcurrentUploadsModifier ?? 0,
+      maxDownloadBandwidthModifier: item.maxDownloadBandwidthModifier ?? 0,
+      maxUploadBandwidthModifier: item.maxUploadBandwidthModifier ?? 0,
+      maxOperationCountModifier: item.maxOperationCountModifier,
+    });
     setError(null);
     setEditItem(item);
   };
@@ -210,29 +110,10 @@ export default function VouchersPage() {
     setError(null);
     setValidationErrors([]);
     try {
+      const formData = formRef.current?.getData() ?? {};
       const payload = {
         id: editItem?.id,
-        code: formCode,
-        priceModifier: Number(formPriceModifier),
-        permissions: formPermissions,
-        entityLimitModifiers: kvToModifiers(formEntityLimitModifiers),
-        apiRateLimitModifier: Number(formApiRateLimitModifier),
-        storageLimitModifier: Math.round(
-          Number(formStorageLimitModifier) * 1073741824,
-        ),
-        fileCacheLimitModifier: Math.round(
-          Number(formFileCacheLimitModifier) * 1048576,
-        ),
-        maxConcurrentDownloadsModifier: Number(
-          formMaxConcurrentDownloadsModifier,
-        ),
-        maxConcurrentUploadsModifier: Number(formMaxConcurrentUploadsModifier),
-        maxDownloadBandwidthModifier: Number(formMaxDownloadBandwidthModifier),
-        maxUploadBandwidthModifier: Number(formMaxUploadBandwidthModifier),
-        maxOperationCountModifier: kvToModifiers(formMaxOperationCountModifier),
-        creditModifier: Number(formCreditModifier),
-        applicablePlanIds: formApplicablePlanIds.map((p) => p.id),
-        expiresAt: formExpiresAt ? new Date(formExpiresAt).toISOString() : null,
+        ...formData,
       };
 
       const method = editItem ? "PUT" : "POST";
@@ -273,146 +154,6 @@ export default function VouchersPage() {
     triggerReload();
   };
 
-  const renderVoucher = (voucher: VoucherItem, _controls: React.ReactNode) => (
-    <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-xl">🎟️</span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-mono font-semibold text-white text-lg">
-                {voucher.code}
-              </h3>
-              {isExpired(voucher.expiresAt) && (
-                <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
-                  {t("core.vouchers.expired")}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-[var(--color-light-text)]">
-              <span>
-                {t("core.vouchers.priceModifier")}:{" "}
-                <span
-                  className={voucher.priceModifier < 0
-                    ? "text-[var(--color-primary-green)]"
-                    : voucher.priceModifier > 0
-                    ? "text-red-400"
-                    : "text-white"}
-                >
-                  {formatModifier(voucher.priceModifier)}
-                </span>
-              </span>
-              {voucher.apiRateLimitModifier !== 0 && (
-                <span>
-                  {t("core.vouchers.apiRate")}:{" "}
-                  {voucher.apiRateLimitModifier > 0 ? "+" : ""}
-                  {voucher.apiRateLimitModifier}
-                </span>
-              )}
-              {voucher.storageLimitModifier !== 0 && (
-                <span>
-                  {t("core.vouchers.storage")}:{" "}
-                  {voucher.storageLimitModifier > 0 ? "+" : ""}
-                  {(voucher.storageLimitModifier / 1073741824).toFixed(1)} GB
-                </span>
-              )}
-              {voucher.fileCacheLimitModifier !== 0 && (
-                <span>
-                  🗂️ {t("core.vouchers.fileCache")}:{" "}
-                  {voucher.fileCacheLimitModifier > 0 ? "+" : ""}
-                  {(voucher.fileCacheLimitModifier / 1048576).toFixed(1)} MB
-                </span>
-              )}
-              {voucher.creditModifier !== 0 && (
-                <span>
-                  {t("core.vouchers.creditModifier")}:{" "}
-                  {voucher.creditModifier > 0 ? "+" : ""}
-                  {voucher.creditModifier}
-                </span>
-              )}
-              {voucher.maxConcurrentDownloadsModifier !== 0 && (
-                <span>
-                  ⬇️ {t("core.vouchers.maxConcurrentDownloadsModifier")}:{" "}
-                  {voucher.maxConcurrentDownloadsModifier > 0 ? "+" : ""}
-                  {voucher.maxConcurrentDownloadsModifier}
-                </span>
-              )}
-              {voucher.maxConcurrentUploadsModifier !== 0 && (
-                <span>
-                  ⬆️ {t("core.vouchers.maxConcurrentUploadsModifier")}:{" "}
-                  {voucher.maxConcurrentUploadsModifier > 0 ? "+" : ""}
-                  {voucher.maxConcurrentUploadsModifier}
-                </span>
-              )}
-              {voucher.maxDownloadBandwidthModifier !== 0 && (
-                <span>
-                  📶 {t("core.vouchers.maxDownloadBandwidthModifier")}:{" "}
-                  {voucher.maxDownloadBandwidthModifier > 0 ? "+" : ""}
-                  {voucher.maxDownloadBandwidthModifier}
-                </span>
-              )}
-              {voucher.maxUploadBandwidthModifier !== 0 && (
-                <span>
-                  📶 {t("core.vouchers.maxUploadBandwidthModifier")}:{" "}
-                  {voucher.maxUploadBandwidthModifier > 0 ? "+" : ""}
-                  {voucher.maxUploadBandwidthModifier}
-                </span>
-              )}
-              {voucher.maxOperationCountModifier &&
-                Object.keys(voucher.maxOperationCountModifier).length > 0 &&
-                Object.entries(voucher.maxOperationCountModifier).map(
-                  ([key, val]) => (
-                    <span key={key}>
-                      🔢 {t(`billing.limits.${key}`) !== `billing.limits.${key}`
-                        ? t(`billing.limits.${key}`)
-                        : key}: {val > 0 ? "+" : ""}
-                      {val}
-                    </span>
-                  ),
-                )}
-              {voucher.applicablePlanIds &&
-                voucher.applicablePlanIds.length > 0 && (
-                <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-                  {voucher.applicablePlanIds.length}{" "}
-                  {t("core.vouchers.applicablePlanIds").toLowerCase()}
-                </span>
-              )}
-              {voucher.expiresAt && !isExpired(voucher.expiresAt) && (
-                <span>
-                  {t("core.vouchers.expires")}:{" "}
-                  {new Date(voucher.expiresAt).toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2 ml-3 shrink-0">
-          <EditButton onClick={() => openEdit(voucher)} />
-          <DeleteButton onConfirm={() => handleDelete(voucher.id)} />
-        </div>
-      </div>
-
-      <TranslatedBadgeList
-        kind="permission"
-        tokens={voucher.permissions}
-        className="mt-3"
-      />
-
-      <TranslatedBadgeList
-        kind="entity"
-        entries={voucher.entityLimitModifiers}
-        className="mt-2"
-        formatValue={(v) => {
-          const n = Number(v);
-          return n > 0 ? `+${n}` : String(n);
-        }}
-      />
-    </div>
-  );
-
-  const inputCls =
-    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
@@ -425,10 +166,15 @@ export default function VouchersPage() {
         onCreateClick={openCreate}
         reloadKey={reloadKey}
         fetchFn={fetchVouchers}
-        renderItem={renderVoucher}
+        renderItem={(voucher) => (
+          <VoucherCard
+            voucher={voucher}
+            onEdit={() => openEdit(voucher)}
+            onDelete={() => handleDelete(voucher.id)}
+          />
+        )}
       />
 
-      {/* Create/Edit Modal */}
       <Modal
         open={showCreate || !!editItem}
         onClose={() => {
@@ -439,248 +185,23 @@ export default function VouchersPage() {
       >
         <ErrorDisplay message={error} errors={validationErrors} />
         <form onSubmit={handleSave} className="mt-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.vouchers.code")} *
-            </label>
-            <input
-              type="text"
-              value={formCode}
-              onChange={(e) => setFormCode(e.target.value)}
-              required
-              placeholder={t("core.vouchers.placeholder.code")}
-              className={`${inputCls} font-mono`}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.priceModifier")} ({t("core.vouchers.cents")})
-              </label>
-              <input
-                type="number"
-                value={formPriceModifier}
-                onChange={(e) => setFormPriceModifier(e.target.value)}
-                placeholder="500"
-                className={inputCls}
-              />
-              <p className="mt-1 text-xs text-[var(--color-light-text)]/60">
-                {t("core.vouchers.priceModifierHint")}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.expiresAt")}
-              </label>
-              <input
-                type="datetime-local"
-                value={formExpiresAt}
-                onChange={(e) => setFormExpiresAt(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-          </div>
-
-          <MultiBadgeField
-            name={t("core.vouchers.permissions")}
-            mode="custom"
-            value={formPermissions}
-            onChange={(vals) => setFormPermissions(vals as string[])}
-            renderBadge={(item, remove) => (
-              <TranslatedBadge
-                kind="permission"
-                token={typeof item === "string" ? item : item.name}
-                onRemove={remove}
-              />
-            )}
+          <VoucherSubform
+            ref={formRef}
+            key={editItem?.id ?? "create"}
+            initialData={formInitial}
           />
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.vouchers.entityLimitModifiers")}
-            </label>
-            <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-              {t("core.vouchers.entityLimitModifiersHint")}
-            </p>
-            <DynamicKeyValueField
-              fields={formEntityLimitModifiers}
-              onChange={setFormEntityLimitModifiers}
-              showDescription={false}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.apiRateLimitModifier")}
-              </label>
-              <input
-                type="number"
-                value={formApiRateLimitModifier}
-                onChange={(e) => setFormApiRateLimitModifier(e.target.value)}
-                placeholder="0"
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.storageLimitModifier")} (GB)
-              </label>
-              <input
-                type="number"
-                value={formStorageLimitModifier}
-                onChange={(e) => setFormStorageLimitModifier(e.target.value)}
-                step="0.1"
-                placeholder={t("core.plans.placeholder.storageGB")}
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.creditModifier")}
-              </label>
-              <input
-                type="number"
-                value={formCreditModifier}
-                onChange={(e) => setFormCreditModifier(e.target.value)}
-                placeholder="0"
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.vouchers.fileCacheLimitModifier")}
-              </label>
-              <input
-                type="number"
-                value={formFileCacheLimitModifier}
-                onChange={(e) => setFormFileCacheLimitModifier(e.target.value)}
-                step="1"
-                placeholder={t(
-                  "core.vouchers.placeholder.fileCacheLimitModifier",
-                )}
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                ⬇️ {t("core.vouchers.maxConcurrentDownloadsModifier")}
-              </label>
-              <input
-                type="number"
-                value={formMaxConcurrentDownloadsModifier}
-                onChange={(e) =>
-                  setFormMaxConcurrentDownloadsModifier(e.target.value)}
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                ⬆️ {t("core.vouchers.maxConcurrentUploadsModifier")}
-              </label>
-              <input
-                type="number"
-                value={formMaxConcurrentUploadsModifier}
-                onChange={(e) =>
-                  setFormMaxConcurrentUploadsModifier(e.target.value)}
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                📶 {t("core.vouchers.maxDownloadBandwidthModifier")}
-              </label>
-              <input
-                type="number"
-                value={formMaxDownloadBandwidthModifier}
-                onChange={(e) =>
-                  setFormMaxDownloadBandwidthModifier(e.target.value)}
-                step="0.1"
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                📶 {t("core.vouchers.maxUploadBandwidthModifier")}
-              </label>
-              <input
-                type="number"
-                value={formMaxUploadBandwidthModifier}
-                onChange={(e) =>
-                  setFormMaxUploadBandwidthModifier(e.target.value)}
-                step="0.1"
-                placeholder="0"
-                className={`${inputCls} placeholder-white/30`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                🔢 {t("core.vouchers.maxOperationCountModifier")}
-              </label>
-              <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-                {t("core.vouchers.maxOperationCountModifierHint")}
-              </p>
-              <DynamicKeyValueField
-                fields={formMaxOperationCountModifier}
-                onChange={setFormMaxOperationCountModifier}
-                showDescription={false}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.vouchers.applicablePlanIds")}
-            </label>
-            <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-              {t("core.vouchers.applicablePlansHint")}
-            </p>
-            <SearchableSelectField
-              fetchFn={async (search: string) => {
-                const params = new URLSearchParams();
-                if (search) params.set("search", search);
-                const res = await fetch(`/api/core/plans?${params}`, {
-                  headers: { Authorization: `Bearer ${systemToken}` },
-                });
-                const json = await res.json();
-                return (json.data ?? []).map((
-                  p: { id: string; name: string },
-                ) => ({
-                  id: String(p.id),
-                  label: p.name,
-                }));
-              }}
-              multiple
-              onChange={setFormApplicablePlanIds}
-            />
-          </div>
 
           <button
             type="submit"
             disabled={saving}
             className="w-full rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-3 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {saving
-              ? (
-                <Spinner
-                  size="sm"
-                  className="border-black border-t-transparent"
-                />
-              )
-              : null}
+            {saving && (
+              <Spinner
+                size="sm"
+                className="border-black border-t-transparent"
+              />
+            )}
             {t("common.save")}
           </button>
         </form>
