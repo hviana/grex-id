@@ -94,10 +94,20 @@ function LoginContent() {
           redirect_origin: oauthRedirectOrigin,
         });
         router.push(`/oauth/authorize?${params.toString()}`);
-      } else if (result.user.roles?.includes("superuser")) {
-        router.push("/systems");
-      } else {
-        router.push("/entry");
+      } else if (result.systemToken) {
+        const payload = JSON.parse(
+          atob(
+            result.systemToken.split(".")[1].replace(/-/g, "+").replace(
+              /_/g,
+              "/",
+            ),
+          ),
+        );
+        if (payload.tenant?.roles?.includes("superuser")) {
+          router.push("/systems");
+        } else {
+          router.push("/entry");
+        }
       }
     } catch (err) {
       const msg = err instanceof Error

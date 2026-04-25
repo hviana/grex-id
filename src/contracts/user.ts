@@ -5,7 +5,6 @@ export interface User {
   id: string;
   profileId: Profile;
   channelIds: EntityChannel[];
-  roles: string[];
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
   /**

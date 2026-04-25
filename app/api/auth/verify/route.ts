@@ -230,9 +230,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         permissions: (mem.permissions ?? []) as string[],
       };
 
-      const isSuperuser = (user.roles ?? []).includes("superuser");
-      if (isSuperuser) {
-        tenant.roles = ["superuser"];
+      if (tenant.roles.includes("superuser")) {
         tenant.permissions = ["*"];
       }
 
@@ -258,7 +256,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
             id: user.id,
             profileId: user.profileId,
             channelIds: user.channelIds,
-            roles: user.roles,
             twoFactorEnabled: user.twoFactorEnabled ?? false,
           },
         },

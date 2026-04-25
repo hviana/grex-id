@@ -99,7 +99,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
           id: user.id,
           profileId: user.profileId,
           channelIds: user.channelIds ?? [],
-          roles: user.roles,
           twoFactorEnabled: user.twoFactorEnabled ?? false,
         },
       },
