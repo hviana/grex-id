@@ -236,6 +236,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const activeSystem = ctx.systems.find((s) => s.id === ctx.systemId);
+  const systemLogoUrl = activeSystem?.logoUri
+    ? `/api/files/download?uri=${encodeURIComponent(activeSystem.logoUri)}`
+    : undefined;
 
   // Apply the active system's default locale when no user preference is set
   useEffect(() => {
@@ -520,11 +523,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen bg-[var(--color-black)]">
         <Sidebar
           menus={menus}
-          systemLogo={activeSystem?.logoUri
-            ? `/api/files/download?uri=${
-              encodeURIComponent(activeSystem.logoUri)
-            }`
-            : undefined}
+          systemLogo={systemLogoUrl}
           systemName={activeSystem?.name}
           activeComponent={activeComponent}
           onNavigate={handleNavigate}
