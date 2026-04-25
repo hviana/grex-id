@@ -1,4 +1,4 @@
-import { getDb } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("deduplication");
@@ -23,7 +23,7 @@ export async function queryDuplicateChecks(
     )
     .join(";\n");
   const bindings: Record<string, unknown> = { entity };
-  if (excludeId) bindings.excludeId = excludeId;
+  if (excludeId) bindings.excludeId = rid(excludeId);
   fields.forEach((f, i) => {
     bindings[`val_${i}`] = f.value;
   });
