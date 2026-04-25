@@ -1,5 +1,5 @@
 DEFINE TABLE api_token SCHEMAFULL;
-DEFINE FIELD userId          ON api_token TYPE record<user>;
+DEFINE FIELD userId          ON api_token TYPE option<record<user>>;
 DEFINE FIELD companyId       ON api_token TYPE record<company>;
 DEFINE FIELD systemId        ON api_token TYPE record<system>;
 DEFINE FIELD name            ON api_token TYPE string;

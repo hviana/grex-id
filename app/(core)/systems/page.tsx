@@ -216,7 +216,6 @@ export default function SystemsPage() {
                 maxSizeBytes={5242880}
                 companyId="core"
                 systemSlug={formSlug}
-                userId="superuser"
                 category={["logos"]}
                 previewEnabled
                 currentUri={formLogo || undefined}

@@ -209,21 +209,26 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
 
       const mem = await resolveUserMembership(String(user.id));
 
-      const tenant = mem
-        ? {
-          systemId: String(mem.systemId),
-          companyId: String(mem.companyId),
-          systemSlug: mem.systemSlug ?? "core",
-          roles: (mem.roles ?? []) as string[],
-          permissions: (mem.permissions ?? []) as string[],
-        }
-        : {
-          systemId: "",
-          companyId: "",
-          systemSlug: "core",
-          roles: [] as string[],
-          permissions: [] as string[],
-        };
+      if (!mem) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "NO_MEMBERSHIP",
+              message: "auth.error.noMembership",
+            },
+          },
+          { status: 403 },
+        );
+      }
+
+      const tenant = {
+        systemId: String(mem.systemId),
+        companyId: String(mem.companyId),
+        systemSlug: mem.systemSlug ?? "core",
+        roles: (mem.roles ?? []) as string[],
+        permissions: (mem.permissions ?? []) as string[],
+      };
 
       const isSuperuser = (user.roles ?? []).includes("superuser");
       if (isSuperuser) {

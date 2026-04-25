@@ -22,11 +22,10 @@ interface LeadCoreSubformProps {
   companyId?: string;
   systemId?: string;
   systemSlug?: string;
-  userId?: string;
 }
 
 const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
-  ({ initialData, hideTags, companyId, systemId, systemSlug, userId }, ref) => {
+  ({ initialData, hideTags, companyId, systemId, systemSlug }, ref) => {
     const { t } = useLocale();
     const { systemToken } = useAuth();
     const channelsRef = useRef<SubformRef>(null);
@@ -129,7 +128,6 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
             initialData={initialData}
             companyId={companyId}
             systemSlug={systemSlug}
-            userId={userId}
             hideAvatar
           />
         </div>

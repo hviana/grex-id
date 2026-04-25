@@ -15,7 +15,7 @@ assertServerOnly("withAuth");
  * Flow:
  *   1. No `Authorization: Bearer` and not an auth route → return 401.
  *      Every non-auth route requires a bearer token (including the
- *      anonymous user's API token for public operations).
+ *      anonymous API token for public operations).
  *   2. No `Authorization: Bearer` on auth routes → proceed without
  *      populating ctx.tenant/ctx.claims (auth routes only use withRateLimit).
  *   3. Otherwise verify the JWT; claims carry Tenant + universal actorId +

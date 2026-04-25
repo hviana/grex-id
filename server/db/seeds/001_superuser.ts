@@ -45,16 +45,11 @@ export async function seed(db: Surreal): Promise<void> {
        slug = "core",
        logoUri = "";
 
-     // 4. Built-in roles for core system
+     // 4. Built-in role for core system
      LET $superuserRole = CREATE role SET
        name = "superuser",
        systemId = $coreSystem[0].id,
        permissions = ["*"],
-       isBuiltIn = true;
-     LET $anonymousRole = CREATE role SET
-       name = "anonymous",
-       systemId = $coreSystem[0].id,
-       permissions = [],
        isBuiltIn = true;
 
      // 5. Superuser tenant membership
@@ -64,35 +59,20 @@ export async function seed(db: Surreal): Promise<void> {
        systemId = $coreSystem[0].id,
        roleIds = [$superuserRole[0].id];
 
-     // 6. Anonymous user (no profile, no channels, no password)
-     LET $anonUser = CREATE user SET
-       passwordHash = NONE,
-       profileId = NONE,
-       channelIds = [],
-       twoFactorEnabled = false,
-       stayLoggedIn = false;
-
-     // 7. Anonymous user's long-lived API token
+     // 6. Anonymous API token (no associated user)
      CREATE api_token:anonymous SET
-       userId = $anonUser[0].id,
+       userId = NONE,
        companyId = $coreCompany[0].id,
        systemId = $coreSystem[0].id,
        name = "Anonymous Token",
-       permissions = [],
+       permissions = ["anonymous"],
        neverExpires = true,
        frontendUse = false,
-       frontendDomains = [];
-
-     // 8. Anonymous user tenant membership
-     CREATE user_company_system SET
-       userId = $anonUser[0].id,
-       companyId = $coreCompany[0].id,
-       systemId = $coreSystem[0].id,
-       roleIds = [$anonymousRole[0].id];`,
+       frontendDomains = [];`,
     { name, password, email },
   );
 
   console.log(
-    `[seed] core infrastructure created: company, system (slug "core"), roles (superuser, anonymous), superuser (${email}), anonymous user + token`,
+    `[seed] core infrastructure created: company, system (slug "core"), superuser role, superuser (${email}), anonymous API token`,
   );
 }

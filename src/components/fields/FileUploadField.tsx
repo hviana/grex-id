@@ -20,7 +20,6 @@ interface FileUploadFieldProps {
   maxSizeBytes: number;
   companyId: string;
   systemSlug: string;
-  userId: string;
   category: string[];
   previewEnabled?: boolean;
   descriptionEnabled?: boolean;
@@ -36,7 +35,6 @@ export default function FileUploadField({
   maxSizeBytes,
   companyId,
   systemSlug,
-  userId,
   category,
   previewEnabled = false,
   descriptionEnabled = false,

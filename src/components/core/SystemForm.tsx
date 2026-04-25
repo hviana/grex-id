@@ -65,7 +65,6 @@ const SystemForm = forwardRef<SubformRef, SystemFormProps>(
               maxSizeBytes={5242880}
               companyId="core"
               systemSlug={slug}
-              userId="superuser"
               category={["logos"]}
               previewEnabled
               transformFn={async (file) => {

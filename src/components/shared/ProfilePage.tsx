@@ -129,7 +129,6 @@ export default function ProfilePage() {
                 maxSizeBytes={2097152}
                 companyId={companyId}
                 systemSlug={systemSlug}
-                userId={user.id}
                 category={["avatars"]}
                 previewEnabled={false}
                 onComplete={(uri) => setAvatarUri(uri)}

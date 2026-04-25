@@ -115,8 +115,8 @@ file crosses a boundary (§2.7).
 - [ ] Frontend stores opaque token only; derives context from `useAuth().tenant`
       (§10.2).
 - [ ] Every tenant corresponds to a real `(company, system)` pair — no
-      synthesized tenants, no `"0"` sentinels. Anonymous operations use the
-      seeded anonymous user's core tenant token (§2.5, §3.5).
+      synthesized tenants. Anonymous operations use the seeded anonymous API
+      token carrying the `"anonymous"` permission (§2.5, §3.5).
 
 ---
 

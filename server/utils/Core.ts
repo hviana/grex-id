@@ -278,6 +278,7 @@ class Core {
     this.missingSettings.clear();
     // JWT secret is derived from settings — clear so it re-reads from updated data
     clearCache(CORE_SLUG, "jwt-secret");
+    clearCache(CORE_SLUG, "anonymous-jwt");
     clearCache(CORE_SLUG, "file-access");
   }
 

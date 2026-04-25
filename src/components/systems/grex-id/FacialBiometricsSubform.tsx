@@ -147,7 +147,6 @@ interface FacialBiometricsSubformProps {
   initialData?: Record<string, unknown>;
   companyId?: string;
   systemSlug?: string;
-  userId?: string;
   systemToken?: string;
 }
 
@@ -162,7 +161,7 @@ const FacialBiometricsSubform = forwardRef<
   SubformRef,
   FacialBiometricsSubformProps
 >(
-  ({ initialData, companyId, systemSlug, userId, systemToken }, ref) => {
+  ({ initialData, companyId, systemSlug, systemToken }, ref) => {
     const { t } = useLocale();
 
     // DOM refs

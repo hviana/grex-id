@@ -10,12 +10,11 @@ interface ProfileSubformProps {
   initialData?: Record<string, unknown>;
   companyId?: string;
   systemSlug?: string;
-  userId?: string;
   hideAvatar?: boolean;
 }
 
 const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
-  ({ initialData, companyId, systemSlug, userId, hideAvatar }, ref) => {
+  ({ initialData, companyId, systemSlug, hideAvatar }, ref) => {
     const { t } = useLocale();
     const profile = (initialData?.profileId as Record<string, unknown>) ?? {};
 
@@ -51,7 +50,7 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
             className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
           />
         </div>
-        {!hideAvatar && companyId && systemSlug && userId
+        {!hideAvatar && companyId && systemSlug
           ? (
             <FileUploadField
               fieldName={t("common.profile.avatar")}
@@ -59,7 +58,6 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
               maxSizeBytes={2097152}
               companyId={companyId}
               systemSlug={systemSlug}
-              userId={userId}
               category={["avatars"]}
               previewEnabled
               transformFn={async (file) => {
