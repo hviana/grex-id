@@ -30,14 +30,14 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
     const [expiresAt, setExpiresAt] = useState(
       (initialData?.expiresAt as string)?.slice(0, 16) ?? "",
     );
-    const [applicablePlans, setapplicablePlans] = useState<
+    const [applicablePlans, setApplicablePlans] = useState<
       { id: string; label: string }[]
     >(() => {
       const ids = initialData?.applicablePlans as string[] | undefined;
       if (!ids) return [];
       return ids.map((id) => ({ id: String(id), label: String(id) }));
     });
-    const [applicableCompanies, setapplicableCompanies] = useState<
+    const [applicableCompanies, setApplicableCompanies] = useState<
       BadgeValue[]
     >(() => {
       const ids = initialData?.applicableCompanies as string[] | undefined;
@@ -141,7 +141,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
             }}
             multiple
             initialSelected={applicablePlans}
-            onChange={setapplicablePlans}
+            onChange={setApplicablePlans}
           />
         </div>
 
@@ -156,7 +156,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
             name={t("core.vouchers.applicableCompanies")}
             mode="search"
             value={applicableCompanies}
-            onChange={setapplicableCompanies}
+            onChange={setApplicableCompanies}
             fetchFn={async (search: string) => {
               const params = new URLSearchParams();
               if (search) params.set("search", search);
