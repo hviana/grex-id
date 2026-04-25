@@ -182,7 +182,7 @@ function CoreProfileMenu() {
           {/* Profile */}
           <button
             onClick={() => {
-              handleClose();
+              setOpen(false);
               router.push("/profile");
             }}
             className="w-full text-left px-4 py-3 text-sm text-[var(--color-light-text)] hover:bg-white/5 hover:text-white transition-colors"

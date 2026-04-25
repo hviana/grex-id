@@ -4,7 +4,7 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import {
   getUserWithProfile,
   storePendingTwoFactorSecret,
@@ -208,7 +208,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       systemSlug,
     );
 
-    await publish("send_communication", {
+    await dispatchCommunication({
       channels: channelOrder(verifiedTypes, defaultChannels),
       recipients: [userId],
       template: "human-confirmation",
@@ -268,7 +268,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       systemSlug,
     );
 
-    await publish("send_communication", {
+    await dispatchCommunication({
       channels: channelOrder(verifiedTypes, defaultChannels),
       recipients: [userId],
       template: "human-confirmation",

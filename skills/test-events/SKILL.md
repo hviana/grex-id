@@ -16,8 +16,9 @@ handler put into `queue_event.payload`, anything.
 **Every event handler is in scope — not just communications.** Examples of
 handlers you can wait on and inspect today:
 
-- `send_communication` / `send_email` / `send_sms` (and any framework-registered
-  channel handler like `send_push`, `send_phone`) — communication dispatch.
+- `send_email` / `send_sms` (and any framework-registered channel handler like
+  `send_push`, `send_phone`) — communication dispatch via
+  `dispatchCommunication`.
 - `process_payment` — synchronous payment attempts (recurring billing, credit
   purchases, retries).
 - `resolve_async_payment` — deferred-payment webhook resolution.
@@ -132,8 +133,9 @@ tsx skills/test-events/run.ts list --status dead --since 1h
 tsx skills/test-routes/run.ts POST /api/auth/register \
   --body '{"password":"x","name":"Alice","channels":[{"type":"email","value":"alice@test.com"}],"termsAccepted":true}'
 
-# 2. Wait for the delivery row that was written by `publish(send_communication, …)`.
-#    Filters: handler=send_email (or send_sms, …), recipient=<user id>,
+# 2. Wait for the delivery row that was published by `dispatchCommunication(…)`.
+#    It picks the first registered channel (e.g. send_email) and publishes
+#    directly. Filters: handler=send_email (or send_sms, …),
 #    actionKey=auth.action.register. Blocks until the worker processes it,
 #    up to --timeout ms.
 tsx skills/test-events/run.ts wait \
@@ -169,14 +171,14 @@ prefixed with `[test-events]` and exit non-zero.
 
 List recent deliveries (the queue rows the workers actually pull from).
 
-| Flag                                       | Meaning                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------- |
-| `--handler NAME`                           | Filter by handler (e.g. `send_email`, `send_communication`, `process_payment`). |
-| `--status pending\|processing\|done\|dead` | Filter by status.                                                               |
-| `--event-name NAME`                        | Filter by the underlying `queue_event.name`.                                    |
-| `--since <iso\|Ns\|Nm\|Nh>`                | Lower time bound (default: `5m` ago).                                           |
-| `--limit N`                                | Default 50, cap 500.                                                            |
-| `--compact`                                | Single-line JSON.                                                               |
+| Flag                                       | Meaning                                                   |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `--handler NAME`                           | Filter by handler (e.g. `send_email`, `process_payment`). |
+| `--status pending\|processing\|done\|dead` | Filter by status.                                         |
+| `--event-name NAME`                        | Filter by the underlying `queue_event.name`.              |
+| `--since <iso\|Ns\|Nm\|Nh>`                | Lower time bound (default: `5m` ago).                     |
+| `--limit N`                                | Default 50, cap 500.                                      |
+| `--compact`                                | Single-line JSON.                                         |
 
 Each row includes the resolved event name + the full payload. For communication
 events that means `recipients` / `template` / `templateData` / `channels`; for
@@ -191,17 +193,17 @@ surfaces `confirmationLink` and `templateData` at the top level for convenience;
 for any other handler those fields are simply `null` and the full payload is in
 `matched.payload`. Returns non-zero when the timeout elapses without a match.
 
-| Flag                                                    | Meaning                                                                                                                                                           |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--handler NAME`                                        | Handler name. Works for every registered handler — `send_email`, `send_communication`, `process_payment`, `auto_recharge`, subsystem / framework names, whatever. |
-| `--event-name NAME`                                     | Underlying `queue_event.name`.                                                                                                                                    |
-| `--recipient user:…\|lead:…`                            | Communication convenience: require `payload.recipients` to contain this id.                                                                                       |
-| `--action-key auth.action.register`                     | Communication convenience: require `payload.templateData.actionKey` to equal this.                                                                                |
-| `--status pending\|processing\|done\|dead`              | Require the delivery to be in this status. Omit for "any".                                                                                                        |
-| `--payload-contains '{"kind":"credits","amount":1000}'` | **The generic filter — works for any handler.** Deep-equality match against payload. Strings match by substring inclusion OR equality. Nested objects descend.    |
-| `--since <dur>`                                         | Lower time bound (default: `2m` ago). Use this to ignore older noise when the test DB isn't cleaned.                                                              |
-| `--timeout <ms>`                                        | Total wait time (default: `60000`).                                                                                                                               |
-| `--poll <ms>`                                           | Poll interval (default: `500`).                                                                                                                                   |
+| Flag                                                    | Meaning                                                                                                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--handler NAME`                                        | Handler name. Works for every registered handler — `send_email`, `process_payment`, `auto_recharge`, subsystem / framework names, whatever.                    |
+| `--event-name NAME`                                     | Underlying `queue_event.name`.                                                                                                                                 |
+| `--recipient user:…\|lead:…`                            | Communication convenience: require `payload.recipients` to contain this id.                                                                                    |
+| `--action-key auth.action.register`                     | Communication convenience: require `payload.templateData.actionKey` to equal this.                                                                             |
+| `--status pending\|processing\|done\|dead`              | Require the delivery to be in this status. Omit for "any".                                                                                                     |
+| `--payload-contains '{"kind":"credits","amount":1000}'` | **The generic filter — works for any handler.** Deep-equality match against payload. Strings match by substring inclusion OR equality. Nested objects descend. |
+| `--since <dur>`                                         | Lower time bound (default: `2m` ago). Use this to ignore older noise when the test DB isn't cleaned.                                                           |
+| `--timeout <ms>`                                        | Total wait time (default: `60000`).                                                                                                                            |
+| `--poll <ms>`                                           | Poll interval (default: `500`).                                                                                                                                |
 
 For non-communication handlers, combine `--handler` with `--payload-contains` to
 uniquely identify the delivery you want:

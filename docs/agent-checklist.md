@@ -150,8 +150,8 @@ Every durable change mutates the cache in the same request:
 
 ## 10. Events & Communication (§5)
 
-- [ ] Publish `send_communication` only — never `send_email`/`send_sms` directly
-      (§5.2).
+- [ ] Use `dispatchCommunication(…)` — never `publish("send_email"/"send_sms")`
+      directly (§5.2).
 - [ ] Only two template families: `human-confirmation` or `notification` (§5.3).
 - [ ] Human-confirmation backed by `verification_request` via
       `communicationGuard` (§4.12).
@@ -243,7 +243,7 @@ Before calling done, answer:
       mutations (§3.3).
 - [ ] **Charges money?** `payment` row before charge; async flows set
       `continuityData`+`expiresAt` (§7.5, §7.6).
-- [ ] **Delivers messages?** `send_communication` + canonical template; no
+- [ ] **Delivers messages?** `dispatchCommunication(…)` + canonical template; no
       bespoke template (§5.2, §5.3).
 - [ ] **Needs human confirmation?** `communicationGuard` +
       `verification_request` — no state mutation before click (§4.12).

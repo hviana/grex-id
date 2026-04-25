@@ -10,7 +10,7 @@ import {
 } from "@/server/db/queries/auth";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { validateField } from "@/server/utils/field-validator";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
@@ -150,7 +150,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const name = profileData?.name ?? "";
   const locale = profileData?.locale;
 
-  await publish("send_communication", {
+  await dispatchCommunication({
     channels: channelOrder,
     recipients: [userId],
     template: "human-confirmation",

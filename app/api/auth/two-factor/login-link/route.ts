@@ -8,7 +8,7 @@ import {
   verifyPassword,
 } from "@/server/db/queries/auth";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 
@@ -121,7 +121,7 @@ async function handler(
     "auth.communication.defaultChannels",
   );
 
-  await publish("send_communication", {
+  await dispatchCommunication({
     channels: channelOrder(verifiedTypes, defaultChannels),
     recipients: [String(user.id)],
     template: "human-confirmation",

@@ -1,4 +1,5 @@
 import { publish } from "../publisher.ts";
+import { dispatchCommunication } from "./send-communication.ts";
 import Core from "../../utils/Core.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 import {
@@ -40,7 +41,7 @@ export async function handleAutoRecharge(
 
   if (!paymentMethod) {
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {
@@ -70,7 +71,7 @@ export async function handleAutoRecharge(
   }
 
   if (ownerId) {
-    await publish("send_communication", {
+    await dispatchCommunication({
       recipients: [ownerId],
       template: "notification",
       templateData: {

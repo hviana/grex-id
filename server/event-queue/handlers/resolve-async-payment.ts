@@ -1,5 +1,5 @@
 import type { HandlerFn } from "../worker.ts";
-import { publish } from "../publisher.ts";
+import { dispatchCommunication } from "./send-communication.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
@@ -108,7 +108,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     );
 
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {
@@ -142,7 +142,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     );
 
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {

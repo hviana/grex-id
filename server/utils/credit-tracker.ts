@@ -1,4 +1,5 @@
 import { publish } from "../event-queue/publisher.ts";
+import { dispatchCommunication } from "../event-queue/handlers/send-communication.ts";
 import type { Tenant } from "@/src/contracts/tenant.ts";
 import type { TenantActorType } from "@/src/contracts/tenant.ts";
 import { resolveMaxOperationCount } from "./guards.ts";
@@ -145,7 +146,7 @@ export async function consumeCredits(params: {
       const systemSlug = alertResult[3]?.[0]?.slug ?? "";
 
       if (ownerId) {
-        await publish("send_communication", {
+        await dispatchCommunication({
           recipients: [ownerId],
           template: "notification",
           templateData: {
@@ -280,7 +281,7 @@ async function sendOperationCountAlert(
   const systemSlug = alertResult[2]?.[0]?.slug ?? "";
 
   if (ownerId) {
-    await publish("send_communication", {
+    await dispatchCommunication({
       recipients: [ownerId],
       template: "notification",
       templateData: {

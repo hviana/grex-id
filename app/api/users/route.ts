@@ -19,7 +19,7 @@ import { createUserWithChannels } from "@/server/db/queries/auth";
 import { findChannelOwners } from "@/server/db/queries/entity-channels";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { forgetActor } from "@/server/utils/actor-validity";
@@ -169,7 +169,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
         "http://localhost:3000";
 
-    await publish("send_communication", {
+    await dispatchCommunication({
       recipients: [existingUserId],
       template: "notification",
       templateData: {
@@ -234,7 +234,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
     const channelOrder = [...new Set(channels.map((c) => c.type))];
 
-    await publish("send_communication", {
+    await dispatchCommunication({
       channels: channelOrder,
       recipients: [String(user.id)],
       template: "human-confirmation",

@@ -20,7 +20,7 @@ export type TemplateBuilder = (
   channel: string,
 ) => Promise<TemplateResult>;
 
-// Unified publish payload for `publish("send_communication", …)` (§5.1).
+// Unified payload for `dispatchCommunication(…)` (§5.1).
 export interface CommunicationPayload {
   channels?: string[];
   senders?: string[];

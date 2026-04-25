@@ -1,20 +1,21 @@
 import Core from "../../utils/Core.ts";
 import { publish } from "../publisher.ts";
 import { channelHandlerName, hasChannel } from "../../module-registry.ts";
-import type { HandlerFn } from "../worker.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("send-communication");
 
 /**
- * Dispatcher for `send_communication` (§15.9).
+ * Channel-agnostic communication dispatcher.
  *
  * Resolves the ordered list of target channels, picks the first one that has
- * a registered handler, and publishes `send_<channel>` with the remaining
- * channels as `channelFallback`. Per-channel handlers cascade to
- * `channelFallback[0]` on recoverable failures.
+ * a registered handler, and publishes `send_<channel>`. Remaining channels
+ * become `channelFallback`; per-channel handlers cascade to the next on
+ * recoverable failures.
  */
-export const sendCommunication: HandlerFn = async (payload) => {
+export async function dispatchCommunication(
+  payload: Record<string, unknown>,
+): Promise<void> {
   const core = Core.getInstance();
 
   let channels = Array.isArray(payload.channels)
@@ -39,11 +40,10 @@ export const sendCommunication: HandlerFn = async (payload) => {
     }
   }
 
-  // Pick the first channel with a registered handler.
   const pickedIndex = channels.findIndex((c) => hasChannel(c));
   if (pickedIndex === -1) {
     console.warn(
-      "[send_communication] no registered channel in the chain; dropping",
+      "[dispatchCommunication] no registered channel in the chain; dropping",
     );
     return;
   }
@@ -58,4 +58,4 @@ export const sendCommunication: HandlerFn = async (payload) => {
     channel: picked,
     channelFallback: fallback,
   });
-};
+}

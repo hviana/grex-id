@@ -1,5 +1,6 @@
 import type { HandlerFn } from "../worker.ts";
 import { publish } from "../publisher.ts";
+import { dispatchCommunication } from "./send-communication.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
 import type { PaymentResult } from "../../../src/contracts/payment-provider.ts";
@@ -126,7 +127,7 @@ export const processPayment: HandlerFn = async (payload) => {
 
     // Send payment-pending notification (§22.9)
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {
@@ -206,7 +207,7 @@ export const processPayment: HandlerFn = async (payload) => {
 
     // Notification on success (§16)
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {
@@ -241,7 +242,7 @@ export const processPayment: HandlerFn = async (payload) => {
     );
 
     if (ownerId) {
-      await publish("send_communication", {
+      await dispatchCommunication({
         recipients: [ownerId],
         template: "notification",
         templateData: {

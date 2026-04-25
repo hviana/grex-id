@@ -2,7 +2,7 @@ import {
   markExpiredPayments,
   resolveExpiredPaymentContext,
 } from "../db/queries/billing.ts";
-import { publish } from "../event-queue/publisher.ts";
+import { dispatchCommunication } from "../event-queue/handlers/send-communication.ts";
 import Core from "../utils/Core.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
@@ -32,7 +32,7 @@ export function startPaymentExpiry(): void {
         const systemSlug = systemInfo?.slug ?? "";
 
         if (owner?.id) {
-          await publish("send_communication", {
+          await dispatchCommunication({
             recipients: [String(owner.id)],
             template: "notification",
             templateData: {

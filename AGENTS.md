@@ -549,9 +549,9 @@ registerComponent, registerHomePage;
 
 **Boot sequence** (`server/jobs/index.ts`):
 
-1. `registerCore()` — core caches, core event handlers (`send_communication`,
-   `send_email`, `send_sms`, `process_payment`, `auto_recharge`,
-   `resolve_async_payment`, `payment_async_completed`), core template builders
+1. `registerCore()` — core caches, core event handlers (`send_email`,
+   `send_sms`, `process_payment`, `auto_recharge`, `resolve_async_payment`),
+   communication dispatcher (`dispatchCommunication`), core template builders
    (`human-confirmation`, `notification`), core jobs.
 2. `registerAllSystems()` — iterate `systems/<slug>/register.ts`.
 3. `registerAllFrameworks()` — iterate `frameworks/<name>/register.ts`.
@@ -694,10 +694,10 @@ event).
 
 ### 5.2 Communication model — one contract, two template families
 
-All communication flows through a single entry point. Callers publish:
+All communication flows through a single utility. Callers invoke:
 
 ```ts
-publish("send_communication", {
+dispatchCommunication({
   channels: string[],                  // ordered; empty → auth.communication.defaultChannels
   senders?: string[],                  // per-channel override
   recipients: string[],                // raw values OR entity ids (user:…/lead:…) —
@@ -711,6 +711,7 @@ publish("send_communication", {
 **Rules:**
 
 - Never publish `send_email`/`send_sms` directly — reserved for the dispatcher.
+  Always call `dispatchCommunication(…)` instead.
 - Tenant context (`systemSlug`, `companyId`, `actorId`, `actionKey`/`eventKey`,
   `occurredAt`, `actorName`, `companyName`, `systemName`, `locale`) travels
   **inside** `templateData`.
@@ -721,11 +722,11 @@ publish("send_communication", {
 - No sensitive data in `templateData` or `verification_request.payload`. i18n
   keys, display names, resource keys, URLs, timestamps only.
 
-**Dispatcher (`send_communication` handler):**
+**Dispatcher (`dispatchCommunication` utility):**
 
 1. Resolve `channels` (fallback to core setting).
-2. Pick first registered channel; publish `send_<channel>` with
-   `{channel, channelFallback, …payload}`.
+2. Pick first registered channel; publish `send_<channel>` directly with
+   `{channel, channelFallback, …payload}` — no intermediate event.
 3. Per-channel handler, on recoverable failure, publishes `send_<fallback[0]>`
    with shortened tail.
 4. All channels exhausted → delivery marked `dead`.
@@ -1103,7 +1104,7 @@ is recovery-only — §3.3).
 4. For every channel type in `auth.communication.defaultChannels`, open a
    `verification_request(actionKey="auth.action.register", payload={channelIds})`
    via `communicationGuard`.
-5. Publish **one** `send_communication` with
+5. Invoke **one** `dispatchCommunication(…)` with
    `channels = submitted types (ordered by user preference, then core default)`,
    `recipients = [user.id]`, `template = "human-confirmation"`,
    `actionKey="auth.action.register"`.
@@ -1157,9 +1158,9 @@ Companies admin page "Access" button).
   `currentPassword`; validate `newPassword`; compute the new hash inside
   SurrealDB; open
   `verification_request(actionKey="auth.action.passwordChange", payload={newPasswordHash})`
-  — **never the plaintext**. `send_communication human-confirmation`.
-  Confirmation link hits `/api/auth/verify` which writes `passwordHash` in one
-  batched query.
+  — **never the plaintext**. `dispatchCommunication(…)` with
+  `human-confirmation`. Confirmation link hits `/api/auth/verify` which writes
+  `passwordHash` in one batched query.
 - **Forgot password (public)** — identical data flow,
   `actionKey="auth.action.passwordReset"`. Anti-enumeration: generic success on
   any block/miss.
@@ -1192,8 +1193,9 @@ envelopes (§4.7).
   `{provisioningUri, qrPayload}` (no PII).
 - `confirm-totp {code}` → verify code;
   `communicationGuard(actionKey="auth.action.twoFactorEnable", payload={twoFactorSecret})`.
-  `send_communication human-confirmation`. The flip `twoFactorEnabled=true`
-  happens **only** when the confirmation link is clicked.
+  `dispatchCommunication(…)` with `human-confirmation`. The flip
+  `twoFactorEnabled=true` happens **only** when the confirmation link is
+  clicked.
 - `disable` → `communicationGuard(actionKey="auth.action.twoFactorDisable")`.
   Flip on confirm.
 
@@ -1552,7 +1554,7 @@ Each phase builds on the previous; nothing later violates earlier invariants.
    skeleton.
 2. **Authentication** — `@panva/jose` token utils; rate limiter; `/api/auth/*` +
    entity_channel approval; bot protection; auth pages + terms checkpoint;
-   `communicationGuard`; minimal event-queue with `send_communication`,
+   `communicationGuard`; minimal event-queue with `dispatchCommunication`,
    `send_email`, and `human-confirmation`/`notification` builders; `useAuth`.
 3. **Event queue** — publisher/registry/worker (claim, lease, backoff,
    dead-letter); `send_sms`; dispatcher fallback chain; per-channel layouts.

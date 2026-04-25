@@ -670,7 +670,7 @@ function printHelp(): void {
       "",
       "LIST / INSPECT",
       "  list                                  list recent deliveries (default: last 5 minutes)",
-      "    [--handler NAME]                      e.g. send_email, send_communication",
+      "    [--handler NAME]                      e.g. send_email",
       "    [--status pending|processing|done|dead]",
       "    [--event-name NAME]                   the underlying queue_event name",
       "    [--since <iso|30s|5m|1h>]             lower time bound (default: 5m ago)",

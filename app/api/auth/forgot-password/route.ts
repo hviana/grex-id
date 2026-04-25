@@ -3,7 +3,7 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import {
   findVerifiedOwnerByChannelValue,
@@ -93,7 +93,7 @@ async function handler(
   const name = profileData?.name ?? "";
   const locale = profileData?.locale;
 
-  await publish("send_communication", {
+  await dispatchCommunication({
     channels: channelOrder,
     recipients: [match.ownerId],
     template: "human-confirmation",

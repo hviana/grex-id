@@ -127,7 +127,7 @@ export async function verifyPassword(
  * recoveryChannelIds), then the user whose `channels` array references all
  * the created entity_channel rows. Channels are created unverified; caller
  * issues the human confirmation via communicationGuard +
- * publish("send_communication", …).
+ * dispatchCommunication(…).
  */
 export async function createUserWithChannels(params: {
   password: string;

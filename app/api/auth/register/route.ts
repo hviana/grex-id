@@ -12,7 +12,7 @@ import {
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
 
 function withAuthRateLimit() {
@@ -199,7 +199,7 @@ async function handler(
     // when the first one fails.
     const channelOrder = [...new Set(channels.map((c) => c.type))];
 
-    await publish("send_communication", {
+    await dispatchCommunication({
       channels: channelOrder,
       recipients: [user.id],
       template: "human-confirmation",

@@ -5,7 +5,6 @@ import {
   registerJob,
   registerTemplate,
 } from "./module-registry.ts";
-import { sendCommunication } from "./event-queue/handlers/send-communication.ts";
 import { sendEmail } from "./event-queue/handlers/send-email.ts";
 import { sendSms } from "./event-queue/handlers/send-sms.ts";
 import { processPayment } from "./event-queue/handlers/process-payment.ts";
@@ -37,7 +36,6 @@ export function registerCore(): void {
   // partitions lazily on first access — no boot-time registration here.
 
   // Event handlers — one name is both the event and the handler function key
-  registerHandler("send_communication", sendCommunication);
   registerHandler("send_email", sendEmail);
   registerHandler("send_sms", sendSms);
   registerHandler("process_payment", processPayment);

@@ -8,7 +8,7 @@ import {
   isLeadAssociated,
 } from "@/server/db/queries/leads";
 import { getSystemIdBySlug } from "@/server/db/queries/systems";
-import { publish } from "@/server/event-queue/publisher";
+import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -201,7 +201,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
       const channelOrder = [...new Set(channels.map((c) => c.type))];
 
-      await publish("send_communication", {
+      await dispatchCommunication({
         channels: channelOrder,
         recipients: [existing.id],
         template: "human-confirmation",
@@ -281,7 +281,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
       const channelOrder = [...new Set(channels.map((c) => c.type))];
 
-      await publish("send_communication", {
+      await dispatchCommunication({
         channels: channelOrder,
         recipients: [lead.id],
         template: "human-confirmation",
