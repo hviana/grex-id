@@ -15,8 +15,8 @@ import type { SubformRef } from "@/src/components/shared/GenericList";
 interface VoucherItem {
   id: string;
   code: string;
-  applicableCompanies: string[];
-  applicablePlans: string[];
+  applicableCompanyIds: string[];
+  applicablePlanIds: string[];
   priceModifier: number;
   permissions: string[];
   entityLimitModifiers: Record<string, number> | null;
@@ -86,7 +86,7 @@ export default function VouchersPage() {
     setFormInitial({
       code: item.code,
       priceModifier: item.priceModifier,
-      applicablePlans: item.applicablePlans ?? [],
+      applicablePlanIds: item.applicablePlanIds ?? [],
       expiresAt: item.expiresAt,
       permissions: item.permissions ?? [],
       entityLimitModifiers: item.entityLimitModifiers,

@@ -5,8 +5,6 @@ import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 
 interface VoucherSubformProps {
@@ -30,21 +28,13 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
     const [expiresAt, setExpiresAt] = useState(
       (initialData?.expiresAt as string)?.slice(0, 16) ?? "",
     );
-    const [applicablePlans, setApplicablePlans] = useState<
+    const [applicablePlanIds, setApplicablePlanIds] = useState<
       { id: string; label: string }[]
     >(() => {
-      const ids = initialData?.applicablePlans as string[] | undefined;
+      const ids = initialData?.applicablePlanIds as string[] | undefined;
       if (!ids) return [];
       return ids.map((id) => ({ id: String(id), label: String(id) }));
     });
-    const [applicableCompanies, setApplicableCompanies] = useState<
-      BadgeValue[]
-    >(() => {
-      const ids = initialData?.applicableCompanies as string[] | undefined;
-      if (!ids) return [];
-      return ids.map((id) => String(id));
-    });
-    const companyMapRef = React.useRef<Map<string, string>>(new Map());
 
     const limitsRef = React.useRef<SubformRef>(null);
 
@@ -54,11 +44,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
         return {
           code,
           priceModifier: Number(priceModifier),
-          applicableCompanies: applicableCompanies.map((v) => {
-            const label = typeof v === "string" ? v : v.name;
-            return companyMapRef.current.get(label) ?? label;
-          }),
-          applicablePlans: applicablePlans.map((p) => p.id),
+          applicablePlanIds: applicablePlanIds.map((p) => p.id),
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
           ...limitsData,
         };
@@ -119,7 +105,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {t("core.vouchers.applicablePlans")}
+            {t("core.vouchers.applicablePlanIds")}
           </label>
           <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
             {t("core.vouchers.applicablePlansHint")}
@@ -140,39 +126,8 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
               );
             }}
             multiple
-            initialSelected={applicablePlans}
-            onChange={setApplicablePlans}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {t("core.vouchers.applicableCompanies")}
-          </label>
-          <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-            {t("core.vouchers.applicableCompaniesHint")}
-          </p>
-          <MultiBadgeField
-            name={t("core.vouchers.applicableCompanies")}
-            mode="search"
-            value={applicableCompanies}
-            onChange={setApplicableCompanies}
-            fetchFn={async (search: string) => {
-              const params = new URLSearchParams();
-              if (search) params.set("search", search);
-              params.set("limit", "20");
-              const res = await fetch(`/api/core/companies?${params}`, {
-                headers: { Authorization: `Bearer ${systemToken}` },
-              });
-              const json = await res.json();
-              return (json.data ?? []).map(
-                (c: { id: string; name: string }) => {
-                  companyMapRef.current.set(c.name, String(c.id));
-                  return c.name;
-                },
-              );
-            }}
-            formatHint={t("core.vouchers.placeholder.searchCompanies")}
+            initialSelected={applicablePlanIds}
+            onChange={setApplicablePlanIds}
           />
         </div>
       </div>

@@ -9,7 +9,7 @@ interface VoucherCardProps {
   voucher: {
     id: string;
     code: string;
-    applicablePlans: string[];
+    applicablePlanIds: string[];
     priceModifier: number;
     permissions: string[];
     entityLimitModifiers: Record<string, number> | null;
@@ -137,10 +137,10 @@ export default function VoucherCard(
                     </span>
                   ),
                 )}
-              {voucher.applicablePlans.length > 0 && (
+              {voucher.applicablePlanIds.length > 0 && (
                 <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-                  {voucher.applicablePlans.length}{" "}
-                  {t("core.vouchers.applicablePlans").toLowerCase()}
+                  {voucher.applicablePlanIds.length}{" "}
+                  {t("core.vouchers.applicablePlanIds").toLowerCase()}
                 </span>
               )}
               {voucher.expiresAt && !isExpired && (
