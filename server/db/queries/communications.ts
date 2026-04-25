@@ -25,8 +25,15 @@ export async function resolveChannelRecipients(
   const rawValues: string[] = [];
   const owners: { table: string; id: StringRecordId }[] = [];
 
-  for (const entry of rawRecipients) {
-    if (typeof entry !== "string" || entry.length === 0) continue;
+  for (const raw of rawRecipients) {
+    const entry = typeof raw === "string"
+      ? raw
+      : raw != null && typeof raw === "object" && "id" in raw
+      ? String((raw as { id: unknown }).id)
+      : raw != null && typeof raw === "object" && "tb" in raw && "id" in raw
+      ? `${(raw as { tb: string }).tb}:${(raw as { id: string }).id}`
+      : String(raw);
+    if (!entry || typeof entry !== "string" || entry.length === 0) continue;
     const table = entry.split(":")[0];
     if (table !== "user" && table !== "lead") {
       rawValues.push(entry);
