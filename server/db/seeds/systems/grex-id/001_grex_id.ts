@@ -15,7 +15,20 @@ export async function seed(db: Surreal): Promise<void> {
   const systemId = systemResult[0][0].id;
   console.log("[seed] system created: GrexID (grex-id)");
 
-  // 2. Create the STANDARD plan
+  // 2. Create the admin role for GrexID
+  await db.query(
+    `IF array::len((SELECT id FROM role WHERE name = "admin" AND systemId = $systemId)) = 0 {
+       CREATE role SET
+         name = "admin",
+         systemId = $systemId,
+         permissions = ["*"],
+         isBuiltIn = true
+     }`,
+    { systemId },
+  );
+  console.log("[seed] role created: admin for grex-id");
+
+  // 3. Create the STANDARD plan
   await db.query(
     `CREATE plan SET
       name = $name,

@@ -114,7 +114,9 @@ file crosses a boundary (§2.7).
       non-exchangeable (§8.6).
 - [ ] Frontend stores opaque token only; derives context from `useAuth().tenant`
       (§10.2).
-- [ ] Anonymous requests get synthesized Tenant, never `null` (§2.5).
+- [ ] Every tenant corresponds to a real `(company, system)` pair — no
+      synthesized tenants, no `"0"` sentinels. Anonymous operations use the
+      seeded anonymous user's core tenant token (§2.5, §3.5).
 
 ---
 

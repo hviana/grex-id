@@ -185,9 +185,10 @@ subqueries).
 
 ### 2.5 Tenant & authorization
 
-- **Every request, job, and handler operates against a `Tenant` object.**
-  Unauthenticated requests receive a synthesized anonymous tenant — never
-  `null`.
+- **Every request, job, and handler operates against a `Tenant` object.** There
+  are no synthetic tenants — every tenant corresponds to a real
+  `(company, system)` pair in the database. Anonymous operations use the seeded
+  anonymous user's token for the core tenant (§3.5).
 - Backend code **never** reads `companyId`/`systemId`/`roles`/`permissions` from
   query strings, cookies, or bodies. They come from the tenant/claims only.
 - **Token exchange is the sole mechanism to change tenant.** API tokens and
@@ -293,8 +294,8 @@ approval invariant. It is independent of `user.channelIds`.
 | `company_user`         | Unique `(companyId, userId)`                                                                                                                                                                                                                        |
 | `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                         |
 | `company_system`       | Unique `(companyId, systemId)`. Idempotent creation (existence-check, never raw CREATE).                                                                                                                                                            |
-| `user_company_system`  | Unique `(userId, companyId, systemId)`. Holds per-tenant `roles`. Admin invariant: every tenant has ≥1 user with role `"admin"`.                                                                                                                    |
-| `role`                 | Unique `(name, systemId)`; `isBuiltIn`                                                                                                                                                                                                              |
+| `user_company_system`  | Unique `(userId, companyId, systemId)`. Holds per-tenant `roles` (references role names from the `role` table). Admin invariant: every tenant has ≥1 user with role `"admin"`.                                                                      |
+| `role`                 | Unique `(name, systemId)`; `isBuiltIn`. Seeded built-in roles per system: core gets `superuser` and `anonymous`; each subsystem gets `admin`. Additional roles created via admin panel.                                                             |
 | `plan`                 | See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                    |
 | `voucher`              | Unique `code`; `applicableCompanyIds`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                          |
 | `menu_item`            | `parentId` optional, unlimited depth; index `(systemId, parentId, sortOrder)`                                                                                                                                                                       |
@@ -329,10 +330,23 @@ approval invariant. It is independent of `user.channelIds`.
 - **Seeds runner** (`server/db/seeds/runner.ts`): same scan pattern. Each
   `NNN_*.ts` exports `async function seed(db: Surreal): Promise<void>` and is
   idempotent (existence-check before insert).
-- **Required seeds:** superuser (creates a `profile`, a verified `email`
-  `entity_channel`, and a `user` linking them — satisfies the approval invariant
-  from first boot); default core settings; default front-core settings; default
-  file-access rules.
+- **Required seeds (in order of dependency):**
+  1. **Core company** — a `company` record representing the platform itself.
+  2. **Core system** — a `system` record with slug `"core"`.
+  3. **Built-in roles** — `superuser` and `anonymous` roles for the core system;
+     one `admin` role per registered subsystem.
+  4. **Superuser** — a `profile`, a verified `email` `entity_channel`, and a
+     `user` linking them (satisfies the approval invariant from first boot),
+     plus a `user_company_system` row granting the `superuser` role in the core
+     tenant.
+  5. **Anonymous user** — a `user` record with **no** profile and **no**
+     communication channels. A `user_company_system` row granting the
+     `anonymous` role in the core tenant only. An associated long-lived
+     `api_token` (row id = actor id) is seeded for use by public endpoints. This
+     user can never log in — it exists solely as the bearer for anonymous
+     operations.
+  6. Default core settings; default front-core settings; default file-access
+     rules.
 
 ---
 
@@ -342,47 +356,40 @@ approval invariant. It is independent of `user.channelIds`.
 
 ```ts
 interface Tenant {
-  systemId: string; // "0" for unauthenticated / non-tenant
-  companyId: string; // "0" for unauthenticated / non-tenant
-  systemSlug: string; // "core" for core-scoped; else system slug
+  systemId: string;
+  companyId: string;
+  systemSlug: string;
   roles: string[];
-  permissions: string[]; // "*" wildcard allowed
+  permissions: string[];
 }
-type TenantActorType = "user" | "api_token" | "connected_app" | "anonymous";
+type TenantActorType = "user" | "api_token" | "connected_app";
 interface TenantClaims extends Tenant {
   actorType: TenantActorType;
-  actorId: string; // "0" for anonymous
-  exchangeable: boolean; // true only for actorType="user"
+  actorId: string;
+  exchangeable: boolean;
 }
 ```
 
-**Helpers (`server/utils/tenant.ts`):** `getSystemTenant()` (for workers:
-`{systemSlug:"core", roles:["superuser"], permissions:["*"]}`),
-`getAnonymousTenant(systemSlug)`, `assertScope(tenant,{companyId?,systemId?})`.
-These are the only places such tenants are constructed.
+Every `Tenant` corresponds to a real `(company, system)` pair in the database.
+There are no sentinel or synthetic values — all IDs are valid SurrealDB record
+IDs. Workers and jobs use `getSystemTenant()` to obtain the core company/system
+IDs with the `superuser` role. Anonymous operations authenticate via the seeded
+anonymous user's API token, which carries the core tenant with the `anonymous`
+role.
 
-> **SurrealDB `rid("0")` trap.** SurrealDB record IDs cannot be the bare string
-> `"0"` — attempting to use it as a record ID (e.g. `record<user>"0"`,
-> `company:0`, or passing `"0"` where a record link is expected) raises an
-> `Invalid record id` / `rid("0")` error. The sentinel values `companyId:"0"`,
-> `systemId:"0"`, and `actorId:"0"` are **application- level markers** meaning
-> "none / unauthenticated". They must **never** be passed directly as SurrealDB
-> record IDs or used in `record<>` comparisons. Every query that builds a record
-> link or filters by these IDs must coerce `"0"` to a safe representation (e.g.
-> `NONE`, a conditional branch, or a separate query path) before the value
-> reaches SurrealQL. This applies to: file-storage paths (`path[0]`/`path[2]`
-> for companyId/userId in §6), `usage_record` / `credit_expense` upserts,
-> tenant-isolation WHERE clauses, actor-validity partition keys, and any other
-> place tenant IDs flow into SurrealQL. When in doubt, guard with
-> `IF $id != "0"` or route anonymous requests through a separate code path that
-> avoids the record-id coercion entirely.
+**Helpers (`server/utils/tenant.ts`):** `getSystemTenant()` (for workers:
+returns real core company/system IDs + `superuser` role from core data cache),
+`assertScope(tenant,{companyId?,systemId?})`. These are the only places such
+tenants are constructed.
 
 ### 4.2 JWT & actor-validity model
 
 Every bearer (user session, API token, connected-app token) is a JWT produced
 via `@panva/jose` with claims
 `{ tenant, actorType, actorId, exchangeable, exp, iat }`. There is no
-opaque-token path, no token hash, no `jti`.
+opaque-token path, no token hash, no `jti`. The seeded anonymous user's
+long-lived API token follows the same JWT format and is included in the
+actor-validity cache at boot.
 
 **Actor-validity cache (`server/utils/actor-validity.ts`)** — the sole authority
 consulted by `withAuth`. Sharded per tenant:
@@ -433,15 +440,16 @@ interface RequestContext {
 
 Standard ordering (cheapest → costliest):
 
-| # | Middleware                                              | Cost                                                                            | Notes                                                                                                                                                  |
-| - | ------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1 | `withRateLimit(config)`                                 | In-memory sliding window                                                        | Key `{companyId}:{systemId}` or `{ip}` for auth routes. Global plan limit distributed across active actors: `floor(limit/actorCount)` min 1.           |
-| 2 | `withAuth({roles?,permissions?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant`/`ctx.claims` or synthesized anonymous. Superusers bypass role/permission checks. Routes never parse `Authorization` themselves. |
-| 3 | `withPlanAccess(featureNames[])`                        | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed permission                                                            |
-| 4 | `withEntityLimit(entityName)`                           | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                                          |
+| # | Middleware                                              | Cost                                                                            | Notes                                                                                                                                               |
+| - | ------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `withRateLimit(config)`                                 | In-memory sliding window                                                        | Key `{companyId}:{systemId}` or `{ip}` for auth routes. Global plan limit distributed across active actors: `floor(limit/actorCount)` min 1.        |
+| 2 | `withAuth({roles?,permissions?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant`/`ctx.claims` from the bearer token. Superusers bypass role/permission checks. Routes never parse `Authorization` themselves. |
+| 3 | `withPlanAccess(featureNames[])`                        | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed permission                                                         |
+| 4 | `withEntityLimit(entityName)`                           | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                                       |
 
-Auth routes (`/api/auth/*`) use only `withRateLimit`, but still receive the
-synthesized anonymous tenant.
+Auth routes (`/api/auth/*`) use only `withRateLimit` — no tenant context is
+populated for these routes. All other routes require a bearer token (including
+the anonymous user's token for public operations).
 
 ### 4.4 Cache registry (`server/utils/cache.ts`)
 
@@ -466,14 +474,14 @@ and tracked in a `Set` so bulk eviction can iterate.
 
 Core-owned caches:
 
-| Slug             | Name                         | Loader                     | Invalidated by                                      |
-| ---------------- | ---------------------------- | -------------------------- | --------------------------------------------------- |
-| `core`           | `data`                       | `loadCoreData`             | `Core.reload()` after any core-entity mutation      |
-| `core`           | `front-data`                 | `loadFrontCoreData`        | `FrontCore.reload()`                                |
-| `core`           | `jwt-secret`                 | from core settings         | `Core.reload()` (derived)                           |
-| `core`           | `file-access`                | load rules + compile regex | rule mutations                                      |
-| `core`           | `sub:<companyId>:<systemId>` | load subscription          | `Core.reloadSubscription()` after billing mutations |
-| `actor-validity` | `<companyId>:<systemId>`     | `loadActorValidityTenant`  | login/logout/exchange/token CRUD/role change        |
+| Slug             | Name                         | Loader                     | Invalidated by                                                                            |
+| ---------------- | ---------------------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| `core`           | `data`                       | `loadCoreData`             | `Core.reload()` after any core-entity mutation                                            |
+| `core`           | `front-data`                 | `loadFrontCoreData`        | `FrontCore.reload()`                                                                      |
+| `core`           | `jwt-secret`                 | from core settings         | `Core.reload()` (derived)                                                                 |
+| `core`           | `file-access`                | load rules + compile regex | rule mutations                                                                            |
+| `core`           | `sub:<companyId>:<systemId>` | load subscription          | `Core.reloadSubscription()` after billing mutations                                       |
+| `actor-validity` | `<companyId>:<systemId>`     | `loadActorValidityTenant`  | login/logout/exchange/token CRUD/role change; includes anonymous user's API token at boot |
 
 **Core data** is stored as pre-built `Map` indexes (`systemsBySlug`,
 `rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`, `vouchersById`,
@@ -617,8 +625,9 @@ transfer/operation limits.
 
 ### 4.10 Rate limiter, usage tracker, credit tracker
 
-- **Rate limiter** — sliding window, in-memory, per `{companyId}:{systemId}` (or
-  `{ip}` for auth). See §4.3.
+- **Rate limiter** — sliding window, in-memory, per `{companyId}:{systemId}`.
+  Auth routes (`/api/auth/*`) use `{ip}` since they operate without a bearer
+  token. See §4.3.
 - **Usage tracker** —
   `trackUsage({actorType, actorId, companyId, systemId, resource, value})`
   upserts `usage_record` for `YYYY-MM`.
@@ -636,8 +645,8 @@ registry). **Sliding-Window Size-Aware LFU**: priority = `hitsInWindow / size`
 (old timestamps pruned each access; cache forgets old popularity without an
 explicit aging step).
 
-- Keyed by `"<companyId>:<systemSlug>"` (tenants) or `"core"` (anonymous /
-  unmatched system).
+- Keyed by `"<companyId>:<systemSlug>"` (every tenant, including the core tenant
+  for anonymous requests).
 - Parameters: `maxSize` (from `resolveFileCacheLimit` or `cache.core.size`),
   `hitWindowMs` (from `cache.file.hitWindowHours`).
 - `access(tenantKey, fileId, fileSize, maxSize, data?, hitWindowMs?, mimeType?) → { hit, noCache, data?, mimeType? }`.
@@ -811,14 +820,13 @@ replacement → reuse existing UUID for atomic overwrite.
 
 ### 6.2 Upload route (`POST /api/files/upload`)
 
-One route, one flow — anonymous vs authenticated differ only in the tenant
-values, not in the code path.
+One route, one flow — all requests authenticate via a bearer token (the
+anonymous user's token for public uploads).
 
-1. `withAuth` populates `ctx.tenant`/`ctx.claims` (anonymous synthesized per
-   §2.5).
+1. `withAuth` populates `ctx.tenant`/`ctx.claims` from the bearer token.
 2. Parse FormData (`file`, `systemSlug`, `category` JSON array, `fileUuid`,
    optional `description`).
-3. `companyId = ctx.tenant.companyId`; `userId = ctx.claims?.actorId ?? "0"`;
+3. `companyId = ctx.tenant.companyId`; `userId = ctx.claims.actorId`;
    `systemSlug` from FormData.
 4. Call `checkFileAccess({operation:"upload",…})` (§6.4). On denial → 403.
 5. Stream via `file.stream()` into
@@ -1041,7 +1049,8 @@ Every mutation ends with `Core.reloadSubscription(companyId, systemId)`.
 
 ### 7.9 Jobs
 
-- **`recurring-billing`** — periodic under system tenant.
+- **`recurring-billing`** — periodic under core tenant (via
+  `getSystemTenant()`).
   `SELECT subscription WHERE status="active" AND currentPeriodEnd <= now()` →
   publish `process_payment` per row. Success: advance period, reset credits
   (`plan.planCredits + voucher.creditModifier`), reset ops map, reset alert
@@ -1054,8 +1063,8 @@ Every mutation ends with `Core.reloadSubscription(companyId, systemId)`.
 
 ### 7.10 Auto-recharge handler (`auto_recharge`)
 
-Runs under a synthesized subscription tenant (system-scoped). Steps: verify flag
-still `true`; load default payment method (missing → notify
+Runs under the core tenant (via `getSystemTenant()`). Steps: verify flag still
+`true`; load default payment method (missing → notify
 `paymentFailure.auto-recharge` + clear flag); notify `autoRechargeStarted`;
 create `credit_purchase` pending with `purpose="auto-recharge"`; publish
 `payment_due`. Terminal branches (success/fail in `process_payment`) clear
@@ -1148,9 +1157,10 @@ The **sole** context-change path. Body `{companyId, systemId}`.
 
 **Superuser bypass.** When `claims.roles` contains `"superuser"`, skip
 membership check. Verify target `company_system` exists. Issue the new JWT with
-`roles:["admin"]`, `permissions:["*"]`. No `user_company_system` row created.
-This is the sole mechanism for a superuser to enter a tenant (exposed via the
-Companies admin page "Access" button).
+the `admin` role (from the target system's `role` table) and
+`permissions:["*"]`. No `user_company_system` row created. This is the sole
+mechanism for a superuser to enter a tenant (exposed via the Companies admin
+page "Access" button).
 
 ### 8.7 Password & channel changes
 
@@ -1312,6 +1322,10 @@ Flow:
   resolved: system → generic → fallback i18n key).
 - **Public front-core**: `GET /api/public/front-core` returns full
   `front_setting` key/value map.
+- **Anonymous token**: `GET /api/public/anonymous-token` returns the seeded
+  anonymous user's API token JWT. No auth required. The frontend calls this on
+  initial load (when no token is stored) to obtain a bearer for public
+  operations.
 - **Terms page** `(auth)/terms/page.tsx`: renders system branding + terms HTML
   from public system info + `LocaleSelector`.
 - **Webhook**: `POST /api/public/webhook/payment` — generic scaffold (§7.6).
@@ -1361,11 +1375,12 @@ must also apply modifiers.
 
 ### 9.7 Lead public submission
 
-`POST /api/leads/public` (bot-protected, no auth). Payload: `name` +
-`channels[]` (≥1, unverified) + `profile` + `companyIds` + `systemSlug` +
-`termsAccepted`. **Tags not accepted** (authenticated-only). New lead → create +
-one `human-confirmation` (`actionKey="auth.action.leadRegister"`). Existing lead
-(any channel match) → no direct write;
+`POST /api/leads/public` (bot-protected, uses anonymous user token). Payload:
+`name` + `channels[]` (≥1, unverified) + `profile` + `companyIds` +
+`systemSlug` + `termsAccepted`. **Tags not accepted** (authenticated-only). New
+lead → create + one `human-confirmation`
+(`actionKey="auth.action.leadRegister"`). Existing lead (any channel match) → no
+direct write;
 `verification_request(actionKey="auth.action.leadUpdate", payload=diff)` +
 human-confirmation. Rate limit via `communicationGuard` → 429 when blocked.
 System-specific routes (e.g. `/api/systems/<slug>/leads/public`) may delegate
@@ -1488,7 +1503,7 @@ app/                            # Next.js App Router
 ├── (app)/                      # Onboarding, entry (spinner-only), [...slug]
 ├── (core)/                     # Superuser panel
 └── api/
-    ├── public/{system,front-core,webhook/payment}/
+    ├── public/{system,front-core,anonymous-token,webhook/payment}/
     ├── auth/{login,register,verify,forgot-password,reset-password,password-change,
     │         refresh,exchange,two-factor,two-factor/login-link,oauth/...}/
     ├── core/{systems,roles,plans,vouchers,menus,terms,companies,
@@ -1586,20 +1601,20 @@ Each phase builds on the previous; nothing later violates earlier invariants.
 
 ## 13. Technical Trade-offs
 
-| Decision                                            | Rationale                                                                                                 |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| SurrealDB HTTP (backend) + WS (frontend live only)  | Serverless-compatible; WS reserved for reactivity                                                         |
-| In-memory rate limiter + actor-validity cache       | Per-instance; multi-instance needs a broadcast channel (API stays the same)                               |
-| Cursor pagination only                              | Stable under concurrent writes, no size degradation                                                       |
-| Event queue inside SurrealDB                        | One fewer infra dep; move to broker if throughput exceeds DB                                              |
-| Argon2 inside the DB                                | Zero native modules in app code                                                                           |
-| Tailwind-only + emojis                              | Design consistency + zero icon deps                                                                       |
-| `@panva/jose` JWT                                   | Pure JS, runs everywhere                                                                                  |
-| Token embeds full Tenant                            | Single source of context for frontend + backend; eliminates scattered IDs                                 |
-| Separate `setting` / `front_setting` tables         | Physical guarantee that frontend bundles cannot leak server-only secrets                                  |
-| Namespace-isolated subframeworks/systems            | No route/name collisions, no scope leakage; module registry is the only wiring                            |
-| Two canonical template families                     | Every comms path funnels through `human-confirmation` or `notification` — no bespoke templates per action |
-| Universal actor id = `api_token.id` (no token hash) | Uniform JWT verification across user sessions and API tokens; revocation lives in the validity cache      |
+| Decision                                            | Rationale                                                                                                                  |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| SurrealDB HTTP (backend) + WS (frontend live only)  | Serverless-compatible; WS reserved for reactivity                                                                          |
+| In-memory rate limiter + actor-validity cache       | Per-instance; multi-instance needs a broadcast channel (API stays the same)                                                |
+| Cursor pagination only                              | Stable under concurrent writes, no size degradation                                                                        |
+| Event queue inside SurrealDB                        | One fewer infra dep; move to broker if throughput exceeds DB                                                               |
+| Argon2 inside the DB                                | Zero native modules in app code                                                                                            |
+| Tailwind-only + emojis                              | Design consistency + zero icon deps                                                                                        |
+| `@panva/jose` JWT                                   | Pure JS, runs everywhere                                                                                                   |
+| Token embeds full Tenant                            | Single source of context for frontend + backend; eliminates scattered IDs; anonymous operations use real core tenant token |
+| Separate `setting` / `front_setting` tables         | Physical guarantee that frontend bundles cannot leak server-only secrets                                                   |
+| Namespace-isolated subframeworks/systems            | No route/name collisions, no scope leakage; module registry is the only wiring                                             |
+| Two canonical template families                     | Every comms path funnels through `human-confirmation` or `notification` — no bespoke templates per action                  |
+| Universal actor id = `api_token.id` (no token hash) | Uniform JWT verification across user sessions and API tokens; revocation lives in the validity cache                       |
 
 ---
 
