@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { PublicSystemInfo } from "@/src/contracts/system";
 import { useLocale } from "./useLocale";
-import { useBrandingHeader } from "./useBrandingHeader";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 
 export function usePublicSystem(slug: string | null) {
@@ -46,11 +45,6 @@ export function usePublicSystem(slug: string | null) {
       cancelled = true;
     };
   }, [slug, setLocale]);
-
-  const logoUrl = systemInfo?.logoUri
-    ? `/api/files/download?uri=${encodeURIComponent(systemInfo.logoUri)}`
-    : null;
-  useBrandingHeader(systemInfo?.name, logoUrl);
 
   return { systemInfo, loading };
 }

@@ -6,7 +6,6 @@ import Sidebar from "@/src/components/shared/Sidebar";
 import Spinner from "@/src/components/shared/Spinner";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
-import { useBrandingHeader } from "@/src/hooks/useBrandingHeader";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import type { MenuItem } from "@/src/contracts/menu";
 
@@ -203,8 +202,6 @@ export default function CoreLayout(
   const { t } = useLocale();
   const { tenant, loading: authLoading } = useAuth();
   const coreMenus = useCoreMenus(t);
-
-  useBrandingHeader(t("core.layout.superuserPanel"));
 
   // Superuser guard (§20)
   useEffect(() => {

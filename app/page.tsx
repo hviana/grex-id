@@ -6,7 +6,6 @@ import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import { getHomePage } from "@/src/components/systems/registry";
-import { useBrandingHeader } from "@/src/hooks/useBrandingHeader";
 
 function HomeContent() {
   const router = useRouter();
@@ -15,8 +14,6 @@ function HomeContent() {
   const systemSlug = searchParams.get("systemSlug");
 
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(systemSlug);
-  const [systemName, setSystemName] = useState<string | null>(null);
-  const [systemLogoUri, setSystemLogoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Only fetch when we need to resolve a system (explicit param or default)
@@ -30,8 +27,6 @@ function HomeContent() {
         const json = await res.json();
         if (json.success && json.data) {
           setResolvedSlug(json.data.slug);
-          setSystemName(json.data.name ?? null);
-          setSystemLogoUri(json.data.logoUri ?? null);
         }
       } catch {
         // Fall through to core homepage
@@ -42,11 +37,6 @@ function HomeContent() {
 
     resolve();
   }, [systemSlug]);
-
-  const logoUrl = systemLogoUri
-    ? `/api/files/download?uri=${encodeURIComponent(systemLogoUri)}`
-    : null;
-  useBrandingHeader(systemName, logoUrl);
 
   if (loading) {
     return (

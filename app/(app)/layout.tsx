@@ -13,7 +13,6 @@ import {
 } from "@/src/hooks/useSystemContext";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useLocale } from "@/src/hooks/useLocale";
-import { useBrandingHeader } from "@/src/hooks/useBrandingHeader";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 import { getCookie, setCookie } from "@/src/lib/cookies";
 
@@ -237,11 +236,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const activeSystem = ctx.systems.find((s) => s.id === ctx.systemId);
-  const systemLogoUrl = activeSystem?.logoUri
-    ? `/api/files/download?uri=${encodeURIComponent(activeSystem.logoUri)}`
-    : undefined;
-
-  useBrandingHeader(activeSystem?.name, systemLogoUrl);
 
   // Apply the active system's default locale when no user preference is set
   useEffect(() => {
@@ -526,7 +520,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen bg-[var(--color-black)]">
         <Sidebar
           menus={menus}
-          systemLogo={systemLogoUrl}
+          systemLogo={activeSystem?.logoUri
+            ? `/api/files/download?uri=${
+              encodeURIComponent(activeSystem.logoUri)
+            }`
+            : undefined}
           systemName={activeSystem?.name}
           activeComponent={activeComponent}
           onNavigate={handleNavigate}
