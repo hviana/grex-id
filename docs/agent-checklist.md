@@ -76,7 +76,8 @@ file crosses a boundary (§2.7).
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with
-      `Id` (single) or `Ids` (multiple)
+      `Id` (single) or `Ids` (multiple). Table names are singular, in lowercase
+      with words separated by underscores. Fields are in camel case.
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
       logic (compositional creates, complex subqueries).

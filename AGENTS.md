@@ -102,8 +102,9 @@ user-facing informational surfaces show translation only.
 - **Record-reference field naming.** Every field typed `record<T>` ends with
   `Id` (e.g. `profileId`, `ownerId`, `planId`). Every field typed
   `array<record<T>>` ends with `Ids` (e.g. `channelIds`, `tagIds`,
-  `companyIds`). No exceptions. This applies to migrations, contracts, queries,
-  and frontend code uniformly.
+  `companyIds`). Table names are singular, in lowercase with words separated by
+  underscores. Fields are in camel case. No exceptions. This applies to
+  migrations, contracts, queries, and frontend code uniformly.
 - **Optimization.** Any field used in queries to select/filter data or used as a
   cursor should be indexed.
 - **Single-batched-query rule.** Every query function batches all statements
