@@ -164,8 +164,11 @@ export async function subscribe(params: {
     queryParams.userId = rid(params.userId);
   }
 
-  const ucsClause = params.userId
-    ? `IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
+  const userClauses = params.userId
+    ? `IF array::len((SELECT id FROM company_user WHERE userId = $userId AND companyId = $companyId)) = 0 {
+         CREATE company_user SET userId = $userId, companyId = $companyId;
+       };
+       IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
          CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = ["admin"];
        };`
     : "";
@@ -196,7 +199,7 @@ export async function subscribe(params: {
        autoRechargeAmount = 0,
        autoRechargeInProgress = false,
        retryPaymentInProgress = false;
-     ${ucsClause}`,
+     ${userClauses}`,
     queryParams,
   );
 }

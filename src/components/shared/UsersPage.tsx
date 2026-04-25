@@ -189,7 +189,9 @@ export default function UsersPage() {
       });
       const json = await res.json();
       if (!json.success) {
-        setError(json.error?.message ?? "common.error.generic");
+        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ||
+          json.error?.message || "common.error.generic";
+        setError(msg);
         return;
       }
       setEditUser(null);
@@ -205,7 +207,7 @@ export default function UsersPage() {
     if (!systemToken || !deleteUser || !companyId || !systemId) return;
     setActionLoading(true);
     try {
-      await fetch("/api/users", {
+      const res = await fetch("/api/users", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -217,6 +219,13 @@ export default function UsersPage() {
           systemId,
         }),
       });
+      const json = await res.json();
+      if (!json.success) {
+        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ||
+          json.error?.message || "common.error.generic";
+        setError(msg);
+        return;
+      }
       setDeleteUser(null);
       triggerReload();
     } catch {
