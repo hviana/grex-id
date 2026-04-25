@@ -336,6 +336,7 @@ export async function deleteLead(id: string): Promise<void> {
                   END;
      LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
+     DELETE lead_company_system WHERE leadId = $id;
      DELETE FROM lead WHERE id = $id;
      FOR $cid IN $chIds { DELETE $cid; };
      FOR $rid IN $recIds { DELETE $rid; };
@@ -446,7 +447,7 @@ export async function removeLeadFromCompanySystem(
     (result[0] ?? []).map((row: { companyId: unknown }) => row.companyId),
   );
   if (remaining.length === 0) {
-    await runLifecycleHooks("lead:delete", { leadId: normalizedLeadId });
+    await deleteLead(normalizedLeadId);
   }
 }
 

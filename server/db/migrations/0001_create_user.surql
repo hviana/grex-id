@@ -2,7 +2,6 @@ DEFINE TABLE user SCHEMAFULL;
 DEFINE FIELD passwordHash ON user TYPE string;
 DEFINE FIELD profileId    ON user TYPE record<profile>;
 DEFINE FIELD channelIds   ON user TYPE array<record<entity_channel>> DEFAULT [];
-DEFINE FIELD roles        ON user TYPE array<string>;
 DEFINE FIELD twoFactorEnabled        ON user TYPE bool DEFAULT false;
 DEFINE FIELD twoFactorSecret         ON user TYPE option<string>;
 DEFINE FIELD pendingTwoFactorSecret  ON user TYPE option<string>;
@@ -12,7 +11,6 @@ DEFINE FIELD updatedAt    ON user TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_user_profile  ON user FIELDS profileId UNIQUE;
 DEFINE INDEX idx_user_channels ON user FIELDS channelIds;
-DEFINE INDEX idx_user_roles    ON user FIELDS roles;
 
 DEFINE TABLE oauth_identity SCHEMAFULL;
 DEFINE FIELD userId         ON oauth_identity TYPE record<user>;
