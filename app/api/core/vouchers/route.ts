@@ -38,8 +38,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
     code,
-    applicableCompanyIds,
-    applicablePlanIds,
+    applicableCompanies,
+    applicablePlans,
     priceModifier,
     permissions,
     entityLimitModifiers,
@@ -74,8 +74,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   try {
     const voucher = await createVoucher({
       code: await standardizeField("name", sanitizeString(code)),
-      applicableCompanyIds: applicableCompanyIds ?? [],
-      applicablePlanIds: applicablePlanIds ?? [],
+      applicableCompanies: applicableCompanies ?? [],
+      applicablePlans: applicablePlans ?? [],
       priceModifier: Number(priceModifier ?? 0),
       permissions: permissions ?? [],
       entityLimitModifiers: entityLimitModifiers &&
@@ -117,7 +117,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
 /**
  * PUT — updates a voucher with auto-removal cascade:
- * If applicablePlanIds is non-empty after the update, clears voucherId
+ * If applicablePlans is non-empty after the update, clears voucherId
  * on any subscription whose planId is NOT in the new list.
  * This runs in the same batched query as the voucher update (§22.7).
  */
@@ -126,8 +126,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   const {
     id,
     code,
-    applicableCompanyIds,
-    applicablePlanIds,
+    applicableCompanies,
+    applicablePlans,
     priceModifier,
     permissions,
     entityLimitModifiers,
@@ -161,13 +161,13 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       sets.push("code = $code");
       bindings.code = await standardizeField("name", sanitizeString(code));
     }
-    if (applicableCompanyIds !== undefined) {
-      sets.push("applicableCompanyIds = $applicableCompanyIds");
-      bindings.applicableCompanyIds = applicableCompanyIds;
+    if (applicableCompanies !== undefined) {
+      sets.push("applicableCompanies = $applicableCompanies");
+      bindings.applicableCompanies = applicableCompanies;
     }
-    if (applicablePlanIds !== undefined) {
-      sets.push("applicablePlanIds = $applicablePlanIds");
-      bindings.applicablePlanIds = applicablePlanIds ?? [];
+    if (applicablePlans !== undefined) {
+      sets.push("applicablePlans = $applicablePlans");
+      bindings.applicablePlans = applicablePlans ?? [];
     }
     if (priceModifier !== undefined) {
       sets.push("priceModifier = $priceModifier");
@@ -240,17 +240,22 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    // Auto-removal cascade: if applicablePlanIds was updated and is non-empty,
-    // strip voucherId from subscriptions whose planId is no longer in the list
-    const shouldCascade = applicablePlanIds !== undefined &&
-      Array.isArray(applicablePlanIds) &&
-      applicablePlanIds.length > 0;
+    // Auto-removal cascade: if applicablePlans or applicableCompanies was
+    // updated and is non-empty, strip voucherId from subscriptions that no
+    // longer match the scope (§7.7).
+    const shouldCascadePlans = applicablePlans !== undefined &&
+      Array.isArray(applicablePlans) &&
+      applicablePlans.length > 0;
+    const shouldCascadeCompanies = applicableCompanies !== undefined &&
+      Array.isArray(applicableCompanies) &&
+      applicableCompanies.length > 0;
 
     const updated = await updateVoucherWithCascade(
       id,
       sets,
       bindings,
-      shouldCascade,
+      shouldCascadePlans,
+      shouldCascadeCompanies,
     );
 
     const core = Core.getInstance();

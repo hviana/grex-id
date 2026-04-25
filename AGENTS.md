@@ -290,7 +290,7 @@ It is independent of `user.channels`.
 | `user_company_system`  | Unique `(userId, companyId, systemId)`. Holds per-tenant `roles`. Admin invariant: every tenant has ≥1 user with role `"admin"`.                                                                                                                |
 | `role`                 | Unique `(name, systemId)`; `isBuiltIn`                                                                                                                                                                                                          |
 | `plan`                 | See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                |
-| `voucher`              | Unique `code`; `applicableCompanyIds`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                      |
+| `voucher`              | Unique `code`; `applicableCompanies`, `applicablePlans` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                         |
 | `menu_item`            | `parentId` optional, unlimited depth; index `(systemId, parentId, sortOrder)`                                                                                                                                                                   |
 | `subscription`         | See §7.2                                                                                                                                                                                                                                        |
 | `payment_method`       | `billingAddress: record<address>`; `isDefault`                                                                                                                                                                                                  |
@@ -998,8 +998,8 @@ When `IPaymentProvider.charge` returns a `PaymentResult` with
 - **Single voucher** per subscription (`subscription.voucherId`).
   `apply_voucher` replaces any existing voucher atomically; no stacking, no
   audit row.
-- **Scope:** `applicableCompanyIds` empty = universal; `applicablePlanIds` empty
-  = all plans. Non-empty lists must include the target.
+- **Scope:** `applicableCompanies` empty = universal; `applicablePlans` empty =
+  all plans. Non-empty lists must include the target.
 - **Modifiers** are signed integers/objects: `priceModifier`,
   `apiRateLimitModifier`, `storageLimitModifier`, `fileCacheLimitModifier`,
   `entityLimitModifiers`, `creditModifier`, concurrent-transfer modifiers,
@@ -1007,7 +1007,7 @@ When `IPaymentProvider.charge` returns a `PaymentResult` with
   Effective value clamped to ≥ 0.
 - **Auto-removal cascade on voucher edit.** `PUT /api/core/vouchers` runs one
   batched query: update voucher → find subscriptions where
-  `voucherId=this AND subscription.planId NOT IN new applicablePlanIds` → clear
+  `voucherId=this AND subscription.planId NOT IN new applicablePlans` → clear
   `voucherId=NONE`. Then `Core.reload()` + `evictAllSubscriptions()`. No email
   sent; billing page reloads show the change.
 - **Plan change** cancels the old subscription (voucher reference dropped with
@@ -1347,7 +1347,7 @@ A shared card component is the **only** renderer of plans across billing,
 onboarding, and core admin. Rich glassmorphism layout; emoji-prefixed limit
 rows; per-resourceKey op-count rows translated via `t("billing.limits." + key)`;
 `0`/absent key → `t("billing.limits.unlimited")`. Voucher-adjusted prices show
-original strikethrough + effective value when voucher's `applicablePlanIds` is
+original strikethrough + effective value when voucher's `applicablePlans` is
 empty or contains the plan; frontend effect is cosmetic, server-side charge calc
 must also apply modifiers.
 

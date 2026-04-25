@@ -362,7 +362,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const applicableIds = voucher.applicableCompanyIds as string[];
+    const applicableIds = voucher.applicableCompanies as string[];
     if (applicableIds && applicableIds.length > 0) {
       const companyIdStr = String(companyId);
       if (!applicableIds.some((id) => String(id) === companyIdStr)) {
@@ -379,12 +379,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    const applicablePlanIds = voucher.applicablePlanIds as string[];
+    const applicablePlans = voucher.applicablePlans as string[];
     const currentPlanId = String(activeSub?.planId ?? "");
-    if (applicablePlanIds && applicablePlanIds.length > 0) {
+    if (applicablePlans && applicablePlans.length > 0) {
       if (
         !currentPlanId ||
-        !applicablePlanIds.some((id) => String(id) === currentPlanId)
+        !applicablePlans.some((id) => String(id) === currentPlanId)
       ) {
         return Response.json(
           {
