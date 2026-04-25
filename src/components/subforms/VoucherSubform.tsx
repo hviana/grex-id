@@ -5,6 +5,8 @@ import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 
 interface VoucherSubformProps {
@@ -35,6 +37,13 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
       if (!ids) return [];
       return ids.map((id) => ({ id: String(id), label: String(id) }));
     });
+    const [applicableCompanyIds, setApplicableCompanyIds] = useState<
+      BadgeValue[]
+    >(() => {
+      const ids = initialData?.applicableCompanyIds as string[] | undefined;
+      if (!ids) return [];
+      return ids.map((id) => ({ id: String(id), name: String(id) }));
+    });
 
     const limitsRef = React.useRef<SubformRef>(null);
 
@@ -44,6 +53,9 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
         return {
           code,
           priceModifier: Number(priceModifier),
+          applicableCompanyIds: applicableCompanyIds.map((b) =>
+            typeof b === "string" ? b : b.id ?? b.name
+          ),
           applicablePlanIds: applicablePlanIds.map((p) => p.id),
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
           ...limitsData,
@@ -102,6 +114,35 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
           mode="voucher"
           initialData={initialData}
         />
+
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+            {t("core.vouchers.applicableCompanyIds")}
+          </label>
+          <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+            {t("core.vouchers.applicableCompaniesHint")}
+          </p>
+          <MultiBadgeField
+            name={t("core.vouchers.applicableCompanyIds")}
+            mode="search"
+            value={applicableCompanyIds}
+            onChange={setApplicableCompanyIds}
+            fetchFn={async (search: string) => {
+              const params = new URLSearchParams();
+              if (search) params.set("search", search);
+              const res = await fetch(`/api/companies?${params}`, {
+                headers: { Authorization: `Bearer ${systemToken}` },
+              });
+              const json = await res.json();
+              return (json.data ?? []).map(
+                (c: { id: string; name: string }) => ({
+                  id: String(c.id),
+                  name: c.name,
+                }),
+              );
+            }}
+          />
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">

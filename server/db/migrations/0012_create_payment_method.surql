@@ -5,7 +5,7 @@ DEFINE FIELD cardMask        ON payment_method TYPE string;
 DEFINE FIELD cardToken       ON payment_method TYPE string;
 DEFINE FIELD holderName      ON payment_method TYPE string;
 DEFINE FIELD holderDocument  ON payment_method TYPE string;
-DEFINE FIELD billingAddress  ON payment_method TYPE record<address>;
+DEFINE FIELD billingAddressId  ON payment_method TYPE record<address>;
 DEFINE FIELD isDefault       ON payment_method TYPE bool DEFAULT false;
 DEFINE FIELD createdAt       ON payment_method TYPE datetime DEFAULT time::now();
 

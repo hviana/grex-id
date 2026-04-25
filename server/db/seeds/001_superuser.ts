@@ -23,11 +23,11 @@ export async function seed(db: Surreal): Promise<void> {
        verified = true;
      LET $prof = CREATE profile SET
        name = $name,
-       recovery_channels = [];
+       recoveryChannelIds = [];
      LET $usr  = CREATE user SET
        passwordHash = crypto::argon2::generate($password),
-       profile = $prof[0].id,
-       channels = [$ch[0].id],
+       profileId = $prof[0].id,
+       channelIds = [$ch[0].id],
        roles = ["superuser", "admin"],
        twoFactorEnabled = false,
        stayLoggedIn = false;`,

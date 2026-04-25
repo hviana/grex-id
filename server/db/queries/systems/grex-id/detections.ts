@@ -112,7 +112,7 @@ interface RawDetectionRow {
       name?: string;
       email?: string;
       phone?: string;
-      profile?: { avatarUri?: string };
+      profileId?: { avatarUri?: string };
     })
     | null;
 }
@@ -155,7 +155,7 @@ export async function listDetections(
 
   // Single batched query (§7.2): detections + lead_company_system membership
   const query =
-    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profile;
+    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
 
     LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId IS NOT NONE ORDER BY detectedAt DESC LIMIT $limit);
 
@@ -163,7 +163,7 @@ export async function listDetections(
       WHERE leadId IN $leadIds
         AND companyId = $companyId
         AND systemId = $systemId
-      FETCH ownerId, ownerId.profile;`;
+      FETCH ownerId, ownerId.profileId;`;
 
   const result = await db.query<
     [
@@ -174,7 +174,7 @@ export async function listDetections(
         ownerId:
           | (Record<string, unknown> & {
             id: unknown;
-            profile?: { name?: string };
+            profileId?: { name?: string };
           })
           | null;
       }[],
@@ -198,7 +198,7 @@ export async function listDetections(
       : null;
     assocMap.set(lid, {
       ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
-      ownerName: owner?.profile?.name ?? undefined,
+      ownerName: owner?.profileId?.name ?? undefined,
     });
   }
 
@@ -231,7 +231,7 @@ export async function listDetections(
       faceId: faceRecordId ?? undefined,
       leadName: leadRecordId ? lead?.name ?? undefined : undefined,
       leadAvatarUri: leadRecordId
-        ? lead?.profile?.avatarUri ?? undefined
+        ? lead?.profileId?.avatarUri ?? undefined
         : undefined,
       leadEmail: isMember ? lead?.email ?? undefined : undefined,
       leadPhone: isMember ? lead?.phone ?? undefined : undefined,
@@ -283,7 +283,7 @@ interface AggregatedFaceRow {
       name?: string;
       email?: string;
       phone?: string;
-      profile?: { avatarUri?: string };
+      profileId?: { avatarUri?: string };
     })
     | null;
   locationId: Record<string, unknown> & {
@@ -329,7 +329,7 @@ export async function getDetectionStats(params: {
         ownerId:
           | Record<string, unknown> & {
             id: unknown;
-            profile?: { name?: string };
+            profileId?: { name?: string };
           }
           | null;
       }[],
@@ -350,7 +350,7 @@ export async function getDetectionStats(params: {
         AND detectedAt <= type::datetime($endDate)${locationFilter}
       GROUP BY faceId
       ORDER BY lastDetectedAt DESC
-      FETCH faceId, leadId, leadId.profile, locationId;
+      FETCH faceId, leadId, leadId.profileId, locationId;
 
     // 2) Raw faceId + detectedAt for hourly/daily unique counts (lightweight)
     SELECT faceId, detectedAt FROM grexid_detection
@@ -373,7 +373,7 @@ export async function getDetectionStats(params: {
       WHERE leadId IN $leadIds
         AND companyId = $companyId
         AND systemId = $systemId
-      FETCH ownerId, ownerId.profile;`,
+      FETCH ownerId, ownerId.profileId;`,
     bindings,
   );
 
@@ -391,7 +391,7 @@ export async function getDetectionStats(params: {
       : null;
     assocMap.set(lid, {
       ownerId: owner ? normalizeRecordId(owner.id) ?? undefined : undefined,
-      ownerName: owner?.profile?.name ?? undefined,
+      ownerName: owner?.profileId?.name ?? undefined,
     });
   }
 
@@ -446,7 +446,7 @@ export async function getDetectionStats(params: {
       leadId: isMember ? leadRecordId ?? undefined : undefined,
       leadName: leadRecordId ? lead?.name ?? undefined : undefined,
       leadAvatarUri: leadRecordId
-        ? lead?.profile?.avatarUri ?? undefined
+        ? lead?.profileId?.avatarUri ?? undefined
         : undefined,
       leadEmail: isMember ? lead?.email ?? undefined : undefined,
       leadPhone: isMember ? lead?.phone ?? undefined : undefined,

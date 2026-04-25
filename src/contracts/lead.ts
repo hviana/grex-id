@@ -4,10 +4,10 @@ import type { Profile } from "./profile.ts";
 export interface Lead {
   id: string;
   name: string;
-  profile: Profile;
-  channels: EntityChannel[];
+  profileId: Profile;
+  channelIds: EntityChannel[];
   companyIds: string[];
-  tags: string[];
+  tagIds: string[];
   createdAt: string;
   updatedAt: string;
 }

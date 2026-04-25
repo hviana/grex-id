@@ -99,6 +99,11 @@ user-facing informational surfaces show translation only.
   link (scalar for one-to-one, `array<record<>>` for collections). To create:
   create composable first, then parent referencing it. To delete: delete both in
   the same batched query.
+- **Record-reference field naming.** Every field typed `record<T>` ends with
+  `Id` (e.g. `profileId`, `ownerId`, `planId`). Every field typed
+  `array<record<T>>` ends with `Ids` (e.g. `channelIds`, `tagIds`,
+  `companyIds`). No exceptions. This applies to migrations, contracts, queries,
+  and frontend code uniformly.
 - **Optimization.** Any field used in queries to select/filter data or used as a
   cursor should be indexed.
 - **Single-batched-query rule.** Every query function batches all statements
@@ -267,50 +272,50 @@ middleware that queries the DB without a cache comes last.
 
 Three reusable composables, each `SCHEMAFULL` and unaware of its parents:
 
-| Table            | Fields (rule-bearing)                                                                       | Referenced by                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `profile`        | name (FULLTEXT), avatarUri, age, locale, `recovery_channels: array<record<entity_channel>>` | `user.profile`, `lead.profile`                                                            |
-| `address`        | street, number, …, postalCode                                                               | `company.billingAddress` (option), `payment_method.billingAddress`, `location` (embedded) |
-| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)       | `user.channels[]`, `lead.channels[]`, `profile.recovery_channels[]`                       |
+| Table            | Fields (rule-bearing)                                                                        | Referenced by                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `profile`        | name (FULLTEXT), avatarUri, age, locale, `recoveryChannelIds: array<record<entity_channel>>` | `user.profileId`, `lead.profileId`                                                            |
+| `address`        | street, number, …, postalCode                                                                | `company.billingAddressId` (option), `payment_method.billingAddressId`, `location` (embedded) |
+| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)        | `user.channelIds[]`, `lead.channelIds[]`, `profile.recoveryChannelIds[]`                      |
 
-**`profile.recovery_channels`** is reserved **exclusively** for account-recovery
-paths — never read by login, communication dispatch, or the approval invariant.
-It is independent of `user.channels`.
+**`profile.recoveryChannelIds`** is reserved **exclusively** for
+account-recovery paths — never read by login, communication dispatch, or the
+approval invariant. It is independent of `user.channelIds`.
 
 ### 3.4 Core tables (rule-bearing fields only)
 
-| Table                  | Key rules                                                                                                                                                                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user`                 | `profile: record<profile>`; `channels: array<record<entity_channel>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`. No identity fields (email/phone) on the row itself. |
-| `oauth_identity`       | One row per `(provider, providerUserId)` linked to `userId`. Unique composite index on that pair; secondary index on `userId`. Multiple providers per user allowed.                                                                             |
-| `company`              | Unique `document`; `billingAddress: option<record<address>>`; `ownerId`                                                                                                                                                                         |
-| `company_user`         | Unique `(companyId, userId)`                                                                                                                                                                                                                    |
-| `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                     |
-| `company_system`       | Unique `(companyId, systemId)`. Idempotent creation (existence-check, never raw CREATE).                                                                                                                                                        |
-| `user_company_system`  | Unique `(userId, companyId, systemId)`. Holds per-tenant `roles`. Admin invariant: every tenant has ≥1 user with role `"admin"`.                                                                                                                |
-| `role`                 | Unique `(name, systemId)`; `isBuiltIn`                                                                                                                                                                                                          |
-| `plan`                 | See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                |
-| `voucher`              | Unique `code`; `applicableCompanyIds`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                      |
-| `menu_item`            | `parentId` optional, unlimited depth; index `(systemId, parentId, sortOrder)`                                                                                                                                                                   |
-| `subscription`         | See §7.2                                                                                                                                                                                                                                        |
-| `payment_method`       | `billingAddress: record<address>`; `isDefault`                                                                                                                                                                                                  |
-| `credit_purchase`      | Status `pending                                                                                                                                                                                                                                 |
-| `payment`              | Unified payment ledger (§7.5)                                                                                                                                                                                                                   |
-| `connected_app`        | Scoped per (company, system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                        |
-| `connected_service`    | Scoped per (company, system, user). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                 |
-| `api_token`            | Row id = universal actor id. Bearer is a JWT carrying that id. Fields: tenant (flexible), `neverExpires` XOR `expiresAt`, `frontendUse`, `frontendDomains`, `revokedAt`, per-resource `maxOperationCount`, `monthlySpendLimit`                  |
-| `usage_record`         | `actorType ∈ user                                                                                                                                                                                                                               |
-| `credit_expense`       | Daily container; unique `(companyId, systemId, resourceKey, day)`; fields `amount` (cents total), `count` (ops), `actorId` optional — both increment via UPSERT                                                                                 |
-| `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                      |
-| `delivery`             | One row per handler per event; status `pending                                                                                                                                                                                                  |
-| `verification_request` | `actionKey` (i18n), `ownerId: record<user                                                                                                                                                                                                       |
-| `setting`              | Unique `(key, systemSlug)`. `systemSlug="core"` = core-level default; any other non-empty = per-system override. ASSERT not empty. Server-only consumption.                                                                                     |
-| `front_setting`        | Same shape as `setting`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                           |
-| `lead`                 | `profile: record<profile>`; `channels: array<record<entity_channel>>`; `companyIds`                                                                                                                                                             |
-| `lead_company_system`  | Unique `(leadId, companyId, systemId)`                                                                                                                                                                                                          |
-| `location`             | Scoped per (company, system); address embedded inline                                                                                                                                                                                           |
-| `tag`                  | Scoped per (company, system); unique `(name, companyId, systemId)`                                                                                                                                                                              |
-| `file_access`          | Unique `name` (FULLTEXT); `categoryPattern`, `download` + `upload` sections (see §6)                                                                                                                                                            |
+| Table                  | Key rules                                                                                                                                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`. No identity fields (email/phone) on the row itself. |
+| `oauth_identity`       | One row per `(provider, providerUserId)` linked to `userId`. Unique composite index on that pair; secondary index on `userId`. Multiple providers per user allowed.                                                                                 |
+| `company`              | Unique `document`; `billingAddressId: option<record<address>>`; `ownerId`                                                                                                                                                                           |
+| `company_user`         | Unique `(companyId, userId)`                                                                                                                                                                                                                        |
+| `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                         |
+| `company_system`       | Unique `(companyId, systemId)`. Idempotent creation (existence-check, never raw CREATE).                                                                                                                                                            |
+| `user_company_system`  | Unique `(userId, companyId, systemId)`. Holds per-tenant `roles`. Admin invariant: every tenant has ≥1 user with role `"admin"`.                                                                                                                    |
+| `role`                 | Unique `(name, systemId)`; `isBuiltIn`                                                                                                                                                                                                              |
+| `plan`                 | See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                    |
+| `voucher`              | Unique `code`; `applicableCompanyIds`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                          |
+| `menu_item`            | `parentId` optional, unlimited depth; index `(systemId, parentId, sortOrder)`                                                                                                                                                                       |
+| `subscription`         | See §7.2                                                                                                                                                                                                                                            |
+| `payment_method`       | `billingAddress: record<address>`; `isDefault`                                                                                                                                                                                                      |
+| `credit_purchase`      | Status `pending                                                                                                                                                                                                                                     |
+| `payment`              | Unified payment ledger (§7.5)                                                                                                                                                                                                                       |
+| `connected_app`        | Scoped per (company, system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                            |
+| `connected_service`    | Scoped per (company, system, user). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                     |
+| `api_token`            | Row id = universal actor id. Bearer is a JWT carrying that id. Fields: tenant (flexible), `neverExpires` XOR `expiresAt`, `frontendUse`, `frontendDomains`, `revokedAt`, per-resource `maxOperationCount`, `monthlySpendLimit`                      |
+| `usage_record`         | `actorType ∈ user                                                                                                                                                                                                                                   |
+| `credit_expense`       | Daily container; unique `(companyId, systemId, resourceKey, day)`; fields `amount` (cents total), `count` (ops), `actorId` optional — both increment via UPSERT                                                                                     |
+| `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                          |
+| `delivery`             | One row per handler per event; status `pending                                                                                                                                                                                                      |
+| `verification_request` | `actionKey` (i18n), `ownerId: record<user                                                                                                                                                                                                           |
+| `setting`              | Unique `(key, systemSlug)`. `systemSlug="core"` = core-level default; any other non-empty = per-system override. ASSERT not empty. Server-only consumption.                                                                                         |
+| `front_setting`        | Same shape as `setting`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                               |
+| `lead`                 | `profile: record<profile>`; `channels: array<record<entity_channel>>`; `companyIds`                                                                                                                                                                 |
+| `lead_company_system`  | Unique `(leadId, companyId, systemId)`                                                                                                                                                                                                              |
+| `location`             | Scoped per (company, system); address embedded inline                                                                                                                                                                                               |
+| `tag`                  | Scoped per (company, system); unique `(name, companyId, systemId)`                                                                                                                                                                                  |
+| `file_access`          | Unique `name` (FULLTEXT); `categoryPattern`, `download` + `upload` sections (see §6)                                                                                                                                                                |
 
 **File storage.** `@hviana/surreal-fs` manages its own `surreal_fs_files` /
 `surreal_fs_chunks` via `fs.init()`. There is no separate `file_metadata` table.
@@ -695,7 +700,7 @@ publish("send_communication", {
   channels: string[],                  // ordered; empty → auth.communication.defaultChannels
   senders?: string[],                  // per-channel override
   recipients: string[],                // raw values OR entity ids (user:…/lead:…) —
-                                       // resolved via parent's channels array, filtered
+                                       // resolved via parent's channelIds array, filtered
                                        // by entity_channel.type = <current channel>, verified=true
   template: string | TemplateBuilder,  // channel-less path; dispatcher prepends <channel>/
   templateData: Record<string, unknown> // includes tenant context + locale — no sensitive data
@@ -728,7 +733,7 @@ publish("send_communication", {
 `send_push`/`send_webhook`/`send_phone`):
 
 1. Resolve locale (§2.3).
-2. Resolve recipients. For `user:…`/`lead:…` ids: FETCH parent's `channels`
+2. Resolve recipients. For `user:…`/`lead:…` ids: FETCH parent's `channelIds`
    array, filter `type=<channel> AND verified=true`, use `value`. If none →
    `{delivered:false, reason:"no-recipients"}`.
 3. Resolve senders (`payload.senders` → `communication.<channel>.senders`
@@ -1077,9 +1082,9 @@ cache; cold-start, logout, role change, exchange → refresh fails with
 
 ### 8.2 Account-approval invariant
 
-An account (user/lead) is "approved" iff its `channels` array contains **≥1
+An account (user/lead) is "approved" iff its `channelIds` array contains **≥1
 verified `entity_channel`**. There are no identity fields on `user`/`lead`
-themselves. `profile.recovery_channels` does **not** satisfy this invariant (it
+themselves. `profile.recoveryChannelIds` does **not** satisfy this invariant (it
 is recovery-only — §3.3).
 
 ### 8.3 Registration
@@ -1157,10 +1162,10 @@ Companies admin page "Access" button).
 - **Forgot password (public)** — identical data flow,
   `actionKey="auth.action.passwordReset"`. Anti-enumeration: generic success on
   any block/miss.
-- **Channel lifecycle** (user.channels / lead.channels):
+- **Channel lifecycle** (user.channelIds / lead.channelIds):
   - **Add** `POST /api/entity-channels`: create
-    `entity_channel(verified=false)` + append id to parent's `channels` array in
-    one batch; open
+    `entity_channel(verified=false)` + append id to parent's `channelIds` array
+    in one batch; open
     `verification_request(actionKey="auth.action.entityChannelAdd")`.
   - **Verify**: confirmation link → `POST /api/auth/verify` flips channel(s) to
     verified.
@@ -1169,8 +1174,8 @@ Companies admin page "Access" button).
     `requiredTypes` entry remains.
   - **Resend**: `?action=resend-verification` (gated by `communicationGuard`).
 - **Account recovery** `/account-recovery` — accepts verified value from
-  `user.channels` **or** `profile.recovery_channels`.
-  `profile.recovery_channels` entries are added + verified through their own
+  `user.channelIds` **or** `profile.recoveryChannelIds`.
+  `profile.recoveryChannelIds` entries are added + verified through their own
   `actionKey="auth.action.recoveryChannelAdd"` flow and are never used outside
   account recovery.
 
@@ -1439,16 +1444,16 @@ props/variants; cross-page duplication is forbidden.
 
 ### 10.4 Field-selection policy
 
-| Data type                                              | Required component                                          | Notes                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------ |
-| Free multi-value strings (permissions, tags, benefits) | `MultiBadgeField mode:"custom"`                             | Type + Enter                                           |
-| Multi-value from backend set (roles, plan IDs)         | `MultiBadgeField mode:"search"` with `fetchFn`              | Cannot invent values                                   |
-| Single/multi record reference                          | `SearchableSelectField`                                     | Debounced API search                                   |
-| Static ≤ 6 options                                     | `<select>` OR `MultiBadgeField mode:"search" staticOptions` |                                                        |
-| Key-value pairs                                        | `DynamicKeyValueField`                                      | Never JSON in `<textarea>`                             |
-| File / image                                           | `FileUploadField`                                           | Never a plain URL input for uploads                    |
-| Entity channels (email/phone/…) as a list              | `EntityChannelsSubform` (modes `authenticated` or `local`)  | Never hardcoded email/phone inputs for list collection |
-| Single identifier (login, forgot, verify resend)       | Plain text input                                            | Resolves one existing verified channel                 |
+| Data type                                                              | Required component                                          | Notes                                                  |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| Free multi-value strings (permissions, tags, benefits, id->name pairs) | `MultiBadgeField mode:"custom"`                             | Type + Enter                                           |
+| Multi-value from backend set (roles, plan IDs)                         | `MultiBadgeField mode:"search"` with `fetchFn`              | Cannot invent values                                   |
+| Single/multi record reference                                          | `SearchableSelectField`                                     | Debounced API search                                   |
+| Static ≤ 6 options                                                     | `<select>` OR `MultiBadgeField mode:"search" staticOptions` |                                                        |
+| Key-value pairs                                                        | `DynamicKeyValueField`                                      | Never JSON in `<textarea>`                             |
+| File / image                                                           | `FileUploadField`                                           | Never a plain URL input for uploads                    |
+| Entity channels (email/phone/…) as a list                              | `EntityChannelsSubform` (modes `authenticated` or `local`)  | Never hardcoded email/phone inputs for list collection |
+| Single identifier (login, forgot, verify resend)                       | Plain text input                                            | Resolves one existing verified channel                 |
 
 ### 10.5 Homepage registry
 

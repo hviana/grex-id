@@ -7,6 +7,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
 import { Bar } from "react-chartjs-2";
@@ -189,9 +190,6 @@ export default function CompaniesPage() {
     cancelled: t("core.companies.cancelled"),
     past_due: t("core.companies.pastDue"),
   };
-  const reverseStatusLabels: Record<string, string> = Object.fromEntries(
-    Object.entries(statusLabels).map(([k, v]) => [v, k]),
-  );
 
   const today = new Date().toISOString().slice(0, 10);
   const thirtyOneDaysAgo = new Date(Date.now() - 31 * 86400000)
@@ -199,19 +197,19 @@ export default function CompaniesPage() {
     .slice(0, 10);
   const [startDate, setStartDate] = useState(thirtyOneDaysAgo);
   const [endDate, setEndDate] = useState(today);
-  const [systemFilter, setSystemFilter] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [planFilter, setPlanFilter] = useState<
-    { id: string; name: string }[]
-  >([]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [systemFilter, setSystemFilter] = useState<BadgeValue[]>([]);
+  const [planFilter, setPlanFilter] = useState<BadgeValue[]>([]);
+  const [statusFilter, setStatusFilter] = useState<BadgeValue[]>([]);
   const [chart, setChart] = useState<RevenueChart | null>(null);
 
-  const systemIds = useMemo(() => systemFilter.map((s) => s.id), [
-    systemFilter,
-  ]);
-  const planIds = useMemo(() => planFilter.map((p) => p.id), [planFilter]);
+  const systemIds = useMemo(
+    () => systemFilter.map((s) => typeof s === "string" ? s : s.id ?? s.name),
+    [systemFilter],
+  );
+  const planIds = useMemo(
+    () => planFilter.map((p) => typeof p === "string" ? p : p.id ?? p.name),
+    [planFilter],
+  );
 
   const fetchCompanies = useCallback(
     async (
@@ -223,7 +221,13 @@ export default function CompaniesPage() {
       sp.set("limit", String(params.limit));
       if (systemIds.length > 0) sp.set("systemIds", systemIds.join(","));
       if (planIds.length > 0) sp.set("planIds", planIds.join(","));
-      if (statusFilter.length > 0) sp.set("statuses", statusFilter.join(","));
+      if (statusFilter.length > 0) {
+        sp.set(
+          "statuses",
+          statusFilter.map((s) => typeof s === "string" ? s : s.id ?? s.name)
+            .join(","),
+        );
+      }
 
       const res = await fetch(`/api/core/companies?${sp}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
@@ -247,7 +251,13 @@ export default function CompaniesPage() {
     });
     if (systemIds.length > 0) sp.set("systemIds", systemIds.join(","));
     if (planIds.length > 0) sp.set("planIds", planIds.join(","));
-    if (statusFilter.length > 0) sp.set("statuses", statusFilter.join(","));
+    if (statusFilter.length > 0) {
+      sp.set(
+        "statuses",
+        statusFilter.map((s) => typeof s === "string" ? s : s.id ?? s.name)
+          .join(","),
+      );
+    }
     const res = await fetch(`/api/core/companies?${sp}`, {
       headers: { Authorization: `Bearer ${systemToken}` },
     });
@@ -358,16 +368,8 @@ export default function CompaniesPage() {
           <MultiBadgeField
             name="systemFilter"
             mode="search"
-            value={systemFilter.map((s) => ({ name: s.name }))}
-            onChange={(v) =>
-              setSystemFilter(
-                v.map((x) => {
-                  if (typeof x === "object" && "id" in x) {
-                    return { id: String(x.id), name: x.name ?? "" };
-                  }
-                  return { id: String(x), name: String(x) };
-                }),
-              )}
+            value={systemFilter}
+            onChange={setSystemFilter}
             fetchFn={fetchSystems}
           />
         </div>
@@ -378,16 +380,8 @@ export default function CompaniesPage() {
           <MultiBadgeField
             name="planFilter"
             mode="search"
-            value={planFilter.map((p) => ({ name: p.name }))}
-            onChange={(v) =>
-              setPlanFilter(
-                v.map((x) => {
-                  if (typeof x === "object" && "id" in x) {
-                    return { id: String(x.id), name: x.name ?? "" };
-                  }
-                  return { id: String(x), name: String(x) };
-                }),
-              )}
+            value={planFilter}
+            onChange={setPlanFilter}
             fetchFn={fetchPlans}
           />
         </div>
@@ -398,17 +392,12 @@ export default function CompaniesPage() {
           <MultiBadgeField
             name="statusFilter"
             mode="search"
-            value={statusFilter.map(
-              (s) => statusLabels[s] ?? s,
-            )}
-            onChange={(v) =>
-              setStatusFilter(
-                v.map((x) => {
-                  const label = typeof x === "string" ? x : x.name;
-                  return reverseStatusLabels[label] ?? label;
-                }),
-              )}
-            staticOptions={Object.values(statusLabels)}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            staticOptions={Object.entries(statusLabels).map(([k, v]) => ({
+              id: k,
+              name: v,
+            }))}
           />
         </div>
       </div>

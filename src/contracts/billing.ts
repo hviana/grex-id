@@ -29,7 +29,7 @@ export interface PaymentMethod {
   cardToken: string;
   holderName: string;
   holderDocument: string;
-  billingAddress: Address;
+  billingAddressId: Address;
   isDefault: boolean;
   createdAt: string;
 }

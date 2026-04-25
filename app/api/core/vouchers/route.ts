@@ -240,17 +240,24 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    // Auto-removal cascade: if applicablePlanIds was updated and is non-empty,
-    // strip voucherId from subscriptions whose planId is no longer in the list
-    const shouldCascade = applicablePlanIds !== undefined &&
+    // Auto-removal cascade (§7.7): if applicablePlanIds was updated and is non-empty,
+    // strip voucherId from subscriptions whose planId is no longer in the list.
+    // Same for applicableCompanyIds — strip from subscriptions whose companyId
+    // is no longer in the list.
+    const shouldCascadePlans = applicablePlanIds !== undefined &&
       Array.isArray(applicablePlanIds) &&
       applicablePlanIds.length > 0;
+
+    const shouldCascadeCompanies = applicableCompanyIds !== undefined &&
+      Array.isArray(applicableCompanyIds) &&
+      applicableCompanyIds.length > 0;
 
     const updated = await updateVoucherWithCascade(
       id,
       sets,
       bindings,
-      shouldCascade,
+      shouldCascadePlans,
+      shouldCascadeCompanies,
     );
 
     const core = Core.getInstance();

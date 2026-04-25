@@ -119,7 +119,7 @@ export async function listLeads(
   const query = `
     LET $lcs = (SELECT leadId, ownerId, createdAt FROM lead_company_system WHERE ${lcsWhere} ORDER BY createdAt DESC LIMIT $limit);
     LET $ids = $lcs.leadId;
-    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profile, channels, tags;
+    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profileId, channelIds, tagIds;
     SELECT leadId, ownerId FROM lead_company_system WHERE ${lcsWhere};`;
 
   const result = await db.query<
@@ -159,7 +159,7 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
   const result = await db.query<[Lead[]]>(
-    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profile, channels",
+    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profileId, channelIds",
     { id: rid(leadId) },
   );
   return normalizeLead(result[0]?.[0] ?? null);
@@ -173,8 +173,8 @@ export async function findLeadByChannelValues(
   const result = await db.query<unknown[]>(
     `LET $chIds = (SELECT VALUE id FROM entity_channel WHERE value IN $values);
      SELECT * FROM lead
-     WHERE channels ANYINSIDE $chIds
-     LIMIT 1 FETCH profile, channels;`,
+     WHERE channelIds ANYINSIDE $chIds
+     LIMIT 1 FETCH profileId, channelIds;`,
     { values },
   );
   const last = result[result.length - 1] as Lead[] | undefined;
@@ -213,7 +213,7 @@ export async function createLead(data: {
     age: data.profile.age ?? undefined,
     name: data.name,
     companyIds,
-    tags: data.tags ?? [],
+    tagIds: data.tags ?? [],
   };
   data.channels.forEach((c, i) => {
     bindings[`ctype${i}`] = c.type;
@@ -226,14 +226,14 @@ export async function createLead(data: {
       name = $profileName,
       avatarUri = $avatarUri,
       age = $age,
-      recovery_channels = [];
+      recoveryChannelIds = [];
     LET $ld = CREATE lead SET
       name = $name,
-      profile = $prof[0].id,
-      channels = [${channelsArray}],
+      profileId = $prof[0].id,
+      channelIds = [${channelsArray}],
       companyIds = $companyIds,
-      tags = $tags;
-    SELECT * FROM $ld[0].id FETCH profile, channels;`;
+      tagIds = $tags;
+    SELECT * FROM $ld[0].id FETCH profileId, channelIds;`;
 
   const result = await db.query<unknown[]>(query, bindings);
   const last = result[result.length - 1] as Lead[];
@@ -264,7 +264,7 @@ export async function updateLead(
     bindings.name = data.name;
   }
   if (data.tags !== undefined) {
-    sets.push("tags = $tags");
+    sets.push("tagIds = $tags");
     bindings.tags = data.tags;
   }
   if (companyIds !== undefined) {
@@ -289,15 +289,15 @@ export async function updateLead(
       bindings.age = data.profile.age || undefined;
     }
     statements.push(
-      `LET $ld = (SELECT profile FROM $id);
-      IF $ld[0].profile != NONE {
-        UPDATE $ld[0].profile SET ${profileSets.join(", ")};
+      `LET $ld = (SELECT profileId FROM $id);
+      IF $ld[0].profileId != NONE {
+        UPDATE $ld[0].profileId SET ${profileSets.join(", ")};
       }`,
     );
   }
 
   statements.push(`UPDATE $id SET ${sets.join(", ")}`);
-  statements.push("SELECT * FROM $id FETCH profile, channels");
+  statements.push("SELECT * FROM $id FETCH profileId, channelIds");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
@@ -328,19 +328,19 @@ export async function deleteLead(id: string): Promise<void> {
   const leadId = requireRecordId(id, "leadId");
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
-    `LET $ld    = (SELECT profile, channels FROM lead WHERE id = $id)[0];
-     LET $chIds = IF $ld = NONE THEN [] ELSE $ld.channels END;
-     LET $prof  = IF $ld = NONE OR $ld.profile = NONE
+    `LET $ld    = (SELECT profileId, channelIds FROM lead WHERE id = $id)[0];
+     LET $chIds = IF $ld = NONE THEN [] ELSE $ld.channelIds END;
+     LET $prof  = IF $ld = NONE OR $ld.profileId = NONE
                   THEN NONE
-                  ELSE (SELECT recovery_channels FROM $ld.profile)[0]
+                  ELSE (SELECT recoveryChannelIds FROM $ld.profileId)[0]
                   END;
-     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recovery_channels END;
+     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE FROM lead WHERE id = $id;
      FOR $cid IN $chIds { DELETE $cid; };
      FOR $rid IN $recIds { DELETE $rid; };
-     IF $ld != NONE AND $ld.profile != NONE {
-       DELETE $ld.profile;
+     IF $ld != NONE AND $ld.profileId != NONE {
+       DELETE $ld.profileId;
      };`,
     { id: rid(leadId) },
   );
@@ -467,8 +467,8 @@ export async function syncLeadChannels(
   const db = await getDb();
   for (const ch of channels) {
     await db.query(
-      `LET $lead = (SELECT channels FROM lead WHERE id = $owner)[0];
-         LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channels END;
+      `LET $lead = (SELECT channelIds FROM lead WHERE id = $owner)[0];
+         LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channelIds END;
          LET $existing = (SELECT id FROM entity_channel
            WHERE id IN $ids AND type = $type AND value = $value
            LIMIT 1);
@@ -478,7 +478,7 @@ export async function syncLeadChannels(
          ) ELSE [] END;
          LET $appended = IF array::len($new) > 0 THEN (
            UPDATE $owner SET
-             channels += $new[0].id,
+             channelIds += $new[0].id,
              updatedAt = time::now()
          ) ELSE [] END;
          LET $flipped = IF array::len($existing) > 0 THEN (
@@ -508,7 +508,7 @@ export async function searchUsersInCompanySystem(
      FROM user_company_system
      WHERE companyId = $companyId
        AND systemId = $systemId
-     LIMIT 100 FETCH userId, userId.profile`,
+     LIMIT 100 FETCH userId, userId.profileId`,
     {
       companyId: rid(normalizedCompanyId),
       systemId: rid(normalizedSystemId),
@@ -518,14 +518,14 @@ export async function searchUsersInCompanySystem(
   return rows
     .filter((row) => {
       const user = row.userId as Record<string, unknown> | undefined;
-      const profile = user?.profile as Record<string, unknown> | undefined;
+      const profile = user?.profileId as Record<string, unknown> | undefined;
       const name = (profile?.name as string) ?? "";
       return name.toLowerCase().includes(search.toLowerCase());
     })
     .slice(0, 20)
     .map((row) => {
       const user = row.userId as Record<string, unknown>;
-      const profile = user.profile as Record<string, unknown>;
+      const profile = user.profileId as Record<string, unknown>;
       return { id: user.id as string, label: (profile.name as string) ?? "" };
     });
 }

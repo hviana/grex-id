@@ -75,11 +75,7 @@ interface UsagePageProps {
 }
 
 function extractIds(badges: BadgeValue[]): string[] {
-  return badges.map((b) =>
-    typeof b === "string"
-      ? b
-      : (b as { name: string; id?: string }).id ?? b.name
-  );
+  return badges.map((b) => typeof b === "string" ? b : b.id ?? b.name);
 }
 
 export default function UsagePage({ mode = "tenant" }: UsagePageProps) {

@@ -10,7 +10,7 @@ interface AddressSubformProps {
 }
 
 const AddressSubform = forwardRef<SubformRef, AddressSubformProps>(
-  ({ initialData, fieldPrefix = "billingAddress" }, ref) => {
+  ({ initialData, fieldPrefix = "billingAddressId" }, ref) => {
     const { t } = useLocale();
     const addr = (initialData?.[fieldPrefix] as Record<string, string>) ?? {};
 

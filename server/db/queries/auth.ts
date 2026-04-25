@@ -85,8 +85,8 @@ export async function findUserByVerifiedChannel(
     : `value = $value AND verified = true`;
   const query = `
     LET $ch = (SELECT id FROM entity_channel WHERE ${filter} LIMIT 1)[0];
-    SELECT * FROM user WHERE channels CONTAINS $ch.id LIMIT 1
-      FETCH profile, channels;`;
+    SELECT * FROM user WHERE channelIds CONTAINS $ch.id LIMIT 1
+      FETCH profileId, channelIds;`;
   const result = await db.query<unknown[]>(query, {
     value,
     type: channelType ?? undefined,
@@ -98,8 +98,8 @@ export async function findUserByVerifiedChannel(
 export async function userHasVerifiedChannel(userId: string): Promise<boolean> {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $u   = (SELECT channels FROM user WHERE id = $userId)[0];
-     LET $ids = IF $u = NONE THEN [] ELSE $u.channels END;
+    `LET $u   = (SELECT channelIds FROM user WHERE id = $userId)[0];
+     LET $ids = IF $u = NONE THEN [] ELSE $u.channelIds END;
      SELECT count() AS c FROM entity_channel
      WHERE id IN $ids AND verified = true
      GROUP ALL;`,
@@ -124,7 +124,7 @@ export async function verifyPassword(
  * Create a new user + profile + initial entity_channel rows in one batched
  * query (§7.2). The entity_channel rows are created first (composable rows
  * carry no back-pointer — §3.1.10), then the profile (with empty
- * recovery_channels), then the user whose `channels` array references all
+ * recoveryChannelIds), then the user whose `channels` array references all
  * the created entity_channel rows. Channels are created unverified; caller
  * issues the human confirmation via communicationGuard +
  * publish("send_communication", …).
@@ -166,20 +166,20 @@ export async function createUserWithChannels(params: {
     LET $prof = CREATE profile SET
       name = $name,
       locale = $locale,
-      recovery_channels = [];
+      recoveryChannelIds = [];
     LET $usr  = CREATE user SET
       passwordHash = crypto::argon2::generate($password),
-      profile = $prof[0].id,
-      channels = [${channelsArray}],
+      profileId = $prof[0].id,
+      channelIds = [${channelsArray}],
       roles = [],
       twoFactorEnabled = false,
       stayLoggedIn = false;
-    SELECT * FROM $usr[0].id FETCH profile, channels;`;
+    SELECT * FROM $usr[0].id FETCH profileId, channelIds;`;
 
   const result = await db.query<unknown[]>(query, bindings);
   const last = result[result.length - 1] as User[];
   const user = last[0];
-  const channels = (user?.channels ?? []) as { id: string }[];
+  const channels = (user?.channelIds ?? []) as { id: string }[];
   return {
     user,
     channelIds: channels.map((c) => String(c.id)),
@@ -269,9 +269,9 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
   const ids = userIds.map((id) => rid(id));
   await db.query(
     `LET $targets = $userIds;
-     LET $users = (SELECT id, profile, channels FROM user WHERE id IN $targets);
-     LET $profileIds = array::distinct($users.profile);
-     LET $channelIds = array::distinct(array::flatten($users.channels));
+     LET $users = (SELECT id, profileId, channelIds FROM user WHERE id IN $targets);
+     LET $profileIds = array::distinct($users.profileId);
+     LET $channelIds = array::distinct(array::flatten($users.channelIds));
      DELETE verification_request WHERE ownerId IN $targets;
      DELETE user WHERE id IN $targets;
      FOR $cid IN $channelIds { DELETE $cid; };
@@ -439,18 +439,18 @@ export async function disableTwoFactor(userId: string): Promise<void> {
  */
 export async function getUserWithProfile(userId: string): Promise<
   {
-    profile: { name: string; locale?: string };
-    channels: { value: string }[];
+    profileId: { name: string; locale?: string };
+    channelIds: { value: string }[];
   } | null
 > {
   const db = await getDb();
   const result = await db.query<
     [{
-      profile: { name: string; locale?: string };
-      channels: { value: string }[];
+      profileId: { name: string; locale?: string };
+      channelIds: { value: string }[];
     }[]]
   >(
-    `SELECT * FROM $userId LIMIT 1 FETCH profile, channels`,
+    `SELECT * FROM $userId LIMIT 1 FETCH profileId, channelIds`,
     { userId: rid(userId) },
   );
   return result[0]?.[0] ?? null;
@@ -468,12 +468,12 @@ export async function getUserProfile(userId: string): Promise<
 > {
   const db = await getDb();
   const result = await db.query<
-    [{ profile: { name: string; locale?: string } }[]]
+    [{ profileId: { name: string; locale?: string } }[]]
   >(
-    `SELECT profile FROM $userId FETCH profile`,
+    `SELECT profileId FROM $userId FETCH profileId`,
     { userId: rid(userId) },
   );
-  const profile = result[0]?.[0]?.profile;
+  const profile = result[0]?.[0]?.profileId;
   return profile ?? null;
 }
 
@@ -503,7 +503,8 @@ export async function getUserForRefresh(userId: string): Promise<
     stayLoggedIn: boolean;
     roles: string[];
     twoFactorEnabled: boolean;
-    profile?: unknown;
+    profileId?: unknown;
+    channelIds?: unknown[];
   } | null
 > {
   const db = await getDb();
@@ -513,12 +514,13 @@ export async function getUserForRefresh(userId: string): Promise<
       stayLoggedIn: boolean;
       roles: string[];
       twoFactorEnabled: boolean;
-      profile?: unknown;
+      profileId?: unknown;
+      channelIds?: unknown[];
     }[]]
   >(
-    `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profile, channels
+    `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profileId, channelIds
        FROM $userId LIMIT 1
-       FETCH profile, channels;`,
+       FETCH profileId, channelIds;`,
     { userId: rid(userId) },
   );
   return result[0]?.[0] ?? null;

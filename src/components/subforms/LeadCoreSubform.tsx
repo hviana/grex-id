@@ -37,22 +37,22 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
     // through as-is so the subform can prefill in `local` mode.
     const initialChannels: Record<string, unknown> = {
       channels: Array.isArray(
-          (initialData as { channels?: unknown })?.channels,
+          (initialData as { channelIds?: unknown })?.channelIds,
         )
-        ? ((initialData as { channels?: EntityChannel[] }).channels ?? [])
+        ? ((initialData as { channelIds?: EntityChannel[] }).channelIds ?? [])
         : [],
     };
 
     const [tags, setTags] = useState<BadgeValue[]>(() => {
-      const initial = initialData?.tags;
+      const initial = initialData?.tagIds;
       if (Array.isArray(initial)) {
         return initial.map((
           tag: { id: string; name: string; color?: string },
         ) => ({
+          id: tag.id,
           name: tag.name,
           color: tag.color,
-          id: tag.id,
-        })) as BadgeValue[];
+        }));
       }
       return [];
     });
@@ -71,6 +71,7 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
         return (json.data ?? []).map((
           tag: { id: string; name: string; color: string },
         ) => ({
+          id: tag.id,
           name: tag.name,
           color: tag.color,
         }));
@@ -84,12 +85,9 @@ const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
         const profileData = profileRef.current?.getData() ?? {};
         const profile =
           (profileData as { profile?: { name?: string } }).profile;
-        const tagIds = tags.map((tag) => {
-          if (typeof tag === "object" && "id" in tag) {
-            return (tag as { id: string }).id;
-          }
-          return typeof tag === "string" ? tag : tag.name;
-        });
+        const tagIds = tags.map((tag) =>
+          typeof tag === "string" ? tag : tag.id ?? tag.name
+        );
         return {
           name: profile?.name ?? "",
           ...channelsData,

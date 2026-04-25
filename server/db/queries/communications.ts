@@ -43,7 +43,7 @@ export async function resolveChannelRecipients(
     const varName = `owner_${i}`;
     vars[varName] = id;
     letStatements.push(
-      `LET $channels_${i} = (SELECT channels FROM ${table} WHERE id = $${varName})[0].channels ?? [];`,
+      `LET $channels_${i} = (SELECT channelIds FROM ${table} WHERE id = $${varName})[0].channelIds ?? [];`,
     );
   }
 

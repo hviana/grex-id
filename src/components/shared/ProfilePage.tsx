@@ -16,18 +16,18 @@ export default function ProfilePage() {
   const { t } = useLocale();
   const { companyId, systemSlug } = useSystemContext();
 
-  const [name, setName] = useState(user?.profile?.name ?? "");
-  const [avatarUri, setAvatarUri] = useState(user?.profile?.avatarUri ?? "");
-  const [age, setAge] = useState(user?.profile?.age?.toString() ?? "");
+  const [name, setName] = useState(user?.profileId?.name ?? "");
+  const [avatarUri, setAvatarUri] = useState(user?.profileId?.avatarUri ?? "");
+  const [age, setAge] = useState(user?.profileId?.age?.toString() ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (user) {
-      setName(user.profile?.name ?? "");
-      setAvatarUri(user.profile?.avatarUri ?? "");
-      setAge(user.profile?.age?.toString() ?? "");
+      setName(user.profileId?.name ?? "");
+      setAvatarUri(user.profileId?.avatarUri ?? "");
+      setAge(user.profileId?.age?.toString() ?? "");
     }
   }, [user]);
 
@@ -58,9 +58,9 @@ export default function ProfilePage() {
         setError(msg);
       } else {
         if (json.data) {
-          setName(json.data.profile?.name ?? name);
-          setAvatarUri(json.data.profile?.avatarUri ?? "");
-          setAge(json.data.profile?.age?.toString() ?? "");
+          setName(json.data.profileId?.name ?? name);
+          setAvatarUri(json.data.profileId?.avatarUri ?? "");
+          setAge(json.data.profileId?.age?.toString() ?? "");
         }
         setSuccess(true);
         await refresh();

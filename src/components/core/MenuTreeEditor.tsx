@@ -97,9 +97,6 @@ export default function MenuTreeEditor(
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
-  // Map plan display name → plan ID for conversion
-  const planNameToIdRef = useRef<Map<string, string>>(new Map());
-
   const fetchRoles = useCallback(
     async (search: string): Promise<BadgeValue[]> => {
       const res = await fetch(
@@ -123,11 +120,10 @@ export default function MenuTreeEditor(
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
-      return (json.data ?? []).map((p: { id: string; name: string }) => {
-        const label = p.name;
-        planNameToIdRef.current.set(label, String(p.id));
-        return label;
-      });
+      return (json.data ?? []).map((p: { id: string; name: string }) => ({
+        id: String(p.id),
+        name: p.name,
+      }));
     },
     [systemId],
   );
@@ -203,7 +199,7 @@ export default function MenuTreeEditor(
     setError(null);
     setValidationErrors([]);
 
-    // Resolve plan IDs to display names
+    // Resolve plan IDs to { id, name } objects
     const planIds = Array.isArray(item.hiddenInPlanIds)
       ? item.hiddenInPlanIds.map(String)
       : [];
@@ -217,13 +213,12 @@ export default function MenuTreeEditor(
         const planMap = new Map<string, string>();
         for (const p of json.data ?? []) {
           planMap.set(String(p.id), p.name);
-          planNameToIdRef.current.set(p.name, String(p.id));
         }
         setFormHiddenInPlanIds(
-          planIds.map((id) => planMap.get(id) ?? id),
+          planIds.map((id) => ({ id, name: planMap.get(id) ?? id })),
         );
       } catch {
-        setFormHiddenInPlanIds(planIds);
+        setFormHiddenInPlanIds(planIds.map((id) => ({ id, name: id })));
       }
     } else {
       setFormHiddenInPlanIds([]);
@@ -251,9 +246,11 @@ export default function MenuTreeEditor(
           emoji: formEmoji || null,
           componentName: formComponentName,
           sortOrder: Number(formSortOrder),
-          requiredRoles: formRequiredRoles as string[],
-          hiddenInPlanIds: (formHiddenInPlanIds as string[]).map(
-            (name) => planNameToIdRef.current.get(name) ?? name,
+          requiredRoles: formRequiredRoles.map((r) =>
+            typeof r === "string" ? r : r.name
+          ),
+          hiddenInPlanIds: formHiddenInPlanIds.map((p) =>
+            typeof p === "string" ? p : p.id ?? p.name
           ),
         }),
       });

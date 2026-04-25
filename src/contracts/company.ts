@@ -5,7 +5,7 @@ export interface Company {
   name: string;
   document: string;
   documentType: string;
-  billingAddress?: Address;
+  billingAddressId?: Address;
   ownerId: string;
   createdAt: string;
   updatedAt: string;

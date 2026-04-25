@@ -2,7 +2,7 @@ DEFINE TABLE company SCHEMAFULL;
 DEFINE FIELD name           ON company TYPE string;
 DEFINE FIELD document       ON company TYPE string;
 DEFINE FIELD documentType   ON company TYPE string;
-DEFINE FIELD billingAddress ON company TYPE option<record<address>>;
+DEFINE FIELD billingAddressId ON company TYPE option<record<address>>;
 DEFINE FIELD ownerId        ON company TYPE record<user>;
 DEFINE FIELD createdAt      ON company TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt      ON company TYPE datetime DEFAULT time::now();

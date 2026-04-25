@@ -88,11 +88,11 @@ export default function ProfileMenu() {
         className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-white/5 transition-colors"
       >
         <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-sm font-bold text-black">
-          {user?.profile?.name?.[0]?.toUpperCase() ?? "?"}
+          {user?.profileId?.name?.[0]?.toUpperCase() ?? "?"}
         </div>
         <div className="hidden sm:flex flex-col items-start">
           <span className="text-sm text-white truncate max-w-32">
-            {user?.profile?.name ?? t("common.user")}
+            {user?.profileId?.name ?? t("common.user")}
           </span>
           {activeCompany && (
             <span className="text-xs text-[var(--color-light-text)] truncate max-w-32">

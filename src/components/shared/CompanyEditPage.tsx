@@ -12,7 +12,7 @@ interface CompanyData {
   name: string;
   document: string;
   documentType: string;
-  billingAddress?: {
+  billingAddressId?: {
     street: string;
     number: string;
     complement?: string;

@@ -3,8 +3,8 @@ import type { Profile } from "./profile.ts";
 
 export interface User {
   id: string;
-  profile: Profile;
-  channels: EntityChannel[];
+  profileId: Profile;
+  channelIds: EntityChannel[];
   roles: string[];
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;

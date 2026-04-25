@@ -79,30 +79,43 @@ export async function createVoucher(data: {
 }
 
 /**
- * Updates a voucher with auto-removal cascade (§22.7).
+ * Updates a voucher with auto-removal cascade (§7.7).
  * If applicablePlanIds is non-empty after the update, clears voucherId
  * on any subscription whose planId is NOT in the new list.
- * Both operations run in one batched query.
+ * If applicableCompanyIds is non-empty after the update, clears voucherId
+ * on any subscription whose companyId is NOT in the new list.
+ * All operations run in one batched query.
  */
 export async function updateVoucherWithCascade(
   id: string,
   sets: string[],
   bindings: Record<string, unknown>,
-  shouldCascade: boolean,
+  shouldCascadePlans: boolean,
+  shouldCascadeCompanies: boolean,
 ): Promise<Voucher | null> {
   if (sets.length === 0) return null;
 
   const db = await getDb();
   bindings.id = rid(String(id));
 
-  const cascadeQuery = shouldCascade
-    ? `UPDATE subscription SET voucherId = NONE
+  const cascadeParts: string[] = [];
+  if (shouldCascadePlans) {
+    cascadeParts.push(
+      `UPDATE subscription SET voucherId = NONE
        WHERE voucherId = $id
-         AND planId NOT IN $applicablePlanIds;`
-    : "";
+         AND planId NOT IN $applicablePlanIds;`,
+    );
+  }
+  if (shouldCascadeCompanies) {
+    cascadeParts.push(
+      `UPDATE subscription SET voucherId = NONE
+       WHERE voucherId = $id
+         AND companyId NOT IN $applicableCompanyIds;`,
+    );
+  }
 
   const result = await db.query<[Voucher[]]>(
-    `UPDATE $id SET ${sets.join(", ")} RETURN AFTER;${cascadeQuery}`,
+    `UPDATE $id SET ${sets.join(", ")} RETURN AFTER;${cascadeParts.join("")}`,
     bindings,
   );
   return result[0]?.[0] ?? null;

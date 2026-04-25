@@ -80,8 +80,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // `verification_request.payload` (§5.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
     const userRow = await getUserWithProfile(userId);
-    const accountLabel = userRow?.channels?.[0]?.value ??
-      userRow?.profile?.name ?? "user";
+    const accountLabel = userRow?.channelIds?.[0]?.value ??
+      userRow?.profileId?.name ?? "user";
 
     const secret = generateSecret({
       length: 20,

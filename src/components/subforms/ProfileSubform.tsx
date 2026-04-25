@@ -17,7 +17,7 @@ interface ProfileSubformProps {
 const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
   ({ initialData, companyId, systemSlug, userId, hideAvatar }, ref) => {
     const { t } = useLocale();
-    const profile = (initialData?.profile as Record<string, unknown>) ?? {};
+    const profile = (initialData?.profileId as Record<string, unknown>) ?? {};
 
     const [name, setName] = useState((profile.name as string) ?? "");
     const [avatarUri, setAvatarUri] = useState(

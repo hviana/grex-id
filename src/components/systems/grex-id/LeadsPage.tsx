@@ -158,18 +158,20 @@ export default function LeadsPage() {
     item: Record<string, unknown>,
     controls: React.ReactNode,
   ) => {
-    const profile = (typeof item.profile === "object" ? item.profile : null) as
-      | { name?: string; avatarUri?: string; age?: number }
-      | null;
+    const profile =
+      (typeof item.profileId === "object" ? item.profileId : null) as
+        | { name?: string; avatarUri?: string; age?: number }
+        | null;
     const avatarUri = profile?.avatarUri || (item.avatarUri as string) || null;
-    const channels = (Array.isArray(item.channels) ? item.channels : []) as {
-      type: string;
-      value: string;
-    }[];
+    const channels =
+      (Array.isArray(item.channelIds) ? item.channelIds : []) as {
+        type: string;
+        value: string;
+      }[];
     const primaryChannel = channels.find((c) => c.type === "email") ??
       channels[0];
     const secondaryChannels = channels.filter((c) => c !== primaryChannel);
-    const tags = (Array.isArray(item.tags) ? item.tags : []) as {
+    const tags = (Array.isArray(item.tagIds) ? item.tagIds : []) as {
       id: string;
       name: string;
       color?: string;

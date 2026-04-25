@@ -3,7 +3,7 @@ DEFINE FIELD name              ON profile TYPE string;
 DEFINE FIELD avatarUri         ON profile TYPE option<string>;
 DEFINE FIELD age               ON profile TYPE option<int>;
 DEFINE FIELD locale            ON profile TYPE option<string>;
-DEFINE FIELD recovery_channels ON profile TYPE array<record<entity_channel>> DEFAULT [];
+DEFINE FIELD recoveryChannelIds ON profile TYPE array<record<entity_channel>> DEFAULT [];
 DEFINE FIELD createdAt         ON profile TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt         ON profile TYPE datetime DEFAULT time::now();
 

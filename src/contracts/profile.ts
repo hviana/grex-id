@@ -6,7 +6,7 @@ export interface Profile {
   avatarUri?: string;
   age?: number;
   locale?: string;
-  recovery_channels: EntityChannel[];
+  recoveryChannelIds: EntityChannel[];
   createdAt: string;
   updatedAt: string;
 }

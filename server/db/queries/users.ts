@@ -26,7 +26,7 @@ export async function getUsersForTenant(params: {
     limit: params.limit + 1,
   };
 
-  let query = `SELECT id, profile, channels, roles, createdAt,
+  let query = `SELECT id, profileId, channelIds, roles, createdAt,
        (SELECT VALUE roles FROM user_company_system
          WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
      FROM user
@@ -34,7 +34,7 @@ export async function getUsersForTenant(params: {
        WHERE companyId = $companyId AND systemId = $systemId)`;
 
   if (params.search) {
-    query += " AND profile.name @@ $search";
+    query += " AND profileId.name @@ $search";
     bindings.search = params.search;
   }
   if (params.cursor) {
@@ -42,7 +42,7 @@ export async function getUsersForTenant(params: {
     bindings.cursor = params.cursor;
   }
 
-  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
+  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const items = result[0] ?? [];
@@ -73,7 +73,7 @@ export async function getUsersNoTenant(params: {
   const conditions: string[] = [];
 
   if (params.search) {
-    conditions.push("profile.name @@ $search");
+    conditions.push("profileId.name @@ $search");
     bindings.search = params.search;
   }
   if (params.cursor) {
@@ -81,9 +81,9 @@ export async function getUsersNoTenant(params: {
     bindings.cursor = params.cursor;
   }
 
-  let query = "SELECT id, profile, channels, roles, createdAt FROM user";
+  let query = "SELECT id, profileId, channelIds, roles, createdAt FROM user";
   if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profile, channels";
+  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const items = result[0] ?? [];
@@ -167,8 +167,8 @@ export async function inviteExistingUser(params: {
      };
      LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
      LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
-     LET $inviter = (SELECT profile.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profile);
-     LET $invitee = (SELECT profile.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profile);
+     LET $inviter = (SELECT profileId.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profileId);
+     LET $invitee = (SELECT profileId.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profileId);
      RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
     {
       userId: rid(params.userId),
@@ -296,8 +296,8 @@ export async function updateUserProfileName(
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $prof = (SELECT profile FROM $id);
-     UPDATE $prof[0].profile SET name = $name, updatedAt = time::now()`,
+    `LET $prof = (SELECT profileId FROM $id);
+     UPDATE $prof[0].profileId SET name = $name, updatedAt = time::now()`,
     { id: rid(userId), name },
   );
 }
@@ -332,10 +332,10 @@ export async function updateCurrentUserProfile(params: {
   }
 
   const stmts = [
-    `LET $prof = (SELECT profile FROM user WHERE id = $userId)[0].profile`,
+    `LET $prof = (SELECT profileId FROM user WHERE id = $userId)[0].profileId`,
     `UPDATE $prof SET ${profileSets.join(", ")}`,
     `UPDATE $userId SET updatedAt = time::now()`,
-    `SELECT * FROM $userId FETCH profile, channels`,
+    `SELECT * FROM $userId FETCH profileId, channelIds`,
   ];
   const result = await db.query<Record<string, unknown>[][]>(
     stmts.join(";\n"),
@@ -348,7 +348,7 @@ export async function updateCurrentUserProfile(params: {
 export async function getUser(id: string): Promise<User | null> {
   const db = await getDb();
   const result = await db.query<[User[]]>(
-    "SELECT * FROM $id FETCH profile, channels",
+    "SELECT * FROM $id FETCH profileId, channelIds",
     { id: rid(id) },
   );
   return result[0]?.[0] ?? null;
@@ -398,9 +398,9 @@ export async function updateUser(
       bindings.locale = data.profile.locale || undefined;
     }
     statements.push(
-      `LET $usr = (SELECT profile FROM $id);
-      IF $usr[0].profile != NONE {
-        UPDATE $usr[0].profile SET ${profileSets.join(", ")};
+      `LET $usr = (SELECT profileId FROM $id);
+      IF $usr[0].profileId != NONE {
+        UPDATE $usr[0].profileId SET ${profileSets.join(", ")};
       }`,
     );
   }
@@ -410,7 +410,7 @@ export async function updateUser(
     statements.push(`UPDATE $id SET ${sets.join(", ")}`);
   }
 
-  statements.push("SELECT * FROM $id FETCH profile, channels");
+  statements.push("SELECT * FROM $id FETCH profileId, channelIds");
 
   const results = await db.query<unknown[]>(
     statements.join(";\n") + ";",
@@ -426,9 +426,9 @@ export async function updateUserLocale(
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $usr = (SELECT profile FROM $id);
-    IF $usr[0].profile != NONE {
-      UPDATE $usr[0].profile SET locale = $locale, updatedAt = time::now();
+    `LET $usr = (SELECT profileId FROM $id);
+    IF $usr[0].profileId != NONE {
+      UPDATE $usr[0].profileId SET locale = $locale, updatedAt = time::now();
     };
     UPDATE $id SET updatedAt = time::now();`,
     { id: rid(id), locale },
@@ -438,19 +438,19 @@ export async function updateUserLocale(
 export async function deleteUser(id: string): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $usr  = (SELECT profile, channels FROM $id)[0];
-     LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channels END;
-     LET $prof  = IF $usr = NONE OR $usr.profile = NONE
+    `LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
+     LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
+     LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
                   THEN NONE
-                  ELSE (SELECT recovery_channels FROM $usr.profile)[0]
+                  ELSE (SELECT recoveryChannelIds FROM $usr.profile)[0]
                   END;
-     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recovery_channels END;
+     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE $id;
      FOR $cid IN $chIds { DELETE $cid; };
      FOR $rid IN $recIds { DELETE $rid; };
-     IF $usr != NONE AND $usr.profile != NONE {
-       DELETE $usr.profile;
+     IF $usr != NONE AND $usr.profileId != NONE {
+       DELETE $usr.profileId;
      };`,
     { id: rid(id) },
   );

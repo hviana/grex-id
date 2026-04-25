@@ -229,7 +229,8 @@ async function handler(
       systemToken,
       user: {
         id: user.id,
-        profile: user.profile,
+        profileId: user.profileId,
+        channelIds: user.channelIds,
         roles: user.roles,
         twoFactorEnabled: user.twoFactorEnabled ?? false,
       },

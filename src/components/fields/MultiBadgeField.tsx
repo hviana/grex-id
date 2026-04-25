@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import Spinner from "@/src/components/shared/Spinner";
 
-export type BadgeValue = string | { name: string; color?: string };
+export type BadgeValue = string | { id?: string; name: string; color?: string };
 
 interface MultiBadgeFieldProps {
   name: string;

@@ -106,7 +106,7 @@ const EntityChannelsSubform = forwardRef<
 
     const initialType = channelTypes[0] ?? "email";
     const [channels, setChannels] = useState<EntityChannel[]>(() => {
-      const seed = initialData?.channels;
+      const seed = initialData?.channelIds;
       return Array.isArray(seed)
         ? (seed as EntityChannel[]).filter((c) =>
           c && typeof c === "object" && typeof c.type === "string" &&

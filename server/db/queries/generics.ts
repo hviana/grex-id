@@ -170,7 +170,7 @@ function buildTenantConditions(
 export interface TagFilter {
   /**
    * The column on the entity table that holds `array<record<tag>>`.
-   * Defaults to `"tags"`.
+   * Defaults to `"tagIds"`.
    */
   tagsColumn?: string;
   /**
@@ -240,7 +240,7 @@ export async function genericList<T = Record<string, unknown>>(
   }
 
   if (params.tagFilter && params.tagFilter.tagNames.length > 0) {
-    const col = params.tagFilter.tagsColumn ?? "tags";
+    const col = params.tagFilter.tagsColumn ?? "tagIds";
     for (let i = 0; i < params.tagFilter.tagNames.length; i++) {
       const bindKey = `tagName_${i}`;
       conditions.push(
@@ -550,7 +550,7 @@ export async function genericCount(
   }
 
   if (params.tagFilter && params.tagFilter.tagNames.length > 0) {
-    const col = params.tagFilter.tagsColumn ?? "tags";
+    const col = params.tagFilter.tagsColumn ?? "tagIds";
     for (let i = 0; i < params.tagFilter.tagNames.length; i++) {
       const bindKey = `tagName_${i}`;
       conditions.push(

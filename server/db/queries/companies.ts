@@ -33,10 +33,10 @@ export async function createCompany(data: {
         name = $name,
         document = $document,
         documentType = $documentType,
-        billingAddress = $addr[0].id,
+        billingAddressId = $addr[0].id,
         ownerId = $ownerId;
       CREATE company_user SET companyId = $comp[0].id, userId = $ownerId;
-      SELECT * FROM $comp[0].id FETCH billingAddress;`,
+      SELECT * FROM $comp[0].id FETCH billingAddressId;`,
       {
         street: addr!.street ?? "",
         number: addr!.number ?? "",
@@ -62,7 +62,7 @@ export async function createCompany(data: {
       documentType = $documentType,
       ownerId = $ownerId;
     CREATE company_user SET companyId = $comp[0].id, userId = $ownerId;
-    SELECT * FROM $comp[0].id FETCH billingAddress;`,
+    SELECT * FROM $comp[0].id FETCH billingAddressId;`,
     {
       name: data.name,
       document: data.document,

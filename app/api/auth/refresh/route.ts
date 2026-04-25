@@ -97,7 +97,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
         systemToken: newToken,
         user: {
           id: user.id,
-          profile: user.profile,
+          profileId: user.profileId,
+          channelIds: user.channelIds ?? [],
           roles: user.roles,
           twoFactorEnabled: user.twoFactorEnabled ?? false,
         },

@@ -24,11 +24,11 @@ interface ChannelRow {
 
 interface UserItem {
   id: string;
-  profile?: {
+  profileId?: {
     name: string;
     avatarUri?: string;
   };
-  channels?: ChannelRow[];
+  channelIds?: ChannelRow[];
   roles: string[];
   contextRoles?: string[];
   createdAt: string;
@@ -36,11 +36,11 @@ interface UserItem {
 }
 
 function primaryChannelLabel(user: UserItem): string {
-  const email = (user.channels ?? []).find((c) => c.type === "email");
+  const email = (user.channelIds ?? []).find((c) => c.type === "email");
   if (email?.value) return email.value;
-  const verified = (user.channels ?? []).find((c) => c.verified);
+  const verified = (user.channelIds ?? []).find((c) => c.verified);
   if (verified?.value) return verified.value;
-  return (user.channels ?? [])[0]?.value ?? "";
+  return (user.channelIds ?? [])[0]?.value ?? "";
 }
 
 export default function UsersPage() {
@@ -228,7 +228,7 @@ export default function UsersPage() {
 
   const openEdit = (user: UserItem) => {
     setEditUser(user);
-    setEditName(user.profile?.name ?? "");
+    setEditName(user.profileId?.name ?? "");
     setEditRoles(user.contextRoles ?? user.roles);
     setError(null);
   };
@@ -275,13 +275,13 @@ export default function UsersPage() {
           <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
-                {(user.profile?.name ?? primaryChannelLabel(user))
+                {(user.profileId?.name ?? primaryChannelLabel(user))
                   .charAt(0)
                   .toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-white truncate">
-                  {user.profile?.name ?? primaryChannelLabel(user)}
+                  {user.profileId?.name ?? primaryChannelLabel(user)}
                 </h3>
                 <p className="text-sm text-[var(--color-light-text)] truncate">
                   {primaryChannelLabel(user)}
@@ -393,7 +393,7 @@ export default function UsersPage() {
                 {t("common.entityChannels.title")}
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {(editUser.channels ?? []).map((c) => (
+                {(editUser.channelIds ?? []).map((c) => (
                   <span
                     key={c.id}
                     className="text-xs text-[var(--color-light-text)] bg-white/5 border border-[var(--color-dark-gray)] rounded-full px-2 py-0.5"
@@ -456,7 +456,7 @@ export default function UsersPage() {
           <div className="text-center space-y-4">
             <p className="text-white">{t("common.users.deleteConfirm")}</p>
             <p className="text-sm text-[var(--color-light-text)]">
-              {deleteUser.profile?.name ?? primaryChannelLabel(deleteUser)}
+              {deleteUser.profileId?.name ?? primaryChannelLabel(deleteUser)}
             </p>
             <div className="flex gap-3 justify-center">
               <button

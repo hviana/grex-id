@@ -77,7 +77,7 @@ export async function setCreditAlertAndFetchOwner(params: {
     `UPDATE $subId SET creditAlertSent = true;
      SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-     SELECT id, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT id, profileId.name AS name, profileId.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       subId: rid(params.subId),
@@ -241,7 +241,7 @@ export async function setOperationCountAlertAndFetchOwner(params: {
     `UPDATE $subId SET operationCountAlertSent = object::extend(IF operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
      LET $companyId = $cId;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
-     SELECT id, profile.name AS name, profile.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profile;
+     SELECT id, profileId.name AS name, profileId.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       subId: rid(params.subId),
