@@ -178,20 +178,21 @@ const EntityChannelsSubform = forwardRef<
       getData: () => {
         if (mode === "local") {
           const pendingValue = channelValue.trim();
-          const allChannels = [...channels];
+          const allChannels: Array<{ type: string; value: string }> = channels
+            .map((c) => ({
+              type: c.type,
+              value: c.value,
+            }));
           if (
             pendingValue &&
-            !channels.some(
+            !allChannels.some(
               (c) => c.type === channelType && c.value === pendingValue,
             )
           ) {
             allChannels.push({ type: channelType, value: pendingValue });
           }
           return {
-            channels: allChannels.map((c) => ({
-              type: c.type,
-              value: c.value,
-            })),
+            channels: allChannels,
           };
         }
         return { channels };
