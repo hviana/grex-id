@@ -16,6 +16,24 @@ import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 assertServerOnly("generics");
 
 // ---------------------------------------------------------------------------
+// Schema helpers
+// ---------------------------------------------------------------------------
+
+const tableFieldCache = new Map<string, Set<string>>();
+
+async function tableHasField(table: string, field: string): Promise<boolean> {
+  if (!tableFieldCache.has(table)) {
+    const db = await getDb();
+    const result = await db.query<[{ fields: Record<string, unknown> }[]]>(
+      `INFO FOR TABLE ${table};`,
+    );
+    const fields = result[0]?.[0]?.fields;
+    tableFieldCache.set(table, new Set(fields ? Object.keys(fields) : []));
+  }
+  return tableFieldCache.get(table)!.has(field);
+}
+
+// ---------------------------------------------------------------------------
 // Field processing specification
 // ---------------------------------------------------------------------------
 
@@ -355,6 +373,10 @@ export async function genericCreate<
   const bindings: Record<string, unknown> = {};
   const setClauses: string[] = [];
 
+  if (await tableHasField(opts.table, "createdAt")) {
+    setClauses.push("createdAt = time::now()");
+  }
+
   for (const [key, value] of Object.entries(processed)) {
     if (value === undefined) continue;
     bindings[key] = value;
@@ -449,7 +471,11 @@ export async function genericUpdate<
   // 3. Build and execute UPDATE query — all values are plain $bindings
   const db = await getDb();
   const bindings: Record<string, unknown> = { id: rid(id) };
-  const setClauses: string[] = ["updatedAt = time::now()"];
+  const setClauses: string[] = [];
+
+  if (await tableHasField(opts.table, "updatedAt")) {
+    setClauses.push("updatedAt = time::now()");
+  }
 
   for (const [key, value] of Object.entries(processed)) {
     if (value === undefined) continue;

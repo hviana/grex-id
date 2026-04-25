@@ -179,6 +179,17 @@ function CoreProfileMenu() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-48 z-50 backdrop-blur-md bg-[#111]/95 border border-[var(--color-dark-gray)] rounded-lg shadow-lg overflow-hidden">
+          {/* Profile */}
+          <button
+            onClick={() => {
+              handleClose();
+              router.push("/profile");
+            }}
+            className="w-full text-left px-4 py-3 text-sm text-[var(--color-light-text)] hover:bg-white/5 hover:text-white transition-colors"
+          >
+            👤 {t("common.profile.menu")}
+          </button>
+
           <button
             onClick={() => {
               setOpen(false);

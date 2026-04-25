@@ -188,7 +188,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     await Core.getInstance().reload();
 
     return Response.json({ success: true, data: result.data });
-  } catch {
+  } catch (e) {
+    console.error("[PUT /api/core/roles]", e);
     return Response.json(
       {
         success: false,

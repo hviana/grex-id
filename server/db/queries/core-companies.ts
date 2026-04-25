@@ -227,11 +227,11 @@ export async function getRevenueChart(params: {
     : `status = "past_due"`;
 
   const result = await db.query<
-    [{ canceled: number; paid: number; projected: number; errors: number }[]]
+    [{ canceled: number; paid: number; projected: number; errors: number }]
   >(
-    `SELECT VALUE {
+    `RETURN {
       canceled: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
         FROM subscription
         WHERE ${canceledCond}
           AND updatedAt >= type::datetime($startDate)
@@ -239,7 +239,7 @@ export async function getRevenueChart(params: {
           ${extra}
       ))[0] ?? 0,
       paid: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
         FROM subscription
         WHERE ${paidCond}
           AND currentPeriodStart >= type::datetime($startDate)
@@ -247,7 +247,7 @@ export async function getRevenueChart(params: {
           ${extra}
       ))[0] ?? 0,
       projected: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
         FROM subscription
         WHERE ${projectedCond}
           AND currentPeriodEnd >= type::datetime($startDate)
@@ -255,16 +255,16 @@ export async function getRevenueChart(params: {
           ${extra}
       ))[0] ?? 0,
       errors: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
         FROM subscription
         WHERE ${errorsCond}
           AND updatedAt >= type::datetime($startDate)
           AND updatedAt <= type::datetime($endDate)
           ${extra}
       ))[0] ?? 0
-    } FROM ONLY [];`,
+    };`,
     bindings,
   );
 
-  return result[0]?.[0] ?? { canceled: 0, paid: 0, projected: 0, errors: 0 };
+  return result[0] ?? { canceled: 0, paid: 0, projected: 0, errors: 0 };
 }
