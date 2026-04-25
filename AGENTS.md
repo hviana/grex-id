@@ -33,7 +33,9 @@ stricter rule. They are stated once.
 - **Server-only guard.** Every file under `server/` calls
   `assertServerOnly("<id>")` from `server/utils/server-only.ts` as the first
   statement after its import block. This is the **single** place `typeof window`
-  is checked.
+  is checked. Exceptions: Front-end file resources that are executed on the
+  backend:
+  - `generateMetadata`
 
 ### 2.2 Visual & UX
 

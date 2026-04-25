@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LocaleProvider } from "@/src/hooks/LocaleProvider";
 import { AuthProvider } from "@/src/hooks/useAuth";
@@ -17,10 +18,38 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Core",
-  description: "Multi-tenant platform",
-};
+// generateMetadata runs server-side — safe to import server modules here (see AGENTS.md §2.1).
+export async function generateMetadata(): Promise<Metadata> {
+  const systemId = (await cookies()).get("core_system")?.value;
+
+  if (systemId) {
+    try {
+      const { default: Core } = await import("@/server/utils/Core");
+      const { normalizeRecordId } = await import("@/server/db/connection");
+      const systems = await Core.getInstance().getAllSystems();
+      const system = systems.find(
+        (s) => normalizeRecordId(s.id) === systemId,
+      );
+
+      if (system?.name) {
+        return {
+          title: system.name,
+          ...(system.logoUri && {
+            icons: {
+              icon: `/api/files/download?uri=${
+                encodeURIComponent(system.logoUri)
+              }`,
+            },
+          }),
+        };
+      }
+    } catch {
+      // Core unavailable during first install
+    }
+  }
+
+  return { title: "Core" };
+}
 
 export default function RootLayout({
   children,
