@@ -165,19 +165,39 @@ const EntityChannelsSubform = forwardRef<
 
     const isFormValid = useCallback((): boolean => {
       if (mode !== "local") return true;
-      // Every required type must appear at least once in the collected list.
-      return required.every((type) => channels.some((c) => c.type === type));
-    }, [mode, required, channels]);
+      const pendingValue = channelValue.trim();
+      const effectiveChannels = pendingValue
+        ? [...channels, { type: channelType, value: pendingValue }]
+        : channels;
+      return required.every((type) =>
+        effectiveChannels.some((c) => c.type === type)
+      );
+    }, [mode, required, channels, channelValue, channelType]);
 
     useImperativeHandle(ref, () => ({
-      getData: () =>
-        mode === "local"
-          ? {
-            channels: channels.map((c) => ({ type: c.type, value: c.value })),
+      getData: () => {
+        if (mode === "local") {
+          const pendingValue = channelValue.trim();
+          const allChannels = [...channels];
+          if (
+            pendingValue &&
+            !channels.some(
+              (c) => c.type === channelType && c.value === pendingValue,
+            )
+          ) {
+            allChannels.push({ type: channelType, value: pendingValue });
           }
-          : { channels },
+          return {
+            channels: allChannels.map((c) => ({
+              type: c.type,
+              value: c.value,
+            })),
+          };
+        }
+        return { channels };
+      },
       isValid: () => isFormValid(),
-    }), [mode, channels, isFormValid]);
+    }), [mode, channels, channelValue, channelType, isFormValid]);
 
     const clearFeedback = () => {
       setChannelError(null);
@@ -431,7 +451,6 @@ const EntityChannelsSubform = forwardRef<
                   }
                 }}
                 placeholder={t("common.placeholder.entityChannel")}
-                required
                 className="flex-1 min-w-0 rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
               />
               <button
