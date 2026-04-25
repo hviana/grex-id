@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/src/components/shared/Sidebar";
 import ProfileMenu from "@/src/components/shared/ProfileMenu";
@@ -521,20 +521,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SystemContext.Provider value={ctx}>
       <div className="flex h-screen bg-[var(--color-black)]">
-        <Sidebar
-          menus={menus}
-          systemLogo={systemLogoUrl}
-          systemName={activeSystem?.name}
-          activeComponent={activeComponent}
-          onNavigate={handleNavigate}
-        />
+        {!pathname.startsWith("/onboarding") && (
+          <Sidebar
+            menus={menus}
+            systemLogo={systemLogoUrl}
+            systemName={activeSystem?.name}
+            activeComponent={activeComponent}
+            onNavigate={handleNavigate}
+          />
+        )}
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top bar */}
-          <header className="flex items-center justify-end gap-3 px-4 py-3 border-b border-[var(--color-dark-gray)] bg-[#0a0a0a]">
-            <LocaleSelector />
-            <ProfileMenu />
-          </header>
+          {!pathname.startsWith("/onboarding") && (
+            <header className="flex items-center justify-end gap-3 px-4 py-3 border-b border-[var(--color-dark-gray)] bg-[#0a0a0a]">
+              <LocaleSelector />
+              <ProfileMenu />
+            </header>
+          )}
 
           {/* Content */}
           <main className="flex-1 overflow-y-auto p-4 lg:p-6">
