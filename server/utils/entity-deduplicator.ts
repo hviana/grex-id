@@ -30,6 +30,7 @@ export interface DeduplicationResult {
 export async function checkDuplicates(
   entity: string,
   fields: DeduplicationField[],
+  excludeId?: string,
 ): Promise<DeduplicationResult> {
   const activeFields = fields.filter(
     (f) => f.value !== null && f.value !== undefined,
@@ -39,7 +40,7 @@ export async function checkDuplicates(
     return { isDuplicate: false, conflicts: [] };
   }
 
-  const results = await queryDuplicateChecks(entity, activeFields);
+  const results = await queryDuplicateChecks(entity, activeFields, excludeId);
 
   const conflicts: DeduplicationConflict[] = [];
   activeFields.forEach((f, i) => {

@@ -12,15 +12,18 @@ assertServerOnly("deduplication");
 export async function queryDuplicateChecks(
   entity: string,
   fields: { field: string; value: unknown }[],
+  excludeId?: string,
 ): Promise<{ id: string }[][]> {
   const db = await getDb();
 
+  const excludeClause = excludeId ? " AND id != $excludeId" : "";
   const statements = fields
     .map((f, i) =>
-      `SELECT id FROM type::table($entity) WHERE ${f.field} = $val_${i} LIMIT 1`
+      `SELECT id FROM type::table($entity) WHERE ${f.field} = $val_${i}${excludeClause} LIMIT 1`
     )
     .join(";\n");
   const bindings: Record<string, unknown> = { entity };
+  if (excludeId) bindings.excludeId = excludeId;
   fields.forEach((f, i) => {
     bindings[`val_${i}`] = f.value;
   });

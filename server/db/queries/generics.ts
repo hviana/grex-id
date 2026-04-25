@@ -437,7 +437,7 @@ export async function genericUpdate<
     .map((s) => ({ field: s.field, value: processed[s.field] }));
 
   if (uniqueFields.length > 0) {
-    const dupResult = await checkDuplicates(opts.table, uniqueFields);
+    const dupResult = await checkDuplicates(opts.table, uniqueFields, id);
     if (dupResult.isDuplicate) {
       return {
         success: false,

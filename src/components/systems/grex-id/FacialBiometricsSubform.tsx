@@ -336,7 +336,7 @@ const FacialBiometricsSubform = forwardRef<
         const formData = new FormData();
         formData.append("file", uploadFile);
         formData.append("systemSlug", systemSlug ?? "grex-id");
-        formData.append("category", JSON.stringify(["avatars"]));
+        formData.append("category", JSON.stringify(["lead-avatars"]));
         formData.append("fileUuid", fileUuid);
 
         const headers: HeadersInit = {};
