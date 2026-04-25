@@ -9,6 +9,7 @@ import {
   getUserContext,
   getUsersForTenant,
   getUsersNoTenant,
+  hardDeleteUserIfOrphaned,
   inviteExistingUser,
   updateCurrentUserProfile,
   updateUserLocale,
@@ -400,6 +401,10 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     { companyId: String(companyId), systemId: String(systemId) },
     String(userId),
   );
+
+  // If the user no longer belongs to any tenant, hard-delete the user
+  // and all their compositional data (profile, channels, recovery channels).
+  await hardDeleteUserIfOrphaned(String(userId));
 
   return Response.json({ success: true });
 }

@@ -271,6 +271,11 @@ export async function deleteUserWithAdminCheck(params: {
      IF $isTargetAdmin = 0 OR $ac > 0 {
        DELETE user_company_system
          WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
+       LET $remainingInCompany = (SELECT count() AS c FROM user_company_system
+         WHERE userId = $userId AND companyId = $companyId)[0].c;
+       IF $remainingInCompany = 0 {
+         DELETE company_user WHERE userId = $userId AND companyId = $companyId;
+       };
      };
      RETURN [$isTargetAdmin, $ac];`,
     {
@@ -454,4 +459,35 @@ export async function deleteUser(id: string): Promise<void> {
      };`,
     { id: rid(id) },
   );
+}
+
+export async function hardDeleteUserIfOrphaned(
+  userId: string,
+): Promise<boolean> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $tenantCount = (SELECT count() AS c FROM company_user
+       WHERE userId = $id)[0].c;
+     IF $tenantCount = 0 {
+       LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
+       LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
+       LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
+                    THEN NONE
+                    ELSE (SELECT recoveryChannelIds FROM $usr.profile)[0]
+                    END;
+       LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
+       DELETE verification_request WHERE ownerId = $id;
+       DELETE user_company_system WHERE userId = $id;
+       DELETE company_user WHERE userId = $id;
+       DELETE $id;
+       FOR $cid IN $chIds { DELETE $cid; };
+       FOR $rid IN $recIds { DELETE $rid; };
+       IF $usr != NONE AND $usr.profileId != NONE {
+         DELETE $usr.profileId;
+       };
+     };
+     RETURN $tenantCount;`,
+    { id: rid(userId) },
+  );
+  return (res[res.length - 1] as number) === 0;
 }

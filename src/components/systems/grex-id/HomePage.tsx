@@ -36,12 +36,15 @@ export default function GrexIdHomePage() {
 
   const fetchCompanies = useCallback(async (search: string) => {
     const res = await fetch(
-      `/api/systems/grex-id/companies?q=${
+      `/api/companies?search=${
         encodeURIComponent(search)
       }&systemSlug=grex-id`,
     );
     const json = await res.json();
-    return json.data ?? [];
+    return (json.data ?? []).map((c: { id: string; name: string }) => ({
+      id: c.id,
+      label: c.name,
+    }));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

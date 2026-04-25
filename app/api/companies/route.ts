@@ -15,6 +15,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
+  const systemSlug = url.searchParams.get("systemSlug") ?? undefined;
   const userId = ctx.claims?.actorId ?? "0";
 
   const extraConditions: string[] = [];
@@ -24,6 +25,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
       "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
     );
     extraBindings.userId = rid(userId);
+  }
+  if (systemSlug) {
+    extraConditions.push(
+      "id IN (SELECT VALUE companyId FROM company_system WHERE systemId = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1))",
+    );
+    extraBindings.systemSlug = systemSlug;
   }
 
   const result = await genericList<Company>({
