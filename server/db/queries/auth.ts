@@ -171,7 +171,6 @@ export async function createUserWithChannels(params: {
       passwordHash = crypto::argon2::generate($password),
       profileId = $prof[0].id,
       channelIds = [${channelsArray}],
-      roles = [],
       twoFactorEnabled = false,
       stayLoggedIn = false;
     SELECT * FROM $usr[0].id FETCH profileId, channelIds;`;
@@ -501,7 +500,7 @@ export async function storePendingTwoFactorSecret(
 }
 
 /**
- * Fetch user fields needed by the refresh-token flow: stayLoggedIn, roles,
+ * Fetch user fields needed by the refresh-token flow: stayLoggedIn,
  * twoFactorEnabled, profile, and channels — all in a single batched query
  * with FETCH resolution (§7.2).
  */
@@ -509,7 +508,6 @@ export async function getUserForRefresh(userId: string): Promise<
   {
     id: string;
     stayLoggedIn: boolean;
-    roles: string[];
     twoFactorEnabled: boolean;
     profileId?: unknown;
     channelIds?: unknown[];
@@ -520,13 +518,12 @@ export async function getUserForRefresh(userId: string): Promise<
     [{
       id: string;
       stayLoggedIn: boolean;
-      roles: string[];
       twoFactorEnabled: boolean;
       profileId?: unknown;
       channelIds?: unknown[];
     }[]]
   >(
-    `SELECT id, stayLoggedIn, roles, twoFactorEnabled, profileId, channelIds
+    `SELECT id, stayLoggedIn, twoFactorEnabled, profileId, channelIds
        FROM $userId LIMIT 1
        FETCH profileId, channelIds;`,
     { userId: rid(userId) },

@@ -81,7 +81,7 @@ export async function getUsersNoTenant(params: {
     bindings.cursor = params.cursor;
   }
 
-  let query = "SELECT id, profileId, channelIds, roles, createdAt FROM user";
+  let query = "SELECT id, profileId, channelIds, createdAt FROM user";
   if (conditions.length) query += " WHERE " + conditions.join(" AND ");
   query += " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds";
 
@@ -384,18 +384,12 @@ export async function updateUser(
         age?: number;
         locale?: string;
       };
-      roles: string[];
     }
   >,
 ): Promise<User> {
   const db = await getDb();
   const sets: string[] = [];
   const bindings: Record<string, unknown> = { id: rid(id) };
-
-  if (data.roles !== undefined) {
-    sets.push("roles = $roles");
-    bindings.roles = data.roles;
-  }
 
   const statements: string[] = [];
 

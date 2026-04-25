@@ -29,7 +29,6 @@ interface UserItem {
     avatarUri?: string;
   };
   channelIds?: ChannelRow[];
-  roles: string[];
   contextRoles?: string[];
   createdAt: string;
   [key: string]: unknown;
@@ -238,7 +237,7 @@ export default function UsersPage() {
   const openEdit = (user: UserItem) => {
     setEditUser(user);
     setEditName(user.profileId?.name ?? "");
-    setEditRoles(user.contextRoles ?? user.roles);
+    setEditRoles(user.contextRoles ?? []);
     setError(null);
   };
 
@@ -298,7 +297,7 @@ export default function UsersPage() {
               </div>
               <TranslatedBadgeList
                 kind="role"
-                tokens={user.contextRoles ?? user.roles}
+                tokens={user.contextRoles ?? []}
                 systemSlug={systemSlug ?? undefined}
                 className="shrink-0"
               />
