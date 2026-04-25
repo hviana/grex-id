@@ -475,7 +475,9 @@ async function cmdRequest(flags: RequestFlags): Promise<number> {
     for (const f of flags.formFiles) {
       fd.append(
         f.key,
-        new Blob([f.data], { type: "application/octet-stream" }),
+        new Blob([new Uint8Array(f.data)], {
+          type: "application/octet-stream",
+        }),
         f.fileName,
       );
     }
