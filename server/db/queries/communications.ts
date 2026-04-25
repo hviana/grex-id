@@ -5,45 +5,53 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("communications");
 
 /**
- * Resolve recipient channel values from raw recipient entries.
+ * Resolve recipient channel values from entity record ids.
  *
- * - Raw values that aren't user/lead record ids are returned as-is.
- * - For user:… / lead:… ids, fetches the owner's entity_channels of the
- *   requested type. Only verified channels are included by default.
+ * - Each entry must resolve to a user:… / lead:… record id.
+ * - Fetches the owner's entity_channels of the requested type and returns
+ *   their values (emails, phone numbers, etc.).
+ * - Only verified channels are included by default.
  * - When `options.includeUnverified` is true, unverified channels belonging to
  *   the owner are also included — but only if that (type, value) pair is NOT
- *   already verified by a DIFFERENT entity. This prevents sending to an
- *   unverified channel whose value another user or lead has already claimed.
+ *   already verified by a DIFFERENT entity.
  *
- * All owner lookups are batched into a single db.query() call (§7.2).
+ * All owner lookups are batched into a single db.query() call.
  */
 export async function resolveChannelRecipients(
   rawRecipients: string[],
   channelType: string,
   options?: { includeUnverified?: boolean },
 ): Promise<string[]> {
-  const rawValues: string[] = [];
   const owners: { table: string; id: StringRecordId }[] = [];
 
   for (const raw of rawRecipients) {
-    const entry = typeof raw === "string"
-      ? raw
-      : raw != null && typeof raw === "object" && "id" in raw
-      ? String((raw as { id: unknown }).id)
-      : raw != null && typeof raw === "object" && "tb" in raw && "id" in raw
-      ? `${(raw as { tb: string }).tb}:${(raw as { id: string }).id}`
-      : String(raw);
-    if (!entry || typeof entry !== "string" || entry.length === 0) continue;
-    const table = entry.split(":")[0];
-    if (table !== "user" && table !== "lead") {
-      rawValues.push(entry);
+    let entry: string;
+    if (typeof raw === "string") {
+      entry = raw;
+    } else if (raw != null && typeof raw === "object") {
+      const str = String(raw);
+      if (str !== "[object Object]") {
+        entry = str;
+      } else if ("tb" in raw && "id" in raw) {
+        entry = `${(raw as { tb: string }).tb}:${
+          String((raw as { id: unknown }).id)
+        }`;
+      } else if ("id" in raw) {
+        entry = String((raw as { id: unknown }).id);
+      } else {
+        continue;
+      }
     } else {
-      owners.push({ table, id: rid(entry) });
+      continue;
     }
+
+    if (!entry || entry.length === 0) continue;
+    const table = entry.split(":")[0];
+    owners.push({ table, id: rid(entry) });
   }
 
   if (owners.length === 0) {
-    return [...new Set(rawValues)];
+    return [];
   }
 
   const db = await getDb();
@@ -103,7 +111,7 @@ export async function resolveChannelRecipients(
 
   // RETURN statement result is the last element.
   const values = result[result.length - 1];
-  const resolved: string[] = [...rawValues];
+  const resolved: string[] = [];
   if (Array.isArray(values)) {
     for (const v of values) resolved.push(String(v));
   }
