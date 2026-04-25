@@ -22,7 +22,10 @@ export async function loadFrontCoreData(): Promise<FrontCoreData> {
 
   const settings = new Map<string, FrontCoreSetting>();
   for (const setting of rows) {
-    const mapKey = (setting.systemSlug ?? "") + ":" + setting.key;
+    const slug = setting.systemSlug && setting.systemSlug.length > 0
+      ? setting.systemSlug
+      : "core";
+    const mapKey = slug + ":" + setting.key;
     settings.set(mapKey, setting);
   }
 
@@ -59,6 +62,11 @@ class FrontCore {
 
     const core = data.settings.get(`core:${key}`);
     if (core) return core.value;
+
+    // Last resort: search all scopes for this key
+    for (const setting of data.settings.values()) {
+      if (setting.key === key) return setting.value;
+    }
 
     if (!this.missingSettings.has(key)) {
       this.missingSettings.set(key, {
