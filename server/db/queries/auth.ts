@@ -306,15 +306,16 @@ export async function resolveUserMembership(userId: string): Promise<
       permissions: string[];
     }[]]
   >(
-    `LET $ucs = (SELECT companyId, systemId FROM user_company_system WHERE userId = $userId LIMIT 1);
+    `LET $ucs = (SELECT companyId, systemId, roleIds FROM user_company_system WHERE userId = $userId LIMIT 1);
      IF array::len($ucs) > 0 {
        LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
-       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles);
+       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN $ucs[0].roleIds);
+       LET $roleNames = (SELECT VALUE name FROM role WHERE id IN $ucs[0].roleIds);
        SELECT
          $ucs[0].companyId AS companyId,
          $ucs[0].systemId AS systemId,
          $sys[0].slug AS systemSlug,
-         (SELECT roles FROM user_company_system WHERE userId = $userId AND companyId = $ucs[0].companyId AND systemId = $ucs[0].systemId LIMIT 1)[0].roles AS roles,
+         $roleNames AS roles,
          array::flatten($roleRecs[*].permissions) AS permissions
        FROM system WHERE id = $ucs[0].systemId LIMIT 1;
      } ELSE {
@@ -322,7 +323,8 @@ export async function resolveUserMembership(userId: string): Promise<
      };`,
     { userId: rid(userId) },
   );
-  return membership[0]?.[0] ?? null;
+  const lastResult = membership[membership.length - 1];
+  return Array.isArray(lastResult) ? lastResult[0] ?? null : null;
 }
 
 /**
@@ -367,18 +369,21 @@ export async function resolveUserExchange(
   const db = await getDb();
   const result = await db.query<
     [
-      { id: string; roles: string[] }[],
+      { id: string; roleIds: string[] }[],
       { slug: string }[],
       { permissions: string[] }[],
+      { name: string }[],
     ]
   >(
-    `SELECT id, roles FROM user_company_system
+    `SELECT id, roleIds FROM user_company_system
        WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
        LIMIT 1;
      SELECT slug FROM system WHERE id = $systemId LIMIT 1;
-     SELECT permissions FROM role WHERE name IN array::flatten(SELECT VALUE roles FROM user_company_system
+     SELECT permissions FROM role WHERE id IN array::flatten(SELECT VALUE roleIds FROM user_company_system
        WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1)
-       AND systemId = $systemId;`,
+       AND systemId = $systemId;
+     SELECT VALUE name FROM role WHERE id IN array::flatten(SELECT VALUE roleIds FROM user_company_system
+       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
@@ -389,8 +394,11 @@ export async function resolveUserExchange(
   const permissions = [
     ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
   ];
+  const roleNames = result[3] ?? [];
   return {
-    membership: mem ? { id: String(mem.id), roles: mem.roles ?? [] } : null,
+    membership: mem
+      ? { id: String(mem.id), roles: roleNames.map((r) => r.name ?? String(r)) }
+      : null,
     slug: result[1]?.[0]?.slug ?? "core",
     permissions,
   };

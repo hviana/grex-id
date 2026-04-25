@@ -45,21 +45,26 @@ export async function seed(db: Surreal): Promise<void> {
        slug = "core",
        logoUri = "";
 
-     // 4. Built-in role for core system
+     // 4. Core company_system link
+     CREATE company_system SET
+       companyId = $coreCompany[0].id,
+       systemId = $coreSystem[0].id;
+
+     // 5. Built-in role for core system
      LET $superuserRole = CREATE role SET
        name = "superuser",
        systemId = $coreSystem[0].id,
        permissions = ["*"],
        isBuiltIn = true;
 
-     // 5. Superuser tenant membership
+     // 6. Superuser tenant membership
      CREATE user_company_system SET
        userId = $usr[0].id,
        companyId = $coreCompany[0].id,
        systemId = $coreSystem[0].id,
        roleIds = [$superuserRole[0].id];
 
-     // 6. Anonymous API token (no associated user)
+     // 7. Anonymous API token (no associated user)
      CREATE api_token:anonymous SET
        userId = NONE,
        companyId = $coreCompany[0].id,

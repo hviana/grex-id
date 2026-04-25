@@ -26,9 +26,9 @@ export async function getUsersForTenant(params: {
     limit: params.limit + 1,
   };
 
-  let query = `SELECT id, profileId, channelIds, roles, createdAt,
-       (SELECT VALUE roles FROM user_company_system
-         WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0] AS contextRoles
+  let query = `SELECT id, profileId, channelIds, createdAt,
+       (SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleIds FROM user_company_system
+         WHERE userId = $parent.id AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0]) AS contextRoles
      FROM user
      WHERE id IN (SELECT VALUE userId FROM user_company_system
        WHERE companyId = $companyId AND systemId = $systemId)`;
@@ -107,17 +107,17 @@ export async function getUserContext(
   systemId: string,
 ): Promise<string[]> {
   const db = await getDb();
-  const result = await db.query<[{ roles: string[] }[]]>(
-    `SELECT roles FROM user_company_system
+  const result = await db.query<[string[]]>(
+    `SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleIds FROM user_company_system
      WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-     LIMIT 1`,
+     LIMIT 1)[0]`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
       systemId: rid(systemId),
     },
   );
-  return result[0]?.[0]?.roles ?? [];
+  return result[0] ?? [];
 }
 
 /**
@@ -148,6 +148,11 @@ export async function inviteExistingUser(params: {
     [
       unknown,
       unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
       {
         sys: { name: string }[];
         comp: { name: string }[];
@@ -156,13 +161,14 @@ export async function inviteExistingUser(params: {
       },
     ]
   >(
-    `IF array::len((SELECT id FROM company_user WHERE companyId = $companyId AND userId = $userId)) = 0 {
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND systemId = $systemId);
+     IF array::len((SELECT id FROM company_user WHERE companyId = $companyId AND userId = $userId)) = 0 {
        CREATE company_user SET companyId = $companyId, userId = $userId;
      };
      IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-       CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = $roles;
+       CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roleIds = $resolvedRoleIds;
      } ELSE {
-       UPDATE user_company_system SET roles = $roles
+       UPDATE user_company_system SET roleIds = $resolvedRoleIds
          WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
      };
      LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
@@ -174,12 +180,17 @@ export async function inviteExistingUser(params: {
       userId: rid(params.userId),
       companyId: rid(params.companyId),
       systemId: rid(params.systemId),
-      roles: params.roles,
+      roleNames: params.roles,
       inviterId: rid(params.inviterId),
     },
   );
 
-  const returnData = batchResult[2];
+  const returnData = batchResult[batchResult.length - 1] as {
+    sys: { name: string }[];
+    comp: { name: string }[];
+    inviter: { profileName?: string }[];
+    invitee: { profileName?: string }[];
+  };
   return {
     systemName: returnData?.sys?.[0]?.name ?? "",
     companyName: returnData?.comp?.[0]?.name ?? "",
@@ -200,17 +211,18 @@ export async function createTenantAssociations(params: {
 }): Promise<void> {
   const db = await getDb();
   await db.query(
-    `CREATE company_user SET companyId = $companyId, userId = $userId;
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND systemId = $systemId);
+     CREATE company_user SET companyId = $companyId, userId = $userId;
      CREATE user_company_system SET
        userId = $userId,
        companyId = $companyId,
        systemId = $systemId,
-       roles = $roles;`,
+       roleIds = $resolvedRoleIds;`,
     {
       userId: rid(params.userId),
       companyId: rid(params.companyId),
       systemId: rid(params.systemId),
-      roles: params.roles,
+      roleNames: params.roles,
     },
   );
 }
@@ -228,11 +240,13 @@ export async function updateUserRolesWithAdminCheck(params: {
 }): Promise<string | null> {
   const db = await getDb();
   const res = await db.query(
-    `LET $ac = (SELECT count() AS c FROM user_company_system
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND systemId = $systemId);
+     LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND systemId = $systemId LIMIT 1)[0];
+     LET $ac = (SELECT count() AS c FROM user_company_system
        WHERE companyId = $companyId AND systemId = $systemId
-         AND roles CONTAINS "admin" AND userId != $userId)[0].c;
-     IF $ac > 0 OR $roles CONTAINS "admin" {
-       UPDATE user_company_system SET roles = $roles
+         AND roleIds CONTAINS $adminRoleId AND userId != $userId)[0].c;
+     IF $ac > 0 OR $resolvedRoleIds CONTAINS $adminRoleId {
+       UPDATE user_company_system SET roleIds = $resolvedRoleIds
          WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
      };
      RETURN $ac;`,
@@ -240,10 +254,10 @@ export async function updateUserRolesWithAdminCheck(params: {
       userId: rid(params.userId),
       companyId: rid(params.companyId),
       systemId: rid(params.systemId),
-      roles: params.roles,
+      roleNames: params.roles,
     },
   );
-  const otherAdmins = res[2] as number;
+  const otherAdmins = res[res.length - 1] as number;
   if (otherAdmins === 0 && !params.roles.includes("admin")) {
     return "users.error.lastAdminRole";
   }
@@ -262,12 +276,13 @@ export async function deleteUserWithAdminCheck(params: {
 }): Promise<string | null> {
   const db = await getDb();
   const res = await db.query(
-    `LET $isTargetAdmin = (SELECT count() AS c FROM user_company_system
+    `LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND systemId = $systemId LIMIT 1)[0];
+     LET $isTargetAdmin = (SELECT count() AS c FROM user_company_system
        WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-         AND roles CONTAINS "admin" LIMIT 1)[0].c;
+         AND roleIds CONTAINS $adminRoleId LIMIT 1)[0].c;
      LET $ac = (SELECT count() AS c FROM user_company_system
        WHERE companyId = $companyId AND systemId = $systemId
-         AND roles CONTAINS "admin" AND userId != $userId)[0].c;
+         AND roleIds CONTAINS $adminRoleId AND userId != $userId)[0].c;
      IF $isTargetAdmin = 0 OR $ac > 0 {
        DELETE user_company_system
          WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId;
@@ -284,7 +299,7 @@ export async function deleteUserWithAdminCheck(params: {
       systemId: rid(params.systemId),
     },
   );
-  const [isTargetAdmin, otherAdmins] = res[3] as [number, number];
+  const [isTargetAdmin, otherAdmins] = res[res.length - 1] as [number, number];
 
   if (isTargetAdmin > 0 && otherAdmins === 0) {
     return "users.error.lastAdminDelete";

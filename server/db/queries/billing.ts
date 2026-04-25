@@ -169,7 +169,8 @@ export async function subscribe(params: {
          CREATE company_user SET userId = $userId, companyId = $companyId;
        };
        IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-         CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roles = ["admin"];
+         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND systemId = $systemId LIMIT 1)[0];
+         CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roleIds = [$adminRoleId];
        };`
     : "";
 

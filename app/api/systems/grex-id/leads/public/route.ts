@@ -24,12 +24,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const coreRes = await publicLeadPostHandler(coreReq, ctx);
     const coreJson = await coreRes.json();
 
-    // If core failed or requires verification, return as-is
-    if (!coreJson.success || coreJson.data?.requiresVerification) {
+    // If core failed, return as-is
+    if (!coreJson.success) {
       return Response.json(coreJson, { status: coreRes.status });
     }
 
-    // Handle face biometrics for new leads
+    // Handle face biometrics for new leads (process even when verification
+    // is pending — the lead already exists in the database).
     const leadId = coreJson.data?.id;
     const companyId = coreJson.data?.companyId;
     const systemId = coreJson.data?.systemId;

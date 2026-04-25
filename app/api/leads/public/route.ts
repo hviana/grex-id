@@ -333,7 +333,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     return Response.json(
-      { success: true, data: { id: lead.id, requiresVerification: true } },
+      {
+        success: true,
+        data: {
+          id: lead.id,
+          companyId: ctx.tenant?.companyId,
+          systemId: ctx.tenant?.systemId,
+          requiresVerification: true,
+        },
+      },
       { status: 201 },
     );
   } catch (err) {
