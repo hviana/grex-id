@@ -1379,15 +1379,16 @@ here and add their own logic.
 
 ### 10.1 Hooks (`src/hooks/`)
 
-| Hook               | Role                                                                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useDebounce`      | Debounced value                                                                                                                                                                                     |
-| `useAuth`          | Context+Provider. Holds opaque token. `login`, `logout`, `refresh`, `exchangeTenant`. Decodes tenant once via `useMemo`. **Single enforcement point**: every fetch wrapper reads `token` from here. |
-| `useLiveQuery`     | `LIVE SELECT` wrapper, manages WebSocket                                                                                                                                                            |
-| `useSystemContext` | Thin wrapper over `useAuth` exposing tenant + companies/systems + `switchCompany`/`switchSystem` (which call `exchangeTenant`)                                                                      |
-| `useLocale`        | `locale`, `setLocale`, `t`, `supportedLocales`                                                                                                                                                      |
-| `useFrontCore`     | Context+Provider. Lazily loads FrontCore; synchronous `get(key)`; reloads on live-query signal                                                                                                      |
-| `usePublicSystem`  | Public system info fetch for homepage/auth branding                                                                                                                                                 |
+| Hook                | Role                                                                                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useDebounce`       | Debounced value                                                                                                                                                                                     |
+| `useAuth`           | Context+Provider. Holds opaque token. `login`, `logout`, `refresh`, `exchangeTenant`. Decodes tenant once via `useMemo`. **Single enforcement point**: every fetch wrapper reads `token` from here. |
+| `useLiveQuery`      | `LIVE SELECT` wrapper, manages WebSocket                                                                                                                                                            |
+| `useSystemContext`  | Thin wrapper over `useAuth` exposing tenant + companies/systems + `switchCompany`/`switchSystem` (which call `exchangeTenant`)                                                                      |
+| `useLocale`         | `locale`, `setLocale`, `t`, `supportedLocales`                                                                                                                                                      |
+| `useFrontCore`      | Context+Provider. Lazily loads FrontCore; synchronous `get(key)`; reloads on live-query signal                                                                                                      |
+| `usePublicSystem`   | Public system info fetch for homepage/auth branding                                                                                                                                                 |
+| `useBrandingHeader` | Updates `document.title` and favicon `<link>` from system name/logo; reverts to defaults on cleanup. Called in `(app)` layout, `(core)` layout, homepage, and via `usePublicSystem` for auth pages. |
 
 **Hook rules** (violations are bugs):
 
