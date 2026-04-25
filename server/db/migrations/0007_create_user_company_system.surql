@@ -2,7 +2,7 @@ DEFINE TABLE user_company_system SCHEMAFULL;
 DEFINE FIELD userId    ON user_company_system TYPE record<user>;
 DEFINE FIELD companyId ON user_company_system TYPE record<company>;
 DEFINE FIELD systemId  ON user_company_system TYPE record<system>;
-DEFINE FIELD roleIds  ON user_company_system TYPE array<record<system>> DEFAULT [];
+DEFINE FIELD roleIds ON user_company_system TYPE array<record<role>> DEFAULT [];
 
 DEFINE FIELD createdAt ON user_company_system TYPE datetime DEFAULT time::now();
 

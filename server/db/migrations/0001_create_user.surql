@@ -1,6 +1,6 @@
 DEFINE TABLE user SCHEMAFULL;
-DEFINE FIELD passwordHash ON user TYPE string;
-DEFINE FIELD profileId    ON user TYPE record<profile>;
+DEFINE FIELD passwordHash ON user TYPE option<string>;
+DEFINE FIELD profileId    ON user TYPE option<record<profile>>;
 DEFINE FIELD channelIds   ON user TYPE array<record<entity_channel>> DEFAULT [];
 DEFINE FIELD twoFactorEnabled        ON user TYPE bool DEFAULT false;
 DEFINE FIELD twoFactorSecret         ON user TYPE option<string>;
