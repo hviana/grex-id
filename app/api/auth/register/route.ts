@@ -203,6 +203,7 @@ async function handler(
       channels: channelOrder,
       recipients: [user.id],
       template: "human-confirmation",
+      allowUnverified: true,
       templateData: {
         actionKey: "auth.action.register",
         confirmationLink,

@@ -67,7 +67,12 @@ export const sendEmail: HandlerFn = async (payload) => {
     ) as string[];
 
   // ── recipient resolution ──────────────────────────────
-  const recipients = await resolveChannelRecipients(rawRecipients, CHANNEL);
+  const allowUnverified = payload.allowUnverified === true;
+  const recipients = await resolveChannelRecipients(
+    rawRecipients,
+    CHANNEL,
+    allowUnverified ? { includeUnverified: true } : undefined,
+  );
   if (recipients.length === 0) {
     await cascade(payload, "no-recipients");
     return;

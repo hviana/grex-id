@@ -27,6 +27,10 @@ export interface CommunicationPayload {
   recipients: string[];
   template: string | TemplateBuilder;
   templateData: Record<string, unknown>;
+  /** When true, recipient resolution includes unverified entity_channels.
+   *  Required for verification flows (register, channel-add, etc.) where
+   *  the channel to reach is not yet verified. */
+  allowUnverified?: boolean;
 }
 
 export interface ChannelDispatchResult {

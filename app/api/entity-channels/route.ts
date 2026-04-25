@@ -11,6 +11,7 @@ import {
   deleteChannel,
   findChannelById,
   findChannelByOwnerTypeAndValue,
+  findVerifiedOwnerByTypedChannel,
   getUserProfileName,
   listChannelsByOwner,
   listVerifiedChannelTypes,
@@ -61,6 +62,7 @@ async function sendChannelConfirmation(
     channels,
     recipients: [userId],
     template: "human-confirmation",
+    allowUnverified: true,
     templateData: {
       actionKey,
       confirmationLink,
@@ -196,6 +198,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
         error: {
           code: "ERROR",
           message: "auth.entityChannel.error.duplicate",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // Cross-entity conflict: reject if the channel value is already verified
+  // by another user or lead.
+  const verifiedOwner = await findVerifiedOwnerByTypedChannel(type, stdValue);
+  if (verifiedOwner && verifiedOwner.ownerId !== userId) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "CONFLICT",
+          errors: ["validation.channel.conflict"],
         },
       },
       { status: 409 },

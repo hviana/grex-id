@@ -15,6 +15,7 @@ assertServerOnly("communications");
 export async function resolveChannelRecipients(
   rawRecipients: string[],
   channelType: string,
+  options?: { includeUnverified?: boolean },
 ): Promise<string[]> {
   const rawValues: string[] = [];
   const owners: { table: string; id: StringRecordId }[] = [];
@@ -56,7 +57,9 @@ export async function resolveChannelRecipients(
   // cannot appear as a bare column name in SELECT.
   const query = letStatements.join("\n") +
     "\n" +
-    `SELECT * FROM entity_channel WHERE id IN $allChannels AND type = $type AND verified = true ORDER BY createdAt ASC;`;
+    `SELECT * FROM entity_channel WHERE id IN $allChannels AND type = $type${
+      options?.includeUnverified ? "" : " AND verified = true"
+    } ORDER BY createdAt ASC;`;
 
   const db = await getDb();
   const result = await db.query<[{ value: string }[]]>(query, vars);

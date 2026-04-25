@@ -115,6 +115,7 @@ async function handler(
     channels,
     recipients: [String(row.ownerId)],
     template: "human-confirmation",
+    allowUnverified: true,
     templateData: {
       actionKey,
       confirmationLink,

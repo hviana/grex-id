@@ -13,6 +13,7 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { communicationGuard } from "@/server/utils/verification-guard";
+import { findVerifiedOwnerByTypedChannel } from "@/server/db/queries/entity-channels";
 
 interface SubmittedChannel {
   type: string;
@@ -143,6 +144,27 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       );
     }
 
+    // Cross-entity conflict: reject if any submitted channel value is already
+    // verified by another user or lead.
+    for (const ch of channels) {
+      const verifiedOwner = await findVerifiedOwnerByTypedChannel(
+        ch.type,
+        ch.value,
+      );
+      if (verifiedOwner) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "CONFLICT",
+              errors: ["validation.channel.conflict"],
+            },
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     // Look up any existing lead matching ANY of the submitted channel values.
     const existing = await findLeadByChannelValues(
       channels.map((c) => c.value),
@@ -205,6 +227,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         channels: channelOrder,
         recipients: [existing.id],
         template: "human-confirmation",
+        allowUnverified: true,
         templateData: {
           actionKey: "auth.action.leadUpdate",
           confirmationLink,
@@ -285,6 +308,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         channels: channelOrder,
         recipients: [lead.id],
         template: "human-confirmation",
+        allowUnverified: true,
         templateData: {
           actionKey: "auth.action.leadRegister",
           confirmationLink,
