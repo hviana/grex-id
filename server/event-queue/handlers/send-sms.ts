@@ -64,7 +64,7 @@ export const sendSms: HandlerFn = async (payload) => {
       (await core.getSetting("communication.sms.senders")) ?? "[]",
     ) as string[];
 
-  const allowUnverified = payload.allowUnverified === true;
+  const allowUnverified = Boolean(payload.allowUnverified);
   const recipients = await resolveChannelRecipients(
     rawRecipients,
     CHANNEL,

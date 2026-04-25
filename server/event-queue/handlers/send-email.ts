@@ -65,9 +65,8 @@ export const sendEmail: HandlerFn = async (payload) => {
     : JSON.parse(
       (await core.getSetting("communication.email.senders")) ?? "[]",
     ) as string[];
-
-  // ── recipient resolution ──────────────────────────────
-  const allowUnverified = payload.allowUnverified === true;
+  // ── recipient resolution ─────────────────────────────
+  const allowUnverified = Boolean(payload.allowUnverified);
   const recipients = await resolveChannelRecipients(
     rawRecipients,
     CHANNEL,
