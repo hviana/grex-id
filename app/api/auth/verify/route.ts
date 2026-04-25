@@ -218,8 +218,8 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
           permissions: (mem.permissions ?? []) as string[],
         }
         : {
-          systemId: "0",
-          companyId: "0",
+          systemId: "",
+          companyId: "",
           systemSlug: "core",
           roles: [] as string[],
           permissions: [] as string[],

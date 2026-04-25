@@ -21,7 +21,6 @@ import {
   ensureActorValidityLoaded,
   isActorValid,
 } from "@/server/utils/actor-validity";
-import { getAnonymousTenant } from "@/server/utils/tenant";
 
 const DEFAULT_MIME = "application/octet-stream";
 const pendingInsertions = new Set<string>();
@@ -81,7 +80,7 @@ export const GET = compose(
 
     const fileCompanyId = path[0];
     const fileSystemSlug = path[1];
-    const fileUserId = path[2] ?? "0";
+    const fileUserId = path[2] ?? "";
     const fileCategory = path.slice(3, path.length - 2);
 
     const tokenParam = url.searchParams.get("token");
@@ -94,7 +93,7 @@ export const GET = compose(
         effectiveTenant = resolved.tenant;
         effectiveClaims = resolved.claims;
       } else {
-        effectiveTenant = getAnonymousTenant(fileSystemSlug);
+        // Invalid/expired token param — access check will deny if isolation is on
         effectiveClaims = undefined;
       }
     }
@@ -127,7 +126,7 @@ export const GET = compose(
       Number((await core.getSetting("cache.core.size")) || "20") * 1048576;
 
     const system = await core.getSystemBySlug(fileSystemSlug);
-    if (system && fileCompanyId !== "0") {
+    if (system && fileCompanyId) {
       const limit = await resolveFileCacheLimit({
         companyId: fileCompanyId,
         systemId: system.id,
@@ -161,7 +160,7 @@ export const GET = compose(
     }
 
     const systemId = system?.id ?? "";
-    const hasSubscription = fileCompanyId !== "0" && systemId;
+    const hasSubscription = fileCompanyId && systemId;
     const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = hasSubscription
       ? await Promise.all([
         resolveMaxConcurrentDownloads({ companyId: fileCompanyId, systemId }),

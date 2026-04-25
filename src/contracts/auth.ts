@@ -63,8 +63,8 @@ export interface ExchangeResponse {
 
 /**
  * Unified request context — every middleware handler receives this.
- * `tenant` is ALWAYS populated (anonymous tenants are synthesized).
- * `claims` is present only for authenticated requests.
+ * `tenant` and `claims` are populated by `withAuth` when a valid bearer token
+ * is present. Auth routes (`/api/auth/*`) may leave these unset.
  */
 export interface RequestContext {
   tenant: Tenant;

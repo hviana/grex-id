@@ -52,7 +52,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const systemId = ctx.tenant.systemId;
 
   if (action === "context") {
-    if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+    if (!companyId || !systemId) {
       return Response.json(
         {
           success: false,
@@ -76,7 +76,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor");
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  if (companyId && systemId && companyId !== "0" && systemId !== "0") {
+  if (companyId && systemId) {
     const result = await getUsersForTenant({
       companyId,
       systemId,
@@ -111,10 +111,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
   for (const ch of channels) {
     errors.push(...await validateField(ch.type, ch.value, "entity_channel"));
   }
-  if (!companyId || companyId === "0") {
+  if (!companyId) {
     errors.push("validation.companyId.required");
   }
-  if (!systemId || systemId === "0") {
+  if (!systemId) {
     errors.push("validation.systemId.required");
   }
 
@@ -323,8 +323,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   if (
-    roles !== undefined && companyId && systemId && companyId !== "0" &&
-    systemId !== "0"
+    roles !== undefined && companyId && systemId
   ) {
     const errorKey = await updateUserRolesWithAdminCheck({
       userId: String(id),
@@ -362,7 +361,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   const { userId, companyId, systemId } = body;
 
   if (
-    !userId || !companyId || !systemId || companyId === "0" || systemId === "0"
+    !userId || !companyId || !systemId
   ) {
     return Response.json(
       {

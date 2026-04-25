@@ -93,7 +93,7 @@ export function useSystemContextProvider(): SystemContextValue {
       setCookie(SYSTEM_COOKIE, systemId);
       // Find the system to get company+system for exchange
       const sys = state.systems.find((s) => s.id === systemId);
-      if (sys && tenant.companyId && tenant.companyId !== "0") {
+      if (sys && tenant.companyId) {
         exchangeTenant(tenant.companyId, systemId).catch(console.error);
       }
       setState((prev) => ({ ...prev, plan: null }));
@@ -103,9 +103,11 @@ export function useSystemContextProvider(): SystemContextValue {
 
   return {
     // Derived from tenant (JWT is the single source of truth)
-    companyId: tenant.companyId !== "0" ? tenant.companyId : null,
-    systemId: tenant.systemId !== "0" ? tenant.systemId : null,
-    systemSlug: tenant.systemSlug !== "core" ? tenant.systemSlug : null,
+    companyId: tenant.companyId || null,
+    systemId: tenant.systemId || null,
+    systemSlug: tenant.systemSlug && tenant.systemSlug !== "core"
+      ? tenant.systemSlug
+      : null,
     roles: tenant.roles,
     permissions: tenant.permissions,
     // Managed state

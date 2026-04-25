@@ -10,10 +10,8 @@ export function withRateLimit(config: RateLimitConfig): Middleware {
     const forwarded = req.headers.get("x-forwarded-for");
     const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
 
-    const hasTenant = ctx.tenant.companyId &&
-      ctx.tenant.systemId &&
-      ctx.tenant.companyId !== "0" &&
-      ctx.tenant.systemId !== "0";
+    // Auth routes (no tenant context) use IP-based rate limiting
+    const hasTenant = ctx.tenant?.companyId && ctx.tenant?.systemId;
 
     let effectiveConfig = config;
 

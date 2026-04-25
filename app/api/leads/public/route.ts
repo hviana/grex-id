@@ -1,4 +1,5 @@
 import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
@@ -35,7 +36,7 @@ async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   return out;
 }
 
-async function postHandler(req: Request, _ctx: RequestContext) {
+async function postHandler(req: Request, ctx: RequestContext) {
   let body: Record<string, unknown> | null = null;
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
@@ -187,7 +188,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
             ? faceDescriptor
             : undefined,
         },
-        tenant: { systemSlug, actorType: "anonymous" },
+        tenant: {
+          systemSlug,
+          companyId: ctx.tenant?.companyId,
+          systemId: ctx.tenant?.systemId,
+          actorType: ctx.claims?.actorType,
+        },
       });
 
       if (!guardResult.allowed) {
@@ -287,7 +293,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       ownerType: "lead",
       actionKey: "auth.action.leadRegister",
       payload: { channelIds },
-      tenant: { systemSlug, actorType: "anonymous" },
+      tenant: {
+        systemSlug,
+        companyId: ctx.tenant?.companyId,
+        systemId: ctx.tenant?.systemId,
+        actorType: ctx.claims?.actorType,
+      },
     });
 
     if (guardResult.allowed) {
@@ -367,6 +378,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 export { postHandler as publicLeadPostHandler };
 
 export const POST = compose(
+  withAuth(),
   withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
-  async (req, _ctx) => postHandler(req, _ctx),
+  async (req, ctx) => postHandler(req, ctx),
 );

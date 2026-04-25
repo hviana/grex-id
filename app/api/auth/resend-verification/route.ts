@@ -83,7 +83,7 @@ async function handler(
     ownerType: "user",
     actionKey,
     payload: { channelIds: [String(row.id)] },
-    tenant: { systemSlug, actorType: "anonymous" },
+    tenant: { systemSlug },
   });
 
   if (!guardResult.allowed) return successResponse;

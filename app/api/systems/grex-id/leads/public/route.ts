@@ -1,4 +1,5 @@
 import { compose } from "@/server/middleware/compose";
+import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { publicLeadPostHandler } from "@/app/api/leads/public/route";
@@ -8,7 +9,6 @@ import {
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
 import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
-import { getAnonymousTenant } from "@/server/utils/tenant";
 
 async function postHandler(req: Request, ctx: RequestContext) {
   try {
@@ -21,10 +21,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       headers: req.headers,
       body: JSON.stringify(body),
     });
-    const coreCtx: RequestContext = {
-      tenant: getAnonymousTenant("grex-id"),
-    };
-    const coreRes = await publicLeadPostHandler(coreReq, coreCtx);
+    const coreRes = await publicLeadPostHandler(coreReq, ctx);
     const coreJson = await coreRes.json();
 
     // If core failed or requires verification, return as-is
@@ -87,6 +84,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 export const POST = compose(
+  withAuth(),
   withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
   async (req, ctx) => postHandler(req, ctx),
 );

@@ -18,10 +18,10 @@ import type { ConnectedApp } from "@/src/contracts/connected-app";
 
 async function getHandler(_req: Request, ctx: RequestContext) {
   const ensureTenant: TenantIsolation = {};
-  if (ctx.tenant.companyId && ctx.tenant.companyId !== "0") {
+  if (ctx.tenant.companyId) {
     ensureTenant.companyId = ctx.tenant.companyId;
   }
-  if (ctx.tenant.systemId && ctx.tenant.systemId !== "0") {
+  if (ctx.tenant.systemId) {
     ensureTenant.systemId = ctx.tenant.systemId;
   }
 
@@ -68,7 +68,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   };
 
   const { app, token: createdToken } = await createConnectedAppWithToken({
-    userId: ctx.claims?.actorId ?? "0",
+    userId: ctx.claims!.actorId,
     name,
     companyId,
     systemId,

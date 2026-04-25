@@ -9,8 +9,7 @@ import {
 
 async function getHandler(req: Request, ctx: RequestContext) {
   if (
-    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
-    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+    !ctx.tenant.companyId || !ctx.tenant.systemId
   ) {
     return Response.json({ success: true, data: [] });
   }

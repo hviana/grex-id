@@ -1,7 +1,6 @@
 import type { Middleware } from "./compose.ts";
 import { verifyTenantToken } from "../utils/token.ts";
 import { enforceCors, getCorsHeaders } from "../utils/cors.ts";
-import { getAnonymousTenant } from "../utils/tenant.ts";
 import {
   ensureActorValidityLoaded,
   isActorValid,
@@ -14,13 +13,17 @@ assertServerOnly("withAuth");
  * Authenticates a request without touching the database (§8.11).
  *
  * Flow:
- *   1. No `Authorization: Bearer` → synthesize anonymous Tenant (§9.2).
- *   2. Otherwise verify the JWT; claims carry Tenant + universal actorId +
+ *   1. No `Authorization: Bearer` and not an auth route → return 401.
+ *      Every non-auth route requires a bearer token (including the
+ *      anonymous user's API token for public operations).
+ *   2. No `Authorization: Bearer` on auth routes → proceed without
+ *      populating ctx.tenant/ctx.claims (auth routes only use withRateLimit).
+ *   3. Otherwise verify the JWT; claims carry Tenant + universal actorId +
  *      frontendUse/frontendDomains (for api_token actors).
- *   3. Load the tenant's actor-validity partition on first use and check
+ *   4. Load the tenant's actor-validity partition on first use and check
  *      `isActorValid(tenant, actorId)`.
- *   4. Enforce CORS using the claims (no DB read).
- *   5. Apply role/permission gates; superusers bypass them.
+ *   5. Enforce CORS using the claims (no DB read).
+ *   6. Apply role/permission gates; superusers bypass them.
  */
 export function withAuth(
   options?: {
@@ -33,39 +36,25 @@ export function withAuth(
     const authHeader = req.headers.get("Authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
-      if (options?.requireAuthenticated) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "UNAUTHORIZED",
-              message: "auth.error.unauthorized",
-            },
-          },
-          { status: 401 },
-        );
-      }
-
       const url = new URL(req.url);
-      let systemSlug = "core";
-      if (
-        url.pathname.startsWith("/api/core/") ||
-        url.pathname.startsWith("/api/auth/")
-      ) {
-        systemSlug = "core";
-      } else if (url.pathname.startsWith("/api/public/")) {
-        systemSlug = url.searchParams.get("slug") ??
-          url.searchParams.get("systemSlug") ?? "core";
-      } else if (url.pathname.match(/^\/api\/systems\/([^/]+)/)) {
-        const match = url.pathname.match(/^\/api\/systems\/([^/]+)/);
-        systemSlug = match?.[1] ?? "core";
-      } else {
-        systemSlug = url.searchParams.get("systemSlug") ?? "core";
+      const isAuthRoute = url.pathname.startsWith("/api/auth/");
+
+      if (isAuthRoute) {
+        // Auth routes proceed without tenant context
+        return next();
       }
 
-      ctx.tenant = getAnonymousTenant(systemSlug);
-      ctx.claims = undefined;
-      return next();
+      // All other routes require a bearer token
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "auth.error.unauthorized",
+          },
+        },
+        { status: 401 },
+      );
     }
 
     const token = authHeader.slice(7);

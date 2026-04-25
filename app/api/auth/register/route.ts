@@ -180,7 +180,6 @@ async function handler(
     payload: { channelIds },
     tenant: {
       systemSlug,
-      actorType: "anonymous",
     },
   });
 

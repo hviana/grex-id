@@ -16,11 +16,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const systemSlug = url.searchParams.get("systemSlug") ?? undefined;
-  const userId = ctx.claims?.actorId ?? "0";
+  const userId = ctx.claims!.actorId;
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
-  if (userId && userId !== "0") {
+  if (userId) {
     extraConditions.push(
       "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
     );
@@ -92,7 +92,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     document: stdDocument!,
     documentType: documentType ?? "cnpj",
     billingAddress: billingAddress ?? {},
-    ownerId: ctx.claims?.actorId ?? "0",
+    ownerId: ctx.claims!.actorId,
   });
 
   return Response.json(

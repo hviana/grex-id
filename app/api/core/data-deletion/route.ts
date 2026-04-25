@@ -28,7 +28,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Verify the superuser's password
   const passwordValid = await verifyUserPassword(
-    ctx.claims?.actorId ?? "0",
+    ctx.claims!.actorId,
     password,
   );
   if (!passwordValid) {

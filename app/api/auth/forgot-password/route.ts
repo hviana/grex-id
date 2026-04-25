@@ -66,7 +66,6 @@ async function handler(
     actionKey: "auth.action.passwordReset",
     tenant: {
       systemSlug,
-      actorType: "anonymous",
     },
   });
 

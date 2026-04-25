@@ -49,7 +49,7 @@ export async function listTokensFiltered(params: {
     conditions.push("userId = $userId");
     bindings.userId = rid(params.userId);
   }
-  if (params.companyId && params.companyId !== "0") {
+  if (params.companyId) {
     conditions.push("companyId = $companyId");
     bindings.companyId = rid(params.companyId);
   }

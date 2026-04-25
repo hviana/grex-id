@@ -14,10 +14,12 @@ import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
 import { getCookie, removeCookie, setCookie } from "@/src/lib/cookies";
 
 const TOKEN_COOKIE_NAME = "core_token";
+const ANONYMOUS_TOKEN_KEY = "core_anonymous_token";
 
 interface AuthState {
   user: User | null;
   systemToken: string | null;
+  anonymousToken: string | null;
   loading: boolean;
 }
 
@@ -58,7 +60,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 /**
- * Extracts Tenant from a JWT token.
+ * Extracts Tenant from a JWT token. All values are real SurrealDB record IDs.
  */
 function extractTenant(token: string): Tenant {
   const payload = decodeJwtPayload(token);
@@ -71,38 +73,57 @@ function extractTenant(token: string): Tenant {
       permissions: string[];
     }
     | undefined;
+  if (!t?.systemId || !t?.companyId) {
+    throw new Error("Invalid token: missing tenant fields");
+  }
   return {
-    systemId: t?.systemId ?? "0",
-    companyId: t?.companyId ?? "0",
-    systemSlug: t?.systemSlug ?? "core",
-    roles: t?.roles ?? [],
-    permissions: t?.permissions ?? [],
+    systemId: t.systemId,
+    companyId: t.companyId,
+    systemSlug: t.systemSlug ?? "core",
+    roles: t.roles ?? [],
+    permissions: t.permissions ?? [],
   };
 }
 
 /**
- * Extracts full TenantClaims from a JWT token.
+ * Extracts full TenantClaims from a JWT token. All values are real SurrealDB record IDs.
  */
 function extractClaims(token: string): TenantClaims | null {
   const payload = decodeJwtPayload(token);
   if (!payload) return null;
   const t = payload.tenant as Tenant;
+  if (!t?.systemId || !t?.companyId) return null;
   return {
-    systemId: t?.systemId ?? "0",
-    companyId: t?.companyId ?? "0",
-    systemSlug: t?.systemSlug ?? "core",
-    roles: t?.roles ?? [],
-    permissions: t?.permissions ?? [],
-    actorType: (payload.actorType as TenantClaims["actorType"]) ?? "user",
-    actorId: (payload.actorId as string) ?? "0",
+    systemId: t.systemId,
+    companyId: t.companyId,
+    systemSlug: t.systemSlug ?? "core",
+    roles: t.roles ?? [],
+    permissions: t.permissions ?? [],
+    actorType: payload.actorType as TenantClaims["actorType"],
+    actorId: payload.actorId as string,
     exchangeable: (payload.exchangeable as boolean) ?? false,
   };
+}
+
+/** Fetches the anonymous token from the public endpoint. */
+async function fetchAnonymousToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/public/anonymous-token");
+    const json = await res.json();
+    if (json.success && json.data?.token) {
+      return json.data.token as string;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
     systemToken: null,
+    anonymousToken: null,
     loading: true,
   });
 
@@ -122,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({
         user: null,
         systemToken: null,
+        anonymousToken: null,
         loading: false,
       });
       return;
@@ -144,11 +166,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState({
           user: null,
           systemToken: null,
+          anonymousToken: null,
           loading: false,
         });
       });
     } else {
-      setState((s) => ({ ...s, loading: false }));
+      // No user token — fetch the anonymous token for public operations
+      fetchAnonymousToken().then((anonToken) => {
+        setState({
+          user: null,
+          systemToken: null,
+          anonymousToken: anonToken,
+          loading: false,
+        });
+      }).catch(() => {
+        setState({
+          user: null,
+          systemToken: null,
+          anonymousToken: null,
+          loading: false,
+        });
+      });
     }
   }, [refresh]);
 
@@ -181,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({
         user: json.data.user,
         systemToken: json.data.systemToken,
+        anonymousToken: null,
         loading: false,
       });
 
@@ -192,18 +231,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     const currentToken = getCookie(TOKEN_COOKIE_NAME);
     if (currentToken) {
-      // Fire-and-forget: server removes the user from the actor-validity
-      // cache (§8.11). Failure does not block the client-side teardown.
       fetch("/api/auth/logout", {
         method: "POST",
         headers: { Authorization: `Bearer ${currentToken}` },
       }).catch(() => {});
     }
     removeCookie(TOKEN_COOKIE_NAME);
-    setState({
-      user: null,
-      systemToken: null,
-      loading: false,
+
+    // Re-fetch anonymous token for public operations
+    fetchAnonymousToken().then((anonToken) => {
+      setState({
+        user: null,
+        systemToken: null,
+        anonymousToken: anonToken,
+        loading: false,
+      });
+    }).catch(() => {
+      setState({
+        user: null,
+        systemToken: null,
+        anonymousToken: null,
+        loading: false,
+      });
     });
   }, []);
 
@@ -241,21 +290,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [state.systemToken],
   );
 
-  const tenant: Tenant = useMemo(
-    () =>
-      state.systemToken ? extractTenant(state.systemToken) : {
-        systemId: "0",
-        companyId: "0",
+  /** The active bearer token — user token when logged in, anonymous token otherwise. */
+  const activeToken = state.systemToken ?? state.anonymousToken;
+
+  const tenant: Tenant = useMemo(() => {
+    if (!activeToken) {
+      // Still loading or anonymous token fetch failed — return a safe default
+      return {
+        systemId: "",
+        companyId: "",
         systemSlug: "core",
         roles: [],
         permissions: [],
-      },
-    [state.systemToken],
-  );
+      };
+    }
+    return extractTenant(activeToken);
+  }, [activeToken]);
 
   const claims: TenantClaims | null = useMemo(
-    () => state.systemToken ? extractClaims(state.systemToken) : null,
-    [state.systemToken],
+    () => activeToken ? extractClaims(activeToken) : null,
+    [activeToken],
   );
 
   const value = useMemo<AuthContextValue>(
@@ -284,4 +338,13 @@ export function useAuth(): AuthContextValue {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return ctx;
+}
+
+/**
+ * Returns the active bearer token for use in fetch wrappers.
+ * User token when logged in, anonymous token when logged out.
+ */
+export function useBearerToken(): string | null {
+  const { systemToken, anonymousToken } = useAuth();
+  return systemToken ?? anonymousToken;
 }

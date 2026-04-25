@@ -5,7 +5,6 @@ export type VerificationActorType =
   | "lead"
   | "api_token"
   | "connected_app"
-  | "anonymous"
   | "system";
 
 export interface VerificationRequestTenantContext {

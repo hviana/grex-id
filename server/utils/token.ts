@@ -91,13 +91,13 @@ export async function verifyTenantToken(
   };
 
   return {
-    systemId: tenant.systemId ?? "0",
-    companyId: tenant.companyId ?? "0",
+    systemId: tenant.systemId,
+    companyId: tenant.companyId,
     systemSlug: tenant.systemSlug ?? "core",
     roles: tenant.roles ?? [],
     permissions: tenant.permissions ?? [],
-    actorType: (payload.actorType as TenantClaims["actorType"]) ?? "user",
-    actorId: (payload.actorId as string) ?? "0",
+    actorType: payload.actorType as TenantClaims["actorType"],
+    actorId: payload.actorId as string,
     exchangeable: (payload.exchangeable as boolean) ?? false,
     exp: payload.exp,
     frontendUse: payload.frontendUse as boolean | undefined,

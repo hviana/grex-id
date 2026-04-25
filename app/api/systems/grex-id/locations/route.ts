@@ -38,7 +38,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
 
-  if (!companyId || companyId === "0" || !systemId || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json({ success: true, data: [], nextCursor: null });
   }
 
@@ -68,8 +68,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (
-    !ctx.tenant.companyId || ctx.tenant.companyId === "0" ||
-    !ctx.tenant.systemId || ctx.tenant.systemId === "0"
+    !ctx.tenant.companyId || !ctx.tenant.systemId
   ) {
     return Response.json(
       {

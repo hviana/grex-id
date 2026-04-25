@@ -944,11 +944,15 @@ export async function creditPurchaseOnSuccess(params: {
   paymentId?: string;
   transactionId?: string;
   invoiceUrl?: string;
+  actorId?: string;
 }): Promise<void> {
   const db = await getDb();
+  const actorIdClause = params.actorId
+    ? `actorType = "api_token", actorId = $actorId,`
+    : "";
   const stmts = [
     `UPSERT usage_record SET
-      actorType = "user", actorId = "0",
+      ${actorIdClause}
       companyId = $companyId, systemId = $systemId,
       resource = "credits", value += $amount, period = $period
      WHERE companyId = $companyId AND systemId = $systemId
@@ -961,6 +965,10 @@ export async function creditPurchaseOnSuccess(params: {
     period: params.period,
     subId: rid(params.subscriptionId),
   };
+
+  if (params.actorId) {
+    queryParams.actorId = params.actorId;
+  }
 
   if (params.creditPurchaseId) {
     stmts.push(`UPDATE $purchaseId SET status = "completed";`);
@@ -1178,11 +1186,15 @@ export async function resolveAsyncCreditSuccess(params: {
   isAutoRecharge: boolean;
   transactionId?: string;
   invoiceUrl?: string;
+  actorId?: string;
 }): Promise<void> {
   const db = await getDb();
+  const actorIdClause = params.actorId
+    ? `actorType = "api_token", actorId = $actorId,`
+    : "";
   const stmts = [
     `UPSERT usage_record SET
-      actorType = "user", actorId = "0",
+      ${actorIdClause}
       companyId = $companyId, systemId = $systemId,
       resource = "credits", value += $amount, period = $period
      WHERE companyId = $companyId AND systemId = $systemId
@@ -1198,6 +1210,10 @@ export async function resolveAsyncCreditSuccess(params: {
     txId: params.transactionId,
     invoiceUrl: params.invoiceUrl,
   };
+
+  if (params.actorId) {
+    queryParams.actorId = params.actorId;
+  }
 
   if (params.hasPendingCreditPurchase && params.subscriptionId) {
     stmts.push(

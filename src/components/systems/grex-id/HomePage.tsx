@@ -673,7 +673,7 @@ export default function GrexIdHomePage() {
             hideTags
             companyId={selectedCompany[0]?.id}
             systemSlug="grex-id"
-            userId="0"
+            userId=""
           />
 
           <div>
@@ -691,7 +691,7 @@ export default function GrexIdHomePage() {
             ref={facialRef}
             companyId={selectedCompany[0]?.id}
             systemSlug="grex-id"
-            userId="0"
+            userId=""
           />
 
           <BotProtection onVerified={setBotToken} />

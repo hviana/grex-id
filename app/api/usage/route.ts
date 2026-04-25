@@ -77,7 +77,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
-  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json(
       {
         success: false,

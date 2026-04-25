@@ -40,12 +40,6 @@ async function loadTenantPartition(
   companyId: string,
   systemId: string,
 ): Promise<Set<string>> {
-  // Anonymous tenant (0:0) has no persisted actors — only live user
-  // sessions, which are added through login/register. Skip the DB probe.
-  if (companyId === "0" || systemId === "0") {
-    return new Set<string>();
-  }
-
   const rows = await fetchActiveApiTokenIds({ companyId, systemId });
 
   const set = new Set<string>();

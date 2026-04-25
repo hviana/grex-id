@@ -1,33 +1,43 @@
 import type { Tenant } from "@/src/contracts/tenant.ts";
+import Core from "./Core.ts";
 import { assertServerOnly } from "./server-only.ts";
+import { getDb } from "../db/connection.ts";
 
 assertServerOnly("tenant.ts");
 
 /**
  * System-level tenant for jobs and workers that operate without a user context.
+ * Reads real core company and system IDs from the Core data cache.
  * Has superuser-level permissions.
  */
-export function getSystemTenant(): Tenant {
+export async function getSystemTenant(): Promise<Tenant> {
+  const core = Core.getInstance();
+  const coreSystem = await core.getSystemBySlug("core");
+  if (!coreSystem) {
+    throw new Error(
+      "[Tenant] Core system not found. Ensure seeds have been executed.",
+    );
+  }
+
+  // Find the core company via company_system link
+  const db = await getDb();
+  const [rows] = await db.query<[{ companyId: string }[]]>(
+    `SELECT companyId FROM company_system WHERE systemId = $systemId LIMIT 1`,
+    { systemId: coreSystem.id },
+  );
+  const coreCompany = (rows ?? [])[0];
+  if (!coreCompany) {
+    throw new Error(
+      "[Tenant] Core company not found. Ensure seeds have been executed.",
+    );
+  }
+
   return {
-    systemId: "0",
-    companyId: "0",
+    systemId: String(coreSystem.id),
+    companyId: String(coreCompany.companyId),
     systemSlug: "core",
     roles: ["superuser"],
     permissions: ["*"],
-  };
-}
-
-/**
- * Anonymous tenant for unauthenticated requests.
- * All IDs are "0", no roles or permissions.
- */
-export function getAnonymousTenant(systemSlug: string): Tenant {
-  return {
-    systemId: "0",
-    companyId: "0",
-    systemSlug,
-    roles: [],
-    permissions: [],
   };
 }
 

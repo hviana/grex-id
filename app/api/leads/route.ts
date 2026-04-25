@@ -44,7 +44,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true, data: lead });
   }
 
-  if (!companyId || companyId === "0" || !systemId || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json({ success: true, data: [], nextCursor: null });
   }
 
@@ -83,7 +83,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
-  const inferredCompanyIds = companyId && companyId !== "0" ? [companyId] : [];
+  const inferredCompanyIds = companyId ? [companyId] : [];
   const { profile, ownerId } = body;
   const channels = await parseChannels(body.channels);
   const name = body.name
@@ -96,7 +96,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
   if (channels.length === 0) errors.push("validation.channel.required");
 
-  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json(
       {
         success: false,
@@ -192,7 +192,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!companyId || !systemId || companyId === "0" || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json(
       {
         success: false,

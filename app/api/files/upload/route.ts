@@ -62,7 +62,7 @@ export const POST = compose(
     }
 
     const companyId = ctx.tenant.companyId;
-    const userId = ctx.claims?.actorId ?? "0";
+    const userId = ctx.claims!.actorId;
     const fileName = file.name || "unnamed";
     const mimeType = file.type || "application/octet-stream";
     const path = [
@@ -138,7 +138,7 @@ export const POST = compose(
     const core = Core.getInstance();
     const system = await core.getSystemBySlug(systemSlug);
     const systemId = system?.id ?? "";
-    const hasSubscription = companyId !== "0" && systemId;
+    const hasSubscription = companyId && systemId;
     const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] =
       hasSubscription
         ? await Promise.all([
@@ -204,7 +204,7 @@ export const POST = compose(
 
       const uri = fs.pathToURIComponent(path);
       let cacheTenantKey = "core";
-      if (system && companyId !== "0") {
+      if (system && companyId) {
         const limit = await resolveFileCacheLimit({
           companyId,
           systemId: system.id,

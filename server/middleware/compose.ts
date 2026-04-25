@@ -1,5 +1,4 @@
 import type { RequestContext } from "@/src/contracts/auth";
-import { getAnonymousTenant } from "@/server/utils/tenant";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("compose");
@@ -23,7 +22,7 @@ export function compose(...middlewares: Middleware[]): any {
     _nextCtx?: unknown,
   ): Promise<Response> => {
     const ctx: RequestContext = {
-      tenant: getAnonymousTenant("core"),
+      tenant: null as unknown as RequestContext["tenant"],
     };
     let index = -1;
 

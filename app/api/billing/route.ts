@@ -20,7 +20,7 @@ import {
 } from "@/server/db/queries/billing";
 
 function tenantGuard(ctx: RequestContext): Response | null {
-  if (ctx.tenant.companyId === "0" || ctx.tenant.systemId === "0") {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json(
       {
         success: false,

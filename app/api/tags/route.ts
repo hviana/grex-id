@@ -15,7 +15,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const search = url.searchParams.get("search");
   const { companyId, systemId } = ctx.tenant;
 
-  if (companyId === "0" || systemId === "0") {
+  if (!companyId || !systemId) {
     return Response.json({ success: true, data: [] });
   }
 

@@ -86,8 +86,8 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
 
   // Only use system context for tenant mode
   const tenant = isCore ? null : useSystemContext();
-  const companyId = isCore ? "0" : tenant?.companyId;
-  const systemId = isCore ? "0" : tenant?.systemId;
+  const companyId = isCore ? undefined : tenant?.companyId;
+  const systemId = isCore ? undefined : tenant?.systemId;
   const tenantSystemSlug = isCore ? undefined : tenant?.systemSlug ?? undefined;
 
   // Resolve a resource token to its human label using the standard
