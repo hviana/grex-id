@@ -6,9 +6,10 @@ import {
   associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
-  isLeadAssociated,
   updateLead,
 } from "@/server/db/queries/leads";
+import { genericCount } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import {
   linkOrphanFaceToLead,
   searchOrphanFaceByEmbedding,
@@ -91,10 +92,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
       : null;
 
     if (existing) {
-      const alreadyAssociated = await isLeadAssociated(
-        existing.id,
-        tenantId,
-      );
+      const alreadyAssociated = (await genericCount({
+        table: "lead",
+        tenant: { id: tenantId },
+        extraConditions: ["id = $leadId"],
+        extraBindings: { leadId: rid(existing.id) },
+      })) > 0;
 
       if (!alreadyAssociated) {
         await associateLeadWithTenant({

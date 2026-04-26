@@ -9,14 +9,14 @@ import {
   countVerifiedChannelsOfType,
   createChannel,
   deleteChannel,
-  findChannelById,
   findChannelByOwnerTypeAndValue,
   findVerifiedOwnerByTypedChannel,
   getUserProfileName,
   listChannelsByOwner,
   listVerifiedChannelTypes,
-  userOwnsChannel,
 } from "@/server/db/queries/entity-channels";
+import { genericCount, genericGetById } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import {
   communicationGuard,
@@ -107,8 +107,23 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const channel = await findChannelById(channelId);
-    if (!channel || !(await userOwnsChannel(userId, String(channel.id)))) {
+    const channel = await genericGetById<
+      { id: string; verified: boolean; type: string }
+    >(
+      { table: "entity_channel" },
+      channelId,
+    );
+    if (
+      !channel ||
+      (await genericCount({
+          table: "user",
+          extraConditions: ["id = $uid", "channelIds CONTAINS $channelId"],
+          extraBindings: {
+            uid: rid(userId),
+            channelId: rid(String(channel.id)),
+          },
+        })) === 0
+    ) {
       return Response.json(
         {
           success: false,
@@ -291,8 +306,20 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const channel = await findChannelById(channelId);
-  if (!channel || !(await userOwnsChannel(userId, String(channel.id)))) {
+  const channel = await genericGetById<
+    { id: string; verified: boolean; type: string }
+  >(
+    { table: "entity_channel" },
+    channelId,
+  );
+  if (
+    !channel ||
+    (await genericCount({
+        table: "user",
+        extraConditions: ["id = $uid", "channelIds CONTAINS $channelId"],
+        extraBindings: { uid: rid(userId), channelId: rid(String(channel.id)) },
+      })) === 0
+  ) {
     return Response.json(
       {
         success: false,

@@ -7,7 +7,7 @@ import {
   ensureActorValidityLoaded,
   isActorValid,
 } from "@/server/utils/actor-validity";
-import { getUserForRefresh } from "@/server/db/queries/auth";
+import { genericGetById } from "@/server/db/queries/generics";
 
 function withAuthRateLimit() {
   return async (
@@ -75,7 +75,16 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // Fetch the fields the client needs to re-hydrate its UI state. Roles
     // are preserved from the current tenant — role changes evict the user
     // (§8.11) and would have rejected this refresh.
-    const user = await getUserForRefresh(String(tenant.actorId));
+    const user = await genericGetById<{
+      id: string;
+      stayLoggedIn: boolean;
+      twoFactorEnabled: boolean;
+      profileId?: unknown;
+      channelIds?: unknown[];
+    }>(
+      { table: "user", fetch: "profileId, channelIds" },
+      String(tenant.actorId),
+    );
     if (!user) {
       return Response.json(
         {

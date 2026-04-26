@@ -7,12 +7,13 @@ import {
   createLead,
   findLeadByChannelValues,
   getLeadById,
-  isLeadAssociated,
   listLeads,
   removeLeadFromTenant,
   searchUsersInCompanySystem,
   updateLead,
 } from "@/server/db/queries/leads";
+import { genericCount } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 
@@ -128,7 +129,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const existing = await findLeadByChannelValues(channels.map((c) => c.value));
 
   if (existing) {
-    const alreadyAssociated = await isLeadAssociated(existing.id, tenantId);
+    const alreadyAssociated = (await genericCount({
+      table: "lead",
+      tenant: { id: tenantId },
+      extraConditions: ["id = $leadId"],
+      extraBindings: { leadId: rid(existing.id) },
+    })) > 0;
     if (alreadyAssociated) {
       return Response.json(
         {

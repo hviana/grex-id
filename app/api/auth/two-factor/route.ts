@@ -5,12 +5,9 @@ import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
-import {
-  getUserWithProfile,
-  storePendingTwoFactorSecret,
-} from "@/server/db/queries/auth";
+import { storePendingTwoFactorSecret } from "@/server/db/queries/auth";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
-import { genericDecrypt } from "@/server/db/queries/generics";
+import { genericDecrypt, genericGetById } from "@/server/db/queries/generics";
 import { encryptField } from "@/server/utils/crypto";
 import {
   generateSecret,
@@ -81,7 +78,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     // `pendingTwoFactorSecret`. The secret never travels through
     // `verification_request.payload` (§5.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
-    const userRow = await getUserWithProfile(userId);
+    const userRow = await genericGetById<{
+      profileId: { name: string; locale?: string };
+      channelIds: { value: string }[];
+    }>({ table: "user", fetch: "profileId, channelIds" }, userId);
     const accountLabel = userRow?.channelIds?.[0]?.value ??
       userRow?.profileId?.name ?? "user";
 

@@ -6,8 +6,9 @@ import {
   associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
-  isLeadAssociated,
 } from "@/server/db/queries/leads";
+import { genericCount } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import { getSystemIdBySlug } from "@/server/db/queries/systems";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import Core from "@/server/utils/Core";
@@ -266,10 +267,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     });
 
     for (const tenantRecordId of tenantIds) {
-      const alreadyAssociated = await isLeadAssociated(
-        lead.id,
-        tenantRecordId,
-      );
+      const alreadyAssociated = (await genericCount({
+        table: "lead",
+        tenant: { id: tenantRecordId },
+        extraConditions: ["id = $leadId"],
+        extraBindings: { leadId: rid(lead.id) },
+      })) > 0;
       if (!alreadyAssociated) {
         await associateLeadWithTenant({
           leadId: lead.id,

@@ -14,10 +14,11 @@ import {
 import { verifyChannels } from "@/server/db/queries/entity-channels";
 import {
   associateLeadWithTenant,
-  isLeadAssociated,
   syncLeadChannels,
   updateLead,
 } from "@/server/db/queries/leads";
+import { genericCount } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
@@ -275,7 +276,12 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
 
     if (leadPayload.tenantIds?.length) {
       for (const tenantId of leadPayload.tenantIds) {
-        const alreadyAssociated = await isLeadAssociated(leadId, tenantId);
+        const alreadyAssociated = (await genericCount({
+          table: "lead",
+          tenant: { id: tenantId },
+          extraConditions: ["id = $leadId"],
+          extraBindings: { leadId: rid(leadId) },
+        })) > 0;
         if (!alreadyAssociated) {
           await associateLeadWithTenant({ leadId, tenantId });
         }

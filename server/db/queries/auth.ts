@@ -469,37 +469,9 @@ export async function storePendingTwoFactorSecret(
 }
 
 // ---------------------------------------------------------------------------
-// User profile / data fetches
+// User profile
 // ---------------------------------------------------------------------------
 
-/**
- * Fetch a user row with profile and channels resolved. Used by routes that
- * need the user's profile (name, locale) or channel values for communication
- * dispatch.
- */
-export async function getUserWithProfile(userId: string): Promise<
-  {
-    profileId: { name: string; locale?: string };
-    channelIds: { value: string }[];
-  } | null
-> {
-  const db = await getDb();
-  const result = await db.query<
-    [{
-      profileId: { name: string; locale?: string };
-      channelIds: { value: string }[];
-    }[]]
-  >(
-    `SELECT * FROM $userId LIMIT 1 FETCH profileId, channelIds`,
-    { userId: rid(userId) },
-  );
-  return result[0]?.[0] ?? null;
-}
-
-/**
- * Get only the profile fields (name, locale) for a user. Used by routes that
- * only need the profile for communication template data.
- */
 export async function getUserProfile(userId: string): Promise<
   {
     name: string;
@@ -515,38 +487,6 @@ export async function getUserProfile(userId: string): Promise<
   );
   const profile = result[0]?.[0]?.profileId;
   return profile ?? null;
-}
-
-/**
- * Fetch user fields needed by the refresh-token flow: stayLoggedIn,
- * twoFactorEnabled, profile, and channels — all in a single batched query
- * with FETCH resolution (§2.4).
- */
-export async function getUserForRefresh(userId: string): Promise<
-  {
-    id: string;
-    stayLoggedIn: boolean;
-    twoFactorEnabled: boolean;
-    profileId?: unknown;
-    channelIds?: unknown[];
-  } | null
-> {
-  const db = await getDb();
-  const result = await db.query<
-    [{
-      id: string;
-      stayLoggedIn: boolean;
-      twoFactorEnabled: boolean;
-      profileId?: unknown;
-      channelIds?: unknown[];
-    }[]]
-  >(
-    `SELECT id, stayLoggedIn, twoFactorEnabled, profileId, channelIds
-       FROM $userId LIMIT 1
-       FETCH profileId, channelIds;`,
-    { userId: rid(userId) },
-  );
-  return result[0]?.[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------

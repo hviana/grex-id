@@ -1,5 +1,5 @@
 import type { Middleware } from "./compose.ts";
-import { countEntitiesByTenant } from "../db/queries/entity-limits.ts";
+import { genericCount } from "../db/queries/generics.ts";
 import { resolveEntityLimit } from "../utils/guards.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
@@ -36,10 +36,10 @@ export function withEntityLimit(
       return next();
     }
 
-    const currentCount = await countEntitiesByTenant(
-      tableName,
-      ctx.tenant.id,
-    );
+    const currentCount = await genericCount({
+      table: tableName,
+      tenant: ctx.tenant,
+    });
     if (currentCount >= limitResult.limit) {
       return Response.json(
         {

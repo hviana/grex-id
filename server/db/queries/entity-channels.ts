@@ -140,18 +140,6 @@ export async function deleteChannel(params: {
   );
 }
 
-/** Fetches a single channel by id. */
-export async function findChannelById(
-  channelId: string,
-): Promise<EntityChannel | null> {
-  const db = await getDb();
-  const result = await db.query<[EntityChannel[]]>(
-    "SELECT * FROM $id",
-    { id: rid(channelId) },
-  );
-  return result[0]?.[0] ?? null;
-}
-
 /**
  * Per-row result of {@link findChannelOwners}.
  */
@@ -434,23 +422,6 @@ export async function countVerifiedChannelsOfType(
   );
   const last = result[result.length - 1] as { c: number }[] | undefined;
   return last?.[0]?.c ?? 0;
-}
-
-/**
- * Returns true when the given channel id is referenced by the user's
- * `channelIds` array. Used to authorize channel-scoped actions.
- */
-export async function userOwnsChannel(
-  userId: string,
-  channelId: string,
-): Promise<boolean> {
-  const db = await getDb();
-  const result = await db.query<[{ c: number }[]]>(
-    `SELECT count() AS c FROM user
-     WHERE id = $uid AND channelIds CONTAINS $cid GROUP ALL`,
-    { uid: rid(userId), cid: rid(channelId) },
-  );
-  return (result[0]?.[0]?.c ?? 0) > 0;
 }
 
 /** Fetches the user's profile name. Returns empty string if not found. */

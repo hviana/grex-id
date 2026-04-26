@@ -3,8 +3,7 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { deleteTenantData } from "@/server/db/queries/data-deletion";
-import { genericVerify } from "@/server/db/queries/generics";
-import { companyExists, getSystemSlug } from "@/server/db/queries/systems";
+import { genericGetById, genericVerify } from "@/server/db/queries/generics";
 import { fetchCompanySystemTenantRow } from "@/server/db/queries/tenants";
 import { reloadTenant } from "@/server/utils/actor-validity";
 import type { Tenant } from "@/src/contracts/tenant";
@@ -66,7 +65,11 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Look up the system slug for file deletion
-  const systemSlug = await getSystemSlug(systemId);
+  const system = await genericGetById<{ slug: string }>(
+    { table: "system" },
+    systemId,
+  );
+  const systemSlug = system?.slug ?? null;
 
   if (!systemSlug) {
     return Response.json(
@@ -82,7 +85,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Verify company exists
-  const exists = await companyExists(companyId);
+  const exists =
+    (await genericGetById({ table: "company" }, companyId)) !== null;
   if (!exists) {
     return Response.json(
       {

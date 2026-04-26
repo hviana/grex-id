@@ -3,6 +3,7 @@ import type { Lead } from "@/src/contracts/lead";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
 import { runLifecycleHooks } from "@/server/module-registry";
+import { genericGetById, genericList } from "./generics.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("leads");
@@ -92,64 +93,40 @@ export async function listLeads(
     tenantId: string;
   },
 ): Promise<PaginatedResult<Lead & { ownerId?: string }>> {
-  const db = await getDb();
   const limit = clampPageLimit(params.limit);
-  const bindings: Record<string, unknown> = {
-    limit: limit + 1,
-    tenantId: rid(requireRecordId(params.tenantId, "tenantId")),
-  };
 
-  let cursorClause = "";
-  if (params.cursor) {
-    cursorClause += " AND id > $cursor";
-    bindings.cursor = rid(requireRecordId(params.cursor, "cursor"));
-  }
+  const result = await genericList<Lead>({
+    table: "lead",
+    fetch: "profileId, channelIds, tagIds",
+    tenant: { id: params.tenantId },
+    search: params.search,
+    searchFields: params.search ? ["profileId.name"] : undefined,
+    cursor: params.cursor,
+    limit,
+    orderBy: "createdAt",
+    orderByDirection: "DESC",
+  });
 
-  let searchClause = "";
-  if (params.search) {
-    searchClause = " AND profileId.name @@ $search";
-    bindings.search = params.search;
-  }
-
-  const query = `
-    SELECT * FROM lead
-     WHERE tenantIds CONTAINS $tenantId${searchClause}${cursorClause}
-     ORDER BY createdAt DESC LIMIT $limit
-     FETCH profileId, channelIds, tagIds;`;
-
-  const result = await db.query<
-    [Lead[]]
-  >(
-    query,
-    bindings,
-  );
-  const leads = result[0] ?? [];
-
-  const hasMore = leads.length > limit;
-  const sliced = hasMore ? leads.slice(0, limit) : leads;
-  const data = sliced.map((lead) => {
+  const data = result.items.map((lead) => {
     const normalizedLead = normalizeLead(lead)!;
-    return {
-      ...normalizedLead,
-    };
+    return { ...normalizedLead };
   });
 
   return {
     items: data,
-    total: 0,
-    hasMore,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? undefined : undefined,
+    total: result.total,
+    hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
   };
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
-  const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
-  const result = await db.query<[Lead[]]>(
-    "SELECT * FROM lead WHERE id = $id LIMIT 1 FETCH profileId, channelIds",
-    { id: rid(leadId) },
+  const result = await genericGetById<Lead>(
+    { table: "lead", fetch: "profileId, channelIds" },
+    leadId,
   );
-  return normalizeLead(result[0]?.[0] ?? null);
+  return normalizeLead(result);
 }
 
 export async function findLeadByChannelValues(
@@ -333,25 +310,6 @@ export async function associateLeadWithTenant(data: {
       tenantId: rid(tenantId),
     },
   );
-}
-
-export async function isLeadAssociated(
-  leadId: string,
-  tenantId: string,
-): Promise<boolean> {
-  const db = await getDb();
-  const normalizedLeadId = requireRecordId(leadId, "leadId");
-  const normalizedTenantId = requireRecordId(tenantId, "tenantId");
-  const result = await db.query<[{ count: number }[]]>(
-    `SELECT count() AS count FROM lead
-     WHERE id = $leadId AND tenantIds CONTAINS $tenantId
-     GROUP ALL`,
-    {
-      leadId: rid(normalizedLeadId),
-      tenantId: rid(normalizedTenantId),
-    },
-  );
-  return (result[0]?.[0]?.count ?? 0) > 0;
 }
 
 export async function removeLeadFromTenant(

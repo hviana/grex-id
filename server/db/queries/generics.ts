@@ -13,6 +13,13 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { Tenant } from "@/src/contracts/tenant";
 
+/**
+ * Minimal tenant scope used by generic query helpers. Only the fields that
+ * the helpers actually consume are required — `tenantIds CONTAINS $tenantId`,
+ * and optionally `systemId`, `companyId`, `actorId` when they are truthy.
+ * This lets callers pass a partial tenant (e.g. `{ id: "tenant:xxx" }`).
+ */
+
 assertServerOnly("generics");
 
 // ---------------------------------------------------------------------------
