@@ -4,7 +4,10 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { genericList, genericUpdate } from "@/server/db/queries/generics";
 import type { System } from "@/src/contracts/system";
-import { getSetting, upsertSetting } from "@/server/db/queries/core-settings";
+import {
+  batchUpsertSettings,
+  buildScopeKey,
+} from "@/server/db/queries/core-settings";
 import Core from "@/server/utils/Core";
 
 async function getHandler(_req: Request, _ctx: RequestContext) {
@@ -13,9 +16,8 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
     { limit: 200 },
   );
 
-  // Generic terms come from core system-level settings (no tenantId override)
-  const genericSetting = await getSetting("terms.generic");
-  const genericContent = genericSetting?.value ?? "";
+  const genericContent =
+    (await Core.getInstance().getSetting("terms.generic")) ?? "";
 
   const systems = result.data.map((sys) => ({
     id: sys.id,
@@ -38,14 +40,14 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
 
-  // Update generic terms (core system-level — no tenantId override)
   if (body.generic === true) {
     const content = typeof body.content === "string" ? body.content : "";
-    await upsertSetting({
+    await batchUpsertSettings([{
       key: "terms.generic",
       value: content,
       description: "core.terms.genericHint",
-    });
+    }]);
+    await Core.getInstance().refreshSettingsScope("__core__");
     await Core.getInstance().reload();
     return Response.json({ success: true });
   }

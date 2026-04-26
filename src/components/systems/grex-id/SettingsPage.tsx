@@ -20,10 +20,9 @@ export default function SettingsPage() {
     async function load() {
       setLoading(true);
       try {
-        const params = new URLSearchParams({
-          systemId,
-          companyId,
-        });
+        const params = new URLSearchParams();
+        if (systemId) params.set("systemId", systemId);
+        if (companyId) params.set("companyId", companyId);
         const res = await fetch(
           `/api/core/settings?${params.toString()}`,
           {

@@ -41,7 +41,12 @@ export async function listFrontSettings(
 
   if (!scopeKey || scopeKey === "__core__") {
     const result = await db.query<[FrontCoreSetting[]]>(
-      `SELECT * FROM front_setting ORDER BY key ASC`,
+      `SELECT * FROM front_setting WHERE tenantIds CONTAINS (
+        SELECT VALUE id FROM tenant
+        WHERE actorId IS NONE AND companyId IS NONE
+        AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id
+        LIMIT 1
+      )[0] ORDER BY key ASC`,
     );
     return result[0] ?? [];
   }
@@ -162,15 +167,4 @@ export async function batchUpsertFrontSettings(
     }
   });
   await db.query(stmts.join("; "), bindings);
-}
-
-/**
- * Fetches all front_setting rows for cache hydration (core-level only).
- */
-export async function fetchAllFrontSettings(): Promise<FrontCoreSetting[]> {
-  const db = await getDb();
-  const results = await db.query<[FrontCoreSetting[]]>(
-    "SELECT * FROM front_setting;",
-  );
-  return results[0] ?? [];
 }
