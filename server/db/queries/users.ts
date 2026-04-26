@@ -1,5 +1,4 @@
 import { getDb, rid } from "../connection.ts";
-import type { User } from "@/src/contracts/user";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("users");
@@ -366,77 +365,6 @@ export async function updateCurrentUserProfile(params: {
   return updatedUser ?? null;
 }
 
-export async function getUser(id: string): Promise<User | null> {
-  const db = await getDb();
-  const result = await db.query<[User[]]>(
-    "SELECT * FROM $id FETCH profileId, channelIds",
-    { id: rid(id) },
-  );
-  return result[0]?.[0] ?? null;
-}
-
-export async function updateUser(
-  id: string,
-  data: Partial<
-    {
-      profile: {
-        name: string;
-        avatarUri?: string;
-        dateOfBirth?: string;
-        locale?: string;
-      };
-    }
-  >,
-): Promise<User> {
-  const db = await getDb();
-  const sets: string[] = [];
-  const bindings: Record<string, unknown> = { id: rid(id) };
-
-  const statements: string[] = [];
-
-  if (data.profile !== undefined) {
-    const profileSets: string[] = ["updatedAt = time::now()"];
-    if (data.profile.name !== undefined) {
-      profileSets.push("name = $profileName");
-      bindings.profileName = data.profile.name;
-    }
-    if (data.profile.avatarUri !== undefined) {
-      profileSets.push("avatarUri = $avatarUri");
-      bindings.avatarUri = data.profile.avatarUri || undefined;
-    }
-    if (data.profile.dateOfBirth !== undefined) {
-      profileSets.push("dateOfBirth = $dateOfBirth");
-      bindings.dateOfBirth = data.profile.dateOfBirth
-        ? `<datetime>${data.profile.dateOfBirth}`
-        : undefined;
-    }
-    if (data.profile.locale !== undefined) {
-      profileSets.push("locale = $locale");
-      bindings.locale = data.profile.locale || undefined;
-    }
-    statements.push(
-      `LET $usr = (SELECT profileId FROM $id);
-      IF $usr[0].profileId != NONE {
-        UPDATE $usr[0].profileId SET ${profileSets.join(", ")};
-      }`,
-    );
-  }
-
-  if (sets.length > 0) {
-    sets.push("updatedAt = time::now()");
-    statements.push(`UPDATE $id SET ${sets.join(", ")}`);
-  }
-
-  statements.push("SELECT * FROM $id FETCH profileId, channelIds");
-
-  const results = await db.query<unknown[]>(
-    statements.join(";\n") + ";",
-    bindings,
-  );
-  const selectResult = results[results.length - 1] as User[];
-  return selectResult[0];
-}
-
 export async function updateUserLocale(
   id: string,
   locale: string,
@@ -449,28 +377,6 @@ export async function updateUserLocale(
     };
     UPDATE $id SET updatedAt = time::now();`,
     { id: rid(id), locale },
-  );
-}
-
-export async function deleteUser(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query(
-    `LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
-     LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
-     LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
-                  THEN NONE
-                  ELSE (SELECT recoveryChannelIds FROM $usr.profileId)[0]
-                  END;
-     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
-     DELETE verification_request WHERE ownerId = $id;
-     DELETE tenant WHERE actorId = $id;
-     DELETE $id;
-     FOR $cid IN $chIds { DELETE $cid; };
-     FOR $rid IN $recIds { DELETE $rid; };
-     IF $usr != NONE AND $usr.profileId != NONE {
-       DELETE $usr.profileId;
-     };`,
-    { id: rid(id) },
   );
 }
 

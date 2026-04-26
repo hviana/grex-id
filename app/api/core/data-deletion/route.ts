@@ -2,10 +2,8 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import {
-  deleteTenantData,
-  verifyUserPassword,
-} from "@/server/db/queries/data-deletion";
+import { deleteTenantData } from "@/server/db/queries/data-deletion";
+import { genericVerify } from "@/server/db/queries/generics";
 import { companyExists, getSystemSlug } from "@/server/db/queries/systems";
 import { fetchCompanySystemTenantRow } from "@/server/db/queries/tenants";
 import { reloadTenant } from "@/server/utils/actor-validity";
@@ -49,7 +47,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Verify the superuser's password
-  const passwordValid = await verifyUserPassword(
+  const passwordValid = await genericVerify(
+    { table: "user", hashField: "passwordHash" },
     ctx.tenant.actorId!,
     password,
   );

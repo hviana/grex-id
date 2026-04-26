@@ -1,36 +1,8 @@
 import { getDb, rid } from "../connection.ts";
-import type {
-  CreditPurchase,
-  PaymentMethod,
-  Subscription,
-} from "@/src/contracts/billing";
+import type { Subscription } from "@/src/contracts/billing";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("billing");
-
-export async function getActiveSubscription(
-  tenantId: string,
-): Promise<Subscription | null> {
-  const db = await getDb();
-  const result = await db.query<[Subscription[]]>(
-    `SELECT * FROM subscription
-     WHERE tenantIds CONTAINS $tenantId AND status = "active"
-     LIMIT 1`,
-    { tenantId: rid(tenantId) },
-  );
-  return result[0]?.[0] ?? null;
-}
-
-export async function listPaymentMethods(
-  tenantId: string,
-): Promise<PaymentMethod[]> {
-  const db = await getDb();
-  const result = await db.query<[PaymentMethod[]]>(
-    "SELECT * FROM payment_method WHERE tenantIds CONTAINS $tenantId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId",
-    { tenantId: rid(tenantId) },
-  );
-  return result[0] ?? [];
-}
 
 // --- GET billing data --------------------------------------------------------
 
@@ -543,114 +515,6 @@ export async function retryPayment(
     return { status: "conflict" };
   }
   return { status: "ok", subscriptionId: String(retryRow.id) };
-}
-
-// --- createPaymentMethod (used by other routes) ------------------------------
-
-export async function createPaymentMethod(data: {
-  tenantId: string;
-  cardMask: string;
-  cardToken: string;
-  holderName: string;
-  holderDocument: string;
-  billingAddress: Record<string, string>;
-}): Promise<PaymentMethod> {
-  const db = await getDb();
-  const addr = data.billingAddress;
-
-  const result = await db.query<[unknown, unknown, PaymentMethod[]]>(
-    `LET $addr = CREATE address SET
-      street = $street,
-      number = $number,
-      complement = $complement,
-      neighborhood = $neighborhood,
-      city = $city,
-      state = $state,
-      country = $country,
-      postalCode = $postalCode;
-    LET $pm = CREATE payment_method SET
-      tenantIds = [$tenantId],
-      type = "credit_card",
-      cardMask = $cardMask,
-      cardToken = $cardToken,
-      holderName = $holderName,
-      holderDocument = $holderDocument,
-      billingAddressId = $addr[0].id,
-      isDefault = false;
-    SELECT * FROM $pm[0].id FETCH billingAddressId;`,
-    {
-      street: addr.street ?? "",
-      number: addr.number ?? "",
-      complement: addr.complement || undefined,
-      neighborhood: addr.neighborhood || undefined,
-      city: addr.city ?? "",
-      state: addr.state ?? "",
-      country: addr.country ?? "",
-      postalCode: addr.postalCode ?? "",
-      tenantId: rid(data.tenantId),
-      cardMask: data.cardMask,
-      cardToken: data.cardToken,
-      holderName: data.holderName,
-      holderDocument: data.holderDocument,
-    },
-  );
-  return result[2][0];
-}
-
-// --- setDefaultPaymentMethodById (used by other routes) ----------------------
-
-export async function setDefaultPaymentMethodById(
-  id: string,
-  tenantId: string,
-): Promise<void> {
-  const db = await getDb();
-  await db.query(
-    `UPDATE payment_method SET isDefault = false WHERE tenantIds CONTAINS $tenantId;
-    UPDATE $id SET isDefault = true;`,
-    { tenantId: rid(tenantId), id: rid(id) },
-  );
-}
-
-// --- deletePaymentMethod (used by other routes) ------------------------------
-
-export async function deletePaymentMethod(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query(
-    `LET $pm = (SELECT billingAddressId FROM $id);
-    DELETE $id;
-    IF $pm[0].billingAddressId != NONE {
-      DELETE $pm[0].billingAddressId;
-    };`,
-    { id: rid(id) },
-  );
-}
-
-// --- createCreditPurchase (used by other routes) -----------------------------
-
-export async function createCreditPurchase(data: {
-  tenantId: string;
-  amount: number;
-  paymentMethodId: string;
-  subscriptionId?: string;
-}): Promise<CreditPurchase> {
-  const db = await getDb();
-  const result = await db.query<[CreditPurchase[]]>(
-    `CREATE credit_purchase SET
-      tenantIds = [$tenantId],
-      amount = $amount,
-      paymentMethodId = $paymentMethodId,
-      subscriptionId = $subscriptionId,
-      status = "pending"`,
-    {
-      tenantId: rid(data.tenantId),
-      amount: data.amount,
-      paymentMethodId: rid(data.paymentMethodId),
-      subscriptionId: data.subscriptionId
-        ? rid(data.subscriptionId)
-        : undefined,
-    },
-  );
-  return result[0][0];
 }
 
 // --- getDueSubscriptions (used by recurring billing job) ---------------------

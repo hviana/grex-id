@@ -8,15 +8,6 @@ assertServerOnly("vouchers");
  * Voucher has no `permissions` field. Voucher modifiers are signed
  * integers/objects per §7.7.
  */
-export async function findVoucherByCode(code: string): Promise<Voucher | null> {
-  const db = await getDb();
-  const result = await db.query<[Voucher[]]>(
-    "SELECT * FROM voucher WHERE code = $code LIMIT 1",
-    { code },
-  );
-  return result[0]?.[0] ?? null;
-}
-
 export async function createVoucher(data: {
   code: string;
   applicableTenantIds: string[];

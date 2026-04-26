@@ -5,8 +5,8 @@ import Core from "@/server/utils/Core";
 import {
   findUserByVerifiedChannel,
   userHasVerifiedChannel,
-  verifyPassword,
 } from "@/server/db/queries/auth";
+import { genericVerify } from "@/server/db/queries/generics";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { standardizeField } from "@/server/utils/field-standardizer";
@@ -80,7 +80,11 @@ async function handler(
   const user = await findUserByVerifiedChannel(value, channelType);
   if (!user) return generic;
 
-  const passwordValid = await verifyPassword(String(user.id), password);
+  const passwordValid = await genericVerify(
+    { table: "user", hashField: "passwordHash" },
+    String(user.id),
+    password,
+  );
   if (!passwordValid) return generic;
 
   const approved = await userHasVerifiedChannel(String(user.id));

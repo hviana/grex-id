@@ -11,7 +11,6 @@ export type {
   VerificationOwnerType,
 } from "@/src/contracts/verification-request";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import { genericVerify } from "./generics.ts";
 
 assertServerOnly("auth");
 
@@ -114,17 +113,6 @@ export async function userHasVerifiedChannel(userId: string): Promise<boolean> {
   );
   const last = result[result.length - 1] as { c: number }[] | undefined;
   return (last?.[0]?.c ?? 0) > 0;
-}
-
-export async function verifyPassword(
-  userId: string,
-  password: string,
-): Promise<boolean> {
-  return genericVerify(
-    { table: "user", hashField: "passwordHash" },
-    userId,
-    password,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -575,139 +563,4 @@ export async function findSystemIdBySlug(slug: string): Promise<string | null> {
     { slug },
   );
   return result[0]?.[0]?.id ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// OAuth identity
-// ---------------------------------------------------------------------------
-
-/**
- * Create an oauth_identity row linking a provider subject to a user.
- * One row per (provider, providerUserId); multiple providers per user allowed.
- */
-export async function createOAuthIdentity(params: {
-  provider: string;
-  providerUserId: string;
-  userId: string;
-}): Promise<void> {
-  const db = await getDb();
-  await db.query(
-    `CREATE oauth_identity SET
-       provider = $provider,
-       providerUserId = $providerUserId,
-       userId = $userId;`,
-    {
-      provider: params.provider,
-      providerUserId: params.providerUserId,
-      userId: rid(params.userId),
-    },
-  );
-}
-
-/**
- * Look up an oauth_identity by (provider, providerUserId). Returns the full
- * row including the linked userId, or null.
- */
-export async function findOAuthIdentity(
-  provider: string,
-  providerUserId: string,
-): Promise<{ id: string; userId: string; provider: string } | null> {
-  const db = await getDb();
-  const result = await db.query<
-    [{ id: string; userId: string; provider: string }[]]
-  >(
-    `SELECT id, userId, provider FROM oauth_identity
-       WHERE provider = $provider AND providerUserId = $providerUserId
-       LIMIT 1;`,
-    { provider, providerUserId },
-  );
-  return result[0]?.[0] ?? null;
-}
-
-/**
- * List all oauth_identity rows linked to a user.
- */
-export async function findOAuthIdentitiesByUser(
-  userId: string,
-): Promise<{ id: string; provider: string; providerUserId: string }[]> {
-  const db = await getDb();
-  const result = await db.query<
-    [{ id: string; provider: string; providerUserId: string }[]]
-  >(
-    `SELECT id, provider, providerUserId FROM oauth_identity
-       WHERE userId = $userId;`,
-    { userId: rid(userId) },
-  );
-  return result[0] ?? [];
-}
-
-/**
- * Delete a specific oauth_identity row by its record id.
- */
-export async function deleteOAuthIdentity(id: string): Promise<void> {
-  const db = await getDb();
-  await db.query("DELETE $id", { id: rid(id) });
-}
-
-// ---------------------------------------------------------------------------
-// API token creation with tenant
-// ---------------------------------------------------------------------------
-
-/**
- * Create an api_token record and its associated tenant row in one batched
- * query. The api_token row id serves as the universal actor id. The tenant
- * row scopes the token to a (company, system) context.
- *
- * Returns the created api_token id.
- */
-export async function createApiTokenWithTenant(params: {
-  tokenId: string;
-  companyId: string;
-  systemId: string;
-  roles: string[];
-  name: string;
-  description?: string;
-  neverExpires?: boolean;
-  expiresAt?: string;
-  frontendUse?: boolean;
-  frontendDomains?: string[];
-  monthlySpendLimit?: number;
-  maxOperationCount?: Record<string, number>;
-}): Promise<string> {
-  const db = await getDb();
-
-  const bindings: Record<string, unknown> = {
-    tokenId: params.tokenId,
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
-    name: params.name,
-    description: params.description ?? undefined,
-    neverExpires: params.neverExpires ?? false,
-    expiresAt: params.expiresAt ?? undefined,
-    frontendUse: params.frontendUse ?? false,
-    frontendDomains: params.frontendDomains ?? [],
-    monthlySpendLimit: params.monthlySpendLimit ?? undefined,
-    maxOperationCount: params.maxOperationCount ?? undefined,
-  };
-
-  await db.query(
-    `LET $t = CREATE tenant SET
-       actorId = $tokenId,
-       companyId = $companyId,
-       systemId = $systemId;
-     CREATE $tokenId SET
-       tenantIds = [$t[0].id],
-       name = $name,
-       description = $description,
-       roles = $roles,
-       neverExpires = $neverExpires,
-       expiresAt = $expiresAt,
-       frontendUse = $frontendUse,
-       frontendDomains = $frontendDomains,
-       monthlySpendLimit = $monthlySpendLimit,
-       maxOperationCount = $maxOperationCount;`,
-    { ...bindings, roles: params.roles },
-  );
-
-  return params.tokenId;
 }

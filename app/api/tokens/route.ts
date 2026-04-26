@@ -4,15 +4,24 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
-import { listTokensFiltered, revokeToken } from "@/server/db/queries/tokens";
-import { genericCreate } from "@/server/db/queries/generics";
+import { revokeToken } from "@/server/db/queries/tokens";
+import { genericCreate, genericList } from "@/server/db/queries/generics";
 import type { ApiToken } from "@/src/contracts/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
-  const data = await listTokensFiltered({
-    tenantId: ctx.tenant.id,
-  });
-  return Response.json({ success: true, data });
+  const result = await genericList<ApiToken>(
+    {
+      table: "api_token",
+      select:
+        "id, name, description, roles, monthlySpendLimit, maxOperationCount, neverExpires, expiresAt, frontendUse, frontendDomains, createdAt",
+      orderBy: "createdAt",
+      orderByDirection: "DESC",
+      extraConditions: ["revokedAt IS NONE"],
+      limit: 50,
+    },
+    { tenant: ctx.tenant, limit: 50 },
+  );
+  return Response.json({ success: true, data: result.items });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {

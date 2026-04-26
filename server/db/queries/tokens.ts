@@ -1,53 +1,7 @@
 import { getDb, rid } from "../connection.ts";
-import type { ApiToken } from "@/src/contracts/token";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tokens");
-
-/**
- * Lists live api_tokens (revokedAt IS NONE) scoped to a tenant.
- */
-export async function listTokens(
-  tenantId: string,
-): Promise<ApiToken[]> {
-  const db = await getDb();
-  const result = await db.query<[ApiToken[]]>(
-    `SELECT id, tenantIds, name, description,
-            roles, monthlySpendLimit, maxOperationCount,
-            neverExpires, expiresAt,
-            frontendUse, frontendDomains, revokedAt, createdAt
-     FROM api_token WHERE tenantIds CONTAINS $tenantId AND revokedAt IS NONE
-     ORDER BY createdAt DESC`,
-    { tenantId: rid(tenantId) },
-  );
-  return result[0] ?? [];
-}
-
-/**
- * Lists live api_tokens (revokedAt IS NONE), optionally filtered by
- * `tenantId`. Returns up to 50 results ordered by createdAt DESC.
- */
-export async function listTokensFiltered(params: {
-  tenantId?: string;
-}): Promise<ApiToken[]> {
-  const db = await getDb();
-  const bindings: Record<string, unknown> = {};
-  const conditions: string[] = ["revokedAt IS NONE"];
-
-  if (params.tenantId) {
-    conditions.push("tenantIds CONTAINS $tenantId");
-    bindings.tenantId = rid(params.tenantId);
-  }
-
-  const query =
-    `SELECT id, name, description, roles, monthlySpendLimit, maxOperationCount,
-            neverExpires, expiresAt, frontendUse, frontendDomains, createdAt
-     FROM api_token WHERE ${conditions.join(" AND ")}
-     ORDER BY createdAt DESC LIMIT 50`;
-
-  const result = await db.query<[ApiToken[]]>(query, bindings);
-  return result[0] ?? [];
-}
 
 /**
  * Revokes an api_token by setting revokedAt = time::now() in a single

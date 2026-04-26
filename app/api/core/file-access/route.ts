@@ -7,11 +7,11 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
 import Core from "@/server/utils/Core";
-import { updateFileAccessRule } from "@/server/db/queries/file-access";
 import {
   genericCreate,
   genericDelete,
   genericList,
+  genericUpdate,
 } from "@/server/db/queries/generics";
 
 const defaultSection = () => ({
@@ -144,37 +144,9 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const sets: string[] = [];
-    const bindings: Record<string, unknown> = {};
+    const data: Record<string, unknown> = {};
 
-    if (name !== undefined) {
-      const sanitizedName = await standardizeField(
-        "name",
-        sanitizeString(name),
-      );
-      const dupCheck = await checkDuplicates("file_access", [
-        { field: "name", value: sanitizedName },
-      ]);
-      if (dupCheck.isDuplicate) {
-        const existingId = String(
-          dupCheck.conflicts[0]?.existingRecordId ?? "",
-        );
-        if (existingId !== String(id)) {
-          return Response.json(
-            {
-              success: false,
-              error: {
-                code: "VALIDATION",
-                errors: ["validation.name.duplicate"],
-              },
-            },
-            { status: 409 },
-          );
-        }
-      }
-      sets.push("name = $name");
-      bindings.name = sanitizedName;
-    }
+    if (name !== undefined) data.name = name;
     if (categoryPattern !== undefined) {
       const sanitized = String(categoryPattern).trim().replace(/<>/g, "");
       if (!sanitized) {
@@ -189,27 +161,46 @@ async function putHandler(req: Request, _ctx: RequestContext) {
           { status: 400 },
         );
       }
-      sets.push("categoryPattern = $categoryPattern");
-      bindings.categoryPattern = sanitized;
+      data.categoryPattern = sanitized;
     }
-    if (download !== undefined) {
-      sets.push("download = $download");
-      bindings.download = download;
-    }
-    if (upload !== undefined) {
-      sets.push("upload = $upload");
-      bindings.upload = upload;
-    }
+    if (download !== undefined) data.download = download;
+    if (upload !== undefined) data.upload = upload;
 
-    if (sets.length === 0) {
+    if (Object.keys(data).length === 0) {
       return Response.json({ success: true, data: null });
     }
 
-    const updated = await updateFileAccessRule(id, sets, bindings);
+    const result = await genericUpdate(
+      { table: "file_access", fields: [{ field: "name", unique: true }] },
+      id,
+      data,
+    );
+
+    if (!result.success) {
+      if (result.duplicateFields?.length) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              errors: ["validation.name.duplicate"],
+            },
+          },
+          { status: 409 },
+        );
+      }
+      return Response.json(
+        {
+          success: false,
+          error: { code: "ERROR", message: "common.error.generic" },
+        },
+        { status: 500 },
+      );
+    }
 
     await Core.getInstance().reloadFileAccess();
 
-    return Response.json({ success: true, data: updated });
+    return Response.json({ success: true, data: result.data });
   } catch {
     return Response.json(
       {

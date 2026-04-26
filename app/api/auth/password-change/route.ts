@@ -3,11 +3,8 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
-import {
-  getUserProfile,
-  hashPassword,
-  verifyPassword,
-} from "@/server/db/queries/auth";
+import { getUserProfile, hashPassword } from "@/server/db/queries/auth";
+import { genericVerify } from "@/server/db/queries/generics";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -67,7 +64,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   // Verify the current password via SurrealDB's argon2 compare (§8.7 step 1).
-  const currentValid = await verifyPassword(userId, currentPassword);
+  const currentValid = await genericVerify(
+    { table: "user", hashField: "passwordHash" },
+    userId,
+    currentPassword,
+  );
   if (!currentValid) {
     return Response.json(
       {

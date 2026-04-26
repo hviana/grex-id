@@ -5,11 +5,10 @@ import {
   findUserByVerifiedChannel,
   resolveUserMembership,
   userHasVerifiedChannel,
-  verifyPassword,
 } from "@/server/db/queries/auth";
 import { createTenantToken } from "@/server/utils/token";
 import Core from "@/server/utils/Core";
-import { genericDecrypt } from "@/server/db/queries/generics";
+import { genericDecrypt, genericVerify } from "@/server/db/queries/generics";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { rememberActor } from "@/server/utils/actor-validity";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
@@ -83,7 +82,11 @@ async function handler(
     );
   }
 
-  const passwordValid = await verifyPassword(String(user.id), password);
+  const passwordValid = await genericVerify(
+    { table: "user", hashField: "passwordHash" },
+    String(user.id),
+    password,
+  );
   if (!passwordValid) {
     return Response.json(
       {

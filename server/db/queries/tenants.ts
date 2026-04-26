@@ -50,27 +50,5 @@ export async function fetchCompanySystemTenantRow(
 }
 
 /**
- * Fetches a tenant row by id along with its resolved role names and system slug.
- * All done in a single batched query.
+ * Fetches the company-system tenant row for a given company + system.
  */
-export async function fetchTenantWithRoles(tenantId: string): Promise<{
-  row: TenantRow | null;
-  roles: string[];
-  systemSlug: string;
-}> {
-  const db = await getDb();
-  const result = await db.query<
-    [TenantRow[], { name: string }[], { slug: string }[]]
-  >(
-    `LET $t = (SELECT id, companyId, systemId, roleIds FROM ONLY $tenantId);
-     SELECT VALUE name FROM role WHERE id IN $t.roleIds;
-     SELECT slug FROM ONLY $t.systemId;`,
-    { tenantId: rid(tenantId) },
-  );
-
-  const row = result[0]?.[0] ? { ...result[0][0] } : null;
-  const roles = (result[1] ?? []).map((r) => r.name);
-  const systemSlug = result[2]?.[0]?.slug ?? "";
-
-  return { row, roles, systemSlug };
-}

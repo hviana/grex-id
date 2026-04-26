@@ -20,7 +20,7 @@ import {
   resolveScopeChain,
   type SettingScope,
 } from "../db/queries/core-settings.ts";
-import { fetchAllFileAccessRules } from "../db/queries/file-access.ts";
+import { genericList } from "../db/queries/generics.ts";
 
 assertServerOnly("Core");
 
@@ -114,7 +114,10 @@ export function compilePattern(pattern: string): RegExp {
 }
 
 async function loadFileAccessData(): Promise<FileAccessCacheData> {
-  const records = await fetchAllFileAccessRules();
+  const { items: records } = await genericList(
+    { table: "file_access", orderBy: "createdAt", limit: 1000 },
+    { limit: 1000 },
+  );
 
   const rules: CompiledFileAccess[] = records.map((r) => ({
     id: String(r.id),

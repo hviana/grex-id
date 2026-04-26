@@ -1,48 +1,7 @@
 import { getDb, rid } from "../connection.ts";
-import type { UsageRecord } from "@/src/contracts/usage";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("usage");
-
-export async function getUsageForPeriod(
-  tenantId: string,
-  period?: string,
-): Promise<UsageRecord[]> {
-  const db = await getDb();
-  const currentPeriod = period ?? getCurrentPeriod();
-
-  const result = await db.query<[UsageRecord[]]>(
-    `SELECT * FROM usage_record
-     WHERE tenantIds CONTAINS $tenantId AND period = $period
-     ORDER BY resource ASC`,
-    {
-      tenantId: rid(tenantId),
-      period: currentPeriod,
-    },
-  );
-  return result[0] ?? [];
-}
-
-export async function getUsageHistory(
-  tenantId: string,
-  resource: string,
-  periodCount: number = 6,
-): Promise<{ period: string; value: number }[]> {
-  const db = await getDb();
-  const result = await db.query<[{ period: string; value: number }[]]>(
-    `SELECT period, math::sum(value) AS value FROM usage_record
-     WHERE tenantIds CONTAINS $tenantId AND resource = $resource
-     GROUP BY period
-     ORDER BY period DESC
-     LIMIT $limit`,
-    {
-      tenantId: rid(tenantId),
-      resource,
-      limit: periodCount,
-    },
-  );
-  return (result[0] ?? []).reverse();
-}
 
 export async function getOperationCount(
   tenantId: string,
@@ -75,13 +34,6 @@ export async function getOperationCount(
       max,
     };
   });
-}
-
-function getCurrentPeriod(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
 }
 
 export interface CoreCreditExpenseRow {

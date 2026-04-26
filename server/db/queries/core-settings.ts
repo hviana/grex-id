@@ -173,45 +173,6 @@ export async function getSetting(
   return result[0]?.[0] ?? null;
 }
 
-export async function upsertSetting(data: {
-  key: string;
-  value: string;
-  description: string;
-  scopeKey?: string;
-  tenantId?: string;
-}): Promise<CoreSetting> {
-  const db = await getDb();
-
-  let effectiveTenantId = data.tenantId;
-  if (!effectiveTenantId && data.scopeKey) {
-    const resolved = await resolveTenantForScope(data.scopeKey);
-    if (resolved) effectiveTenantId = resolved;
-  }
-
-  const bindings: Record<string, unknown> = {
-    key: data.key,
-    value: data.value,
-    description: data.description,
-  };
-
-  let whereClause = "WHERE key = $key";
-  if (effectiveTenantId) {
-    bindings.tenantId = rid(effectiveTenantId);
-    whereClause += " AND tenantIds CONTAINS $tenantId";
-  }
-
-  const result = await db.query<[CoreSetting[]]>(
-    `UPSERT setting SET
-      key = $key,
-      value = $value,
-      description = $description,
-      updatedAt = time::now()
-    ${whereClause}`,
-    bindings,
-  );
-  return result[0][0];
-}
-
 export async function deleteSetting(
   key: string,
   scopeKey?: string,
