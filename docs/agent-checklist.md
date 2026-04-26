@@ -75,8 +75,8 @@ file crosses a boundary (§2.7).
       link, child has no back-pointer (§2.4, §3.3).
 - [ ] Cascade deletion: dissociate → orphan-check → hard-delete cycle; shared
       data dissociated first, hard-deleted only if orphaned across all tenants
-      (§2.4.2). Human confirmation required before dissociating `user` or `lead`
-      from a tenant.
+      (§2.4.2). Human confirmation required before association/dissociation
+      sensitive data such `user` or `lead` from a tenant.
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with

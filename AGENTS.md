@@ -202,12 +202,12 @@ dissociates first; the entity is hard-deleted only if orphaned across **all**
 tenants. This ensures rigorous tenant isolation without data loss from
 cross-tenant references.
 
-**Human-confirmed dissociation.** Certain shared entities represent real people
-or prospects (`user`, `lead`). Dissociating such an entity from a tenant
-requires explicit human authorization — a confirmation step (modal, password
-re-entry, or `verification_request`) before the dissociate→orphan-check cycle
-begins. This guard applies regardless of whether the entity would be orphaned
-after dissociation.
+**Human-confirmed association/dissociation.** Certain shared entities represent
+real people or prospects (`user`, `lead`). Association/dissociation such an
+entity from a tenant requires explicit human authorization — a confirmation step
+(modal, password re-entry, or `verification_request`) before the
+dissociate→orphan-check cycle begins. This guard applies regardless of whether
+the entity would be orphaned after association/dissociation.
 
 **Cascade tree** — deterministic depth-first walk on hard-delete:
 
