@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@/src/contracts/user";
-import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
+import type { Tenant } from "@/src/contracts/tenant";
 import { getCookie, removeCookie, setCookie } from "@/src/lib/cookies";
 
 const TOKEN_COOKIE_NAME = "core_token";
@@ -25,7 +25,6 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   tenant: Tenant;
-  claims: TenantClaims | null;
   login: (
     identifier: string,
     password: string,
@@ -58,7 +57,10 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 function extractTenant(token: string): Tenant {
   const payload = decodeJwtPayload(token);
-  const t = payload?.tenant as
+  if (!payload) {
+    throw new Error("Invalid token: missing payload");
+  }
+  const t = payload.tenant as
     | {
       id: string;
       systemId: string;
@@ -76,22 +78,8 @@ function extractTenant(token: string): Tenant {
     companyId: t.companyId,
     systemSlug: t.systemSlug ?? "core",
     roles: t.roles ?? [],
-  };
-}
-
-function extractClaims(token: string): TenantClaims | null {
-  const payload = decodeJwtPayload(token);
-  if (!payload) return null;
-  const t = payload.tenant as Tenant | undefined;
-  if (!t?.id || !t?.systemId || !t?.companyId) return null;
-  return {
-    id: t.id,
-    systemId: t.systemId,
-    companyId: t.companyId,
-    systemSlug: t.systemSlug ?? "core",
-    roles: t.roles ?? [],
-    actorType: payload.actorType as TenantClaims["actorType"],
-    actorId: payload.actorId as string,
+    actorType: payload.actorType as Tenant["actorType"],
+    actorId: payload.actorId as string | undefined,
     exchangeable: (payload.exchangeable as boolean) ?? false,
   };
 }
@@ -293,22 +281,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return extractTenant(activeToken);
   }, [activeToken]);
 
-  const claims: TenantClaims | null = useMemo(
-    () => activeToken ? extractClaims(activeToken) : null,
-    [activeToken],
-  );
-
   const value = useMemo<AuthContextValue>(
     () => ({
       ...state,
       tenant,
-      claims,
       login,
       logout,
       refresh,
       exchangeTenant,
     }),
-    [state, tenant, claims, login, logout, refresh, exchangeTenant],
+    [state, tenant, login, logout, refresh, exchangeTenant],
   );
 
   return (

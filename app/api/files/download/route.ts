@@ -15,7 +15,7 @@ import {
 } from "@/server/utils/guards";
 import Core from "@/server/utils/Core";
 import { checkFileAccess } from "@/server/utils/file-access-guard";
-import type { Tenant, TenantClaims } from "@/src/contracts/tenant";
+import type { Tenant } from "@/src/contracts/tenant";
 import { verifyTenantToken } from "@/server/utils/token";
 import {
   ensureActorValidityLoaded,
@@ -28,24 +28,15 @@ const activeDownloads = new Map<string, number>();
 
 async function resolveTokenParam(
   tokenStr: string,
-): Promise<{ tenant: Tenant; claims?: TenantClaims } | null> {
+): Promise<{ tenant: Tenant } | null> {
   try {
-    const claims = await verifyTenantToken(tokenStr);
-    if (!claims.actorId) return null;
+    const tenant = await verifyTenantToken(tokenStr);
+    if (!tenant.actorId) return null;
 
-    await ensureActorValidityLoaded(claims.id);
-    if (!isActorValid(claims.id, claims.actorId)) return null;
+    await ensureActorValidityLoaded(tenant.id);
+    if (!isActorValid(tenant.id, tenant.actorId)) return null;
 
-    return {
-      tenant: {
-        id: claims.id,
-        systemId: claims.systemId,
-        companyId: claims.companyId,
-        systemSlug: claims.systemSlug,
-        roles: claims.roles,
-      },
-      claims,
-    };
+    return { tenant };
   } catch {
     return null;
   }
@@ -85,16 +76,11 @@ export const GET = compose(
 
     const tokenParam = url.searchParams.get("token");
     let effectiveTenant = ctx.tenant;
-    let effectiveClaims = ctx.claims;
 
     if (tokenParam) {
       const resolved = await resolveTokenParam(tokenParam);
       if (resolved) {
         effectiveTenant = resolved.tenant;
-        effectiveClaims = resolved.claims;
-      } else {
-        // Invalid/expired token param — access check will deny if isolation is on
-        effectiveClaims = undefined;
       }
     }
 
@@ -104,7 +90,6 @@ export const GET = compose(
       fileSystemSlug,
       fileUserId,
       tenant: effectiveTenant,
-      claims: effectiveClaims,
       operation: "download",
     });
     if (!accessCheck.allowed) {

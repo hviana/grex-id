@@ -1,4 +1,4 @@
-import type { TenantClaims } from "@/src/contracts/tenant.ts";
+import type { Tenant } from "@/src/contracts/tenant.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("cors.ts");
@@ -17,7 +17,7 @@ assertServerOnly("cors.ts");
  */
 export function enforceCors(
   req: Request,
-  claims: TenantClaims,
+  claims: Tenant,
 ): Response | null {
   if (claims.actorType === "user") return null;
 
@@ -66,7 +66,7 @@ export function enforceCors(
  */
 export function getCorsHeaders(
   req: Request,
-  claims: TenantClaims,
+  claims: Tenant,
 ): Record<string, string> {
   const origin = req.headers.get("Origin");
   if (!origin || claims.actorType === "user") return {};

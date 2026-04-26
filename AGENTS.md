@@ -296,8 +296,7 @@ middleware that queries the DB without a cache comes last.
   `fetch()` attaches `Authorization: Bearer <token>`; the backend resolves scope
   from the token's embedded tenant.
 - Backend never reads `companyId`/`systemId`/`roles` from query strings,
-  cookies, or request bodies — exclusively from `ctx.tenant`/`ctx.claims`
-  (§2.5).
+  cookies, or request bodies — exclusively from `ctx.tenant` (§2.5).
 - All queries, utilities, handlers, and jobs accept `tenant: Tenant` — not loose
   IDs.
 
@@ -442,18 +441,19 @@ company.
 ### 4.1 Tenant contract
 
 ```ts
+type TenantActorType = "user" | "api_token" | "connected_app";
 interface Tenant {
   id: string; // tenant record ID — universal scope key and FK target
   systemId: string;
   companyId: string;
   systemSlug: string;
   roles: string[];
-}
-type TenantActorType = "user" | "api_token" | "connected_app";
-interface TenantClaims extends Tenant {
-  actorType: TenantActorType;
-  actorId: string;
-  exchangeable: boolean;
+  actorType?: TenantActorType;
+  actorId?: string; // universal actor id — user id or api_token id; always a real SurrealDB record ID
+  exchangeable?: boolean; // true only for actorType="user"
+  exp?: number; // unix seconds — present on JWT-decoded tenants
+  frontendUse?: boolean;
+  frontendDomains?: string[];
 }
 ```
 
@@ -520,18 +520,17 @@ signal row) that calls `reloadTenant` on receipt; API shape is unchanged.
 type Middleware = (req, ctx, next) => Promise<Response>;
 interface RequestContext {
   tenant: Tenant;
-  claims?: TenantClaims;
 }
 ```
 
 Standard ordering (cheapest → costliest):
 
-| # | Middleware                                 | Cost                                                                            | Notes                                                                                                                                    |
-| - | ------------------------------------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 | `withRateLimit(config)`                    | In-memory sliding window                                                        | Key `tenantId` or `{ip}` for auth routes. Global plan limit distributed across active actors: `floor(limit/actorCount)` min 1.           |
-| 2 | `withAuth({roles?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant`/`ctx.claims` from the bearer token. Superusers bypass role checks. Routes never parse `Authorization` themselves. |
-| 3 | `withPlanAccess(roleNames[])`              | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed role                                                    |
-| 4 | `withEntityLimit(entityName)`              | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                            |
+| # | Middleware                                 | Cost                                                                            | Notes                                                                                                                          |
+| - | ------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1 | `withRateLimit(config)`                    | In-memory sliding window                                                        | Key `tenantId` or `{ip}` for auth routes. Global plan limit distributed across active actors: `floor(limit/actorCount)` min 1. |
+| 2 | `withAuth({roles?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant` from the bearer token. Superusers bypass role checks. Routes never parse `Authorization` themselves.    |
+| 3 | `withPlanAccess(roleNames[])`              | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed role                                          |
+| 4 | `withEntityLimit(entityName)`              | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                  |
 
 Auth routes (`/api/auth/*`) use only `withRateLimit` — no tenant context is
 populated for these routes. All other routes require a bearer token (including
@@ -909,10 +908,10 @@ replacement → reuse existing UUID for atomic overwrite.
 One route, one flow — all requests authenticate via a bearer token (the
 anonymous API token for public uploads).
 
-1. `withAuth` populates `ctx.tenant`/`ctx.claims` from the bearer token.
+1. `withAuth` populates `ctx.tenant` from the bearer token.
 2. Parse FormData (`file`, `systemSlug`, `category` JSON array, `fileUuid`,
    optional `description`).
-3. `companyId = ctx.tenant.companyId`; `userId = ctx.claims.actorId`;
+3. `companyId = ctx.tenant.companyId`; `userId = ctx.tenant.actorId`;
    `systemSlug` from FormData.
 4. Call `checkFileAccess({operation:"upload",…})` (§6.4). On denial → 403.
 5. Stream via `file.stream()` into

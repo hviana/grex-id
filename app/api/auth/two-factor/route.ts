@@ -55,7 +55,7 @@ function channelOrder(
 }
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
-  if (ctx.claims?.actorType !== "user") {
+  if (ctx.tenant.actorType !== "user") {
     return Response.json(
       {
         success: false,
@@ -71,7 +71,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json().catch(() => ({}));
   const { action } = body as { action?: string };
-  const userId = ctx.claims.actorId;
+  const userId = ctx.tenant.actorId!;
   const tenantId = ctx.tenant.id;
   const systemSlug = ctx.tenant.systemSlug;
 

@@ -3,7 +3,7 @@ import type {
   CompiledFileAccess,
   FileAccessCacheData,
 } from "./file-access-cache.ts";
-import type { Tenant, TenantClaims } from "@/src/contracts/tenant.ts";
+import type { Tenant } from "@/src/contracts/tenant.ts";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
@@ -18,7 +18,6 @@ export interface FileAccessCheckParams {
   fileSystemSlug: string;
   fileUserId: string;
   tenant: Tenant;
-  claims?: TenantClaims;
   operation: "download" | "upload";
 }
 
@@ -38,9 +37,9 @@ function checkSection(
   const { isolateSystem, isolateCompany, isolateUser, roles } = section;
 
   const needsAuth = isolateSystem || isolateCompany || isolateUser;
-  if (needsAuth && !params.claims) return false;
+  if (needsAuth && !params.tenant.actorId) return false;
 
-  if (isolateUser && params.claims!.actorId !== params.fileUserId) return false;
+  if (isolateUser && params.tenant.actorId !== params.fileUserId) return false;
   if (isolateCompany && params.tenant.companyId !== params.fileCompanyId) {
     return false;
   }
@@ -49,7 +48,7 @@ function checkSection(
   }
 
   if (roles.length > 0) {
-    if (!params.claims) return false;
+    if (!params.tenant.actorId) return false;
     const hasRole = roles.some((r) => params.tenant.roles.includes(r));
     if (!hasRole) return false;
   }

@@ -114,9 +114,9 @@ file crosses a boundary (§2.7).
 - [ ] **Token–Tenant boundary:** frontend uses tokens only; backend uses tenant
       contracts. No loose `companyId`/`systemId`/`roles` in forms, hooks, or
       fetch wrappers (§2.10).
-- [ ] Backend reads tenant from `ctx.tenant`/`ctx.claims` only — never query
-      strings, cookies, bodies (§2.5). Tenant includes `tenant.id` (the record
-      ID used as universal scope key).
+- [ ] Backend reads tenant from `ctx.tenant` only — never query strings,
+      cookies, bodies (§2.5). Tenant includes `tenant.id` (the record ID used as
+      universal scope key).
 - [ ] All functions accept `tenant: Tenant`, not loose ids (§2.5).
 - [ ] Scoped tables use `tenantId: record<tenant>` instead of separate
       `companyId`/`systemId` fields (§3.4).

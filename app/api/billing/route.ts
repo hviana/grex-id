@@ -142,7 +142,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       )
       : null;
 
-    const userId = ctx.claims?.actorId ?? null;
+    const userId = ctx.tenant.actorId ?? null;
     const now = new Date();
     const periodEnd = new Date(
       now.getTime() + (plan.recurrenceDays ?? 30) * 86400000,

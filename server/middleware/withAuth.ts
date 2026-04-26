@@ -65,20 +65,13 @@ export function withAuth(
     const corsError = enforceCors(req, claims);
     if (corsError) return corsError;
 
-    ctx.tenant = {
-      id: claims.id,
-      systemId: claims.systemId,
-      companyId: claims.companyId,
-      systemSlug: claims.systemSlug,
-      roles: claims.roles,
-    };
-    ctx.claims = claims;
+    ctx.tenant = claims;
 
     // Superuser bypasses role checks
     if (ctx.tenant.roles.includes("superuser")) {
       const response = await next();
-      if (ctx.claims.actorType !== "user") {
-        const corsHeaders = getCorsHeaders(req, ctx.claims);
+      if (ctx.tenant.actorType !== "user") {
+        const corsHeaders = getCorsHeaders(req, ctx.tenant);
         for (const [key, value] of Object.entries(corsHeaders)) {
           response.headers.set(key, value);
         }
@@ -105,8 +98,8 @@ export function withAuth(
 
     const response = await next();
 
-    if (ctx.claims.actorType !== "user") {
-      const corsHeaders = getCorsHeaders(req, ctx.claims);
+    if (ctx.tenant.actorType !== "user") {
+      const corsHeaders = getCorsHeaders(req, ctx.tenant);
       for (const [key, value] of Object.entries(corsHeaders)) {
         response.headers.set(key, value);
       }

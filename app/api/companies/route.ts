@@ -16,7 +16,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const systemSlug = url.searchParams.get("systemSlug") ?? undefined;
-  const userId = ctx.claims!.actorId;
+  const userId = ctx.tenant.actorId!;
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
@@ -94,7 +94,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     document: stdDocument!,
     documentType: documentType ?? "cnpj",
     billingAddress: billingAddress ?? {},
-    ownerId: ctx.claims!.actorId,
+    ownerId: ctx.tenant.actorId!,
     systemId: ctx.tenant.systemId,
   });
 

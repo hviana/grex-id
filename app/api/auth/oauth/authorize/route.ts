@@ -38,8 +38,7 @@ function withAuthRateLimit() {
  * query, then returns the JWT (§8.1) the client will use as the bearer.
  */
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
-  const claims = ctx.claims;
-  if (!claims) {
+  if (!ctx.tenant.actorId) {
     return Response.json(
       {
         success: false,
@@ -92,7 +91,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     ? requestedRoles
     : [];
 
-  const userId = claims.actorId;
+  const userId = ctx.tenant.actorId;
 
   // Resolve the tenant row for this (user, company, system) combination.
   // The user must already be a member of this tenant to authorize a

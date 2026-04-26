@@ -49,7 +49,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Verify the superuser's password
   const passwordValid = await verifyUserPassword(
-    ctx.claims!.actorId,
+    ctx.tenant.actorId!,
     password,
   );
   if (!passwordValid) {

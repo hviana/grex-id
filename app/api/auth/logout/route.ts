@@ -8,9 +8,8 @@ async function handler(
   _req: Request,
   ctx: RequestContext,
 ): Promise<Response> {
-  const claims = ctx.claims;
-  if (claims?.actorType === "user" && claims.actorId) {
-    await forgetActor(claims.id, String(claims.actorId));
+  if (ctx.tenant.actorType === "user" && ctx.tenant.actorId) {
+    await forgetActor(ctx.tenant.id, String(ctx.tenant.actorId));
   }
   return Response.json({ success: true });
 }

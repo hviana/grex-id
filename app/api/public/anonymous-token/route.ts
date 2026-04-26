@@ -1,12 +1,12 @@
 import { getCache, registerCache } from "@/server/utils/cache";
 import { createTenantToken } from "@/server/utils/token";
 import { getSystemTenant } from "@/server/utils/tenant";
-import type { TenantClaims } from "@/src/contracts/tenant";
+import type { Tenant } from "@/src/contracts/tenant";
 
 registerCache<string>("core", "anonymous-jwt", async () => {
   const tenant = await getSystemTenant();
 
-  const claims: TenantClaims = {
+  const claims: Tenant = {
     id: tenant.id,
     systemId: tenant.systemId,
     companyId: tenant.companyId,

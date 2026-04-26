@@ -1,7 +1,7 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
 import { getCache } from "./cache.ts";
-import type { TenantClaims } from "@/src/contracts/tenant.ts";
+import type { Tenant } from "@/src/contracts/tenant.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/token.ts");
@@ -29,7 +29,7 @@ async function getJwtSecret(): Promise<Uint8Array> {
  * need a DB read.
  */
 export async function createTenantToken(
-  claims: TenantClaims,
+  claims: Tenant,
   stayLoggedIn: boolean = false,
   expiresAt?: Date,
 ): Promise<string> {
@@ -72,7 +72,7 @@ export async function createTenantToken(
  */
 export async function verifyTenantToken(
   token: string,
-): Promise<TenantClaims> {
+): Promise<Tenant> {
   const { payload } = await jose.jwtVerify(token, await getJwtSecret(), {
     issuer: "core",
   });
@@ -91,7 +91,7 @@ export async function verifyTenantToken(
     companyId: tenant.companyId,
     systemSlug: tenant.systemSlug ?? "core",
     roles: tenant.roles ?? [],
-    actorType: payload.actorType as TenantClaims["actorType"],
+    actorType: payload.actorType as Tenant["actorType"],
     actorId: payload.actorId as string,
     exchangeable: (payload.exchangeable as boolean) ?? false,
     exp: payload.exp,

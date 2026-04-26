@@ -78,7 +78,7 @@ async function sendChannelConfirmation(
 }
 
 async function getHandler(_req: Request, ctx: RequestContext) {
-  const userId = ctx.claims!.actorId;
+  const userId = ctx.tenant.actorId!;
   const channels = await listChannelsByOwner(userId, "user");
   return Response.json({ success: true, data: channels });
 }
@@ -86,7 +86,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
 async function postHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
-  const userId = ctx.claims!.actorId;
+  const userId = ctx.tenant.actorId!;
 
   if (action === "resend-verification") {
     const body = await req.json();
@@ -272,7 +272,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     channelId?: string;
     requiredTypes?: string[];
   };
-  const userId = ctx.claims!.actorId;
+  const userId = ctx.tenant.actorId!;
 
   if (!channelId) {
     return Response.json(

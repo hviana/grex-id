@@ -62,7 +62,7 @@ export const POST = compose(
     }
 
     const companyId = ctx.tenant.companyId;
-    const userId = ctx.claims!.actorId;
+    const userId = ctx.tenant.actorId!;
     const fileName = file.name || "unnamed";
     const mimeType = file.type || "application/octet-stream";
     const path = [
@@ -90,7 +90,6 @@ export const POST = compose(
       fileSystemSlug: systemSlug,
       fileUserId: userId,
       tenant: ctx.tenant,
-      claims: ctx.claims,
       operation: "upload",
     });
     if (!accessCheck.allowed) {

@@ -63,7 +63,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       );
     }
     const roles = await getUserContext(
-      ctx.claims!.actorId,
+      ctx.tenant.actorId!,
       ctx.tenant.id,
     );
     return Response.json({ success: true, data: { roles } });
@@ -147,7 +147,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       userId: existingUserId,
       tenantId: ctx.tenant.id,
       roles: roles ?? [],
-      inviterId: ctx.claims!.actorId,
+      inviterId: ctx.tenant.actorId!,
       companyId,
       systemId,
     });
@@ -209,7 +209,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       companyId,
       systemId,
       systemSlug: ctx.tenant.systemSlug,
-      actorId: ctx.claims!.actorId,
+      actorId: ctx.tenant.actorId!,
       actorType: "user",
     },
   });
@@ -266,14 +266,14 @@ async function putHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await updateUserLocale(ctx.claims!.actorId, locale);
+    await updateUserLocale(ctx.tenant.actorId!, locale);
     return Response.json({ success: true });
   }
 
   if (action === "profile") {
     const body = await req.json();
     const { name, avatarUri, age } = body;
-    const userId = ctx.claims!.actorId;
+    const userId = ctx.tenant.actorId!;
 
     let stdName: string | undefined;
     if (name !== undefined) {

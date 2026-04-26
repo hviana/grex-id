@@ -26,7 +26,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     confirmPassword?: string;
   };
 
-  const userId = ctx.claims!.actorId;
+  const userId = ctx.tenant.actorId!;
   const tenantId = ctx.tenant.id;
   const systemSlug = ctx.tenant.systemSlug;
 

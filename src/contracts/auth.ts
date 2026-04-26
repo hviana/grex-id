@@ -1,4 +1,4 @@
-import type { Tenant, TenantClaims } from "./tenant.ts";
+import type { Tenant } from "./tenant.ts";
 
 export interface LoginRequest {
   email: string;
@@ -63,10 +63,9 @@ export interface ExchangeResponse {
 
 /**
  * Unified request context — every middleware handler receives this.
- * `tenant` and `claims` are populated by `withAuth` when a valid bearer token
- * is present. Auth routes (`/api/auth/*`) may leave these unset.
+ * `tenant` is populated by `withAuth` when a valid bearer token is present.
+ * Auth routes (`/api/auth/*`) may leave tenant unset.
  */
 export interface RequestContext {
   tenant: Tenant;
-  claims?: TenantClaims;
 }

@@ -25,7 +25,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   if (!isAdmin) {
     extraConditions.push("userId = $userId");
-    extraBindings.userId = rid(ctx.claims!.actorId);
+    extraBindings.userId = rid(ctx.tenant.actorId!);
   }
 
   const result = await genericList<ConnectedService>(
@@ -67,7 +67,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!ctx.claims?.actorId) {
+  if (!ctx.tenant.actorId) {
     return Response.json(
       {
         success: false,
@@ -83,7 +83,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       tenantId: ctx.tenant.id,
     },
     {
-      userId: rid(ctx.claims.actorId),
+      userId: rid(ctx.tenant.actorId!),
       name: stdName,
       data: serviceData ?? undefined,
     },

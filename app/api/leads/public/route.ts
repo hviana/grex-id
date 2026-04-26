@@ -193,7 +193,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           systemSlug,
           companyId: ctx.tenant?.companyId,
           systemId: ctx.tenant?.systemId,
-          actorType: ctx.claims?.actorType,
+          actorType: ctx.tenant.actorType,
         },
       });
 
@@ -299,7 +299,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         systemSlug,
         companyId: ctx.tenant?.companyId,
         systemId: ctx.tenant?.systemId,
-        actorType: ctx.claims?.actorType,
+        actorType: ctx.tenant.actorType,
       },
     });
 
