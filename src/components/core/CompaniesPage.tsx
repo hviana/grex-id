@@ -234,9 +234,10 @@ export default function CompaniesPage() {
       });
       const json = await res.json();
       return {
-        data: json.data ?? [],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as Company[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken, systemIds, planIds, statusFilter],

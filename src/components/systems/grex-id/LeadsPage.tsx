@@ -126,7 +126,7 @@ export default function LeadsPage() {
       params: CursorParams & { search?: string; filters?: FilterValues },
     ): Promise<PaginatedResult<Record<string, unknown>>> => {
       if (!systemToken || !companyId || !systemId) {
-        return { data: [], nextCursor: null, prevCursor: null };
+        return { items: [], total: 0, hasMore: false };
       }
 
       const qs = new URLSearchParams();
@@ -146,9 +146,10 @@ export default function LeadsPage() {
       });
       const json = await res.json();
       return {
-        data: json.data ?? [],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: json.prevCursor ?? null,
+        items: (json.items ?? []) as Record<string, unknown>[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor ?? undefined,
       };
     },
     [systemToken, companyId, systemId],

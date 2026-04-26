@@ -55,6 +55,9 @@ export function sanitizeString(str: string): string {
   return str.trim().replace(/[<>]/g, "");
 }
 
-export function clampPageLimit(limit: number, max: number = 200): number {
-  return Math.max(1, Math.min(limit, max));
+export function clampPageLimit(
+  limit: number | undefined,
+  max: number = 200,
+): number {
+  return Math.max(1, Math.min(limit ?? 20, max));
 }

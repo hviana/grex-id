@@ -44,7 +44,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       limit: 50,
     },
   );
-  return Response.json({ success: true, data: result.data });
+  return Response.json({ success: true, ...result });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {

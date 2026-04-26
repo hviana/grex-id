@@ -42,7 +42,7 @@ export default function UsersPage() {
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<UserViewData>> => {
       if (!systemToken || !companyId || !systemId) {
-        return { data: [], nextCursor: null, prevCursor: null };
+        return { items: [], total: 0, hasMore: false };
       }
       const p = new URLSearchParams({ limit: String(params.limit) });
       if (params.search) p.set("search", params.search);
@@ -52,9 +52,10 @@ export default function UsersPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as UserViewData[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as UserViewData[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken, companyId, systemId],

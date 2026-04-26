@@ -147,9 +147,7 @@ export async function listDetections(
     bindings.locationId = rid(params.locationId);
   }
   if (params.cursor) {
-    whereClause += params.direction === "prev"
-      ? " AND id < $cursor"
-      : " AND id > $cursor";
+    whereClause += " AND id > $cursor";
     bindings.cursor = params.cursor;
   }
 
@@ -243,9 +241,12 @@ export async function listDetections(
   });
 
   return {
-    data: enriched,
-    nextCursor: hasMore ? enriched[enriched.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
+    items: enriched,
+    total: 0,
+    hasMore,
+    nextCursor: hasMore
+      ? enriched[enriched.length - 1]?.id ?? undefined
+      : undefined,
   };
 }
 

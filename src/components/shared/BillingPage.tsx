@@ -150,7 +150,7 @@ export default function BillingPage() {
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<PaymentRecord>> => {
       if (!companyId || !systemId || !systemToken) {
-        return { data: [], nextCursor: null, prevCursor: null };
+        return { items: [], total: 0, hasMore: false };
       }
       const p = new URLSearchParams();
       p.set("include", "payments");
@@ -167,9 +167,10 @@ export default function BillingPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data?.payments ?? []) as PaymentRecord[],
-        nextCursor: json.data?.paymentsNextCursor ?? null,
-        prevCursor: null,
+        items: (json.data?.payments ?? []) as PaymentRecord[],
+        total: 0,
+        hasMore: !!json.data?.paymentsNextCursor,
+        nextCursor: json.data?.paymentsNextCursor,
       };
     },
     [systemToken, companyId, systemId, paymentHistoryStart, paymentHistoryEnd],

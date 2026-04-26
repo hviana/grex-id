@@ -54,7 +54,7 @@ export default function VouchersPage() {
     async (
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<VoucherItem>> => {
-      if (!systemToken) return { data: [], nextCursor: null, prevCursor: null };
+      if (!systemToken) return { items: [], total: 0, hasMore: false };
       const query = new URLSearchParams();
       if (params.search) query.set("search", params.search);
       if (params.cursor) query.set("cursor", params.cursor);
@@ -65,12 +65,13 @@ export default function VouchersPage() {
       const json = await res.json();
       if (json.success) {
         return {
-          data: json.data ?? [],
-          nextCursor: json.nextCursor ?? null,
-          prevCursor: json.prevCursor ?? null,
+          items: (json.items ?? []) as VoucherItem[],
+          total: json.total ?? 0,
+          hasMore: json.hasMore ?? false,
+          nextCursor: json.nextCursor,
         };
       }
-      return { data: [], nextCursor: null, prevCursor: null };
+      return { items: [], total: 0, hasMore: false };
     },
     [systemToken],
   );

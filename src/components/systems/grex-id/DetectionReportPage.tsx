@@ -204,9 +204,10 @@ export default function DetectionReportPage() {
       const nextCursor = nextIndex < all.length ? String(nextIndex) : null;
 
       return {
-        data: sliced as DetectionIndividual[],
-        nextCursor,
-        prevCursor: null,
+        items: sliced as DetectionIndividual[],
+        total: all.length,
+        hasMore: nextCursor !== null,
+        nextCursor: nextCursor ?? undefined,
       };
     },
     [stats?.individuals],

@@ -83,7 +83,7 @@ export default function TokensPage() {
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<ApiToken>> => {
       if (!systemToken || !companyId || !user) {
-        return { data: [], nextCursor: null, prevCursor: null };
+        return { items: [], total: 0, hasMore: false };
       }
       const p = new URLSearchParams({
         userId: user.id,
@@ -97,9 +97,9 @@ export default function TokensPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as ApiToken[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.data ?? []) as ApiToken[],
+        total: 0,
+        hasMore: false,
       };
     },
     [systemToken, companyId, user],

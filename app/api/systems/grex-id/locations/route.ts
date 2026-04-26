@@ -38,7 +38,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
   if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
-    return Response.json({ success: true, data: [], nextCursor: null });
+    return Response.json({
+      success: true,
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
   }
 
   const result = await genericList<Location>(

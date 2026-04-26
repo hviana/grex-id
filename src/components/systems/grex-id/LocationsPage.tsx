@@ -47,9 +47,10 @@ export default function LocationsPage() {
       );
       const json = await res.json();
       return {
-        data: json.data ?? [],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: json.prevCursor ?? null,
+        items: (json.items ?? []) as Record<string, unknown>[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken],

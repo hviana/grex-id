@@ -59,9 +59,10 @@ function createFetchFileAccess(token: string) {
     });
     const json = await res.json();
     return {
-      data: json.data ?? [],
-      nextCursor: json.nextCursor ?? null,
-      prevCursor: null,
+      items: json.items ?? [],
+      total: json.total ?? 0,
+      hasMore: json.hasMore ?? false,
+      nextCursor: json.nextCursor,
     };
   };
 }

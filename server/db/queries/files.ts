@@ -41,9 +41,7 @@ export async function listFiles(
     bindings.systemSlug = params.systemSlug;
   }
   if (params.cursor) {
-    conditions.push(
-      params.direction === "prev" ? "id < $cursor" : "id > $cursor",
-    );
+    conditions.push("id > $cursor");
     bindings.cursor = params.cursor;
   }
 
@@ -52,14 +50,15 @@ export async function listFiles(
   query += " ORDER BY createdAt DESC LIMIT $limit";
 
   const result = await db.query<[FileMetadata[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > limit;
-  const data = hasMore ? items.slice(0, limit) : items;
+  const rows = result[0] ?? [];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
 
   return {
-    data,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
+    items,
+    total: 0,
+    hasMore,
+    nextCursor: hasMore ? items[items.length - 1]?.id ?? undefined : undefined,
   };
 }
 

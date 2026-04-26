@@ -35,7 +35,7 @@ export default function ConnectedAppsPage() {
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<ConnectedApp>> => {
       if (!systemToken || !companyId || !systemId) {
-        return { data: [], nextCursor: null, prevCursor: null };
+        return { items: [], total: 0, hasMore: false };
       }
       const p = new URLSearchParams({ companyId, systemId });
       if (params.search) p.set("search", params.search);
@@ -46,9 +46,10 @@ export default function ConnectedAppsPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as ConnectedApp[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as ConnectedApp[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken, companyId, systemId],

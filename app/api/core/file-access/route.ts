@@ -32,11 +32,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     { search, cursor, limit },
   );
 
-  return Response.json({
-    success: true,
-    data: result.data,
-    nextCursor: result.nextCursor,
-  });
+  return Response.json({ success: true, ...result });
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {

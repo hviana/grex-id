@@ -83,43 +83,83 @@ export default function GenericList<T extends Record<string, unknown>>({
 }: GenericListProps<T>) {
   const { t } = useLocale();
   const [items, setItems] = useState<T[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<FilterValues>({});
-  const [cursor, setCursor] = useState<string | undefined>();
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editItem, setEditItem] = useState<T | null>(null);
   const [editLoading, setEditLoading] = useState<string | null>(null);
 
-  const load = useCallback(async (reset: boolean = false) => {
-    setLoading(true);
-    try {
-      const result = await fetchFn({
-        limit: 20,
-        cursor: reset ? undefined : cursor,
-        search: search || undefined,
-        filters: Object.keys(filterValues).length > 0
-          ? filterValues
-          : undefined,
-      });
-      setItems(reset ? result.data : [...items, ...result.data]);
-      setNextCursor(result.nextCursor);
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, search, filterValues, fetchFn]);
+  // Stack-based pagination: stack[0] = undefined (first page), push cursors as you advance
+  const [cursorStack, setCursorStack] = useState<(string | undefined)[]>([
+    undefined,
+  ]);
+  const currentCursor = cursorStack[cursorStack.length - 1];
+  const pageIndex = cursorStack.length; // 1-based
 
+  const loadPage = useCallback(
+    async (cursor: string | undefined) => {
+      setLoading(true);
+      try {
+        const result = await fetchFn({
+          limit: 20,
+          cursor,
+          search: search || undefined,
+          filters: Object.keys(filterValues).length > 0
+            ? filterValues
+            : undefined,
+        });
+        setItems(result.items);
+        setTotal(result.total);
+        setHasMore(result.hasMore);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [search, filterValues, fetchFn],
+  );
+
+  // Initial load and reload on search/filter/reloadKey changes
   useEffect(() => {
-    load(true);
+    setCursorStack([undefined]);
+    loadPage(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filterValues, fetchFn, reloadKey]);
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
-    setCursor(undefined);
   }, []);
+
+  const goNext = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await fetchFn({
+        limit: 20,
+        cursor: currentCursor,
+        search: search || undefined,
+        filters: Object.keys(filterValues).length > 0
+          ? filterValues
+          : undefined,
+      });
+      setItems(result.items);
+      setTotal(result.total);
+      setHasMore(result.hasMore);
+      if (result.nextCursor) {
+        setCursorStack((prev) => [...prev, result.nextCursor!]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [currentCursor, search, filterValues, fetchFn]);
+
+  const goPrev = useCallback(() => {
+    if (cursorStack.length <= 1) return;
+    const newStack = cursorStack.slice(0, -1);
+    setCursorStack(newStack);
+    loadPage(newStack[newStack.length - 1]);
+  }, [cursorStack, loadPage]);
 
   const authHeaders: HeadersInit = authToken
     ? { Authorization: `Bearer ${authToken}` }
@@ -166,6 +206,8 @@ export default function GenericList<T extends Record<string, unknown>>({
       ))}
     </>
   );
+
+  const isFirstPage = cursorStack.length <= 1;
 
   return (
     <div className="space-y-4">
@@ -243,18 +285,27 @@ export default function GenericList<T extends Record<string, unknown>>({
           </div>
         )}
 
-      {nextCursor && (
-        <div className="flex justify-center pt-4">
+      {total > 0 && (
+        <div className="flex items-center justify-center gap-4 pt-4">
           <button
-            onClick={() => {
-              setCursor(nextCursor);
-              load();
-            }}
-            disabled={loading}
-            className="rounded-lg border border-[var(--color-dark-gray)] px-6 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors flex items-center gap-2"
+            onClick={goPrev}
+            disabled={isFirstPage || loading}
+            className="rounded-lg border border-[var(--color-dark-gray)] px-4 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {t("common.previous")}
+          </button>
+
+          <span className="text-sm text-[var(--color-light-text)]">
+            {t("common.page")} {pageIndex}
+          </span>
+
+          <button
+            onClick={goNext}
+            disabled={!hasMore || loading}
+            className="rounded-lg border border-[var(--color-dark-gray)] px-4 py-2 text-sm text-[var(--color-light-text)] hover:border-[var(--color-primary-green)] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading ? <Spinner size="sm" /> : null}
-            {t("common.loadMore")}
+            {t("common.next")}
           </button>
         </div>
       )}
@@ -269,7 +320,7 @@ export default function GenericList<T extends Record<string, unknown>>({
           extraData={extraData}
           onSuccess={() => {
             setShowCreateModal(false);
-            load(true);
+            loadPage(undefined);
           }}
           onClose={() => setShowCreateModal(false)}
         />
@@ -286,7 +337,7 @@ export default function GenericList<T extends Record<string, unknown>>({
           extraData={extraData}
           onSuccess={() => {
             setEditItem(null);
-            load(true);
+            loadPage(undefined);
           }}
           onClose={() => setEditItem(null)}
         />

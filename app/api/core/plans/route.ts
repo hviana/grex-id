@@ -14,8 +14,6 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
-  const direction = (url.searchParams.get("direction") as "next" | "prev") ??
-    "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const tenantId = url.searchParams.get("tenantId") ?? undefined;
 
@@ -37,16 +35,11 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     {
       limit,
       cursor,
-      direction,
       search,
     },
   );
 
-  return Response.json({
-    success: true,
-    data: result.data,
-    nextCursor: result.nextCursor,
-  });
+  return Response.json({ success: true, ...result });
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {

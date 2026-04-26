@@ -15,6 +15,7 @@
   "back": "Back",
   "next": "Next",
   "previous": "Previous",
+  "page": "Page",
   "loadMore": "Load More",
   "noResults": "No results found",
   "error.generic": "An unexpected error occurred",

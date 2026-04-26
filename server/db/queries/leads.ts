@@ -101,9 +101,7 @@ export async function listLeads(
 
   let cursorClause = "";
   if (params.cursor) {
-    cursorClause += params.direction === "prev"
-      ? " AND id < $cursor"
-      : " AND id > $cursor";
+    cursorClause += " AND id > $cursor";
     bindings.cursor = rid(requireRecordId(params.cursor, "cursor"));
   }
 
@@ -137,9 +135,10 @@ export async function listLeads(
   });
 
   return {
-    data,
-    nextCursor: hasMore ? data[data.length - 1]?.id ?? null : null,
-    prevCursor: params.cursor ?? null,
+    items: data,
+    total: 0,
+    hasMore,
+    nextCursor: hasMore ? data[data.length - 1]?.id ?? undefined : undefined,
   };
 }
 

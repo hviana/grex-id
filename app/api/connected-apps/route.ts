@@ -23,7 +23,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
       tenant: ctx.tenant,
     },
   );
-  return Response.json({ success: true, data: result.data });
+  return Response.json({ success: true, ...result });
 }
 
 /**

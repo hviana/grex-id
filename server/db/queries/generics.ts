@@ -435,9 +435,9 @@ export interface DateRangeFilter {
   end?: string;
 }
 
-export interface GenericListParams extends CursorParams {
-  limit: number;
-  cursor: unknown;
+export interface GenericListParams {
+  limit?: number;
+  cursor?: string;
   search?: string;
   tenant?: Tenant;
   tagFilter?: TagFilter;

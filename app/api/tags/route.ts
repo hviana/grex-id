@@ -15,7 +15,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const search = url.searchParams.get("search");
 
   if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
-    return Response.json({ success: true, data: [] });
+    return Response.json({
+      success: true,
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
   }
 
   const result = await genericList<Tag>(
@@ -31,7 +36,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     },
   );
 
-  return Response.json({ success: true, data: result.data });
+  return Response.json({ success: true, ...result });
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {

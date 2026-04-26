@@ -79,9 +79,7 @@ export async function listCoreCompanies(
   }
 
   if (params.cursor) {
-    conditions.push(
-      params.direction === "prev" ? "id < $cursor" : "id > $cursor",
-    );
+    conditions.push("id > $cursor");
     bindings.cursor = params.cursor;
   }
 
@@ -139,7 +137,7 @@ export async function listCoreCompanies(
   const subs = result[3] ?? [];
 
   if (!companiesRaw || companiesRaw.length === 0) {
-    return { data: [], nextCursor: null, prevCursor: null };
+    return { items: [], total: 0, hasMore: false };
   }
 
   const hasMore = companiesRaw.length > limit;
@@ -185,9 +183,10 @@ export async function listCoreCompanies(
   });
 
   return {
-    data: companies,
-    nextCursor: hasMore ? String(lastItem?.id ?? "") : null,
-    prevCursor: params.cursor ?? null,
+    items: companies,
+    total: 0,
+    hasMore,
+    nextCursor: hasMore ? String(lastItem?.id ?? "") : undefined,
   };
 }
 

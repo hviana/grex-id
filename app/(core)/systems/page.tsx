@@ -47,9 +47,10 @@ export default function SystemsPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as SystemItem[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as SystemItem[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken],

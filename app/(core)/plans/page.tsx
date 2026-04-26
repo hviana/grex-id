@@ -74,9 +74,10 @@ export default function PlansPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as PlanItem[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as PlanItem[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken],

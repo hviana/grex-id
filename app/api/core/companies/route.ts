@@ -62,11 +62,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
       : undefined,
   });
 
-  return Response.json({
-    success: true,
-    data: result.data,
-    nextCursor: result.nextCursor,
-  });
+  return Response.json({ success: true, ...result });
 }
 
 export const GET = compose(

@@ -43,7 +43,12 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   if (!companyId || !systemId) {
-    return Response.json({ success: true, data: [], nextCursor: null });
+    return Response.json({
+      success: true,
+      items: [],
+      total: 0,
+      hasMore: false,
+    });
   }
 
   const result = await listLeads({

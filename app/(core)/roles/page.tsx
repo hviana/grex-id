@@ -79,9 +79,10 @@ export default function RolesPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as RoleItem[],
-        nextCursor: json.nextCursor ?? null,
-        prevCursor: null,
+        items: (json.items ?? []) as RoleItem[],
+        total: json.total ?? 0,
+        hasMore: json.hasMore ?? false,
+        nextCursor: json.nextCursor,
       };
     },
     [systemToken],

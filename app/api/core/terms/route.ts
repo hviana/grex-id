@@ -19,7 +19,7 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
   const genericContent =
     (await Core.getInstance().getSetting("terms.generic")) ?? "";
 
-  const systems = result.data.map((sys) => ({
+  const systems = result.items.map((sys) => ({
     id: sys.id,
     name: sys.name,
     slug: sys.slug,
