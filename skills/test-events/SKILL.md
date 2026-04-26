@@ -104,7 +104,7 @@ one common instance.
 #    an HTTP call, a DB write, a cron tick, anything.
 tsx skills/test-routes/run.ts POST /api/billing \
   --as-superuser \
-  --body '{"action":"purchase_credits","companyId":"company:...","systemId":"system:...","amount":1000,"paymentMethodId":"payment_method:..."}'
+  --body '{"action":"purchase_credits","amount":1000,"paymentMethodId":"payment_method:..."}'
 
 # 2. Wait for the delivery row matching the handler you want. Any filter that
 #    makes the match unique works: --handler, --event-name, --payload-contains,
@@ -391,7 +391,7 @@ Example chained flow:
 ```bash
 # Setup a lead registration, then wait for the lead-register confirmation email
 tsx skills/test-routes/run.ts POST /api/leads/public \
-  --body '{"name":"Bob","channels":[{"type":"email","value":"bob@test.com"}],"systemSlug":"grex-id","companyIds":["company:acme"],"termsAccepted":true,"botToken":"stub"}'
+  --body '{"name":"Bob","channels":[{"type":"email","value":"bob@test.com"}],"systemSlug":"grex-id","tenantIds":["tenant:acme_core"],"termsAccepted":true,"botToken":"stub"}'
 
 tsx skills/test-events/run.ts verification confirm \
   --action-key auth.action.leadRegister \

@@ -9,15 +9,17 @@ import {
 import { companyExists, getSystemSlug } from "@/server/db/queries/systems";
 import { reloadTenant } from "@/server/utils/actor-validity";
 import { getDb } from "@/server/db/connection";
+import type { Tenant } from "@/src/contracts/tenant";
 
 /**
  * Resolves the company-system tenant row (actorId=NONE, companyId, systemId)
- * to obtain the tenantId needed for scoped deletion.
+ * and returns a full Tenant contract for scoped deletion.
  */
-async function resolveCompanySystemTenantId(
+async function resolveCompanySystemTenant(
   companyId: string,
   systemId: string,
-): Promise<string | null> {
+  systemSlug: string,
+): Promise<Tenant | null> {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `SELECT id FROM tenant
@@ -27,7 +29,15 @@ async function resolveCompanySystemTenantId(
      LIMIT 1`,
     { companyId, systemId },
   );
-  return result[0]?.[0]?.id ?? null;
+  const row = result[0]?.[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    systemId,
+    companyId,
+    systemSlug,
+    roles: [],
+  };
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
@@ -97,8 +107,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Resolve the company-system tenant row for scoped deletion
-  const tenantId = await resolveCompanySystemTenantId(companyId, systemId);
-  if (!tenantId) {
+  const tenant = await resolveCompanySystemTenant(companyId, systemId, systemSlug);
+  if (!tenant) {
     return Response.json(
       {
         success: false,
@@ -111,11 +121,11 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await deleteTenantData(tenantId, companyId, systemSlug);
+  await deleteTenantData(tenant, companyId, systemSlug);
 
   // Rebuild this tenant's actor-validity partition — the batched deletion
   // removed api_tokens and tenant rows scoped to this tenantId (§8.11, §9.4).
-  await reloadTenant(tenantId);
+  await reloadTenant(tenant.id);
 
   return Response.json({
     success: true,

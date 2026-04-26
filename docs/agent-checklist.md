@@ -80,9 +80,11 @@ file crosses a boundary (§2.7).
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with
-      `Id` (single) or `Ids` (multiple - `array<record<T>>`). Table names are
-      singular, in lowercase with words separated by underscores. Fields are in
-      camel case.
+      `Id` (single) or `Ids` (multiple - `array<record<T>>`). **Tenant references
+      always use `tenantIds: array<record<tenant>>`** — never a single `tenantId`
+      column, and never scattered `companyId`/`systemId`/`userId` columns. Table
+      names are singular, in lowercase with words separated by underscores. Fields
+      are in camel case.
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
       logic (compositional creates, complex subqueries).
@@ -118,8 +120,9 @@ file crosses a boundary (§2.7).
       cookies, bodies (§2.5). Tenant includes `tenant.id` (the record ID used as
       universal scope key).
 - [ ] All functions accept `tenant: Tenant`, not loose ids (§2.5).
-- [ ] Scoped tables use `tenantId: record<tenant>` instead of separate
-      `companyId`/`systemId` fields (§3.4).
+- [ ] Scoped tables use `tenantIds: array<record<tenant>>` instead of separate
+      `companyId`/`systemId` fields or a single `tenantId` column (§3.4).
+      Queries filter with `tenantIds CONTAINS $tenantId`.
 - [ ] Context change only via `/api/auth/exchange`; API/connected-app tokens
       non-exchangeable (§8.6).
 - [ ] Frontend stores opaque token only; derives context from `useAuth().tenant`
@@ -156,7 +159,7 @@ Every durable change mutates the cache in the same request:
 - [ ] Exchange → `forgetActor(old)` + `rememberActor(new)`.
 - [ ] Token create/OAuth authorize → `rememberActor`. Revoke → `revokedAt` +
       `forgetActor`.
-- [ ] Role/membership change in `tenant`/`tenant_role` → `forgetActor`.
+- [ ] Role/membership change in `tenant` (`roleIds`) → `forgetActor`.
       Data-deletion → `reloadTenant`.
 
 ---
@@ -179,7 +182,7 @@ Every durable change mutates the cache in the same request:
 ## 11. Billing, Credits, Limits (§7)
 
 - [ ] `consumeCredits` before side effects — handles
-      plan→purchased→op-cap→auto-recharge→alert atomically via `tenantId`
+      plan→purchased→op-cap→auto-recharge→alert atomically via `tenant.id`
       (§7.3).
 - [ ] Entity limits via `withEntityLimit`; op-count caps via
       `maxOperationCount`; rate limits via plan `apiRateLimit` (§4.9).
@@ -246,7 +249,8 @@ Before calling done, answer:
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
 - [ ] **Entity cap?** Added to `entityLimits` + `withEntityLimit` (§4.9).
-- [ ] **Multi-tenant?** Scoped by `tenantId` with covering index (§3.1, §3.4).
+- [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id`
+      with covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).
 - [ ] **User-generated text?** Standardize → validate → dedupe before write
       (§4.8).

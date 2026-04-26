@@ -1,10 +1,23 @@
-import { getDb, rid } from "../connection.ts";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import { genericVerify } from "./generics.ts";
+import { genericDelete, genericVerify } from "./generics.ts";
+import type { Tenant } from "@/src/contracts/tenant";
 
 assertServerOnly("data-deletion");
+
+const tenantCascadeTables = [
+  "subscription",
+  "lead_company_system",
+  "usage_record",
+  "connected_app",
+  "api_token",
+  "credit_purchase",
+  "credit_expense",
+  "tag",
+  "location",
+  "tenant_role",
+] as const;
 
 /**
  * Deletes all data scoped to a tenant.
@@ -12,28 +25,17 @@ assertServerOnly("data-deletion");
  * All scoped tables use `tenantId` as the single scope key.
  */
 export async function deleteTenantData(
-  tenantId: string,
+  tenant: Tenant,
   companyId: string,
   systemSlug: string,
 ): Promise<void> {
-  const db = await getDb();
-
-  // Delete tenant-scoped data. All tables use tenantId.
-  await db.query(
-    `
-    DELETE FROM subscription WHERE tenantId = $tenantId;
-    DELETE FROM lead_company_system WHERE tenantId = $tenantId;
-    DELETE FROM usage_record WHERE tenantId = $tenantId;
-    DELETE FROM connected_app WHERE tenantId = $tenantId;
-    DELETE FROM api_token WHERE tenantId = $tenantId;
-    DELETE FROM credit_purchase WHERE tenantId = $tenantId;
-    DELETE FROM credit_expense WHERE tenantId = $tenantId;
-    DELETE FROM tag WHERE tenantId = $tenantId;
-    DELETE FROM location WHERE tenantId = $tenantId;
-    DELETE FROM tenant_role WHERE tenantId = $tenantId;
-    DELETE FROM tenant WHERE id = $tenantId;
-    `,
-    { tenantId: rid(tenantId) },
+  await genericDelete(
+    {
+      table: "tenant",
+      tenant,
+      cascade: tenantCascadeTables.map((table) => ({ table })),
+    },
+    tenant.id,
   );
 
   // Delete all uploaded files under {companyId}/{systemSlug}/
@@ -44,7 +46,7 @@ export async function deleteTenantData(
     // If directory doesn't exist or fs fails, continue — data may not have files
   }
 
-  FileCacheManager.getInstance().clearTenant(tenantId);
+  FileCacheManager.getInstance().clearTenant(tenant.id);
 }
 
 /**
