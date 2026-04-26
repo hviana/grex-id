@@ -447,13 +447,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const minAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.minAmount",
-          ctx.tenant.systemSlug,
+          { systemId: ctx.tenant.systemId, companyId: ctx.tenant.companyId },
         )) ?? "500",
       );
       const maxAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.maxAmount",
-          ctx.tenant.systemSlug,
+          { systemId: ctx.tenant.systemId, companyId: ctx.tenant.companyId },
         )) ?? "50000",
       );
 

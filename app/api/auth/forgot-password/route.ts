@@ -43,6 +43,10 @@ async function handler(
   const core = Core.getInstance();
   const body = await req.json();
   const systemSlug = body.systemSlug as string | undefined;
+  const system = systemSlug
+    ? await core.getSystemBySlug(systemSlug)
+    : undefined;
+  const settingScope = system ? { systemId: system.id } : undefined;
   const raw = body.identifier as string | undefined;
 
   const successResponse = Response.json({
@@ -72,10 +76,13 @@ async function handler(
   if (!guardResult.allowed) return successResponse;
 
   const expiryMinutes = Number(
-    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+    (await core.getSetting(
+      "auth.communication.expiry.minutes",
+      settingScope,
+    )) ||
       15,
   );
-  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
     "http://localhost:3000";
   const resetLink = `${baseUrl}/reset-password?token=${guardResult.token}`;
 

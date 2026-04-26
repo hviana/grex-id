@@ -1,6 +1,5 @@
-import { getCache } from "@/server/utils/cache";
-import type { FrontCoreData } from "@/server/utils/FrontCore";
 import Core from "@/server/utils/Core";
+import FrontCore from "@/server/utils/FrontCore";
 
 /**
  * GET /api/public/front-core
@@ -9,23 +8,43 @@ import Core from "@/server/utils/Core";
  */
 export async function GET() {
   try {
-    const data = await getCache<FrontCoreData>("core", "front-data");
+    const frontCore = FrontCore.getInstance();
+    const core = Core.getInstance();
+
     const settingsMap: Record<string, { value: string; description: string }> =
       {};
 
-    // Only expose core-scoped front settings here; per-system overrides are
-    // opaque to the public endpoint (the frontend resolves per-system keys on
-    // demand via its own helpers).
-    for (const [, setting] of data.settings) {
-      // Only expose core-scoped front settings (tenantIds empty or core-level)
-      if (setting.tenantIds && setting.tenantIds.length > 0) continue;
-      settingsMap[setting.key] = {
+    // Expose core-level front settings
+    const coreScope = await frontCore.getSetting("");
+    // Access the core scope's full map through the lazy cache
+    // For the public endpoint, we need all core-level front settings
+    const { getCache } = await import("@/server/utils/cache");
+    const { loadFrontSettingsForScope } = await import(
+      "@/server/db/queries/front-settings"
+    );
+
+    // Ensure core scope is loaded
+    let coreSettings: Map<string, { value: string; description?: string }>;
+    try {
+      coreSettings = await getCache<
+        Map<string, { value: string; description?: string }>
+      >("front-settings", "settings:__core__");
+    } catch {
+      // Fallback: load directly
+      coreSettings = await loadFrontSettingsForScope("__core__") as Map<
+        string,
+        { value: string; description?: string }
+      >;
+    }
+
+    for (const [key, setting] of coreSettings) {
+      settingsMap[key] = {
         value: setting.value,
         description: setting.description ?? "",
       };
     }
 
-    const core = Core.getInstance();
+    // Also include db.frontend.* settings from core setting table
     const frontendDbKeys = [
       "db.frontend.url",
       "db.frontend.namespace",

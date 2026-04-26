@@ -29,6 +29,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const userId = ctx.tenant.actorId!;
   const tenantId = ctx.tenant.id;
   const systemSlug = ctx.tenant.systemSlug;
+  const settingScope = { systemId: ctx.tenant.systemId };
 
   if (!currentPassword || !newPassword) {
     return Response.json(
@@ -115,19 +116,24 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   const expiryMinutes = Number(
-    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+    (await core.getSetting(
+      "auth.communication.expiry.minutes",
+      settingScope,
+    )) ||
       15,
   );
-  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
     "http://localhost:3000";
   const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 
   // Channel order: the owner's verified channel types, respecting the default
   // precedence when present.
   const verifiedTypes = await listVerifiedChannelTypes(userId, "user");
-  const defaultChannelsRaw =
-    (await core.getSetting("auth.communication.defaultChannels", systemSlug)) ??
-      "[]";
+  const defaultChannelsRaw = (await core.getSetting(
+    "auth.communication.defaultChannels",
+    settingScope,
+  )) ??
+    "[]";
   let defaultChannels: string[] = [];
   try {
     const parsed = JSON.parse(defaultChannelsRaw);

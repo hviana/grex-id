@@ -8,7 +8,7 @@ import {
   searchOrphanFaceByEmbedding,
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
-import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
+import Core from "@/server/utils/Core";
 
 async function postHandler(req: Request, ctx: RequestContext) {
   try {
@@ -41,7 +41,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ) {
       const tenantId = ctx.tenant.id;
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        (await Core.getInstance().getSetting(
+          "detection.sensitivity",
+          { systemId, companyId },
+        )) ?? "0.5",
       );
       try {
         const orphanMatch = await searchOrphanFaceByEmbedding(

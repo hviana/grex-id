@@ -20,16 +20,25 @@ export default function SettingsPage() {
     async function load() {
       setLoading(true);
       try {
+        const params = new URLSearchParams({
+          systemId,
+          companyId,
+        });
         const res = await fetch(
-          `/api/systems/grex-id/settings`,
+          `/api/core/settings?${params.toString()}`,
           {
             headers: { Authorization: `Bearer ${systemToken}` },
           },
         );
         const json = await res.json();
-        if (json.success && json.data) {
-          const val = parseFloat(json.data["detection.sensitivity"]);
-          if (!isNaN(val)) setSensitivity(val);
+        if (json.success && Array.isArray(json.data)) {
+          const setting = json.data.find(
+            (s: { key: string }) => s.key === "detection.sensitivity",
+          );
+          if (setting) {
+            const val = parseFloat(setting.value);
+            if (!isNaN(val)) setSensitivity(val);
+          }
         }
       } finally {
         setLoading(false);
@@ -46,11 +55,19 @@ export default function SettingsPage() {
       if (systemToken) {
         headers["Authorization"] = `Bearer ${systemToken}`;
       }
-      const res = await fetch("/api/systems/grex-id/settings", {
+      const res = await fetch("/api/core/settings", {
         method: "PUT",
         headers,
         body: JSON.stringify({
-          settings: { "detection.sensitivity": sensitivity.toString() },
+          settings: [
+            {
+              key: "detection.sensitivity",
+              value: sensitivity.toString(),
+              description: "Face detection sensitivity threshold (0-1)",
+            },
+          ],
+          systemId,
+          companyId,
         }),
       });
       const json = await res.json();
@@ -58,7 +75,7 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [sensitivity, systemToken]);
+  }, [sensitivity, systemToken, systemId, companyId]);
 
   if (loading) {
     return (

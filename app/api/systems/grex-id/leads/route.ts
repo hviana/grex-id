@@ -14,7 +14,7 @@ import {
   searchOrphanFaceByEmbedding,
   tryUpsertFace,
 } from "@/server/db/queries/systems/grex-id/faces";
-import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
+import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 
@@ -126,7 +126,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        (await Core.getInstance().getSetting(
+          "detection.sensitivity",
+          { systemId, companyId },
+        )) ?? "0.5",
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,
@@ -247,7 +250,10 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        (await Core.getInstance().getSetting(
+          "detection.sensitivity",
+          { systemId, companyId },
+        )) ?? "0.5",
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,

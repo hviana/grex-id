@@ -165,6 +165,10 @@ async function handler(
 
   const locale = body.locale as string | undefined;
   const systemSlug = body.systemSlug as string | undefined;
+  const system = systemSlug
+    ? await core.getSystemBySlug(systemSlug)
+    : undefined;
+  const settingScope = system ? { systemId: system.id } : undefined;
 
   const { user, channelIds } = await createUserWithChannels({
     password,
@@ -187,10 +191,10 @@ async function handler(
     const expiryMinutes = Number(
       (await core.getSetting(
         "auth.communication.expiry.minutes",
-        systemSlug,
+        settingScope,
       )) || 15,
     );
-    const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+    const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
       "http://localhost:3000";
     const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 

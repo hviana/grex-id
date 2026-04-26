@@ -18,7 +18,7 @@ import { notificationEmailTemplate } from "./utils/communication/templates/email
 import { humanConfirmationSmsTemplate } from "./utils/communication/templates/sms/human-confirmation.ts";
 import { notificationSmsTemplate } from "./utils/communication/templates/sms/notification.ts";
 import { loadCoreData } from "./utils/Core.ts";
-import { loadFrontCoreData } from "./utils/FrontCore.ts";
+// FrontCore settings are loaded lazily per scope under "front-settings" slug
 import { loadJwtSecret } from "./utils/token.ts";
 import { loadFileAccessData } from "./utils/file-access-cache.ts";
 import FileCacheManager from "./utils/file-cache.ts";
@@ -29,7 +29,7 @@ assertServerOnly("core-register");
 export function registerCore(): void {
   // Caches
   registerCache("core", "data", loadCoreData);
-  registerCache("core", "front-data", loadFrontCoreData);
+  // FrontCore settings caches register lazily per scope under "front-settings" slug
   registerCache("core", "jwt-secret", loadJwtSecret);
   registerCache("core", "file-access", loadFileAccessData);
   // The actor-validity cache (§8.11) is sharded per tenant and registers

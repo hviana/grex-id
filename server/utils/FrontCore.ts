@@ -1,7 +1,12 @@
-import { getCache, updateCache } from "./cache.ts";
+import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
 import { assertServerOnly } from "./server-only.ts";
-import { fetchAllFrontSettings } from "../db/queries/front-settings.ts";
+import { loadFrontSettingsForScope } from "../db/queries/front-settings.ts";
+import {
+  buildScopeKey,
+  resolveScopeChain,
+  type SettingScope,
+} from "../db/queries/core-settings.ts";
 
 assertServerOnly("FrontCore");
 
@@ -14,23 +19,17 @@ export interface FrontCoreData {
   settings: Map<string, FrontCoreSetting>;
 }
 
-const CACHE_SLUG = "core";
-const CACHE_NAME = "front-data";
+const SETTINGS_SLUG = "front-settings";
+const trackedScopes: Set<string> = new Set();
 
+/**
+ * Loads core-level front settings for the initial cache hydration.
+ */
 export async function loadFrontCoreData(): Promise<FrontCoreData> {
-  const rows = await fetchAllFrontSettings();
-
-  const settings = new Map<string, FrontCoreSetting>();
-  for (const setting of rows) {
-    const slug = setting.tenantIds && setting.tenantIds.length > 0
-      ? setting.tenantIds[0]
-      : "core";
-    const mapKey = slug + ":" + setting.key;
-    settings.set(mapKey, setting);
-  }
+  const settings = await loadFrontSettingsForScope("__core__");
 
   console.log(
-    `[FrontCore] loaded ${settings.size} front settings from DB`,
+    `[FrontCore] loaded ${settings.size} core front settings from DB`,
   );
 
   return { settings };
@@ -49,23 +48,21 @@ class FrontCore {
     return FrontCore.instance;
   }
 
+  /**
+   * Retrieves a front setting value by walking the scope hierarchy:
+   * actor-scoped → company-system-scoped → system-scoped → core-level.
+   * Settings are loaded lazily per scope and cached.
+   */
   async getSetting(
     key: string,
-    systemSlug?: string,
+    scope?: SettingScope,
   ): Promise<string | undefined> {
-    const data = await getCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
+    const scopeChain = resolveScopeChain(scope);
 
-    if (systemSlug && systemSlug !== "core") {
-      const specific = data.settings.get(`${systemSlug}:${key}`);
-      if (specific) return specific.value;
-    }
-
-    const core = data.settings.get(`core:${key}`);
-    if (core) return core.value;
-
-    // Last resort: search all scopes for this key
-    for (const setting of data.settings.values()) {
-      if (setting.key === key) return setting.value;
+    for (const scopeKey of scopeChain) {
+      const scopeSettings = await this.getOrLoadScope(scopeKey);
+      const setting = scopeSettings.get(key);
+      if (setting) return setting.value;
     }
 
     if (!this.missingSettings.has(key)) {
@@ -79,13 +76,47 @@ class FrontCore {
     return undefined;
   }
 
+  private async getOrLoadScope(
+    scopeKey: string,
+  ): Promise<Map<string, FrontCoreSetting>> {
+    const cacheName = `settings:${scopeKey}`;
+
+    if (!trackedScopes.has(scopeKey)) {
+      registerCache(
+        SETTINGS_SLUG,
+        cacheName,
+        () => loadFrontSettingsForScope(scopeKey),
+      );
+      trackedScopes.add(scopeKey);
+    }
+
+    return getCache<Map<string, FrontCoreSetting>>(SETTINGS_SLUG, cacheName);
+  }
+
+  /**
+   * Refreshes a specific scope's front settings cache after a mutation.
+   */
+  async refreshSettingsScope(scopeKey: string): Promise<void> {
+    const cacheName = `settings:${scopeKey}`;
+    if (trackedScopes.has(scopeKey)) {
+      await updateCache(SETTINGS_SLUG, cacheName);
+    }
+  }
+
   async getMissingSettings(): Promise<MissingFrontSetting[]> {
-    await getCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
     return Array.from(this.missingSettings.values());
   }
 
   async reload(): Promise<void> {
-    await updateCache<FrontCoreData>(CACHE_SLUG, CACHE_NAME);
+    // Refresh all loaded front-settings scopes
+    for (const scopeKey of trackedScopes) {
+      const cacheName = `settings:${scopeKey}`;
+      try {
+        await updateCache(SETTINGS_SLUG, cacheName);
+      } catch {
+        // Cache may not be registered yet; skip
+      }
+    }
     this.missingSettings.clear();
   }
 }

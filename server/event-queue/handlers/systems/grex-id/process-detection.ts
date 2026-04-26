@@ -1,4 +1,3 @@
-import { getSetting } from "@/server/db/queries/systems/grex-id/settings";
 import { genericGetById } from "@/server/db/queries/generics";
 import {
   batchCreateDetections,
@@ -6,6 +5,7 @@ import {
   searchMatchingFace,
 } from "@/server/db/queries/systems/grex-id/detections";
 import { rid } from "@/server/db/connection";
+import Core from "@/server/utils/Core";
 import type { HandlerFn } from "@/server/event-queue/worker";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
 
@@ -24,11 +24,10 @@ export const processDetection: HandlerFn = async (payload) => {
   }
 
   const sensitivity = parseFloat(
-    await getSetting(
-      location.companyId,
-      location.systemId,
+    (await Core.getInstance().getSetting(
       "detection.sensitivity",
-    ),
+      { systemId: location.systemId, companyId: location.companyId },
+    )) ?? "0.5",
   );
 
   // Idempotency: check if detections for this event already exist

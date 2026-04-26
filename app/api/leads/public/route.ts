@@ -212,13 +212,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
 
       const core = Core.getInstance();
+      const settingScope = systemId ? { systemId } : undefined;
       const expiryMinutes = Number(
         (await core.getSetting(
           "auth.communication.expiry.minutes",
-          systemSlug,
+          settingScope,
         )) || 15,
       );
-      const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+      const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
         "http://localhost:3000";
       const confirmationLink =
         `${baseUrl}/verify?token=${guardResult.token}&systemSlug=${
@@ -297,13 +298,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     if (guardResult.allowed) {
       const core = Core.getInstance();
+      const settingScope = systemId ? { systemId } : undefined;
       const expiryMinutes = Number(
         (await core.getSetting(
           "auth.communication.expiry.minutes",
-          systemSlug,
+          settingScope,
         )) || 15,
       );
-      const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+      const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
         "http://localhost:3000";
       const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 

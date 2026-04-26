@@ -29,6 +29,7 @@ async function sendChannelConfirmation(
   channelType: string,
   userName: string,
   systemSlug: string,
+  systemId: string,
   tenantId: string,
   actionKey: "auth.action.register" | "auth.action.entityChannelAdd",
 ): Promise<CommunicationGuardResult> {
@@ -43,11 +44,15 @@ async function sendChannelConfirmation(
   if (!guardResult.allowed) return guardResult;
 
   const core = Core.getInstance();
+  const settingScope = { systemId };
   const expiryMinutes = Number(
-    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+    (await core.getSetting(
+      "auth.communication.expiry.minutes",
+      settingScope,
+    )) ||
       15,
   );
-  const baseUrl = (await core.getSetting("app.baseUrl", systemSlug)) ??
+  const baseUrl = (await core.getSetting("app.baseUrl", settingScope)) ??
     "http://localhost:3000";
   const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
 
@@ -142,6 +147,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       channel.type,
       name,
       ctx.tenant.systemSlug,
+      ctx.tenant.systemId,
       ctx.tenant.id,
       actionKey,
     );
@@ -226,7 +232,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const maxPerOwner = Number(
     (await core.getSetting(
       "auth.entityChannel.maxPerOwner",
-      ctx.tenant.systemSlug,
+      { systemId: ctx.tenant.systemId },
     )) || 10,
   );
 
@@ -259,6 +265,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     type,
     name,
     ctx.tenant.systemSlug,
+    ctx.tenant.systemId,
     ctx.tenant.id,
     "auth.action.entityChannelAdd",
   );

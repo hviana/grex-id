@@ -26,16 +26,24 @@ export async function communicationGuard(params: {
   const core = Core.getInstance();
   const { ownerId, ownerType, actionKey, payload, tenant } = params;
   const systemSlug = tenant?.systemSlug;
+  const system = systemSlug
+    ? await core.getSystemBySlug(systemSlug)
+    : undefined;
+  const settingScope = system ? { systemId: system.id } : undefined;
 
   const expiryMinutes = Number(
-    (await core.getSetting("auth.communication.expiry.minutes", systemSlug)) ||
+    (await core.getSetting(
+      "auth.communication.expiry.minutes",
+      settingScope,
+    )) ||
       15,
   );
   const maxCount = Number(
-    (await core.getSetting("auth.communication.maxCount", systemSlug)) || 5,
+    (await core.getSetting("auth.communication.maxCount", settingScope)) || 5,
   );
   const windowHours = Number(
-    (await core.getSetting("auth.communication.windowHours", systemSlug)) || 1,
+    (await core.getSetting("auth.communication.windowHours", settingScope)) ||
+      1,
   );
 
   const token = generateSecureToken();

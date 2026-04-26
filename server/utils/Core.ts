@@ -9,11 +9,18 @@ import type { Subscription } from "@/src/contracts/billing";
 import dbConfig from "../../database.json" with { type: "json" };
 import { assertServerOnly } from "./server-only.ts";
 import {
+  buildScopeKey,
   fetchActiveSubscription,
   fetchAllCoreData,
+  loadSettingsForScope,
+  resolveScopeChain,
+  type SettingScope,
 } from "../db/queries/core-settings.ts";
 
 assertServerOnly("Core");
+
+export type { SettingScope };
+export { buildScopeKey };
 
 export interface MissingSetting {
   key: string;
@@ -26,7 +33,6 @@ export interface CoreData {
   plans: Plan[];
   vouchers: Voucher[];
   menus: MenuItem[];
-  settings: Map<string, CoreSetting>;
   systemsBySlug: Map<string, System>;
   rolesBySystem: Map<string, Role[]>;
   plansBySystem: Map<string, Plan[]>;
@@ -36,6 +42,7 @@ export interface CoreData {
 }
 
 const CORE_SLUG = "core";
+const SETTINGS_SLUG = "core-settings";
 
 export async function loadCoreData(): Promise<CoreData> {
   const results = await fetchAllCoreData();
@@ -44,15 +51,13 @@ export async function loadCoreData(): Promise<CoreData> {
   const roles = results[1] ?? [];
   const plans = results[2] ?? [];
   const menus = results[3] ?? [];
-  const settings = results[4] ?? [];
-  const vouchers = results[5] ?? [];
+  const vouchers = results[4] ?? [];
 
   const systemsBySlug = new Map<string, System>();
   for (const s of systems) {
     systemsBySlug.set(s.slug, s);
   }
 
-  // Index roles by systemId (resolve from tenantIds → system via tenant table)
   const rolesBySystem = new Map<string, Role[]>();
   for (const r of roles) {
     const raw = (r as unknown as Record<string, unknown>).tenantIds;
@@ -96,17 +101,8 @@ export async function loadCoreData(): Promise<CoreData> {
     vouchersById.set(String(v.id), v);
   }
 
-  // Settings indexed by tenantId:key — resolve systemSlug from system lookup
-  const settingsMap = new Map<string, CoreSetting>();
-  for (const setting of settings) {
-    const raw = (setting as unknown as Record<string, unknown>).tenantIds;
-    const tenantKey = String(Array.isArray(raw) ? raw[0] : raw);
-    const mapKey = `${tenantKey}:${setting.key}`;
-    settingsMap.set(mapKey, setting);
-  }
-
   console.log(
-    `[Core] loaded: ${systems.length} systems, ${roles.length} roles, ${plans.length} plans, ${vouchers.length} vouchers, ${menus.length} menus, ${settingsMap.size} settings`,
+    `[Core] loaded: ${systems.length} systems, ${roles.length} roles, ${plans.length} plans, ${vouchers.length} vouchers, ${menus.length} menus`,
   );
 
   return {
@@ -115,7 +111,6 @@ export async function loadCoreData(): Promise<CoreData> {
     plans,
     vouchers,
     menus,
-    settings: settingsMap,
     systemsBySlug,
     rolesBySystem,
     plansBySystem,
@@ -133,6 +128,7 @@ async function loadSubscription(
 }
 
 const subscriptionKeys: Set<string> = new Set();
+const trackedScopes: Set<string> = new Set();
 
 class Core {
   static readonly DB_URL = dbConfig.url;
@@ -153,23 +149,21 @@ class Core {
     return Core.instance;
   }
 
+  /**
+   * Retrieves a setting value by walking the scope hierarchy:
+   * actor-scoped → company-system-scoped → system-scoped → core-level.
+   * Settings are loaded lazily per scope and cached.
+   */
   async getSetting(
     key: string,
-    systemSlug?: string,
+    scope?: SettingScope,
   ): Promise<string | undefined> {
-    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    const scopeChain = resolveScopeChain(scope);
 
-    if (systemSlug && systemSlug !== "core") {
-      const specific = data.settings.get(`${systemSlug}:${key}`);
-      if (specific) return specific.value;
-    }
-
-    const core = data.settings.get(`core:${key}`);
-    if (core) return core.value;
-
-    // Last resort: search all scopes for this key
-    for (const setting of data.settings.values()) {
-      if (setting.key === key) return setting.value;
+    for (const scopeKey of scopeChain) {
+      const scopeSettings = await this.getOrLoadScope(scopeKey);
+      const setting = scopeSettings.get(key);
+      if (setting) return setting.value;
     }
 
     if (!this.missingSettings.has(key)) {
@@ -181,6 +175,37 @@ class Core {
     }
 
     return undefined;
+  }
+
+  /**
+   * Loads settings for a specific scopeKey, using the cache registry.
+   * Registers the cache entry lazily on first access.
+   */
+  private async getOrLoadScope(
+    scopeKey: string,
+  ): Promise<Map<string, CoreSetting>> {
+    const cacheName = `settings:${scopeKey}`;
+
+    if (!trackedScopes.has(scopeKey)) {
+      registerCache(
+        SETTINGS_SLUG,
+        cacheName,
+        () => loadSettingsForScope(scopeKey),
+      );
+      trackedScopes.add(scopeKey);
+    }
+
+    return getCache<Map<string, CoreSetting>>(SETTINGS_SLUG, cacheName);
+  }
+
+  /**
+   * Refreshes a specific scope's settings cache after a mutation.
+   */
+  async refreshSettingsScope(scopeKey: string): Promise<void> {
+    const cacheName = `settings:${scopeKey}`;
+    if (trackedScopes.has(scopeKey)) {
+      await updateCache(SETTINGS_SLUG, cacheName);
+    }
   }
 
   async getMissingSettings(): Promise<MissingSetting[]> {
@@ -274,7 +299,6 @@ class Core {
     companyId: string,
     systemId: string,
   ): Promise<Subscription | null> {
-    // Find the company-system tenant row
     const { getDb } = await import("../db/connection.ts");
     const db = await getDb();
     const [rows] = await db.query<[{ id: string }[]]>(
@@ -292,6 +316,16 @@ class Core {
     clearCache(CORE_SLUG, "jwt-secret");
     clearCache(CORE_SLUG, "anonymous-jwt");
     clearCache(CORE_SLUG, "file-access");
+
+    // Refresh all loaded settings scopes
+    for (const scopeKey of trackedScopes) {
+      const cacheName = `settings:${scopeKey}`;
+      try {
+        await updateCache(SETTINGS_SLUG, cacheName);
+      } catch {
+        // Cache may not be registered yet; skip
+      }
+    }
   }
 
   evictAllSubscriptions(): void {

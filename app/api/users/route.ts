@@ -158,9 +158,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     await forgetActor(ctx.tenant.id, String(existingUserId));
 
     const core = Core.getInstance();
-    const baseUrl =
-      (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
-        "http://localhost:3000";
+    const baseUrl = (await core.getSetting("app.baseUrl", {
+      systemId: ctx.tenant.systemId,
+    })) ??
+      "http://localhost:3000";
 
     await dispatchCommunication({
       recipients: [existingUserId],
@@ -215,12 +216,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const expiryMinutes = Number(
       (await core.getSetting(
         "auth.communication.expiry.minutes",
-        ctx.tenant.systemSlug,
+        { systemId: ctx.tenant.systemId },
       )) || 15,
     );
-    const baseUrl =
-      (await core.getSetting("app.baseUrl", ctx.tenant.systemSlug)) ??
-        "http://localhost:3000";
+    const baseUrl = (await core.getSetting("app.baseUrl", {
+      systemId: ctx.tenant.systemId,
+    })) ??
+      "http://localhost:3000";
     const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
     const channelOrder = [...new Set(channels.map((c) => c.type))];
 
