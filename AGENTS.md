@@ -113,7 +113,7 @@ informational surfaces show translation only.
   single-tenant consistency at the schema level: `subscription`,
   `payment_method`, `credit_purchase`, `payment`, `connected_app`,
   `connected_service`, `api_token`, `usage_record`, `credit_expense`,
-  `location`, `tag`, `role`, `plan`, `menu_item`, `setting`, `front_setting`.
+  `location`, `tag`, `role`, `plan`, `menu_item`.
 - **Optimization.** Any field used in queries to select/filter data or used as a
   cursor should be indexed.
 - **Single-batched-query rule.** Every query function batches all statements
@@ -372,7 +372,7 @@ approval invariant. It is independent of `user.channelIds`.
 | `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `delivery`             | One row per handler per event; status `pending`                                                                                                                                                                                                                                                                                                                                                                              |
 | `verification_request` | `actionKey` (i18n), `ownerId: record<user`                                                                                                                                                                                                                                                                                                                                                                                   |
-| `setting`              | `tenantIds: array<record<tenant>>` (system-only tenants). Unique `(key, tenantIds)`. Core-level default = tenant for core system. Server-only consumption.                                                                                                                                                                                                                                                                   |
+| `setting`              | `tenantIds: array<record<tenant>>`. Unique `(key, tenantIds)`. Applicable to any tenant — system-level, company-system, or actor-scoped. Server-only consumption.                                                                                                                                                                                                                                                            |
 | `front_setting`        | Same shape as `setting`, keyed by `(key, tenantIds)`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                                                                                                                                                                           |
 | `lead`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `tagIds: array<record<tag>>`                                                                                                                                                                                                                                                                                  |
 | `location`             | `tenantIds: array<record<tenant>>` (company-system tenants); address embedded inline                                                                                                                                                                                                                                                                                                                                         |
@@ -387,7 +387,9 @@ fields:
 | user    | company   | system   | User's access to a system within a company (roles via `tenant.roleIds`)              |
 | user    | company   | NONE     | User's company membership (`isOwner` marks the owner)                                |
 | NONE    | company   | system   | Company-system link (replaces `company_system`)                                      |
-| NONE    | NONE      | system   | System-level scope (used by `role`, `plan`, `menu_item`, `setting`, `front_setting`) |
+| NONE    | NONE      | system   | System-level scope (used by `role`, `plan`, `menu_item`, `setting`, `front_setting` at core level) |
+| user    | company   | system   | `setting`/`front_setting` per-actor override within a company-system context          |
+| NONE    | company   | system   | `setting`/`front_setting` per-company override within a system                         |
 | token   | company   | system   | API token scope                                                                      |
 | app     | company   | system   | Connected app scope                                                                  |
 
@@ -438,8 +440,11 @@ company.
      `neverExpires: true`, and `exchangeable: false`. No associated `user`
      record — the token is the sole identity for anonymous operations.
   7. Default core settings; default front-core settings; default file-access
-     rules. Each setting row uses `tenantIds` referencing the appropriate
-     system-level tenants.
+     rules. Core settings use `tenantIds` referencing the core system-level
+     tenant; subsystem settings reference their own system-level tenants. The
+     settings infrastructure supports any tenant scope — system-level seeds are
+     the baseline; company-system and actor-scoped settings are created at
+     runtime as needed.
 
 ---
 
@@ -579,28 +584,66 @@ Core-owned caches:
 
 **Core data** is stored as pre-built `Map` indexes (`systemsBySlug`,
 `rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`, `vouchersById`,
-`settings`) for O(1) lookups. This principle — design for O(1) — holds for all
-caches.
+`settings` as `Map<scopeKey, Map<key, value>>` where `scopeKey` is the string
+`systemId` or `"systemId:companyId"` or `"systemId:companyId:actorId"`) for O(1)
+lookups. Settings resolution walks the scope hierarchy by constructing successive
+`scopeKey`s from most-specific to least-specific — each is a single `Map.get()`,
+no iteration. The settings cache is loaded on demand: when a key is requested
+from a scopeKey not yet in the cache, that scope's full key/value map is fetched
+from the DB and inserted. On tenant data mutation, if the affected scopeKey
+already exists in the cache, only that scope's map is refreshed. This principle
+— design for O(1) — holds for all caches.
 
 ### 4.5 Core & FrontCore singletons
 
 Both use the cache registry. Both are server-only.
 
-- **`Core`**: settings (getSetting with `(key, tenantIds?)` → per-system
-  override via tenant records → core-level → undefined + missing-key log),
-  cached system/role/plan/menu/voucher accessors, subscription helpers
+- **`Core`**: settings (`getSetting(key, tenant)` where `tenant` accepts
+  optional `systemId`, `companyId`, `actorId` — resolves by most-specific match
+  first: actor-scoped → company-system-scoped → system-scoped → core-level
+  default → undefined + missing-key log), cached
+  system/role/plan/menu/voucher accessors, subscription helpers
   (`getActiveSubscriptionCached`, `ensureSubscription`, `reloadSubscription`,
   `evictAllSubscriptions`), `reload()`. DB credentials from `database.json`.
 - **`FrontCore`**: same shape, reads exclusively from `front_setting`. Frontend
   consumes via `useFrontCore` hook calling `GET /api/public/front-core` (never
   imports the class).
 
-**Settings rule.** Each setting row references `tenantIds` (system-only tenant
-rows). The core system's tenant is the core-level default; any other system's
-tenant is a per-system override. The admin panel has two separate pages (server
-settings / front settings), each with a system-scope dropdown and a "missing
-keys" banner with "Add all missing". Physical separation of `setting` vs
-`front_setting` is a load-bearing security invariant.
+**Settings resolution hierarchy.** Each setting row references `tenantIds`. The
+resolution chain walks from most-specific to least-specific tenant scope:
+
+1. **Actor-scoped** — tenant row with `actorId + companyId + systemId` (if
+   provided).
+2. **Company-system-scoped** — tenant row with `companyId + systemId`
+   (actorId=NONE).
+3. **System-scoped** — tenant row with `systemId` only
+   (actorId=NONE, companyId=NONE).
+4. **Core-level default** — tenant row for the core system.
+
+First literal hit wins. The cache stores settings as nested `Map` structures
+keyed by `(systemId → companyId → actorId)` for O(1) lookup at every level
+without iteration.
+
+**Settings route permissions.** The core settings route enforces access control
+based on the caller's tenant scope:
+- **Superuser**: full access to all scopes (system, company-system,
+  actor-scoped).
+- **System admin** (`admin` role on a system-scoped tenant): read/write
+  settings at the system level for their system.
+- **Company admin** (`admin` role on a company-system tenant): read/write
+  settings at the company-system level for their company + system.
+- **Actor** (regular user): read/write settings at their own actor-scoped
+  tenant only.
+
+**Settings size limit.** Every create or update of a setting row must validate
+that the total size of the row's value does not exceed 64 KB. This prevents
+abuse on tenants where actors or subsystem admins can write settings. The route
+handler rejects writes exceeding this limit with a validation error.
+
+**Physical separation** of `setting` vs `front_setting` is a load-bearing
+security invariant. The admin panel has two separate pages (server settings /
+front settings), each with a tenant-scope selector reflecting the hierarchy
+above.
 
 **Seeded core settings** (non-exhaustive — the full list is in
 `002_default_settings.ts`; rules-bearing categories):
@@ -1389,7 +1432,7 @@ Flow:
 | Root     | `/` (public homepage router)                 | Reads `?systemSlug=` → registry → system homepage; else `app.defaultSystem`; else core inline homepage                                                                                         |
 | `(auth)` | Public auth surfaces + terms + OAuth consent | No sidebar; `?systemSlug=` preserved across links; `SystemBranding` top of forms                                                                                                               |
 | `(app)`  | Authenticated user workspace (scoped tenant) | Sidebar + `ProfileMenu`; onboarding guard on mount; cookie-persisted context                                                                                                                   |
-| `(core)` | Superuser admin                              | Hardcoded core sidebar (Companies, Systems, Roles, Plans, Vouchers, Menus, Terms, Data Deletion, Settings, Front Settings, File Access). Sidebar **never** displays "Core" in `(app)` context. |
+| `(core)` | Superuser admin                              | Hardcoded core sidebar (Companies, Systems, Roles, Plans, Vouchers, Menus, Terms, Data Deletion, Settings, Front Settings, File Access). Settings management supports the full tenant-scope hierarchy. Sidebar **never** displays "Core" in `(app)` context. |
 
 ### 9.2 `(app)` layout rules
 
@@ -1417,8 +1460,9 @@ Flow:
 - **Public system info**: `GET /api/public/system?slug=` or `?default=true`.
   Response: `{name, slug, logoUri, defaultLocale?, termsOfService?}` (terms
   resolved: system → generic → fallback i18n key).
-- **Public front-core**: `GET /api/public/front-core` returns full
-  `front_setting` key/value map.
+- **Public front-core**: `GET /api/public/front-core` returns
+  `front_setting` key/value map resolved for the requesting tenant's scope
+  hierarchy (actor → company-system → system → core default).
 - **Anonymous token**: `GET /api/public/anonymous-token` returns the seeded
   anonymous API token JWT. No auth required. The frontend calls this on initial
   load (when no token is stored) to obtain a bearer for public operations.
@@ -1438,7 +1482,7 @@ Per-concern rules:
 | Permissions      | Always via `MultiBadgeField` (`mode:"custom"` for authoring new tokens, `mode:"search"` for picking from server-defined sets).                                                                                                                                     |
 | Record pickers   | Always `SearchableSelectField` fetching the relevant API.                                                                                                                                                                                                          |
 | KV objects       | Always `DynamicKeyValueField` (never `<textarea>` with JSON). Applies to entity limits, op-count maps, settings editors.                                                                                                                                           |
-| Settings editors | `server` and `front` have separate pages; both have a system-scope dropdown + "missing keys" banner + "Add all missing"; badge identifies the table.                                                                                                               |
+| Settings editors | `server` and `front` have separate pages; both have a tenant-scope selector reflecting the resolution hierarchy (system → company-system → actor) + "missing keys" banner + "Add all missing"; badge identifies the table. Superuser sees all scopes; subsystem admins see their system; company admins see their company-system; actors see their own scope. Write size validated against 64 KB limit. |
 | Menu editor      | Dedicated tree editor: inline "+" buttons (root + inside nodes) for creation (label only, no modal); edit modal for everything except hierarchy; drag-drop manages parent/order; "⚠" badge marks items missing required config.                                    |
 | Terms editor     | Generic fallback card at top + per-system list; large HTML textarea; system picker for new entries uses the same debounced search pattern as `DataDeletion`.                                                                                                       |
 | Data deletion    | Two debounced searches (company, system) + confirmation modal with awareness checkbox + password re-entry (argon2-compared). Deletes scoped rows + `fs.delete` under `{companyId}/{systemSlug}/`. Never deletes the `company` or `system` record itself.           |
