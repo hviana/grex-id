@@ -409,15 +409,12 @@ class Core {
     companyId: string,
     systemId: string,
   ): Promise<Subscription | null> {
-    const { getDb } = await import("../db/connection.ts");
-    const db = await getDb();
-    const [rows] = await db.query<[{ id: string }[]]>(
-      `SELECT id FROM tenant WHERE actorId IS NONE AND companyId = $companyId AND systemId = $systemId LIMIT 1`,
-      { companyId, systemId },
+    const { fetchCompanySystemTenantRow } = await import(
+      "../db/queries/tenants.ts"
     );
-    const tenantId = rows?.[0]?.id;
-    if (!tenantId) return null;
-    return this.reloadSubscription(String(tenantId));
+    const tenantRow = await fetchCompanySystemTenantRow(companyId, systemId);
+    if (!tenantRow) return null;
+    return this.reloadSubscription(tenantRow.id);
   }
 
   async reload(): Promise<void> {

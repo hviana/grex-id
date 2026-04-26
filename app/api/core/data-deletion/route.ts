@@ -7,8 +7,8 @@ import {
   verifyUserPassword,
 } from "@/server/db/queries/data-deletion";
 import { companyExists, getSystemSlug } from "@/server/db/queries/systems";
+import { fetchCompanySystemTenantRow } from "@/server/db/queries/tenants";
 import { reloadTenant } from "@/server/utils/actor-validity";
-import { getDb } from "@/server/db/connection";
 import type { Tenant } from "@/src/contracts/tenant";
 
 /**
@@ -20,16 +20,7 @@ async function resolveCompanySystemTenant(
   systemId: string,
   systemSlug: string,
 ): Promise<Tenant | null> {
-  const db = await getDb();
-  const result = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM tenant
-     WHERE actorId IS NONE
-       AND companyId = $companyId
-       AND systemId = $systemId
-     LIMIT 1`,
-    { companyId, systemId },
-  );
-  const row = result[0]?.[0];
+  const row = await fetchCompanySystemTenantRow(companyId, systemId);
   if (!row) return null;
   return {
     id: row.id,

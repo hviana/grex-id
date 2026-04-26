@@ -1,6 +1,6 @@
 import { assertServerOnly } from "./server-only.ts";
 import { encryptField } from "./crypto.ts";
-import { getDb } from "../db/connection.ts";
+import { argon2Hash } from "../db/queries/crypto.ts";
 
 assertServerOnly("server/utils/field-standardizer.ts");
 
@@ -100,12 +100,7 @@ export async function standardizeField(
   }
 
   if (encryption === "argon2-hash") {
-    const db = await getDb();
-    const hashed = await db.query<[string]>(
-      "SELECT VALUE crypto::argon2::generate($plain)",
-      { plain: result },
-    );
-    return hashed[0];
+    return argon2Hash(result);
   }
 
   return result;
