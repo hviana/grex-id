@@ -6,7 +6,7 @@ assertServerOnly("002_grex_id_menus");
 export async function seed(db: Surreal): Promise<void> {
   // Resolve system-level tenant for grex-id
   const tenantResult = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM tenant WHERE actorId IS NONE AND companyId IS NONE AND systemId = (SELECT id FROM system WHERE slug = "grex-id" LIMIT 1).id LIMIT 1`,
+    `SELECT id FROM tenant WHERE !actorId AND !companyId AND systemId = (SELECT id FROM system WHERE slug = "grex-id" LIMIT 1)[0].id LIMIT 1`,
   );
   const systemTenantId = tenantResult[0]?.[0]?.id;
   if (!systemTenantId) {

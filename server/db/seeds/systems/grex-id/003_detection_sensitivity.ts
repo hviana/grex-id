@@ -7,8 +7,8 @@ export async function seed(db: Surreal): Promise<void> {
   // Resolve grex-id system-level tenant row
   const tenantResult = await db.query<[{ id: string }[]]>(
     `SELECT id FROM tenant
-     WHERE actorId IS NONE AND companyId IS NONE
-     AND systemId = (SELECT id FROM system WHERE slug = "grex-id" LIMIT 1).id
+     WHERE !actorId AND !companyId
+     AND systemId = (SELECT id FROM system WHERE slug = "grex-id" LIMIT 1)[0].id
      LIMIT 1`,
   );
   const tenantId = tenantResult[0]?.[0]?.id;
