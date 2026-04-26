@@ -1,8 +1,5 @@
-import { getCache } from "./cache.ts";
-import type {
-  CompiledFileAccess,
-  FileAccessCacheData,
-} from "./file-access-cache.ts";
+import Core from "./Core.ts";
+import type { CompiledFileAccess } from "./Core.ts";
 import type { Tenant } from "@/src/contracts/tenant.ts";
 import type {
   FileAccessSection,
@@ -59,8 +56,7 @@ function checkSection(
 export async function checkFileAccess(
   params: FileAccessCheckParams,
 ): Promise<FileAccessCheckResult> {
-  const cache = await getCache<FileAccessCacheData>("core", "file-access");
-  const { rules } = cache;
+  const rules = await Core.getInstance().getFileAccessRules();
 
   if (rules.length === 0) return { allowed: true };
 

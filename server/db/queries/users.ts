@@ -503,3 +503,44 @@ export async function hardDeleteUserIfOrphaned(
   );
   return (res[res.length - 1] as number) === 0;
 }
+
+/**
+ * Fetches metadata for re-sending a tenant invitation notification.
+ * Does NOT create or modify any tenant rows — read-only.
+ */
+export async function getUserInviteMeta(params: {
+  userId: string;
+  inviterId: string;
+  companyId: string;
+  systemId: string;
+}): Promise<InviteExistingUserResult> {
+  const db = await getDb();
+  const result = await db.query<
+    [{
+      sys: { name: string }[];
+      comp: { name: string }[];
+      inviter: { profileName?: string }[];
+      invitee: { profileName?: string }[];
+    }]
+  >(
+    `LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
+     LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
+     LET $inviter = (SELECT profileId.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profileId);
+     LET $invitee = (SELECT profileId.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profileId);
+     RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      inviterId: rid(params.inviterId),
+    },
+  );
+
+  const data = result[0];
+  return {
+    systemName: data?.sys?.[0]?.name ?? "",
+    companyName: data?.comp?.[0]?.name ?? "",
+    inviterName: data?.inviter?.[0]?.profileName ?? "",
+    inviteeName: data?.invitee?.[0]?.profileName ?? "",
+  };
+}

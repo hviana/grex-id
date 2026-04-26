@@ -7,6 +7,7 @@ import {
   createTenantAssociations,
   deleteUserWithAdminCheck,
   getUserContext,
+  getUserInviteMeta,
   getUsersForTenant,
   getUsersNoTenant,
   hardDeleteUserIfOrphaned,
@@ -265,6 +266,66 @@ async function putHandler(req: Request, ctx: RequestContext) {
     }
 
     await updateUserLocale(ctx.tenant.actorId!, locale);
+    return Response.json({ success: true });
+  }
+
+  if (action === "resend-invitation") {
+    const body = await req.json();
+    const { userId } = body;
+
+    if (!userId) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: ["validation.id.required"] },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            message: "validation.companyAndSystem.required",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    // Read-only: fetch metadata needed for the notification without
+    // touching tenant rows.
+    const inviteResult = await getUserInviteMeta({
+      userId: String(userId),
+      inviterId: ctx.tenant.actorId!,
+      companyId: ctx.tenant.companyId,
+      systemId: ctx.tenant.systemId,
+    });
+
+    const core = Core.getInstance();
+    const baseUrl = (await core.getSetting("app.baseUrl", {
+      systemId: ctx.tenant.systemId,
+    })) ?? "http://localhost:3000";
+
+    await dispatchCommunication({
+      recipients: [String(userId)],
+      template: "notification",
+      templateData: {
+        eventKey: "auth.event.tenantInvite",
+        occurredAt: new Date().toISOString(),
+        actorName: inviteResult.inviteeName,
+        companyName: inviteResult.companyName,
+        systemName: inviteResult.systemName,
+        ctaKey: "templates.notification.cta.goToDashboard",
+        ctaUrl: `${baseUrl}/login?systemSlug=${ctx.tenant.systemSlug}`,
+        systemSlug: ctx.tenant.systemSlug,
+        inviterName: inviteResult.inviterName,
+      },
+    });
+
     return Response.json({ success: true });
   }
 

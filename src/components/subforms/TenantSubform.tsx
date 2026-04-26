@@ -197,6 +197,10 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
       async (search: string) => {
         const params = new URLSearchParams();
         if (search) params.set("search", search);
+        const currentCompanyId = companyId.length > 0
+          ? companyId[0].id
+          : undefined;
+        if (currentCompanyId) params.set("companyId", currentCompanyId);
         const res = await fetch(`/api/core/systems?${params}`, {
           headers: authHeaders,
         });
@@ -209,7 +213,7 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
           }),
         );
       },
-      [authHeaders],
+      [authHeaders, companyId],
     );
 
     const fetchUsers = useCallback(
@@ -236,6 +240,10 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
       async (search: string): Promise<BadgeValue[]> => {
         const params = new URLSearchParams();
         if (search) params.set("search", search);
+        const currentSystemId = systemId.length > 0
+          ? systemId[0].id
+          : undefined;
+        if (currentSystemId) params.set("systemId", currentSystemId);
         const res = await fetch(`/api/core/roles?${params}`, {
           headers: authHeaders,
         });
@@ -247,7 +255,7 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
           }),
         );
       },
-      [authHeaders],
+      [authHeaders, systemId],
     );
 
     useImperativeHandle(ref, () => ({

@@ -6,6 +6,10 @@ import type { MenuItem } from "@/src/contracts/menu";
 import type { CoreSetting } from "@/src/contracts/core-settings";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { Subscription } from "@/src/contracts/billing";
+import type {
+  FileAccessSection,
+  FileAccessUploadSection,
+} from "@/src/contracts/file-access";
 import dbConfig from "../../database.json" with { type: "json" };
 import { assertServerOnly } from "./server-only.ts";
 import {
@@ -16,6 +20,7 @@ import {
   resolveScopeChain,
   type SettingScope,
 } from "../db/queries/core-settings.ts";
+import { fetchAllFileAccessRules } from "../db/queries/file-access.ts";
 
 assertServerOnly("Core");
 
@@ -39,6 +44,93 @@ export interface CoreData {
   menusBySystem: Map<string, MenuItem[]>;
   plansById: Map<string, Plan>;
   vouchersById: Map<string, Voucher>;
+}
+
+export interface CompiledFileAccess {
+  id: string;
+  name: string;
+  categoryPattern: string;
+  compiledPattern: RegExp;
+  download: FileAccessSection;
+  upload: FileAccessUploadSection;
+}
+
+export interface FileAccessCacheData {
+  rules: CompiledFileAccess[];
+}
+
+const defaultSection: FileAccessSection = {
+  isolateSystem: false,
+  isolateCompany: false,
+  isolateUser: false,
+  roles: [],
+};
+
+const defaultUploadSection: FileAccessUploadSection = {
+  ...defaultSection,
+  maxFileSizeMB: undefined,
+  allowedExtensions: [],
+};
+
+function normalizeSection(
+  raw: Partial<FileAccessSection> | undefined,
+): FileAccessSection {
+  if (!raw) return { ...defaultSection };
+  return {
+    isolateSystem: !!raw.isolateSystem,
+    isolateCompany: !!raw.isolateCompany,
+    isolateUser: !!raw.isolateUser,
+    roles: Array.isArray(raw.roles) ? raw.roles : [],
+  };
+}
+
+function normalizeUploadSection(
+  raw: Partial<FileAccessUploadSection> | undefined,
+): FileAccessUploadSection {
+  if (!raw) return { ...defaultUploadSection };
+  return {
+    ...normalizeSection(raw),
+    maxFileSizeMB: raw.maxFileSizeMB !== undefined && raw.maxFileSizeMB !== null
+      ? Number(raw.maxFileSizeMB)
+      : undefined,
+    allowedExtensions: Array.isArray(raw.allowedExtensions)
+      ? raw.allowedExtensions.map(String)
+      : [],
+  };
+}
+
+export function compilePattern(pattern: string): RegExp {
+  let normalized = pattern.trim();
+  if (normalized.startsWith("/")) normalized = normalized.slice(1);
+  if (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
+
+  const segments = normalized.split("/");
+  const regexParts = segments.map((seg) => {
+    const escaped = seg.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    return escaped.replace(/\*/g, "[^/]+");
+  });
+
+  return new RegExp("^" + regexParts.join("/") + "$");
+}
+
+async function loadFileAccessData(): Promise<FileAccessCacheData> {
+  const records = await fetchAllFileAccessRules();
+
+  const rules: CompiledFileAccess[] = records.map((r) => ({
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    categoryPattern: String(r.categoryPattern ?? ""),
+    compiledPattern: compilePattern(String(r.categoryPattern ?? "")),
+    download: normalizeSection(
+      r.download as Partial<FileAccessSection> | undefined,
+    ),
+    upload: normalizeUploadSection(
+      r.upload as Partial<FileAccessUploadSection> | undefined,
+    ),
+  }));
+
+  console.log(`[Core] loaded ${rules.length} file access rules`);
+  return { rules };
 }
 
 const CORE_SLUG = "core";
@@ -139,6 +231,7 @@ class Core {
 
   private static instance: Core | null = null;
   private missingSettings: Map<string, MissingSetting> = new Map();
+  private fileAccessLoaded = false;
 
   private constructor() {}
 
@@ -147,6 +240,23 @@ class Core {
       Core.instance = new Core();
     }
     return Core.instance;
+  }
+
+  private ensureFileAccessRegistered(): void {
+    if (this.fileAccessLoaded) return;
+    registerCache(CORE_SLUG, "file-access", loadFileAccessData);
+    this.fileAccessLoaded = true;
+  }
+
+  async getFileAccessRules(): Promise<CompiledFileAccess[]> {
+    this.ensureFileAccessRegistered();
+    const data = await getCache<FileAccessCacheData>(CORE_SLUG, "file-access");
+    return data.rules;
+  }
+
+  async reloadFileAccess(): Promise<void> {
+    this.ensureFileAccessRegistered();
+    await updateCache(CORE_SLUG, "file-access");
   }
 
   /**

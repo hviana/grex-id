@@ -20,7 +20,6 @@ import { notificationSmsTemplate } from "./utils/communication/templates/sms/not
 import { loadCoreData } from "./utils/Core.ts";
 // FrontCore settings are loaded lazily per scope under "front-settings" slug
 import { loadJwtSecret } from "./utils/token.ts";
-import { loadFileAccessData } from "./utils/file-access-cache.ts";
 import FileCacheManager from "./utils/file-cache.ts";
 import { assertServerOnly } from "./utils/server-only.ts";
 
@@ -31,7 +30,6 @@ export function registerCore(): void {
   registerCache("core", "data", loadCoreData);
   // FrontCore settings caches register lazily per scope under "front-settings" slug
   registerCache("core", "jwt-secret", loadJwtSecret);
-  registerCache("core", "file-access", loadFileAccessData);
   // The actor-validity cache (§8.11) is sharded per tenant and registers
   // partitions lazily on first access — no boot-time registration here.
 

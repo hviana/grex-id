@@ -9,10 +9,11 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import type { Role } from "@/src/contracts/role";
 
-async function getHandler(req: Request, _ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
@@ -20,9 +21,26 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const tenantId = url.searchParams.get("tenantId") ?? undefined;
+  const systemId = url.searchParams.get("systemId") ?? undefined;
+  const isSuperuser = ctx.tenant.roles.includes("superuser");
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
+
+  // Non-superusers only see roles from their own system.
+  if (!isSuperuser && ctx.tenant.systemId) {
+    extraConditions.push(
+      "tenantIds CONTAINS (SELECT id FROM tenant WHERE actorId = NONE AND companyId = NONE AND systemId = $autoSystemId LIMIT 1)",
+    );
+    extraBindings.autoSystemId = rid(ctx.tenant.systemId);
+  }
+
+  if (systemId) {
+    extraConditions.push(
+      "tenantIds CONTAINS (SELECT id FROM tenant WHERE actorId = NONE AND companyId = NONE AND systemId = $filterSystemId LIMIT 1)",
+    );
+    extraBindings.filterSystemId = rid(systemId);
+  }
 
   if (tenantId) {
     extraConditions.push("tenantIds CONTAINS $tenantId");
@@ -254,7 +272,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuth({ requireAuthenticated: true }),
   getHandler,
 );
 

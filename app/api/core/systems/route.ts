@@ -9,16 +9,42 @@ import {
   genericUpdate,
 } from "@/server/db/queries/generics";
 import type { System } from "@/src/contracts/system";
+import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 
-async function getHandler(req: Request, _ctx: RequestContext) {
+async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") ?? undefined;
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
+  const companyId = url.searchParams.get("companyId") ?? undefined;
+  const isSuperuser = ctx.tenant.roles.includes("superuser");
+
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+
+  // Non-superusers only see their own system.
+  if (!isSuperuser && ctx.tenant.systemId) {
+    extraConditions.push("id = $autoSystemId");
+    extraBindings.autoSystemId = rid(ctx.tenant.systemId);
+  }
+
+  if (companyId) {
+    extraConditions.push(
+      "id IN (SELECT VALUE systemId FROM tenant WHERE companyId = $filterCompanyId AND systemId != NONE)",
+    );
+    extraBindings.filterCompanyId = rid(companyId);
+  }
 
   const result = await genericList<System>(
-    { table: "system", searchFields: ["name"] },
+    {
+      table: "system",
+      searchFields: ["name"],
+      extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
+      extraBindings: Object.keys(extraBindings).length > 0
+        ? extraBindings
+        : undefined,
+    },
     { search, cursor, limit },
   );
   return Response.json({
@@ -179,7 +205,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuth({ requireAuthenticated: true }),
   getHandler,
 );
 

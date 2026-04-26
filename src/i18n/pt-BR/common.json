@@ -150,6 +150,8 @@
   "tokens.maxOperationCountHint": "Limites de contagem de operações por recurso. Deixe vazio para sem limite.",
   "tokens.rolesHint": "Busque funções definidas neste sistema",
   "users.inviteExisting": "Usuário já existe e foi convidado para este sistema",
+  "users.resendInvitation": "Reenviar convite",
+  "users.invitationSent": "Convite reenviado",
   "users.rolesHint": "Busque funções disponíveis para este sistema",
   "users.inviteHint": "Se o usuário já possui uma conta, ele será convidado para este sistema sem criar uma nova conta.",
   "users.channelsReadOnlyHint": "Canais só podem ser alterados pelo próprio usuário, a partir do perfil dele, com confirmação humana (§8.7).",

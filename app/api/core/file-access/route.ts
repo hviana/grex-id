@@ -6,7 +6,7 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
-import { updateCache } from "@/server/utils/cache";
+import Core from "@/server/utils/Core";
 import { updateFileAccessRule } from "@/server/db/queries/file-access";
 import {
   genericCreate,
@@ -116,7 +116,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     );
     const rule = createResult.data;
 
-    await updateCache("core", "file-access");
+    await Core.getInstance().reloadFileAccess();
 
     return Response.json(
       { success: true, data: rule },
@@ -211,7 +211,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
     const updated = await updateFileAccessRule(id, sets, bindings);
 
-    await updateCache("core", "file-access");
+    await Core.getInstance().reloadFileAccess();
 
     return Response.json({ success: true, data: updated });
   } catch {
@@ -249,7 +249,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   try {
     await genericDelete({ table: "file_access" }, id);
 
-    await updateCache("core", "file-access");
+    await Core.getInstance().reloadFileAccess();
 
     return Response.json({ success: true });
   } catch {

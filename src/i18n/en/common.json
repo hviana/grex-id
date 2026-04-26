@@ -150,6 +150,8 @@
   "tokens.maxOperationCountHint": "Per-resource operation count caps. Leave empty for no limit.",
   "tokens.rolesHint": "Search roles defined in this system",
   "users.inviteExisting": "User already exists and was invited to this system",
+  "users.resendInvitation": "Resend invitation",
+  "users.invitationSent": "Invitation re-sent",
   "users.rolesHint": "Search available roles for this system",
   "users.inviteHint": "If the user already has an account, they will be invited to this system without creating a new account.",
   "users.channelsReadOnlyHint": "Channels can only be changed by the user from their own profile, via a human confirmation link (§8.7).",

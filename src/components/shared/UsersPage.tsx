@@ -8,39 +8,15 @@ import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
-import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
+import EditButton from "@/src/components/shared/EditButton";
+import DeleteButton from "@/src/components/shared/DeleteButton";
+import UserSubform from "@/src/components/subforms/UserSubform";
+import UserView, {
+  userHasVerifiedChannel,
+  type UserViewData,
+} from "@/src/components/shared/UserView";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-
-interface ChannelRow {
-  id: string;
-  type: string;
-  value: string;
-  verified: boolean;
-}
-
-interface UserItem {
-  id: string;
-  profileId?: {
-    name: string;
-    avatarUri?: string;
-  };
-  channelIds?: ChannelRow[];
-  contextRoles?: string[];
-  createdAt: string;
-  [key: string]: unknown;
-}
-
-function primaryChannelLabel(user: UserItem): string {
-  const email = (user.channelIds ?? []).find((c) => c.type === "email");
-  if (email?.value) return email.value;
-  const verified = (user.channelIds ?? []).find((c) => c.verified);
-  if (verified?.value) return verified.value;
-  return (user.channelIds ?? [])[0]?.value ?? "";
-}
 
 export default function UsersPage() {
   const { t } = useLocale();
@@ -51,50 +27,24 @@ export default function UsersPage() {
   const isAdmin = myRoles.includes("admin") || myRoles.includes("superuser");
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [deleteUser, setDeleteUser] = useState<UserItem | null>(null);
+  const [editUser, setEditUser] = useState<UserViewData | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const newChannelsRef = useRef<SubformRef>(null);
-  const [newName, setNewName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newRoles, setNewRoles] = useState<string[]>([]);
-
-  const [editName, setEditName] = useState("");
-  const [editRoles, setEditRoles] = useState<string[]>([]);
-
-  const fetchSystemRoles = useCallback(async (search: string) => {
-    if (!systemId) return [];
-    try {
-      const res = await fetch(
-        `/api/core/roles?systemId=${encodeURIComponent(systemId)}&limit=100`,
-      );
-      const json = await res.json();
-      const roles: { name: string }[] = json.data ?? [];
-      const lower = search.toLowerCase();
-      return roles
-        .map((r) => r.name)
-        .filter((name) => name.toLowerCase().includes(lower));
-    } catch {
-      return [];
-    }
-  }, [systemId]);
+  const createFormRef = useRef<SubformRef>(null);
+  const editFormRef = useRef<SubformRef>(null);
 
   const fetchUsers = useCallback(
     async (
       params: CursorParams & { search?: string },
-    ): Promise<PaginatedResult<UserItem>> => {
+    ): Promise<PaginatedResult<UserViewData>> => {
       if (!systemToken || !companyId || !systemId) {
         return { data: [], nextCursor: null, prevCursor: null };
       }
-      const p = new URLSearchParams({
-        limit: String(params.limit),
-        companyId,
-        systemId,
-      });
+      const p = new URLSearchParams({ limit: String(params.limit) });
       if (params.search) p.set("search", params.search);
       if (params.cursor) p.set("cursor", params.cursor);
       const res = await fetch(`/api/users?${p}`, {
@@ -102,7 +52,7 @@ export default function UsersPage() {
       });
       const json = await res.json();
       return {
-        data: (json.data ?? []) as UserItem[],
+        data: (json.data ?? []) as UserViewData[],
         nextCursor: json.nextCursor ?? null,
         prevCursor: null,
       };
@@ -114,18 +64,11 @@ export default function UsersPage() {
 
   const handleCreate = async () => {
     if (!systemToken || !companyId || !systemId) return;
-    const collected = (newChannelsRef.current?.getData() ?? {}) as {
-      channels?: { type: string; value: string }[];
-    };
-    const channels = collected.channels ?? [];
-    if (channels.length === 0) {
-      setError("validation.channel.required");
+    if (!createFormRef.current?.isValid()) {
+      setError(t("common.error.validation"));
       return;
     }
-    if (!newChannelsRef.current?.isValid()) {
-      setError("validation.channel.requiredTypes");
-      return;
-    }
+    const data = createFormRef.current.getData();
     setActionLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -136,26 +79,16 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({
-          channels,
-          password: newPassword,
-          name: newName,
-          companyId,
-          systemId,
-          roles: newRoles,
-        }),
+        body: JSON.stringify({ ...data, companyId, systemId }),
       });
       const json = await res.json();
       if (!json.success) {
-        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ||
-          json.error?.message || "common.error.generic";
+        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ??
+          json.error?.message ?? "common.error.generic";
         setError(msg);
         return;
       }
       setCreateOpen(false);
-      setNewName("");
-      setNewPassword("");
-      setNewRoles([]);
       if (json.invited) {
         setSuccessMsg("common.users.inviteExisting");
       }
@@ -169,6 +102,11 @@ export default function UsersPage() {
 
   const handleEdit = async () => {
     if (!systemToken || !editUser || !companyId || !systemId) return;
+    if (!editFormRef.current?.isValid()) {
+      setError(t("common.error.validation"));
+      return;
+    }
+    const data = editFormRef.current.getData();
     setActionLoading(true);
     setError(null);
     try {
@@ -178,18 +116,12 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({
-          id: editUser.id,
-          name: editName,
-          companyId,
-          systemId,
-          roles: editRoles,
-        }),
+        body: JSON.stringify({ id: editUser.id, ...data, companyId, systemId }),
       });
       const json = await res.json();
       if (!json.success) {
-        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ||
-          json.error?.message || "common.error.generic";
+        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ??
+          json.error?.message ?? "common.error.generic";
         setError(msg);
         return;
       }
@@ -202,47 +134,53 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!systemToken || !deleteUser || !companyId || !systemId) return;
-    setActionLoading(true);
+  const handleDelete = async (user: UserViewData) => {
+    if (!systemToken) return;
+    setError(null);
+    const res = await fetch("/api/users", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${systemToken}`,
+      },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    const json = await res.json();
+    if (!json.success) {
+      const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ??
+        json.error?.message ?? "common.error.generic";
+      setError(msg);
+      throw new Error(msg);
+    }
+    triggerReload();
+  };
+
+  const handleResendInvitation = async (userId: string) => {
+    if (!systemToken) return;
+    setResendingId(userId);
+    setError(null);
+    setSuccessMsg(null);
     try {
-      const res = await fetch("/api/users", {
-        method: "DELETE",
+      const res = await fetch(`/api/users?action=resend-invitation`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({
-          userId: deleteUser.id,
-          companyId,
-          systemId,
-        }),
+        body: JSON.stringify({ userId, companyId, systemId }),
       });
       const json = await res.json();
-      if (!json.success) {
-        const msg = json.error?.errors?.map((e: string) => t(e)).join(", ") ||
-          json.error?.message || "common.error.generic";
-        setError(msg);
-        return;
+      if (json.success) {
+        setSuccessMsg("common.users.invitationSent");
+      } else {
+        setError(json.error?.message ?? "common.error.generic");
       }
-      setDeleteUser(null);
-      triggerReload();
     } catch {
       setError("common.error.network");
     } finally {
-      setActionLoading(false);
+      setResendingId(null);
     }
   };
-
-  const openEdit = (user: UserItem) => {
-    setEditUser(user);
-    setEditName(user.profileId?.name ?? "");
-    setEditRoles(user.contextRoles ?? []);
-    setError(null);
-  };
-
-  const inputCls =
-    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
   return (
     <div className="space-y-6">
@@ -272,7 +210,7 @@ export default function UsersPage() {
 
       <ErrorDisplay message={error} />
 
-      <GenericList<UserItem>
+      <GenericList<UserViewData>
         entityName={t("common.menu.users")}
         searchEnabled={false}
         createEnabled={false}
@@ -280,45 +218,33 @@ export default function UsersPage() {
         fetchFn={fetchUsers}
         reloadKey={reloadKey}
         renderItem={(user) => (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-black font-bold text-sm shrink-0">
-                {(user.profileId?.name ?? primaryChannelLabel(user))
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-white truncate">
-                  {user.profileId?.name ?? primaryChannelLabel(user)}
-                </h3>
-                <p className="text-sm text-[var(--color-light-text)] truncate">
-                  {primaryChannelLabel(user)}
-                </p>
-              </div>
-              <TranslatedBadgeList
-                kind="role"
-                tokens={user.contextRoles ?? []}
-                systemSlug={systemSlug ?? undefined}
-                className="shrink-0"
-              />
-              {isAdmin && (
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => openEdit(user)}
-                    className="text-sm px-2 py-1 rounded border border-[var(--color-dark-gray)] text-[var(--color-light-text)] hover:bg-white/5 transition-colors"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => setDeleteUser(user)}
-                    className="text-sm px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <UserView
+            user={user}
+            systemSlug={systemSlug ?? undefined}
+            controls={isAdmin
+              ? (
+                <>
+                  {!userHasVerifiedChannel(user) && (
+                    <button
+                      onClick={() => handleResendInvitation(user.id)}
+                      disabled={resendingId === user.id}
+                      title={t("common.users.resendInvitation")}
+                      className="text-sm px-2 py-1 rounded border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] hover:bg-[var(--color-secondary-blue)]/10 transition-colors disabled:opacity-50"
+                    >
+                      {resendingId === user.id ? <Spinner size="sm" /> : "📨"}
+                    </button>
+                  )}
+                  <EditButton
+                    onClick={() => {
+                      setEditUser(user);
+                      setError(null);
+                    }}
+                  />
+                  <DeleteButton onConfirm={() => handleDelete(user)} />
+                </>
+              )
+              : undefined}
+          />
         )}
       />
 
@@ -331,48 +257,17 @@ export default function UsersPage() {
         >
           <ErrorDisplay message={error} />
           <div className="space-y-3">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder={t("common.placeholder.name")}
-              className={inputCls}
-            />
-            <EntityChannelsSubform
-              ref={newChannelsRef}
-              mode="local"
-              channelTypes={["email", "phone"]}
-              requiredTypes={["email"]}
-            />
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder={t("common.users.password")}
-              className={inputCls}
-            />
-            <MultiBadgeField
-              name={t("common.users.roles")}
-              mode="search"
-              value={newRoles}
-              onChange={(vals) => setNewRoles(vals as string[])}
-              fetchFn={fetchSystemRoles}
-              formatHint={t("common.users.rolesHint")}
-              renderBadge={(item, remove) => (
-                <TranslatedBadge
-                  kind="role"
-                  token={typeof item === "string" ? item : item.name}
-                  systemSlug={systemSlug ?? undefined}
-                  onRemove={remove}
-                />
-              )}
+            <UserSubform
+              ref={createFormRef}
+              isCreate
+              systemSlug={systemSlug ?? undefined}
             />
             <p className="text-xs text-[var(--color-light-text)]/60">
               {t("common.users.inviteHint")}
             </p>
             <button
               onClick={handleCreate}
-              disabled={actionLoading || !newName}
+              disabled={actionLoading}
               className="w-full rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-3 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {actionLoading && (
@@ -414,28 +309,13 @@ export default function UsersPage() {
                 {t("common.users.channelsReadOnlyHint")}
               </p>
             </div>
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder={t("common.placeholder.name")}
-              className={inputCls}
-            />
-            <MultiBadgeField
-              name={t("common.users.roles")}
-              mode="search"
-              value={editRoles}
-              onChange={(vals) => setEditRoles(vals as string[])}
-              fetchFn={fetchSystemRoles}
-              formatHint={t("common.users.rolesHint")}
-              renderBadge={(item, remove) => (
-                <TranslatedBadge
-                  kind="role"
-                  token={typeof item === "string" ? item : item.name}
-                  systemSlug={systemSlug ?? undefined}
-                  onRemove={remove}
-                />
-              )}
+            <UserSubform
+              ref={editFormRef}
+              initialData={{
+                name: editUser.profileId?.name ?? "",
+                contextRoles: editUser.contextRoles ?? [],
+              }}
+              systemSlug={systemSlug ?? undefined}
             />
             <button
               onClick={handleEdit}
@@ -450,38 +330,6 @@ export default function UsersPage() {
               )}
               {t("common.save")}
             </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Delete confirmation */}
-      {deleteUser && (
-        <Modal
-          open={!!deleteUser}
-          onClose={() => setDeleteUser(null)}
-          title={t("common.users.deleteConfirm")}
-        >
-          <div className="text-center space-y-4">
-            <p className="text-white">{t("common.users.deleteConfirm")}</p>
-            <p className="text-sm text-[var(--color-light-text)]">
-              {deleteUser.profileId?.name ?? primaryChannelLabel(deleteUser)}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setDeleteUser(null)}
-                className="rounded-lg border border-[var(--color-dark-gray)] px-4 py-2 text-[var(--color-light-text)] hover:bg-white/5 transition-colors"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={actionLoading}
-                className="rounded-lg bg-red-500/80 px-4 py-2 text-white font-semibold hover:bg-red-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {actionLoading && <Spinner size="sm" />}
-                {t("common.delete")}
-              </button>
-            </div>
           </div>
         </Modal>
       )}
