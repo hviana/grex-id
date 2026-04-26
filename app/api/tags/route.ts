@@ -23,18 +23,14 @@ async function getHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  const result = await genericList<Tag>(
-    {
-      table: "tag",
-      searchFields: ["name"],
-      ...(search ? {} : { orderBy: "name ASC" }),
-    },
-    {
-      search: search ?? undefined,
-      limit: search ? 20 : 200,
-      tenant: ctx.tenant,
-    },
-  );
+  const result = await genericList<Tag>({
+    table: "tag",
+    searchFields: ["name"],
+    ...(search ? {} : { orderBy: "name ASC" }),
+    search: search ?? undefined,
+    limit: search ? 20 : 200,
+    tenant: ctx.tenant,
+  });
 
   return Response.json({ success: true, ...result });
 }

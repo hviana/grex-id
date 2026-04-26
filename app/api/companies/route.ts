@@ -39,7 +39,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
     fetch: "billingAddressId",
     extraConditions,
     extraBindings,
-  }, { search, cursor, limit });
+    search,
+    cursor,
+    limit,
+  });
 
   return Response.json({ success: true, ...result });
 }

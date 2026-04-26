@@ -46,13 +46,14 @@ async function getHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  const result = await genericList<Location>(
-    {
-      table: "location",
-      searchFields: ["name"],
-    },
-    { limit, cursor, search, tenant: ctx.tenant },
-  );
+  const result = await genericList<Location>({
+    table: "location",
+    searchFields: ["name"],
+    limit,
+    cursor,
+    search,
+    tenant: ctx.tenant,
+  });
 
   return Response.json({ success: true, ...result });
 }

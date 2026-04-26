@@ -20,10 +20,13 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const result = await genericList<Voucher>(
-    { table: "voucher", searchFields: ["code"] },
-    { limit, cursor, search },
-  );
+  const result = await genericList<Voucher>({
+    table: "voucher",
+    searchFields: ["code"],
+    limit,
+    cursor,
+    search,
+  });
 
   return Response.json({ success: true, ...result });
 }

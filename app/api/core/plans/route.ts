@@ -25,19 +25,15 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     extraBindings.tenantId = tenantId;
   }
 
-  const result = await genericList<Plan>(
-    {
-      table: "plan",
-      searchFields: ["name"],
-      extraConditions,
-      extraBindings,
-    },
-    {
-      limit,
-      cursor,
-      search,
-    },
-  );
+  const result = await genericList<Plan>({
+    table: "plan",
+    searchFields: ["name"],
+    extraConditions,
+    extraBindings,
+    limit,
+    cursor,
+    search,
+  });
 
   return Response.json({ success: true, ...result });
 }

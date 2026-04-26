@@ -114,10 +114,11 @@ export function compilePattern(pattern: string): RegExp {
 }
 
 async function loadFileAccessData(): Promise<FileAccessCacheData> {
-  const { items: records } = await genericList(
-    { table: "file_access", orderBy: "createdAt", limit: 1000 },
-    { limit: 1000 },
-  );
+  const { items: records } = await genericList({
+    table: "file_access",
+    orderBy: "createdAt",
+    limit: 1000,
+  });
 
   const rules: CompiledFileAccess[] = records.map((r) => ({
     id: String(r.id),

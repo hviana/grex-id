@@ -28,22 +28,17 @@ async function getHandler(req: Request, ctx: RequestContext) {
     extraBindings.userId = rid(ctx.tenant.actorId!);
   }
 
-  const result = await genericList<ConnectedService>(
-    {
-      table: "connected_service",
-      select: isAdmin ? "*, userId.profile.name AS userName" : "*",
-      searchFields: ["name"],
-      fetch: "userId.profile",
-      limit: 50,
-      extraConditions,
-      extraBindings,
-    },
-    {
-      tenant: ctx.tenant,
-      search,
-      limit: 50,
-    },
-  );
+  const result = await genericList<ConnectedService>({
+    table: "connected_service",
+    select: isAdmin ? "*, userId.profile.name AS userName" : "*",
+    searchFields: ["name"],
+    fetch: "userId.profile",
+    limit: 50,
+    extraConditions,
+    extraBindings,
+    tenant: ctx.tenant,
+    search,
+  });
   return Response.json({ success: true, ...result });
 }
 

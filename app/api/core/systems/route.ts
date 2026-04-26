@@ -36,17 +36,17 @@ async function getHandler(req: Request, ctx: RequestContext) {
     extraBindings.filterCompanyId = rid(companyId);
   }
 
-  const result = await genericList<System>(
-    {
-      table: "system",
-      searchFields: ["name"],
-      extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
-      extraBindings: Object.keys(extraBindings).length > 0
-        ? extraBindings
-        : undefined,
-    },
-    { search, cursor, limit },
-  );
+  const result = await genericList<System>({
+    table: "system",
+    searchFields: ["name"],
+    extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
+    extraBindings: Object.keys(extraBindings).length > 0
+      ? extraBindings
+      : undefined,
+    search,
+    cursor,
+    limit,
+  });
   return Response.json({ success: true, ...result });
 }
 

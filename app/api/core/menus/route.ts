@@ -28,20 +28,16 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     extraBindings.tenantId = tenantId;
   }
 
-  const result = await genericList<MenuItem>(
-    {
-      table: "menu_item",
-      searchFields: ["label"],
-      orderBy: "sortOrder ASC, createdAt DESC",
-      extraConditions,
-      extraBindings,
-    },
-    {
-      search,
-      cursor,
-      limit,
-    },
-  );
+  const result = await genericList<MenuItem>({
+    table: "menu_item",
+    searchFields: ["label"],
+    orderBy: "sortOrder ASC, createdAt DESC",
+    extraConditions,
+    extraBindings,
+    search,
+    cursor,
+    limit,
+  });
 
   return Response.json({ success: true, ...result });
 }

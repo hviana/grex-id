@@ -11,10 +11,7 @@ import {
 import Core from "@/server/utils/Core";
 
 async function getHandler(_req: Request, _ctx: RequestContext) {
-  const result = await genericList<System>(
-    { table: "system" },
-    { limit: 200 },
-  );
+  const result = await genericList<System>({ table: "system", limit: 200 });
 
   const genericContent =
     (await Core.getInstance().getSetting("terms.generic")) ?? "";

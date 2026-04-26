@@ -13,16 +13,11 @@ import { genericList, genericUpdate } from "@/server/db/queries/generics";
 import type { ConnectedApp } from "@/src/contracts/connected-app";
 
 async function getHandler(_req: Request, ctx: RequestContext) {
-  const result = await genericList<ConnectedApp>(
-    {
-      table: "connected_app",
-      limit: 50,
-    },
-    {
-      limit: 50,
-      tenant: ctx.tenant,
-    },
-  );
+  const result = await genericList<ConnectedApp>({
+    table: "connected_app",
+    limit: 50,
+    tenant: ctx.tenant,
+  });
   return Response.json({ success: true, ...result });
 }
 

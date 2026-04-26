@@ -448,15 +448,6 @@ export interface DateRangeFilter {
   end?: string;
 }
 
-export interface GenericListParams {
-  limit?: number;
-  cursor?: string;
-  search?: string;
-  tenant?: Tenant;
-  tagFilter?: TagFilter;
-  dateRange?: DateRangeFilter;
-}
-
 /**
  * Cursor-paginated list with optional cascade-loading of related entities.
  *
@@ -471,52 +462,51 @@ export interface GenericListParams {
  *
  * Cursor pagination uses `WHERE cursorField > $__cursor` for ASC and `<` for
  * DESC. The returned `nextCursor` is the stringified cursorField value of the
- * last row on the current page; pass it back via params.cursor for the next
+ * last row on the current page; pass it back via opts.cursor for the next
  * page.
  */
 export async function genericList<T = Record<string, unknown>>(
   opts: GenericListOptions,
-  params: GenericListParams,
 ): Promise<PaginatedResult<WithCascade<T>>> {
   const baseConditions: string[] = [...(opts.extraConditions ?? [])];
   const bindings: Record<string, unknown> = { ...(opts.extraBindings ?? {}) };
 
   // --- Filters that apply to BOTH items and total count -------------------
 
-  if (params.search && opts.searchFields?.length) {
+  if (opts.search && opts.searchFields?.length) {
     const searchExpr = opts.searchFields
       .map((f) => `${f} @@ $search`)
       .join(" OR ");
     baseConditions.push(`(${searchExpr})`);
-    bindings.search = params.search;
+    bindings.search = opts.search;
   }
 
   await addTenantConditions(
-    params.tenant,
+    opts.tenant,
     opts.table,
     baseConditions,
     bindings,
   );
 
-  if (params.dateRange && opts.dateRangeField) {
-    if (params.dateRange.start) {
+  if (opts.dateRange && opts.dateRangeField) {
+    if (opts.dateRange.start) {
       baseConditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
-      bindings.dateRangeStart = params.dateRange.start;
+      bindings.dateRangeStart = opts.dateRange.start;
     }
-    if (params.dateRange.end) {
+    if (opts.dateRange.end) {
       baseConditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
-      bindings.dateRangeEnd = params.dateRange.end;
+      bindings.dateRangeEnd = opts.dateRange.end;
     }
   }
 
-  if (params.tagFilter && params.tagFilter.tagNames.length > 0) {
-    const col = params.tagFilter.tagsColumn ?? "tagIds";
-    for (let i = 0; i < params.tagFilter.tagNames.length; i++) {
+  if (opts.tagFilter && opts.tagFilter.tagNames.length > 0) {
+    const col = opts.tagFilter.tagsColumn ?? "tagIds";
+    for (let i = 0; i < opts.tagFilter.tagNames.length; i++) {
       const bindKey = `tagName_${i}`;
       baseConditions.push(
         `${col} CONTAINS (SELECT VALUE id FROM tag WHERE name = $${bindKey} LIMIT 1)`,
       );
-      bindings[bindKey] = params.tagFilter.tagNames[i];
+      bindings[bindKey] = opts.tagFilter.tagNames[i];
     }
   }
 
@@ -525,18 +515,16 @@ export async function genericList<T = Record<string, unknown>>(
   const cursorField = opts.cursorField ?? "id";
   const direction = opts.orderByDirection ?? "ASC";
   const orderField = opts.orderBy ?? cursorField;
-  const requestedLimit = params.limit ?? 20;
-  const cap = opts.limit ?? Number.MAX_SAFE_INTEGER;
-  const limit = Math.max(1, Math.min(requestedLimit, cap));
+  const limit = Math.max(1, opts.limit ?? 20);
 
   const itemConditions = [...baseConditions];
-  if (params.cursor) {
+  if (opts.cursor) {
     const op = direction === "ASC" ? ">" : "<";
     itemConditions.push(`${cursorField} ${op} $__cursor`);
     bindings.__cursor =
-      typeof params.cursor === "string" && params.cursor.includes(":")
-        ? rid(params.cursor)
-        : params.cursor;
+      typeof opts.cursor === "string" && opts.cursor.includes(":")
+        ? rid(opts.cursor)
+        : opts.cursor;
   }
 
   const baseWhere = baseConditions.length
@@ -565,7 +553,7 @@ export async function genericList<T = Record<string, unknown>>(
   };
 
   const cascadePlans = opts.cascade?.length
-    ? await planCascade(opts.cascade, "$__items", builder, params.tenant)
+    ? await planCascade(opts.cascade, "$__items", builder, opts.tenant)
     : [];
 
   // --- Assemble and execute as one round-trip -----------------------------
@@ -1096,46 +1084,40 @@ async function buildCascadeStatements(
 
 export async function genericCount(
   opts: GenericListOptions,
-  params: {
-    search?: string;
-    tenant?: Tenant;
-    tagFilter?: TagFilter;
-    dateRange?: DateRangeFilter;
-  },
 ): Promise<number> {
   const db = await getDb();
   const conditions: string[] = [...(opts.extraConditions ?? [])];
   const bindings: Record<string, unknown> = { ...(opts.extraBindings ?? {}) };
 
-  if (params.search && opts.searchFields?.length) {
+  if (opts.search && opts.searchFields?.length) {
     const searchExpr = opts.searchFields
       .map((f) => `${f} @@ $search`)
       .join(" OR ");
     conditions.push(`(${searchExpr})`);
-    bindings.search = params.search;
+    bindings.search = opts.search;
   }
 
-  await addTenantConditions(params.tenant, opts.table, conditions, bindings);
+  await addTenantConditions(opts.tenant, opts.table, conditions, bindings);
 
-  if (params.dateRange && opts.dateRangeField) {
-    if (params.dateRange.start) {
+  if (opts.dateRange && opts.dateRangeField) {
+    if (opts.dateRange.start) {
       conditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
-      bindings.dateRangeStart = params.dateRange.start;
+      bindings.dateRangeStart = opts.dateRange.start;
     }
-    if (params.dateRange.end) {
+    if (opts.dateRange.end) {
       conditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
-      bindings.dateRangeEnd = params.dateRange.end;
+      bindings.dateRangeEnd = opts.dateRange.end;
     }
   }
 
-  if (params.tagFilter && params.tagFilter.tagNames.length > 0) {
-    const col = params.tagFilter.tagsColumn ?? "tagIds";
-    for (let i = 0; i < params.tagFilter.tagNames.length; i++) {
+  if (opts.tagFilter && opts.tagFilter.tagNames.length > 0) {
+    const col = opts.tagFilter.tagsColumn ?? "tagIds";
+    for (let i = 0; i < opts.tagFilter.tagNames.length; i++) {
       const bindKey = `tagName_${i}`;
       conditions.push(
         `${col} CONTAINS (SELECT VALUE id FROM tag WHERE name = $${bindKey} LIMIT 1)`,
       );
-      bindings[bindKey] = params.tagFilter.tagNames[i];
+      bindings[bindKey] = opts.tagFilter.tagNames[i];
     }
   }
 

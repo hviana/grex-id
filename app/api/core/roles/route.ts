@@ -45,17 +45,17 @@ async function getHandler(req: Request, ctx: RequestContext) {
     extraBindings.tenantId = tenantId;
   }
 
-  const result = await genericList<Role>(
-    {
-      table: "role",
-      searchFields: ["name"],
-      extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
-      extraBindings: Object.keys(extraBindings).length > 0
-        ? extraBindings
-        : undefined,
-    },
-    { cursor, limit, search },
-  );
+  const result = await genericList<Role>({
+    table: "role",
+    searchFields: ["name"],
+    extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
+    extraBindings: Object.keys(extraBindings).length > 0
+      ? extraBindings
+      : undefined,
+    cursor,
+    limit,
+    search,
+  });
 
   return Response.json({ success: true, ...result });
 }

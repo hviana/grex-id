@@ -27,10 +27,13 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  const result = await genericList(
-    { table: "file_access", searchFields: ["name"] },
-    { search, cursor, limit },
-  );
+  const result = await genericList({
+    table: "file_access",
+    searchFields: ["name"],
+    search,
+    cursor,
+    limit,
+  });
 
   return Response.json({ success: true, ...result });
 }

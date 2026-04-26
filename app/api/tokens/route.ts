@@ -9,18 +9,16 @@ import { genericCreate, genericList } from "@/server/db/queries/generics";
 import type { ApiToken } from "@/src/contracts/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
-  const result = await genericList<ApiToken>(
-    {
-      table: "api_token",
-      select:
-        "id, name, description, roles, monthlySpendLimit, maxOperationCount, neverExpires, expiresAt, frontendUse, frontendDomains, createdAt",
-      orderBy: "createdAt",
-      orderByDirection: "DESC",
-      extraConditions: ["revokedAt IS NONE"],
-      limit: 50,
-    },
-    { tenant: ctx.tenant, limit: 50 },
-  );
+  const result = await genericList<ApiToken>({
+    table: "api_token",
+    select:
+      "id, name, description, roles, monthlySpendLimit, maxOperationCount, neverExpires, expiresAt, frontendUse, frontendDomains, createdAt",
+    orderBy: "createdAt",
+    orderByDirection: "DESC",
+    extraConditions: ["revokedAt IS NONE"],
+    limit: 50,
+    tenant: ctx.tenant,
+  });
   return Response.json({ success: true, data: result.items });
 }
 
