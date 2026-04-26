@@ -1,5 +1,4 @@
 import { getDb, rid } from "../connection.ts";
-import { paginatedQuery } from "./pagination.ts";
 import {
   type FieldEncryptionMode,
   standardizeField,
@@ -18,6 +17,13 @@ assertServerOnly("generics");
 
 // ---------------------------------------------------------------------------
 // Schema helpers
+// ---------------------------------------------------------------------------
+//
+// `tableHasField` is consulted on every generated query (tenant scoping,
+// auto-timestamps, cascade tenant filtering). Because every DB call is a
+// remote round-trip, a per-process cache of `INFO FOR TABLE` is essential —
+// schemas don't change on hot paths, so the cache is warm after the first
+// lookup per table.
 // ---------------------------------------------------------------------------
 
 const tableFieldCache = new Map<string, Set<string>>();
@@ -46,20 +52,90 @@ export interface FieldSpec {
 }
 
 // ---------------------------------------------------------------------------
+// Cascade descriptor (shared by read- and delete-cascade flows)
+// ---------------------------------------------------------------------------
+
+export interface CascadeChild {
+  /** Table to operate on. */
+  table: string;
+  /**
+   * For DELETE cascade (genericDelete): field on the child table that
+   * references the parent entity's id, used for orphan-checking and scoped
+   * deletion. Default: "tenantId" when the table has it and a tenant is
+   * provided.
+   */
+  parentField?: string;
+  /**
+   * For READ cascade (genericList / genericGetById): field on THIS (parent)
+   * entity that references the child's id (or array of ids). Loaded child(ren)
+   * appear in CascadeResult under this exact key — `assigneeId` yields the
+   * matching `user` row, `tagIds` yields an array of `tag` rows. Children
+   * that fail the tenant access check are silently filtered out.
+   */
+  sourceField?: string;
+  /**
+   * For DELETE: whether the child's parentField is an array<record<>>.
+   * For READ:   whether the parent's sourceField is an array (e.g. tagIds vs
+   * tagId). Drives the SurrealQL projection: scalar refs use `$parent.field`,
+   * array refs use `array::flatten($parent.field)`. JS-side distribution
+   * still detects via Array.isArray on each parent's value.
+   */
+  isArray?: boolean;
+  /** Nested cascade for deeper traversal (depth-first). */
+  children?: CascadeChild[];
+}
+
+/**
+ * Map of parent source-field name → loaded related entity (or array of
+ * entities). Keys correspond to the parent's "xxxId" / "xxxIds" fields.
+ * Children that fail tenant access checks are silently dropped: a single-ref
+ * field becomes `null`, an array-ref field omits the missing entries.
+ */
+export type CascadeResult = Record<
+  string,
+  Record<string, unknown> | Record<string, unknown>[] | null
+>;
+
+/** A row optionally augmented with its loaded cascade graph under `_cascade`. */
+export type WithCascade<T> = T & { _cascade?: CascadeResult };
+
+// ---------------------------------------------------------------------------
 // Generic list options
 // ---------------------------------------------------------------------------
 
 export interface GenericListOptions {
   table: string;
+  /** SELECT projection (default `*`). */
   select?: string;
+  /** SurrealQL FETCH clause for the main row select. */
   fetch?: string;
+  /**
+   * Field used for cursor-based pagination. Default `"id"`. The cursor value
+   * is compared against this field with `>` (ASC) or `<` (DESC). Should be
+   * monotonic for stable paging.
+   */
   cursorField?: string;
+  /**
+   * ORDER BY field. Defaults to cursorField when omitted. If you set this to
+   * something other than cursorField, you're responsible for ensuring the
+   * cursor still produces stable, non-overlapping pages.
+   */
   orderBy?: string;
+  /** ORDER BY direction. Default `"ASC"`. */
+  orderByDirection?: "ASC" | "DESC";
   searchFields?: string[];
   dateRangeField?: string;
   extraConditions?: string[];
   extraBindings?: Record<string, unknown>;
+  /** Hard cap; the effective page size is min(params.limit, opts.limit). */
   limit?: number;
+  /**
+   * Optional cascade descriptors. When present, related entities referenced
+   * by each parent's `sourceField` are loaded (tenant-scoped when applicable)
+   * IN THE SAME db.query() round-trip and attached to every row under
+   * `_cascade`.
+   */
+  cascade?: CascadeChild[];
 }
 
 // ---------------------------------------------------------------------------
@@ -71,9 +147,9 @@ export interface GenericCrudOptions {
   /**
    * When set, every generated query includes AND-combined conditions derived
    * from the Tenant contract fields (id → tenantId, systemId, companyId,
-   * actorId). The helper automatically checks which of these columns exist on
-   * the table and only emits conditions for those that do. Omit for global
-   * (unscoped) operations like core admin lookups.
+   * actorId). The helper checks which of these columns exist on the table
+   * and only emits conditions for those that do. Omit for global (unscoped)
+   * operations like core admin lookups.
    */
   tenant?: Tenant;
   fields?: FieldSpec[];
@@ -108,15 +184,13 @@ interface TenantBindings {
 /**
  * Builds AND-combined SurrealQL conditions and bindings from a Tenant contract.
  *
- * For each relevant Tenant field (id, systemId, companyId, actorId), checks
- * whether the target table actually has a matching column and only emits a
- * condition when it does. This makes every generic function tenant-aware
- * without callers needing to know the table schema.
- *
- * - tenant.id  → `tenantIds CONTAINS $tenantId`
+ * - tenant.id        → `tenantIds CONTAINS $tenantId`
  * - tenant.systemId  → `systemId = $tenantSystemId`
  * - tenant.companyId → `companyId = $tenantCompanyId`
  * - tenant.actorId   → `actorId = $tenantActorId`
+ *
+ * Each condition is only emitted when the target table actually has the
+ * relevant column (via the cached `tableHasField`).
  */
 async function buildTenantConditions(
   tenant: Tenant,
@@ -153,27 +227,42 @@ async function buildTenantConditions(
 }
 
 /**
- * Appends Tenant-derived conditions into an existing conditions/bindings pair.
- * Only modifies the arrays in-place when the table has the corresponding column.
+ * Appends Tenant-derived conditions into an existing conditions/bindings
+ * pair. Only modifies the arrays in-place when the table has the column.
+ *
+ * `bindingPrefix` re-namespaces every `$x` placeholder to `$prefix_x` so
+ * cascade levels (each scoped to the same tenant against a different child
+ * table) can coexist in the same query without colliding on `$tenantId`.
  */
 async function addTenantConditions(
   tenant: Tenant | undefined,
   table: string,
   conditions: string[],
   bindings: Record<string, unknown>,
+  bindingPrefix?: string,
 ): Promise<void> {
   if (!tenant) return;
   const tb = await buildTenantConditions(tenant, table);
-  conditions.push(...tb.conditions);
-  Object.assign(bindings, tb.bindings);
+  if (!bindingPrefix) {
+    conditions.push(...tb.conditions);
+    Object.assign(bindings, tb.bindings);
+    return;
+  }
+  for (const cond of tb.conditions) {
+    conditions.push(
+      cond.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, `$${bindingPrefix}_$1`),
+    );
+  }
+  for (const [k, v] of Object.entries(tb.bindings)) {
+    bindings[`${bindingPrefix}_${k}`] = v;
+  }
 }
 
 /**
  * Returns tenant-derived SET clause parts for CREATE/UPDATE statements.
- * Used alongside addTenantConditions for write operations.
  *
  * For `tenantIds` (array field), emits `tenantIds = [$tenantId]` on create.
- * For scalar fields (systemId, companyId, actorId), emits `field = $binding`.
+ * For scalar fields, emits `field = $binding`.
  */
 async function addTenantSetClauses(
   tenant: Tenant | undefined,
@@ -185,13 +274,151 @@ async function addTenantSetClauses(
   const tb = await buildTenantConditions(tenant, table);
   for (const cond of tb.conditions) {
     if (cond.startsWith("tenantIds CONTAINS")) {
-      // CREATE: set the array with single element
       setClauses.push("tenantIds = [$tenantId]");
     } else {
       setClauses.push(cond);
     }
   }
   Object.assign(bindings, tb.bindings);
+}
+
+// ---------------------------------------------------------------------------
+// CASCADE PLANNING (read-side, used by genericList & genericGetById)
+// ---------------------------------------------------------------------------
+//
+// Cascade loads run in the same round-trip as the main query. The `cascade`
+// descriptor tree compiles to a chain of `LET` statements that read from the
+// previous LET's array projection — no JS-side intermediate fetches.
+//
+//   LET $__items   = (SELECT * FROM task WHERE ...);
+//   LET $cascade0  = SELECT * FROM user WHERE id IN $__items.assigneeId AND ...;
+//   LET $cascade1  = SELECT * FROM company WHERE id IN $cascade0.companyId AND ...;
+//   LET $cascade2  = SELECT * FROM tag WHERE id IN array::flatten($__items.tagIds) AND ...;
+//
+// Then a single `RETURN { items, total, cascade0, cascade1, ... }` packages
+// everything for one db.query() call. JS-side, `distributeCascade` walks the
+// plan tree and attaches each loaded row back onto its parent's `_cascade`.
+// ---------------------------------------------------------------------------
+
+interface CascadePlan {
+  sourceField: string;
+  /** SurrealQL LET variable name (without `$`) — also the RETURN key. */
+  varName: string;
+  isArray: boolean;
+  children: CascadePlan[];
+}
+
+interface CascadeBuilder {
+  letStatements: string[];
+  returnFields: string[];
+  bindings: Record<string, unknown>;
+  /** Monotonic counter for unique LET vars across all nesting levels. */
+  varCounter: { n: number };
+}
+
+async function planCascade(
+  cascade: CascadeChild[],
+  parentVar: string,
+  builder: CascadeBuilder,
+  tenant: Tenant | undefined,
+): Promise<CascadePlan[]> {
+  const plans: CascadePlan[] = [];
+
+  for (const child of cascade) {
+    const sourceField = child.sourceField;
+    if (!sourceField) continue;
+
+    const varName = `cascade${builder.varCounter.n++}`;
+    const isArray = child.isArray ?? false;
+
+    // Project the child id source from the parent LET. Array-ref fields need
+    // flattening because $items.tagIds is array<array<>>.
+    const idSource = isArray
+      ? `array::flatten(${parentVar}.${sourceField})`
+      : `${parentVar}.${sourceField}`;
+
+    // Tenant-scope this child the same way as everything else, but with a
+    // namespaced binding prefix so multiple cascade levels don't fight over
+    // the same `$tenantId` placeholder name.
+    const condParts: string[] = [`id IN ${idSource}`];
+    await addTenantConditions(
+      tenant,
+      child.table,
+      condParts,
+      builder.bindings,
+      varName,
+    );
+
+    builder.letStatements.push(
+      `LET $${varName} = SELECT * FROM ${child.table} WHERE ${
+        condParts.join(" AND ")
+      };`,
+    );
+    builder.returnFields.push(`${varName}: $${varName}`);
+
+    const nested = child.children?.length
+      ? await planCascade(child.children, `$${varName}`, builder, tenant)
+      : [];
+
+    plans.push({ sourceField, varName, isArray, children: nested });
+  }
+
+  return plans;
+}
+
+/**
+ * Walks the cascade plan and indexes each loaded child set by id, then for
+ * every parent looks up its source-field value(s) and assigns the matched
+ * row(s) into `parent._cascade[sourceField]`. Tenant-filtered-out rows are
+ * absent from the index, so single refs collapse to `null` and array refs
+ * omit the missing entries.
+ */
+function distributeCascade(
+  parents: Record<string, unknown>[],
+  cascadeData: Record<string, unknown>,
+  plans: CascadePlan[],
+): void {
+  for (const plan of plans) {
+    const loaded = (cascadeData[plan.varName] as Record<string, unknown>[]) ??
+      [];
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const item of loaded) byId.set(stringifyId(item.id), item);
+
+    for (const parent of parents) {
+      const v = parent[plan.sourceField];
+      const slot =
+        ((parent as WithCascade<Record<string, unknown>>)._cascade ??= {});
+      if (v == null) {
+        slot[plan.sourceField] = plan.isArray ? [] : null;
+      } else if (Array.isArray(v)) {
+        slot[plan.sourceField] = v
+          .map((id) => byId.get(stringifyId(id)))
+          .filter((x): x is Record<string, unknown> => x != null);
+      } else {
+        slot[plan.sourceField] = byId.get(stringifyId(v)) ?? null;
+      }
+    }
+
+    if (plan.children.length > 0) {
+      distributeCascade(loaded, cascadeData, plan.children);
+    }
+  }
+}
+
+/**
+ * Coerce a SurrealDB record id (string, RecordId, or `{ tb, id }`) to a
+ * stable string key for Map / Set lookups. RecordId object identity isn't
+ * reliable across query results, so we always key by canonical string form.
+ */
+function stringifyId(id: unknown): string {
+  if (id == null) return "";
+  if (typeof id === "string") return id;
+  if (typeof id === "object") {
+    const obj = id as { toString?: () => string; tb?: string; id?: unknown };
+    if (obj.tb && obj.id != null) return `${obj.tb}:${stringifyId(obj.id)}`;
+    if (typeof obj.toString === "function") return obj.toString();
+  }
+  return String(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -209,38 +436,62 @@ export interface DateRangeFilter {
 }
 
 export interface GenericListParams extends CursorParams {
+  limit: number;
+  cursor: unknown;
   search?: string;
   tenant?: Tenant;
   tagFilter?: TagFilter;
   dateRange?: DateRangeFilter;
 }
 
+/**
+ * Cursor-paginated list with optional cascade-loading of related entities.
+ *
+ * Everything happens in a SINGLE db.query() round-trip:
+ *
+ *   LET $__items   = (SELECT … LIMIT N+1);   -- N+1 to detect hasMore
+ *   LET $__total   = (SELECT count() … GROUP ALL)[0].c;
+ *   LET $cascade0  = SELECT … FROM child0 WHERE id IN $__items.<sourceField> …;
+ *   LET $cascade1  = SELECT … FROM child1 WHERE id IN $cascade0.<sourceField> …;
+ *   …
+ *   RETURN { items: $__items, total: $__total, cascade0: $cascade0, … };
+ *
+ * Cursor pagination uses `WHERE cursorField > $__cursor` for ASC and `<` for
+ * DESC. The returned `nextCursor` is the stringified cursorField value of the
+ * last row on the current page; pass it back via params.cursor for the next
+ * page.
+ */
 export async function genericList<T = Record<string, unknown>>(
   opts: GenericListOptions,
   params: GenericListParams,
-): Promise<PaginatedResult<T>> {
-  const conditions: string[] = [...(opts.extraConditions ?? [])];
-  const bindings: Record<string, unknown> = {
-    ...(opts.extraBindings ?? {}),
-  };
+): Promise<PaginatedResult<WithCascade<T>>> {
+  const baseConditions: string[] = [...(opts.extraConditions ?? [])];
+  const bindings: Record<string, unknown> = { ...(opts.extraBindings ?? {}) };
+
+  // --- Filters that apply to BOTH items and total count -------------------
 
   if (params.search && opts.searchFields?.length) {
     const searchExpr = opts.searchFields
       .map((f) => `${f} @@ $search`)
       .join(" OR ");
-    conditions.push(`(${searchExpr})`);
+    baseConditions.push(`(${searchExpr})`);
     bindings.search = params.search;
   }
 
-  await addTenantConditions(params.tenant, opts.table, conditions, bindings);
+  await addTenantConditions(
+    params.tenant,
+    opts.table,
+    baseConditions,
+    bindings,
+  );
 
   if (params.dateRange && opts.dateRangeField) {
     if (params.dateRange.start) {
-      conditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
+      baseConditions.push(`${opts.dateRangeField} >= $dateRangeStart`);
       bindings.dateRangeStart = params.dateRange.start;
     }
     if (params.dateRange.end) {
-      conditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
+      baseConditions.push(`${opts.dateRangeField} <= $dateRangeEnd`);
       bindings.dateRangeEnd = params.dateRange.end;
     }
   }
@@ -249,51 +500,180 @@ export async function genericList<T = Record<string, unknown>>(
     const col = params.tagFilter.tagsColumn ?? "tagIds";
     for (let i = 0; i < params.tagFilter.tagNames.length; i++) {
       const bindKey = `tagName_${i}`;
-      conditions.push(
+      baseConditions.push(
         `${col} CONTAINS (SELECT VALUE id FROM tag WHERE name = $${bindKey} LIMIT 1)`,
       );
       bindings[bindKey] = params.tagFilter.tagNames[i];
     }
   }
 
-  const effectiveParams: CursorParams = {
-    ...params,
-    limit: opts.limit != null
-      ? Math.min(params.limit, opts.limit)
-      : params.limit,
+  // --- Pagination (only on items, not on total) ---------------------------
+
+  const cursorField = opts.cursorField ?? "id";
+  const direction = opts.orderByDirection ?? "ASC";
+  const orderField = opts.orderBy ?? cursorField;
+  const requestedLimit = params.limit ?? 20;
+  const cap = opts.limit ?? Number.MAX_SAFE_INTEGER;
+  const limit = Math.max(1, Math.min(requestedLimit, cap));
+
+  const itemConditions = [...baseConditions];
+  if (params.cursor) {
+    const op = direction === "ASC" ? ">" : "<";
+    itemConditions.push(`${cursorField} ${op} $__cursor`);
+    bindings.__cursor =
+      typeof params.cursor === "string" && params.cursor.includes(":")
+        ? rid(params.cursor)
+        : params.cursor;
+  }
+
+  const baseWhere = baseConditions.length
+    ? ` WHERE ${baseConditions.join(" AND ")}`
+    : "";
+  const itemWhere = itemConditions.length
+    ? ` WHERE ${itemConditions.join(" AND ")}`
+    : "";
+  const selectFields = opts.select ?? "*";
+  const fetchClause = opts.fetch ? ` FETCH ${opts.fetch}` : "";
+
+  // Limit + 1 lets us detect hasMore without a second query.
+  const itemsSelect = `SELECT ${selectFields} FROM ${opts.table}${itemWhere}` +
+    ` ORDER BY ${orderField} ${direction} LIMIT ${limit + 1}${fetchClause}`;
+
+  const countSelect =
+    `SELECT count() AS c FROM ${opts.table}${baseWhere} GROUP ALL`;
+
+  // --- Cascade plan (contributes its own LETs and RETURN fields) ----------
+
+  const builder: CascadeBuilder = {
+    letStatements: [],
+    returnFields: [],
+    bindings,
+    varCounter: { n: 0 },
   };
 
-  return paginatedQuery<T>({
-    table: opts.table,
-    select: opts.select,
-    fetch: opts.fetch,
-    cursorField: opts.cursorField,
-    orderBy: opts.orderBy,
-    conditions,
-    bindings,
-    params: effectiveParams,
-  });
+  const cascadePlans = opts.cascade?.length
+    ? await planCascade(opts.cascade, "$__items", builder, params.tenant)
+    : [];
+
+  // --- Assemble and execute as one round-trip -----------------------------
+
+  const cascadeReturn = builder.returnFields.length
+    ? ", " + builder.returnFields.join(", ")
+    : "";
+
+  const query = [
+    `LET $__items = (${itemsSelect});`,
+    `LET $__totalRow = (${countSelect});`,
+    `LET $__total = IF array::len($__totalRow) > 0 THEN $__totalRow[0].c ELSE 0 END;`,
+    ...builder.letStatements,
+    `RETURN { items: $__items, total: $__total${cascadeReturn} };`,
+  ].join("\n");
+
+  const db = await getDb();
+  const result = await db.query<unknown[]>(query, bindings);
+  const final = (result[result.length - 1] ?? {}) as {
+    items?: Record<string, unknown>[];
+    total?: number;
+    [key: string]: unknown;
+  };
+
+  let items = final.items ?? [];
+  const total = final.total ?? 0;
+
+  // Trim the +1 sentinel and compute pagination metadata.
+  const hasMore = items.length > limit;
+  if (hasMore) items = items.slice(0, limit);
+
+  let nextCursor: string | undefined;
+  if (hasMore && items.length > 0) {
+    const cv = items[items.length - 1][cursorField];
+    if (cv != null) nextCursor = stringifyId(cv);
+  }
+
+  if (cascadePlans.length > 0 && items.length > 0) {
+    distributeCascade(items, final, cascadePlans);
+  }
+
+  return {
+    items: items as WithCascade<T>[],
+    total,
+    hasMore,
+    nextCursor,
+  } as PaginatedResult<WithCascade<T>>;
 }
 
 // ---------------------------------------------------------------------------
 // GET BY ID
 // ---------------------------------------------------------------------------
 
+/**
+ * Single-row read with optional cascade. When cascade is requested, the row
+ * fetch and every cascade level run in one db.query() round-trip via the
+ * same LET-chain compiler used by genericList.
+ */
 export async function genericGetById<T = Record<string, unknown>>(
-  opts: GenericCrudOptions,
+  opts: GenericCrudOptions & { cascade?: CascadeChild[] },
   id: string,
-): Promise<T | null> {
+): Promise<WithCascade<T> | null> {
   const db = await getDb();
   const bindings: Record<string, unknown> = { id: rid(id) };
   const conditions = ["id = $id"];
 
   await addTenantConditions(opts.tenant, opts.table, conditions, bindings);
 
-  let query = `SELECT * FROM ${opts.table} WHERE ${conditions.join(" AND ")}`;
-  if (opts.fetch) query += ` FETCH ${opts.fetch}`;
+  const fetchClause = opts.fetch ? ` FETCH ${opts.fetch}` : "";
+  const entitySelect =
+    `SELECT * FROM ${opts.table} WHERE ${conditions.join(" AND ")}` +
+    ` LIMIT 1${fetchClause}`;
 
-  const result = await db.query<[T[]]>(query, bindings);
-  return result[0]?.[0] ?? null;
+  // Fast path: no cascade, plain SELECT.
+  if (!opts.cascade?.length) {
+    const result = await db.query<[T[]]>(entitySelect, bindings);
+    return (result[0]?.[0] as WithCascade<T>) ?? null;
+  }
+
+  // Cascade path: compile to one LET-chain query.
+  const builder: CascadeBuilder = {
+    letStatements: [],
+    returnFields: [],
+    bindings,
+    varCounter: { n: 0 },
+  };
+
+  // Plan against `$__entity` (an array of one) so cascade projections like
+  // `$__entity.userId` produce a one-element array — same shape the list
+  // path sees, no special-casing needed downstream.
+  const cascadePlans = await planCascade(
+    opts.cascade,
+    "$__entity",
+    builder,
+    opts.tenant,
+  );
+
+  const cascadeReturn = builder.returnFields.length
+    ? ", " + builder.returnFields.join(", ")
+    : "";
+
+  const query = [
+    `LET $__entity = (${entitySelect});`,
+    ...builder.letStatements,
+    `RETURN { entity: $__entity[0]${cascadeReturn} };`,
+  ].join("\n");
+
+  const result = await db.query<unknown[]>(query, bindings);
+  const final = (result[result.length - 1] ?? {}) as {
+    entity?: Record<string, unknown> | null;
+    [key: string]: unknown;
+  };
+
+  const entity = final.entity ?? null;
+  if (!entity) return null;
+
+  if (cascadePlans.length > 0) {
+    distributeCascade([entity], final, cascadePlans);
+  }
+
+  return entity as WithCascade<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -479,13 +859,7 @@ export async function genericUpdate<
 
 /**
  * Associates an entity with a tenant by setting the tenant-derived columns
- * (tenantId, systemId, companyId, actorId) that exist on the table.
- *
- * Uses the same field mapping as `buildTenantConditions`:
- * - tenant.id      → tenantId
- * - tenant.systemId  → systemId   (only if tenant.systemId is set)
- * - tenant.companyId → companyId  (only if tenant.companyId is set)
- * - tenant.actorId   → actorId    (only if tenant.actorId is set)
+ * (tenantIds, systemId, companyId, actorId) that exist on the table.
  *
  * Columns that don't exist on the table are silently skipped.
  */
@@ -525,49 +899,27 @@ export async function genericAssociate(
 // DELETE (dissociate → orphan-check → hard-delete)
 // ---------------------------------------------------------------------------
 
-export interface CascadeChild {
-  /** Table to cascade-delete from when the parent is orphaned. */
-  table: string;
-  /**
-   * Field on the child table that references the parent entity's id.
-   * Used for orphan-checking and scoped deletion.
-   * Default: "tenantId" when the table has it and a tenant is provided.
-   */
-  parentField?: string;
-  /**
-   * Whether the child's parentField is an array<record<>>.
-   * When true, orphan-check uses CONTAINS and dissociation uses array.filter().
-   * When false (default), orphan-check uses = and dissociation sets field = NONE.
-   */
-  isArray?: boolean;
-  /** Nested children for deeper cascading (depth-first). */
-  children?: CascadeChild[];
-}
-
 export interface GenericDeleteResult {
   success: boolean;
   /** True when the root entity was actually hard-deleted. */
   deleted: boolean;
-  /** True when the entity was dissociated from the tenant but still referenced elsewhere. */
+  /** True when the entity was dissociated but still referenced elsewhere. */
   orphaned: boolean;
   /** Tables that were cascade-deleted (only when hard-deleted). */
   cascaded?: string[];
 }
 
 /**
- * genericDelete implements the dissociate → orphan-check → hard-delete cycle
- * from §2.4.2:
+ * genericDelete implements the dissociate → orphan-check → hard-delete cycle:
  *
- * 1. If the table has a `tenantId` column and a tenant is provided:
- *    a. Dissociate — remove the entity's tenantId (set to NONE).
- *    b. Orphan-check — query whether any other row still references the entity.
- *       For tenantId-scoped entities, checks if any row across ALL tenants
- *       still references this entity's id through the relevant parent fields.
+ * 1. If the table has `tenantIds` and a tenant is provided:
+ *    a. Dissociate — remove this tenant from the entity's tenantIds array.
+ *    b. Orphan-check — query whether any other row still references the
+ *       entity through child cascade fields or the same table.
  *    c. If still referenced → return { deleted: true, orphaned: true }.
- *       The entity survives, dissociated from this tenant only.
  *    d. If orphaned → hard-delete the entity and cascade through children.
  *
- * 2. If the table has no `tenantId` or no tenant is provided:
+ * 2. If the table has no `tenantIds` or no tenant is provided:
  *    Hard-delete the entity directly with cascade.
  */
 export async function genericDelete(
@@ -580,7 +932,6 @@ export async function genericDelete(
   const hasTenantIds = await tableHasField(opts.table, "tenantIds");
   const tenant = opts.tenant;
 
-  // Build tenant-derived WHERE conditions for scoping the initial lookup
   const tenantWhere: string[] = [];
   await addTenantConditions(tenant, opts.table, tenantWhere, bindings);
   const tenantWhereClause = tenantWhere.length
@@ -588,21 +939,17 @@ export async function genericDelete(
     : "";
 
   if (hasTenantIds && tenant) {
-    // ── Path A: tenant-scoped entity → dissociate first ──────────────────
     const dissociateBindings: Record<string, unknown> = { id: entityId };
     const tenantBind = await buildTenantConditions(tenant, opts.table);
     Object.assign(dissociateBindings, tenantBind.bindings);
 
     const queries: string[] = [
-      // Step 1: Dissociate — remove this tenant from the entity's tenantIds array
       `UPDATE ${opts.table} SET tenantIds = tenantIds.filter(|x| x != $tenantId) WHERE id = $id${tenantWhereClause};`,
     ];
 
-    // Step 2: Orphan-check — is the entity still referenced by any row in any tenant?
     const orphanChecks = await buildOrphanChecks(opts.table, id, opts.cascade);
     queries.push(...orphanChecks.queries);
 
-    // Step 3: Conditional hard-delete with cascade
     const cascadeStatements = await buildCascadeStatements(
       opts.cascade ?? [],
       id,
@@ -618,7 +965,6 @@ export async function genericDelete(
 
     await db.query(queries.join("\n"), { ...bindings, ...dissociateBindings });
 
-    // Verify whether entity was actually hard-deleted
     const checkResult = await db.query<[{ id: string }[]]>(
       `SELECT id FROM ${opts.table} WHERE id = $id LIMIT 1;`,
       { id: entityId },
@@ -632,7 +978,6 @@ export async function genericDelete(
       cascaded: stillExists ? undefined : cascadeStatements.cascadedTables,
     };
   } else {
-    // ── Path B: unscoped entity → hard-delete directly ───────────────────
     const cascadeStatements = await buildCascadeStatements(
       opts.cascade ?? [],
       id,
@@ -656,11 +1001,6 @@ export async function genericDelete(
   }
 }
 
-/**
- * Builds SurrealQL orphan-check queries for an entity.
- * Checks whether any row in any tenant still references the entity
- * through the cascade children's parentField or the entity's own id.
- */
 async function buildOrphanChecks(
   table: string,
   id: string,
@@ -668,11 +1008,8 @@ async function buildOrphanChecks(
 ): Promise<{ queries: string[]; condition: string }> {
   const checks: string[] = [];
 
-  // Check if any row in the same table still has this entity referenced
-  // (e.g. other tenants referencing it via foreign keys)
   if (cascade?.length) {
-    for (let i = 0; i < cascade.length; i++) {
-      const child = cascade[i];
+    for (const child of cascade) {
       const parentField = child.parentField ?? "tenantIds";
       const isArray = child.isArray ?? true;
 
@@ -688,8 +1025,6 @@ async function buildOrphanChecks(
     }
   }
 
-  // Also check if any other row in the same table references this id
-  // (e.g. composables that might be shared across tenants)
   checks.push(
     `(SELECT count() AS c FROM ${table} WHERE id = $eid GROUP ALL)[0].c = 0`,
   );
@@ -704,9 +1039,6 @@ async function buildOrphanChecks(
   return { queries, condition: "$isOrphaned" };
 }
 
-/**
- * Builds cascade DELETE statements for all children, depth-first.
- */
 async function buildCascadeStatements(
   cascade: CascadeChild[],
   parentId: string,
@@ -760,9 +1092,7 @@ export async function genericCount(
 ): Promise<number> {
   const db = await getDb();
   const conditions: string[] = [...(opts.extraConditions ?? [])];
-  const bindings: Record<string, unknown> = {
-    ...(opts.extraBindings ?? {}),
-  };
+  const bindings: Record<string, unknown> = { ...(opts.extraBindings ?? {}) };
 
   if (params.search && opts.searchFields?.length) {
     const searchExpr = opts.searchFields
@@ -824,7 +1154,7 @@ export async function genericDecrypt(
 
   await addTenantConditions(opts.tenant, opts.table, conditions, bindings);
 
-  let query = `SELECT ${columns} FROM ${opts.table} WHERE ${
+  const query = `SELECT ${columns} FROM ${opts.table} WHERE ${
     conditions.join(" AND ")
   }`;
 
@@ -862,7 +1192,7 @@ export async function genericVerify(
 
   await addTenantConditions(opts.tenant, opts.table, conditions, bindings);
 
-  let query = `SELECT ${opts.hashField} FROM ${opts.table} WHERE ${
+  const query = `SELECT ${opts.hashField} FROM ${opts.table} WHERE ${
     conditions.join(" AND ")
   }`;
 
