@@ -104,6 +104,7 @@ export type WithCascade<T> = T & { _cascade?: CascadeResult };
 // ---------------------------------------------------------------------------
 
 export interface GenericListOptions {
+  // --- Table configuration ---
   table: string;
   /** SELECT projection (default `*`). */
   select?: string;
@@ -127,8 +128,6 @@ export interface GenericListOptions {
   dateRangeField?: string;
   extraConditions?: string[];
   extraBindings?: Record<string, unknown>;
-  /** Hard cap; the effective page size is min(params.limit, opts.limit). */
-  limit?: number;
   /**
    * Optional cascade descriptors. When present, related entities referenced
    * by each parent's `sourceField` are loaded (tenant-scoped when applicable)
@@ -136,6 +135,20 @@ export interface GenericListOptions {
    * `_cascade`.
    */
   cascade?: CascadeChild[];
+
+  // --- Request parameters ---
+  /** Page size (default 20). */
+  limit?: number;
+  /** Cursor for pagination (pass nextCursor from previous page). */
+  cursor?: string;
+  /** Fulltext search string. */
+  search?: string;
+  /** Tenant for scoping (tenantIds, systemId, companyId, actorId). */
+  tenant?: Tenant;
+  /** Tag-name filter (AND-combined CONTAINS subqueries). */
+  tagFilter?: TagFilter;
+  /** Inclusive date range filter. */
+  dateRange?: DateRangeFilter;
 }
 
 // ---------------------------------------------------------------------------
