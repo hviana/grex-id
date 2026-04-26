@@ -4,7 +4,6 @@ export interface Voucher {
   applicableCompanyIds: string[]; // empty = universal
   applicablePlanIds: string[]; // empty = valid for every plan
   priceModifier: number;
-  permissions: string[];
   entityLimitModifiers?: Record<string, number>;
   apiRateLimitModifier: number;
   storageLimitModifier: number;

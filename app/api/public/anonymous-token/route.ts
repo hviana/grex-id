@@ -7,11 +7,11 @@ registerCache<string>("core", "anonymous-jwt", async () => {
   const tenant = await getSystemTenant();
 
   const claims: TenantClaims = {
+    id: tenant.id,
     systemId: tenant.systemId,
     companyId: tenant.companyId,
     systemSlug: "core",
-    roles: [],
-    permissions: ["anonymous"],
+    roles: ["anonymous"],
     actorType: "api_token",
     actorId: "api_token:anonymous",
     exchangeable: false,

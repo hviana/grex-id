@@ -18,7 +18,7 @@ function LoginContent() {
   const systemSlug = searchParams.get("systemSlug");
   const isOAuth = searchParams.get("oauth") === "1";
   const oauthClientName = searchParams.get("client_name") ?? "";
-  const oauthPermissions = searchParams.get("permissions") ?? "";
+  const oauthRoles = searchParams.get("roles") ?? "";
   const oauthSystemSlug = searchParams.get("systemSlug") ?? systemSlug ?? "";
   const oauthRedirectOrigin = searchParams.get("redirect_origin") ?? "";
   const { login } = useAuth();
@@ -89,7 +89,7 @@ function LoginContent() {
         // Redirect to OAuth authorization page preserving all params
         const params = new URLSearchParams({
           client_name: oauthClientName,
-          permissions: oauthPermissions,
+          roles: oauthRoles,
           systemSlug: oauthSystemSlug,
           redirect_origin: oauthRedirectOrigin,
         });

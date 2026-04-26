@@ -12,8 +12,8 @@ import Core from "@/server/utils/Core";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
-  const systemSlug = url.searchParams.get("systemSlug") || undefined;
-  const data = await listSettings(systemSlug);
+  const tenantId = url.searchParams.get("tenantId") || undefined;
+  const data = await listSettings(tenantId);
   return Response.json({
     success: true,
     data,
@@ -22,7 +22,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { settings, systemSlug } = body;
+  const { settings, tenantId } = body;
 
   if (!Array.isArray(settings)) {
     return Response.json(
@@ -41,14 +41,14 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     key: string;
     value: string;
     description: string;
-    systemSlug?: string;
+    tenantId?: string;
   }[] = [];
   for (const s of settings.filter((s: Record<string, unknown>) => s.key)) {
     items.push({
       key: await standardizeField("name", String(s.key ?? "")),
       value: await standardizeField("name", String(s.value ?? "")),
       description: await standardizeField("name", String(s.description ?? "")),
-      systemSlug: systemSlug || undefined,
+      tenantId: tenantId || undefined,
     });
   }
 
@@ -60,7 +60,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { key, systemSlug } = body;
+  const { key, tenantId } = body;
   if (!key) {
     return Response.json(
       {
@@ -73,7 +73,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
       { status: 400 },
     );
   }
-  await deleteSetting(key, systemSlug || undefined);
+  await deleteSetting(key, tenantId || undefined);
   await Core.getInstance().reload();
   return Response.json({ success: true });
 }

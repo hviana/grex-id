@@ -22,13 +22,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const extraBindings: Record<string, unknown> = {};
   if (userId) {
     extraConditions.push(
-      "id IN (SELECT VALUE companyId FROM company_user WHERE userId = $userId)",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = $userId AND companyId != NONE)",
     );
     extraBindings.userId = rid(userId);
   }
   if (systemSlug) {
     extraConditions.push(
-      "id IN (SELECT VALUE companyId FROM company_system WHERE systemId = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1))",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE systemId = (SELECT id FROM system WHERE slug = $systemSlug LIMIT 1) AND actorId = NONE AND systemId != NONE)",
     );
     extraBindings.systemSlug = systemSlug;
   }
@@ -36,7 +36,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const result = await genericList<Company>({
     table: "company",
     searchFields: ["name"],
-    fetch: "billingAddress",
+    fetch: "billingAddressId",
     extraConditions,
     extraBindings,
   }, { search, cursor, limit });
@@ -87,12 +87,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
+  // Company has no ownerId — owner resolved via tenant.isOwner = true.
+  // Pass the current systemId from the tenant context.
   const company = await createCompany({
     name: stdName!,
     document: stdDocument!,
     documentType: documentType ?? "cnpj",
     billingAddress: billingAddress ?? {},
     ownerId: ctx.claims!.actorId,
+    systemId: ctx.tenant.systemId,
   });
 
   return Response.json(

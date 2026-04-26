@@ -2,12 +2,12 @@ export interface Plan {
   id: string;
   name: string;
   description: string;
-  systemId: string;
+  tenantId: string; // references system-only tenant row
   price: number;
   currency: string;
   recurrenceDays: number;
   benefits: string[];
-  permissions: string[];
+  roles: string[]; // role tokens granted by this plan
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;

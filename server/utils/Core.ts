@@ -52,9 +52,11 @@ export async function loadCoreData(): Promise<CoreData> {
     systemsBySlug.set(s.slug, s);
   }
 
+  // Index roles by systemId (resolve from tenantId → system via tenant table)
   const rolesBySystem = new Map<string, Role[]>();
   for (const r of roles) {
-    const key = String(r.systemId);
+    // tenantId references a system-only tenant row — resolve the system
+    const key = String((r as Record<string, unknown>).systemId ?? r.tenantId);
     let list = rolesBySystem.get(key);
     if (!list) {
       list = [];
@@ -66,7 +68,9 @@ export async function loadCoreData(): Promise<CoreData> {
   const plansBySystem = new Map<string, Plan[]>();
   const plansById = new Map<string, Plan>();
   for (const p of plans) {
-    const sysKey = String(p.systemId);
+    const sysKey = String(
+      (p as Record<string, unknown>).systemId ?? p.tenantId,
+    );
     let list = plansBySystem.get(sysKey);
     if (!list) {
       list = [];
@@ -78,7 +82,7 @@ export async function loadCoreData(): Promise<CoreData> {
 
   const menusBySystem = new Map<string, MenuItem[]>();
   for (const m of menus) {
-    const key = String(m.systemId);
+    const key = String((m as Record<string, unknown>).systemId ?? m.tenantId);
     let list = menusBySystem.get(key);
     if (!list) {
       list = [];
@@ -92,12 +96,14 @@ export async function loadCoreData(): Promise<CoreData> {
     vouchersById.set(String(v.id), v);
   }
 
+  // Settings indexed by tenantId:key — resolve systemSlug from system lookup
   const settingsMap = new Map<string, CoreSetting>();
   for (const setting of settings) {
-    const slug = setting.systemSlug && setting.systemSlug.length > 0
-      ? setting.systemSlug
-      : "core";
-    const mapKey = slug + ":" + setting.key;
+    const mapKey = `${
+      String(
+        (setting as Record<string, unknown>).systemSlug ?? setting.tenantId,
+      )
+    }:${setting.key}`;
     settingsMap.set(mapKey, setting);
   }
 
@@ -122,14 +128,12 @@ export async function loadCoreData(): Promise<CoreData> {
 }
 
 async function loadSubscription(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<Subscription | null> {
-  const rows = await fetchActiveSubscription({ companyId, systemId });
+  const rows = await fetchActiveSubscription({ tenantId });
   return rows[0] ?? null;
 }
 
-// Tracked subscription cache keys for bulk eviction
 const subscriptionKeys: Set<string> = new Set();
 
 class Core {
@@ -222,11 +226,9 @@ class Core {
   }
 
   async getActiveSubscriptionCached(
-    companyId: string,
-    systemId: string,
+    tenantId: string,
   ): Promise<Subscription | undefined> {
-    const key = `${companyId}:${systemId}`;
-    const cacheName = `sub:${key}`;
+    const cacheName = `sub:${tenantId}`;
     try {
       return await getCache<Subscription>(CORE_SLUG, cacheName);
     } catch {
@@ -235,17 +237,15 @@ class Core {
   }
 
   async ensureSubscription(
-    companyId: string,
-    systemId: string,
+    tenantId: string,
   ): Promise<Subscription | null> {
-    const key = `${companyId}:${systemId}`;
-    const cacheName = `sub:${key}`;
+    const cacheName = `sub:${tenantId}`;
 
     if (!subscriptionKeys.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => loadSubscription(companyId, systemId),
+        () => loadSubscription(tenantId),
       );
       subscriptionKeys.add(cacheName);
     }
@@ -255,17 +255,15 @@ class Core {
   }
 
   async reloadSubscription(
-    companyId: string,
-    systemId: string,
+    tenantId: string,
   ): Promise<Subscription | null> {
-    const key = `${companyId}:${systemId}`;
-    const cacheName = `sub:${key}`;
+    const cacheName = `sub:${tenantId}`;
 
     if (!subscriptionKeys.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => loadSubscription(companyId, systemId),
+        () => loadSubscription(tenantId),
       );
       subscriptionKeys.add(cacheName);
     }
@@ -273,10 +271,26 @@ class Core {
     return updateCache<Subscription | null>(CORE_SLUG, cacheName);
   }
 
+  /** @deprecated Use reloadSubscription(tenantId) instead */
+  async reloadSubscriptionByScope(
+    companyId: string,
+    systemId: string,
+  ): Promise<Subscription | null> {
+    // Find the company-system tenant row
+    const { getDb } = await import("../db/connection.ts");
+    const db = await getDb();
+    const [rows] = await db.query<[{ id: string }[]]>(
+      `SELECT id FROM tenant WHERE actorId IS NONE AND companyId = $companyId AND systemId = $systemId LIMIT 1`,
+      { companyId, systemId },
+    );
+    const tenantId = rows?.[0]?.id;
+    if (!tenantId) return null;
+    return this.reloadSubscription(String(tenantId));
+  }
+
   async reload(): Promise<void> {
     await updateCache<CoreData>(CORE_SLUG, "data");
     this.missingSettings.clear();
-    // JWT secret is derived from settings — clear so it re-reads from updated data
     clearCache(CORE_SLUG, "jwt-secret");
     clearCache(CORE_SLUG, "anonymous-jwt");
     clearCache(CORE_SLUG, "file-access");

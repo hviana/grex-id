@@ -89,19 +89,17 @@ async function getLeadCompanyIds(id: string): Promise<string[]> {
 export async function listLeads(
   params: CursorParams & {
     search?: string;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
   },
 ): Promise<PaginatedResult<Lead & { ownerId?: string }>> {
   const db = await getDb();
   const limit = clampPageLimit(params.limit);
   const bindings: Record<string, unknown> = {
     limit: limit + 1,
-    companyId: rid(requireRecordId(params.companyId, "companyId")),
-    systemId: rid(requireRecordId(params.systemId, "systemId")),
+    tenantId: rid(requireRecordId(params.tenantId, "tenantId")),
   };
 
-  let lcsWhere = `companyId = $companyId AND systemId = $systemId`;
+  let lcsWhere = `tenantId = $tenantId`;
 
   if (params.cursor) {
     lcsWhere += params.direction === "prev"
@@ -452,14 +450,7 @@ export async function removeLeadFromCompanySystem(
 }
 
 /**
- * Sync a lead's channels for the lead-update verification flow. For each
- * channel in the payload: if the lead already references a matching
- * `(type, value)` entity_channel row, flip it to verified; otherwise create a
- * new verified channel and append its id to `lead.channels`.
- *
- * Each channel is synced in its own batched query (the loop is intentional —
- * SurrealDB conditional branching inside a single query per channel is simpler
- * than building a dynamic multi-channel batch).
+ * Sync a lead's channels for the lead-update verification flow.
  */
 export async function syncLeadChannels(
   leadId: string,
@@ -505,11 +496,12 @@ export async function searchUsersInCompanySystem(
   const normalizedCompanyId = requireRecordId(companyId, "companyId");
   const normalizedSystemId = requireRecordId(systemId, "systemId");
   const result = await db.query<[Record<string, unknown>[]]>(
-    `SELECT userId AS userId
-     FROM user_company_system
+    `SELECT actorId AS userId
+     FROM tenant
      WHERE companyId = $companyId
        AND systemId = $systemId
-     LIMIT 100 FETCH userId, userId.profileId`,
+       AND actorId != NONE
+     LIMIT 100 FETCH actorId, actorId.profileId`,
     {
       companyId: rid(normalizedCompanyId),
       systemId: rid(normalizedSystemId),

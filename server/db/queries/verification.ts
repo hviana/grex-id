@@ -8,11 +8,15 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("verification");
 
 /**
- * Atomic communication guard query (§12.13).
+ * Atomic communication guard query (§4.12).
  *
  * Checks for a previous non-expired verification request and rate limit
  * in a single batched query. If both pass, atomically creates the new
  * verification_request row.
+ *
+ * verification_request has `tenantId: record<tenant>` instead of separate
+ * `companyId`/`systemId`/`systemSlug`/`actorId`/`actorType` fields.
+ * The tenantId links to the full tenant context.
  *
  * Returns an array where the last element is a status object with:
  *   blockedByPrevious, blockedByRateLimit, allowed
@@ -62,11 +66,7 @@ export async function atomicCommunicationGuard(params: {
         token = $verificationToken,
         expiresAt = $expiresAt,
         payload = $payload,
-        companyId = $companyId,
-        systemId = $systemId,
-        systemSlug = $systemSlug,
-        actorId = $actorId,
-        actorType = $actorType
+        tenantId = $tenantId
     ) ELSE [] END;
 
     [{
@@ -83,15 +83,9 @@ export async function atomicCommunicationGuard(params: {
       payload: params.payload ?? undefined,
       windowStart: params.windowStart,
       maxCount: params.maxCount,
-      companyId: params.tenant?.companyId
-        ? rid(params.tenant.companyId)
+      tenantId: params.tenant?.tenantId
+        ? rid(params.tenant.tenantId)
         : undefined,
-      systemId: params.tenant?.systemId
-        ? rid(params.tenant.systemId)
-        : undefined,
-      systemSlug: params.tenant?.systemSlug ?? undefined,
-      actorId: params.tenant?.actorId ?? undefined,
-      actorType: params.tenant?.actorType ?? undefined,
     },
   );
 }

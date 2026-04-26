@@ -1,10 +1,9 @@
 export interface Tenant {
-  // All values are real SurrealDB record IDs — no sentinels.
+  id: string; // tenant record ID — universal scope key and FK target
   systemId: string;
   companyId: string;
   systemSlug: string; // "core" for core-scoped routes; else the system slug
   roles: string[]; // [] for anonymous-role tenants
-  permissions: string[]; // [] for anonymous-role tenants; "*" wildcard allowed
 }
 
 export type TenantActorType = "user" | "api_token" | "connected_app";

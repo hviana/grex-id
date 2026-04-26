@@ -18,22 +18,28 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const isAdmin = ctx.tenant.roles.includes("admin") ||
     ctx.tenant.roles.includes("superuser");
 
-  const ensureTenant = {
-    companyId: ctx.tenant.companyId,
-    systemId: ctx.tenant.systemId,
-    ...(isAdmin ? {} : { userId: "userId" }),
-  };
+  // Admin sees all services in the tenant; regular users are filtered
+  // by their own userId via extraConditions.
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+
+  if (!isAdmin) {
+    extraConditions.push("userId = $userId");
+    extraBindings.userId = rid(ctx.claims!.actorId);
+  }
 
   const result = await genericList<ConnectedService>(
     {
       table: "connected_service",
-      select: "*, userId.profile.name AS userName",
+      select: isAdmin ? "*, userId.profile.name AS userName" : "*",
       searchFields: ["name"],
       fetch: "userId.profile",
       limit: 50,
+      extraConditions,
+      extraBindings,
     },
     {
-      ensureTenant,
+      tenantId: ctx.tenant.id,
       search,
       limit: 50,
     },
@@ -74,10 +80,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<ConnectedService>(
     {
       table: "connected_service",
-      ensureTenant: {
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
-      },
+      tenantId: ctx.tenant.id,
     },
     {
       userId: rid(ctx.claims.actorId),
@@ -99,7 +102,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   return Response.json({ success: true, data: result.data }, { status: 201 });
 }
 
-async function deleteHandler(req: Request, _ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
@@ -113,7 +116,10 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "connected_service" }, id);
+  await genericDelete(
+    { table: "connected_service", tenantId: ctx.tenant.id },
+    id,
+  );
   return Response.json({ success: true });
 }
 

@@ -11,7 +11,6 @@ interface VoucherCardProps {
     code: string;
     applicablePlanIds: string[];
     priceModifier: number;
-    permissions: string[];
     entityLimitModifiers: Record<string, number> | null;
     apiRateLimitModifier: number;
     storageLimitModifier: number;
@@ -157,12 +156,6 @@ export default function VoucherCard(
           <DeleteButton onConfirm={onDelete} />
         </div>
       </div>
-
-      <TranslatedBadgeList
-        kind="permission"
-        tokens={voucher.permissions}
-        className="mt-3"
-      />
 
       <TranslatedBadgeList
         kind="entity"

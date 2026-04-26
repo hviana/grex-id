@@ -6,17 +6,17 @@ assertServerOnly("actor-validity");
 /**
  * Loads all non-revoked api_token ids for a tenant partition.
  * Used by the actor-validity cache to hydrate a tenant's in-memory set.
+ * Now scopes by tenantId (the tenant record ID) instead of companyId/systemId.
  */
 export async function fetchActiveApiTokenIds(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<{ id: string }[]> {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM api_token
-       WHERE companyId = $companyId AND systemId = $systemId
+    `SELECT id, tenantId FROM api_token
+       WHERE tenantId = $tenantId
          AND revokedAt IS NONE`,
-    { companyId: rid(params.companyId), systemId: rid(params.systemId) },
+    { tenantId: rid(params.tenantId) },
   );
   return result[0] ?? [];
 }

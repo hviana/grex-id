@@ -29,6 +29,7 @@ async function sendChannelConfirmation(
   channelType: string,
   userName: string,
   systemSlug: string,
+  tenantId: string,
   actionKey: "auth.action.register" | "auth.action.entityChannelAdd",
 ): Promise<CommunicationGuardResult> {
   const guardResult = await communicationGuard({
@@ -36,7 +37,7 @@ async function sendChannelConfirmation(
     ownerType: "user",
     actionKey,
     payload: { channelIds: [channelId] },
-    tenant: { systemSlug, actorId: userId, actorType: "user" },
+    tenant: { id: tenantId, systemSlug, actorId: userId, actorType: "user" },
   });
 
   if (!guardResult.allowed) return guardResult;
@@ -141,6 +142,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       channel.type,
       name,
       ctx.tenant.systemSlug,
+      ctx.tenant.id,
       actionKey,
     );
 
@@ -257,6 +259,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     type,
     name,
     ctx.tenant.systemSlug,
+    ctx.tenant.id,
     "auth.action.entityChannelAdd",
   );
 

@@ -6,7 +6,6 @@ import enHomepage from "./en/homepage.json";
 import enTemplates from "./en/templates.json";
 import enValidation from "./en/validation.json";
 import enRoles from "./en/roles.json";
-import enPermissions from "./en/permissions.json";
 import enEntities from "./en/entities.json";
 import enResources from "./en/resources.json";
 import enGrexId from "./en/systems/grex-id.json";
@@ -18,7 +17,6 @@ import ptBRHomepage from "./pt-BR/homepage.json";
 import ptBRTemplates from "./pt-BR/templates.json";
 import ptBRValidation from "./pt-BR/validation.json";
 import ptBRRoles from "./pt-BR/roles.json";
-import ptBRPermissions from "./pt-BR/permissions.json";
 import ptBREntities from "./pt-BR/entities.json";
 import ptBRResources from "./pt-BR/resources.json";
 import ptBRGrexId from "./pt-BR/systems/grex-id.json";
@@ -35,7 +33,6 @@ const translations: Record<string, Record<string, TranslationMap>> = {
     templates: enTemplates,
     validation: enValidation,
     roles: enRoles,
-    permissions: enPermissions,
     entities: enEntities,
     resources: enResources,
   },
@@ -48,7 +45,6 @@ const translations: Record<string, Record<string, TranslationMap>> = {
     templates: ptBRTemplates,
     validation: ptBRValidation,
     roles: ptBRRoles,
-    permissions: ptBRPermissions,
     entities: ptBREntities,
     resources: ptBRResources,
   },

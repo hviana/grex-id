@@ -39,8 +39,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
       leadId && faceDescriptor && Array.isArray(faceDescriptor) &&
       typeof companyId === "string" && typeof systemId === "string"
     ) {
+      const tenantId = ctx.tenant.id;
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        await getSetting(tenantId, "detection.sensitivity"),
       );
       try {
         const orphanMatch = await searchOrphanFaceByEmbedding(
@@ -55,8 +56,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             embedding_type1: faceDescriptor,
           }, {
             route: "systems/grex-id/leads/public:POST",
-            companyId,
-            systemId,
+            tenantId,
           });
         }
       } catch {
@@ -65,8 +65,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads/public:POST",
-          companyId,
-          systemId,
+          tenantId,
         });
       }
     }

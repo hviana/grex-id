@@ -34,24 +34,23 @@ export interface CreditDeductionResult {
 }
 
 /**
- * Attempts to consume credits for an operation (§22.3).
+ * Attempts to consume credits for an operation (§7.3).
  *
  * Deduction priority:
  * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
  * 2. Purchased credits (usage_record with resource="credits") — persistent
  *
- * Operation-count cap (§22.3 step 4, per-resourceKey):
+ * Operation-count cap (§7.3 step 2, per-resourceKey):
  * If remainingOperationCount[resourceKey] is 0 and the cap is active,
  * the operation is rejected regardless of available credits.
- * Actor-level cap (step 4a) enforced for api_token / connected_app actors.
+ * Actor-level cap (step 3) enforced for api_token / connected_app actors.
  *
- * All DB lookups batched into single queries per logical step (§7.2).
+ * All DB lookups batched into single queries per logical step (§7.3).
  */
 export async function consumeCredits(params: {
   resourceKey: string;
   amount: number;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   tenant: Tenant;
   actorId?: string;
   actorType?: TenantActorType;
@@ -59,10 +58,9 @@ export async function consumeCredits(params: {
   const day = getCurrentDay();
 
   // Single batched query: fetch subscription + credit balance + conditionally set
-  // auto-recharge re-entrancy guard (§22.3, §7.2)
+  // auto-recharge re-entrancy guard (§7.3)
   const result = await fetchSubscriptionAndCreditBalance({
-    companyId: params.companyId,
-    systemId: params.systemId,
+    tenantId: params.tenantId,
   });
 
   const sub = result[0]?.[0];
@@ -74,14 +72,13 @@ export async function consumeCredits(params: {
   const purchasedCredits = result[1]?.[0]?.balance ?? 0;
   const totalAvailable = planCredits + purchasedCredits;
 
-  // Per-resourceKey operation-count cap check (§12.3)
+  // Per-resourceKey operation-count cap check (§7.3 step 2)
   const operationCounts: Record<string, number> =
     (sub.remainingOperationCount as Record<string, number>) ?? {};
   const remainingForThisKey = operationCounts[params.resourceKey] ?? 0;
 
   const opCap = await resolveMaxOperationCount({
-    companyId: params.companyId,
-    systemId: params.systemId,
+    tenant: params.tenant,
     resourceKey: params.resourceKey,
   });
 
@@ -92,12 +89,16 @@ export async function consumeCredits(params: {
         ? rawAlertMap as Record<string, boolean>
         : {};
     if (!alertMap[params.resourceKey]) {
-      await sendOperationCountAlert(sub, params, opCap.max);
+      await sendOperationCountAlert(
+        sub,
+        { resourceKey: params.resourceKey, tenantId: params.tenantId },
+        opCap.max,
+      );
     }
     return { success: false, source: "operationLimit" };
   }
 
-  // Actor-level cap check (§22.3 step 4a) for api_token / connected_app
+  // Actor-level cap check (§7.3 step 3) for api_token / connected_app
   if (
     params.actorId &&
     (params.actorType === "api_token" ||
@@ -107,8 +108,7 @@ export async function consumeCredits(params: {
       actorId: params.actorId,
       actorType: params.actorType ?? "user",
       resourceKey: params.resourceKey,
-      companyId: params.companyId,
-      systemId: params.systemId,
+      tenantId: params.tenantId,
     });
 
     if (actorCapResult === "limited") {
@@ -122,8 +122,7 @@ export async function consumeCredits(params: {
     if (sub.autoRechargeGuardSet) {
       await publish("auto_recharge", {
         subscriptionId: String(sub.id),
-        companyId: String(sub.companyId),
-        systemId: String(sub.systemId),
+        tenantId: params.tenantId,
         resourceKey: params.resourceKey,
       });
 
@@ -134,8 +133,7 @@ export async function consumeCredits(params: {
     if (!sub.creditAlertSent) {
       const alertResult = await setCreditAlertAndFetchOwner({
         subId: String(sub.id),
-        companyId: params.companyId,
-        systemId: params.systemId,
+        tenantId: params.tenantId,
       });
 
       const user = alertResult[2]?.[0];
@@ -177,8 +175,7 @@ export async function consumeCredits(params: {
     await deductFromPlanCredits({
       subId: String(sub.id),
       amount: params.amount,
-      companyId: params.companyId,
-      systemId: params.systemId,
+      tenantId: params.tenantId,
       resourceKey: params.resourceKey,
       day,
       actorId: params.actorId ?? null,
@@ -198,8 +195,7 @@ export async function consumeCredits(params: {
 
   await deductFromPurchasedCredits({
     subId: String(sub.id),
-    companyId: params.companyId,
-    systemId: params.systemId,
+    tenantId: params.tenantId,
     fromPurchased,
     totalAmount: params.amount,
     resourceKey: params.resourceKey,
@@ -227,17 +223,15 @@ async function checkActorOperationCap(params: {
   actorId: string;
   actorType: string;
   resourceKey: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<"ok" | "limited"> {
-  const { actorId, actorType, resourceKey, companyId, systemId } = params;
+  const { actorId, actorType, resourceKey, tenantId } = params;
 
   const result = await fetchActorOperationCap({
     actorRid: rid(actorId),
     actorStr: actorId,
     resourceKey,
-    companyId: rid(companyId),
-    systemId: rid(systemId),
+    tenantId: rid(tenantId),
     periodStart: getCurrentDay().slice(0, 7) + "-01",
     actorType,
   });
@@ -260,16 +254,14 @@ async function checkActorOperationCap(params: {
 async function sendOperationCountAlert(
   sub: {
     id: string;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
   },
-  params: { resourceKey: string; companyId: string; systemId: string },
+  params: { resourceKey: string; tenantId: string },
   _maxCount: number,
 ): Promise<void> {
   const alertResult = await setOperationCountAlertAndFetchOwner({
     subId: String(sub.id),
-    companyId: sub.companyId,
-    systemId: sub.systemId,
+    tenantId: sub.tenantId,
     alertMerge: { [params.resourceKey]: true },
   });
 
@@ -305,15 +297,13 @@ async function sendOperationCountAlert(
 export async function trackCreditExpense(params: {
   resourceKey: string;
   amount: number;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   actorId?: string;
 }): Promise<void> {
   const day = getCurrentDay();
 
   await upsertCreditExpense({
-    companyId: params.companyId,
-    systemId: params.systemId,
+    tenantId: params.tenantId,
     resourceKey: params.resourceKey,
     amount: params.amount,
     day,
@@ -322,11 +312,10 @@ export async function trackCreditExpense(params: {
 }
 
 /**
- * Queries aggregated credit expenses for a company+system within a date range.
+ * Queries aggregated credit expenses for a tenant within a date range.
  */
 export async function getCreditExpenses(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   startDate: string;
   endDate: string;
 }): Promise<

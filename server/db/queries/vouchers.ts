@@ -4,6 +4,10 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("vouchers");
 
+/**
+ * Voucher has no `permissions` field. Voucher modifiers are signed
+ * integers/objects per §7.7.
+ */
 export async function findVoucherByCode(code: string): Promise<Voucher | null> {
   const db = await getDb();
   const result = await db.query<[Voucher[]]>(
@@ -18,7 +22,6 @@ export async function createVoucher(data: {
   applicableCompanyIds: string[];
   applicablePlanIds: string[];
   priceModifier: number;
-  permissions: string[];
   entityLimitModifiers?: Record<string, number>;
   apiRateLimitModifier?: number;
   storageLimitModifier?: number;
@@ -40,7 +43,6 @@ export async function createVoucher(data: {
       applicableCompanyIds = $applicableCompanyIds,
       applicablePlanIds = $applicablePlanIds,
       priceModifier = $priceModifier,
-      permissions = $permissions,
       ${
       hasEntityLimitModifiers
         ? "entityLimitModifiers = $entityLimitModifiers,"

@@ -27,6 +27,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   };
 
   const userId = ctx.claims!.actorId;
+  const tenantId = ctx.tenant.id;
   const systemSlug = ctx.tenant.systemSlug;
 
   if (!currentPassword || !newPassword) {
@@ -98,11 +99,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     actionKey: "auth.action.passwordChange",
     payload: { newPasswordHash },
     tenant: {
-      companyId: ctx.tenant.companyId,
-      systemId: ctx.tenant.systemId,
+      tenantId,
       systemSlug,
-      actorId: userId,
-      actorType: "user",
     },
   });
 

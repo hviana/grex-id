@@ -13,9 +13,8 @@ import type { Tag } from "@/src/contracts/tag";
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search");
-  const { companyId, systemId } = ctx.tenant;
 
-  if (!companyId || !systemId) {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json({ success: true, data: [] });
   }
 
@@ -28,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     {
       search: search ?? undefined,
       limit: search ? 20 : 200,
-      ensureTenant: { companyId, systemId },
+      tenantId: ctx.tenant.id,
     },
   );
 
@@ -69,10 +68,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Tag>(
     {
       table: "tag",
-      ensureTenant: {
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
-      },
+      tenantId: ctx.tenant.id,
       fields: [{ field: "name", unique: true, entity: "tag" }],
     },
     { name, color },
@@ -103,7 +99,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   return Response.json({ success: true, data: result.data }, { status: 201 });
 }
 
-async function putHandler(req: Request, _ctx: RequestContext) {
+async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id } = body;
 
@@ -144,6 +140,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   const result = await genericUpdate<Tag>(
     {
       table: "tag",
+      tenantId: ctx.tenant.id,
       fields: name ? [{ field: "name", unique: true, entity: "tag" }] : [],
     },
     id,
@@ -172,7 +169,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   return Response.json({ success: true, data: result.data });
 }
 
-async function deleteHandler(req: Request, _ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id") ?? "";
 
@@ -186,7 +183,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "tag" }, id);
+  await genericDelete({ table: "tag", tenantId: ctx.tenant.id }, id);
   return Response.json({ success: true });
 }
 

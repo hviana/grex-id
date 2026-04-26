@@ -9,22 +9,10 @@ import {
   createConnectedAppWithToken,
   revokeConnectedApp,
 } from "@/server/db/queries/connected-apps";
-import {
-  genericList,
-  genericUpdate,
-  type TenantIsolation,
-} from "@/server/db/queries/generics";
+import { genericList, genericUpdate } from "@/server/db/queries/generics";
 import type { ConnectedApp } from "@/src/contracts/connected-app";
 
 async function getHandler(_req: Request, ctx: RequestContext) {
-  const ensureTenant: TenantIsolation = {};
-  if (ctx.tenant.companyId) {
-    ensureTenant.companyId = ctx.tenant.companyId;
-  }
-  if (ctx.tenant.systemId) {
-    ensureTenant.systemId = ctx.tenant.systemId;
-  }
-
   const result = await genericList<ConnectedApp>(
     {
       table: "connected_app",
@@ -32,7 +20,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
     },
     {
       limit: 50,
-      ensureTenant: Object.keys(ensureTenant).length ? ensureTenant : undefined,
+      tenantId: ctx.tenant.id,
     },
   );
   return Response.json({ success: true, data: result.data });
@@ -44,9 +32,9 @@ async function getHandler(_req: Request, ctx: RequestContext) {
  */
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { name, companyId, systemId, permissions, monthlySpendLimit } = body;
+  const { name, roles, monthlySpendLimit, maxOperationCount } = body;
 
-  if (!name || !companyId || !systemId) {
+  if (!name) {
     return Response.json(
       {
         success: false,
@@ -60,21 +48,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   const tenant: Tenant = {
+    id: ctx.tenant.id,
     systemId: ctx.tenant.systemId,
     companyId: ctx.tenant.companyId,
     systemSlug: ctx.tenant.systemSlug,
     roles: [],
-    permissions: permissions ?? [],
   };
 
   const { app, token: createdToken } = await createConnectedAppWithToken({
-    userId: ctx.claims!.actorId,
     name,
-    companyId,
-    systemId,
+    tenantId: ctx.tenant.id,
     tenant,
-    permissions: permissions ?? [],
+    roles: roles ?? [],
     monthlySpendLimit,
+    maxOperationCount,
   });
 
   if (!createdToken) {
@@ -101,7 +88,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     farFuture,
   );
 
-  await rememberActor(tenant, String(createdToken.id));
+  await rememberActor(ctx.tenant.id, String(createdToken.id));
 
   return Response.json(
     { success: true, data: { app, token: jwt } },
@@ -111,7 +98,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { id, name, permissions, monthlySpendLimit } = body;
+  const { id, name, roles, monthlySpendLimit, maxOperationCount } = body;
 
   if (!id) {
     return Response.json(
@@ -125,9 +112,12 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
-  if (permissions !== undefined) data.permissions = permissions;
+  if (roles !== undefined) data.roles = roles;
   if (monthlySpendLimit !== undefined) {
     data.monthlySpendLimit = monthlySpendLimit || undefined;
+  }
+  if (maxOperationCount !== undefined) {
+    data.maxOperationCount = maxOperationCount || undefined;
   }
 
   if (Object.keys(data).length === 0) {
@@ -150,7 +140,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 /**
  * DELETE — revokes the linked api_token AND deletes the connected_app in a
  * single batched query; evicts the api_token id from the tenant's
- * actor-validity partition (§8.11 / §8.11).
+ * actor-validity partition (§8.11).
  */
 async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
@@ -169,10 +159,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   const revoked = await revokeConnectedApp(id);
 
   if (revoked) {
-    await forgetActor(
-      { companyId: revoked.companyId, systemId: revoked.systemId },
-      revoked.apiTokenId,
-    );
+    await forgetActor(revoked.tenantId, revoked.apiTokenId);
   }
 
   return Response.json({ success: true });

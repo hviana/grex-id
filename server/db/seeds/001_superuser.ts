@@ -32,12 +32,11 @@ export async function seed(db: Surreal): Promise<void> {
        twoFactorEnabled = false,
        stayLoggedIn = false;
 
-     // 2. Core company (owned by superuser)
+     // 2. Core company (no ownerId — owner resolved via tenant.isOwner)
      LET $coreCompany = CREATE company SET
        name = "Core",
        document = "core-platform",
-       documentType = "system",
-       ownerId = $usr[0].id;
+       documentType = "system";
 
      // 3. Core system
      LET $coreSystem = CREATE system SET
@@ -45,32 +44,51 @@ export async function seed(db: Surreal): Promise<void> {
        slug = "core",
        logoUri = "";
 
-     // 4. Core company_system link
-     CREATE company_system SET
+     // 4. System-level tenant row for core system (actorId=NONE, companyId=NONE, systemId=core)
+     LET $coreSystemTenant = CREATE tenant SET
+       actorId = NONE,
+       companyId = NONE,
+       systemId = $coreSystem[0].id;
+
+     // 5. Company-system tenant row (actorId=NONE)
+     LET $coreCompanySystemTenant = CREATE tenant SET
+       actorId = NONE,
        companyId = $coreCompany[0].id,
        systemId = $coreSystem[0].id;
 
-     // 5. Built-in role for core system
+     // 6. Built-in superuser role linked to core system-level tenant
      LET $superuserRole = CREATE role SET
        name = "superuser",
-       systemId = $coreSystem[0].id,
-       permissions = ["*"],
+       tenantId = $coreSystemTenant[0].id,
        isBuiltIn = true;
 
-     // 6. Superuser tenant membership
-     CREATE user_company_system SET
-       userId = $usr[0].id,
+     // 7. Company-membership tenant row (user + company, systemId=NONE, isOwner=true)
+     LET $userCompanyTenant = CREATE tenant SET
+       actorId = $usr[0].id,
        companyId = $coreCompany[0].id,
-       systemId = $coreSystem[0].id,
-       roleIds = [$superuserRole[0].id];
+       systemId = NONE,
+       isOwner = true;
 
-     // 7. Anonymous API token (no associated user)
-     CREATE api_token:anonymous SET
-       userId = NONE,
+     // 8. User-access tenant row (user + company + system)
+     LET $userCompanySystemTenant = CREATE tenant SET
+       actorId = $usr[0].id,
        companyId = $coreCompany[0].id,
-       systemId = $coreSystem[0].id,
+       systemId = $coreSystem[0].id;
+
+     // 9. Link user-access tenant to superuser role via tenant_role
+     CREATE tenant_role SET
+       tenantId = $userCompanySystemTenant[0].id,
+       roleId = $superuserRole[0].id;
+
+     // 10. Anonymous API token with its own tenant row
+     LET $anonTenant = CREATE tenant SET
+       actorId = NONE,
+       companyId = $coreCompany[0].id,
+       systemId = $coreSystem[0].id;
+     CREATE api_token:anonymous SET
+       tenantId = $anonTenant[0].id,
        name = "Anonymous Token",
-       permissions = ["anonymous"],
+       roles = ["anonymous"],
        neverExpires = true,
        frontendUse = false,
        frontendDomains = [];`,
@@ -78,6 +96,6 @@ export async function seed(db: Surreal): Promise<void> {
   );
 
   console.log(
-    `[seed] core infrastructure created: company, system (slug "core"), superuser role, superuser (${email}), anonymous API token`,
+    `[seed] core infrastructure created: company, system (slug "core"), tenant rows, superuser role, superuser (${email}), anonymous API token`,
   );
 }

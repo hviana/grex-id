@@ -4,13 +4,11 @@ import { useLocale } from "@/src/hooks/useLocale";
 
 export type TranslatedBadgeKind =
   | "role"
-  | "permission"
   | "entity"
   | "resource";
 
 const KIND_SEGMENT: Record<TranslatedBadgeKind, string> = {
   role: "roles",
-  permission: "permissions",
   entity: "entities",
   resource: "resources",
 };

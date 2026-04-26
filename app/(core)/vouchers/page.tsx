@@ -18,7 +18,6 @@ interface VoucherItem {
   applicableCompanyIds: string[];
   applicablePlanIds: string[];
   priceModifier: number;
-  permissions: string[];
   entityLimitModifiers: Record<string, number> | null;
   apiRateLimitModifier: number;
   storageLimitModifier: number;
@@ -88,7 +87,7 @@ export default function VouchersPage() {
       priceModifier: item.priceModifier,
       applicablePlanIds: item.applicablePlanIds ?? [],
       expiresAt: item.expiresAt,
-      permissions: item.permissions ?? [],
+      roles: item.roles ?? [],
       entityLimitModifiers: item.entityLimitModifiers,
       apiRateLimitModifier: item.apiRateLimitModifier ?? 0,
       storageLimitModifier: item.storageLimitModifier ?? 0,

@@ -14,7 +14,7 @@ import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 interface ConnectedApp {
   id: string;
   name: string;
-  permissions: string[];
+  roles: string[];
   monthlySpendLimit?: number;
   createdAt: string;
   [key: string]: unknown;
@@ -85,7 +85,7 @@ export default function ConnectedAppsPage() {
   const authorizeUrl = typeof window !== "undefined"
     ? `${globalThis.location.origin}/oauth/authorize?systemSlug=${
       encodeURIComponent(systemSlug ?? "")
-    }&client_name=YOUR_APP_NAME&permissions=read:*&redirect_origin=https://yourapp.com`
+    }&client_name=YOUR_APP_NAME&roles=read:*&redirect_origin=https://yourapp.com`
     : "";
 
   return (
@@ -139,8 +139,8 @@ export default function ConnectedAppsPage() {
                   </span>
                 </div>
                 <TranslatedBadgeList
-                  kind="permission"
-                  tokens={app.permissions}
+                  kind="role"
+                  tokens={app.roles}
                   systemSlug={systemSlug ?? undefined}
                   className="mt-2"
                 />

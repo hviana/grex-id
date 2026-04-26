@@ -35,7 +35,7 @@ interface PlanData {
   currency: string;
   recurrenceDays: number;
   benefits: string[];
-  permissions?: string[];
+  roles?: string[];
   entityLimits?: Record<string, number> | null;
   apiRateLimit: number;
   storageLimitBytes: number;
@@ -350,11 +350,11 @@ export default function PlanCard({
         ? <LimitsCompact plan={plan} systemSlug={systemSlug} />
         : <LimitsFull plan={plan} systemSlug={systemSlug} />}
 
-      {/* Permissions (core only — operator surface, shows both lines) */}
+      {/* Roles (core only — operator surface, shows both lines) */}
       {variant === "core" && (
         <TranslatedBadgeList
-          kind="permission"
-          tokens={plan.permissions}
+          kind="role"
+          tokens={plan.roles}
           systemSlug={systemSlug}
           className="mt-3"
         />

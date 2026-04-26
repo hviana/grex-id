@@ -6,7 +6,6 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
-import { rid } from "@/server/db/connection";
 import { genericDelete, genericList } from "@/server/db/queries/generics";
 import { createPlan, updatePlan } from "@/server/db/queries/plans";
 import type { Plan } from "@/src/contracts/plan";
@@ -18,14 +17,14 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const direction = (url.searchParams.get("direction") as "next" | "prev") ??
     "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
-  const systemId = url.searchParams.get("systemId") ?? undefined;
+  const tenantId = url.searchParams.get("tenantId") ?? undefined;
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
 
-  if (systemId) {
-    extraConditions.push("systemId = $systemId");
-    extraBindings.systemId = rid(systemId);
+  if (tenantId) {
+    extraConditions.push("tenantId = $tenantId");
+    extraBindings.tenantId = tenantId;
   }
 
   const result = await genericList<Plan>(
@@ -55,12 +54,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const {
     name,
     description,
-    systemId,
+    tenantId,
     price,
     currency,
     recurrenceDays,
     benefits,
-    permissions,
+    roles,
     entityLimits,
     apiRateLimit,
     storageLimitBytes,
@@ -76,7 +75,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
   const errors: string[] = [];
   errors.push(...await validateField("name", name));
-  if (!systemId) errors.push("validation.system.required");
+  if (!tenantId) errors.push("validation.tenant.required");
   if (price === undefined) errors.push("validation.plan.priceRequired");
   if (!recurrenceDays) errors.push("validation.plan.recurrenceRequired");
 
@@ -94,12 +93,12 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const plan = await createPlan({
       name: await standardizeField("name", sanitizeString(name)),
       description: sanitizeString(description ?? ""),
-      systemId,
+      tenantId,
       price: Number(price),
       currency,
       recurrenceDays: Number(recurrenceDays),
       benefits: benefits ?? [],
-      permissions: permissions ?? [],
+      roles: roles ?? [],
       entityLimits: entityLimits && Object.keys(entityLimits).length > 0
         ? entityLimits
         : undefined,
@@ -112,6 +111,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       maxDownloadBandwidthMB,
       maxUploadBandwidthMB,
       maxOperationCount: maxOperationCount || undefined,
+      isActive,
     });
 
     await Core.getInstance().reload();
@@ -155,7 +155,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       "currency",
       "recurrenceDays",
       "benefits",
-      "permissions",
+      "roles",
       "entityLimits",
       "apiRateLimit",
       "storageLimitBytes",

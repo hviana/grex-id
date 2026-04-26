@@ -11,14 +11,13 @@ export function withRateLimit(config: RateLimitConfig): Middleware {
     const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
 
     // Auth routes (no tenant context) use IP-based rate limiting
-    const hasTenant = ctx.tenant?.companyId && ctx.tenant?.systemId;
+    const hasTenant = ctx.tenant?.id;
 
     let effectiveConfig = config;
 
     if (hasTenant) {
       const rateLimitResult = await resolveRateLimitConfig({
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
+        tenant: ctx.tenant,
       });
 
       if (rateLimitResult.globalLimit > 0) {
@@ -32,9 +31,7 @@ export function withRateLimit(config: RateLimitConfig): Middleware {
       }
     }
 
-    const key = hasTenant
-      ? `${ctx.tenant.companyId}:${ctx.tenant.systemId}`
-      : `ip:${ip}`;
+    const key = hasTenant ? ctx.tenant.id : `ip:${ip}`;
 
     const result = checkRateLimit(key, effectiveConfig);
 

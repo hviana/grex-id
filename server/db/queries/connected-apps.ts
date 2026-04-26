@@ -8,16 +8,17 @@ assertServerOnly("connected-apps");
 
 /**
  * Create a connected_app AND its backing api_token in one batched query
- * (§7.2). Returns both the app row and the token row so the route handler
+ * (§2.4). Returns both the app row and the token row so the route handler
  * can issue a JWT (§8.1) whose actorId is the api_token id.
+ *
+ * Both connected_app and api_token have `tenantId: record<tenant>` and
+ * `roles: array<string>` instead of `permissions`.
  */
 export async function createConnectedAppWithToken(data: {
-  userId: string;
   name: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   tenant: Tenant;
-  permissions: string[];
+  roles: string[];
   monthlySpendLimit?: number;
   maxOperationCount?: Record<string, number>;
   description?: string;
@@ -25,13 +26,11 @@ export async function createConnectedAppWithToken(data: {
   const db = await getDb();
   const result = await db.query<[unknown, unknown, ConnectedApp[], ApiToken[]]>(
     `LET $tkn = CREATE api_token SET
-      userId = $userId,
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       tenant = $tenant,
       name = $name,
       description = $description,
-      permissions = $permissions,
+      roles = $roles,
       monthlySpendLimit = $monthlySpendLimit,
       maxOperationCount = $maxOperationCount,
       neverExpires = true,
@@ -39,22 +38,19 @@ export async function createConnectedAppWithToken(data: {
       frontendDomains = [];
     LET $app = CREATE connected_app SET
       name = $name,
-      companyId = $companyId,
-      systemId = $systemId,
-      permissions = $permissions,
+      tenantId = $tenantId,
+      roles = $roles,
       monthlySpendLimit = $monthlySpendLimit,
       maxOperationCount = $maxOperationCount,
       apiTokenId = $tkn[0].id;
     SELECT * FROM $app[0].id;
     SELECT * FROM $tkn[0].id;`,
     {
-      userId: rid(data.userId),
       name: data.name,
       description: data.description ?? "",
-      companyId: rid(data.companyId),
-      systemId: rid(data.systemId),
+      tenantId: rid(data.tenantId),
       tenant: data.tenant,
-      permissions: data.permissions ?? [],
+      roles: data.roles ?? [],
       monthlySpendLimit: data.monthlySpendLimit ?? undefined,
       maxOperationCount: data.maxOperationCount ?? undefined,
     },
@@ -67,16 +63,11 @@ export async function createConnectedAppWithToken(data: {
 
 /**
  * Revoke the linked api_token AND delete the connected_app in a single
- * batched query (§7.2). Returns the linked apiTokenId, companyId, and
- * systemId so the caller can evict the actor from the validity cache
- * (§8.11 / §8.11).
+ * batched query (§2.4). Returns the linked apiTokenId and tenantId so the
+ * caller can evict the actor from the validity cache.
  */
 export async function revokeConnectedApp(id: string): Promise<
-  {
-    apiTokenId: string;
-    companyId: string;
-    systemId: string;
-  } | null
+  { apiTokenId: string; tenantId: string } | null
 > {
   const db = await getDb();
   const result = await db.query<
@@ -84,10 +75,10 @@ export async function revokeConnectedApp(id: string): Promise<
       unknown,
       unknown,
       unknown,
-      { apiTokenId: string; companyId: string; systemId: string }[],
+      { apiTokenId: string; tenantId: string }[],
     ]
   >(
-    `LET $app = (SELECT apiTokenId, companyId, systemId FROM $id LIMIT 1);
+    `LET $app = (SELECT apiTokenId, tenantId FROM $id LIMIT 1);
      IF $app[0].apiTokenId != NONE {
        UPDATE $app[0].apiTokenId SET revokedAt = time::now() WHERE revokedAt IS NONE;
      };
@@ -97,10 +88,9 @@ export async function revokeConnectedApp(id: string): Promise<
   );
 
   const row = result[3]?.[0];
-  if (!row?.apiTokenId || !row?.companyId || !row?.systemId) return null;
+  if (!row?.apiTokenId || !row?.tenantId) return null;
   return {
     apiTokenId: String(row.apiTokenId),
-    companyId: String(row.companyId),
-    systemId: String(row.systemId),
+    tenantId: String(row.tenantId),
   };
 }

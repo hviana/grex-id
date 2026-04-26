@@ -30,7 +30,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { name, slug, logoUri, termsOfService } = body;
+  const { name, slug, logoUri, defaultLocale, termsOfService } = body;
 
   const result = await genericCreate<System>(
     {
@@ -39,6 +39,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
         { field: "name", unique: true },
         { field: "slug", unique: true },
         { field: "logoUri" },
+        { field: "defaultLocale" },
         { field: "termsOfService" },
       ],
     },
@@ -46,6 +47,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       name,
       slug,
       logoUri: logoUri ?? "",
+      defaultLocale: defaultLocale || undefined,
       termsOfService: termsOfService || undefined,
     },
   );
@@ -86,7 +88,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { id, name, slug, logoUri, termsOfService } = body;
+  const { id, name, slug, logoUri, defaultLocale, termsOfService } = body;
 
   if (!id) {
     return Response.json(
@@ -102,6 +104,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   if (name !== undefined) data.name = name;
   if (slug !== undefined) data.slug = slug;
   if (logoUri !== undefined) data.logoUri = logoUri;
+  if (defaultLocale !== undefined) data.defaultLocale = defaultLocale;
   if (termsOfService !== undefined) data.termsOfService = termsOfService;
 
   const result = await genericUpdate<System>(
@@ -111,6 +114,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
         { field: "name", unique: true },
         { field: "slug", unique: true },
         { field: "logoUri" },
+        { field: "defaultLocale" },
         { field: "termsOfService" },
       ],
     },

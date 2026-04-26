@@ -1,9 +1,6 @@
 export interface UsageRecord {
   id: string;
-  companyId: string;
-  systemId: string;
-  actorType: "user" | "token" | "connected_app";
-  actorId: string;
+  tenantId: string; // references actor + company + system tenant row
   resource: string;
   value: number;
   period: string;
@@ -18,8 +15,7 @@ export interface UsageRecord {
  */
 export interface CreditExpense {
   id: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string; // references company-system tenant row
   resourceKey: string;
   amount: number;
   count: number;

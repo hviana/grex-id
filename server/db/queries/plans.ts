@@ -4,15 +4,19 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("plans");
 
+/**
+ * Plan has `tenantId: record<tenant>` (system-level tenant) instead of
+ * `systemId`. Uses `roles: array<string>` instead of `permissions`.
+ */
 export async function createPlan(data: {
   name: string;
   description: string;
-  systemId: string;
+  tenantId: string;
   price: number;
   currency?: string;
   recurrenceDays: number;
   benefits: string[];
-  permissions: string[];
+  roles: string[];
   entityLimits?: Record<string, number>;
   apiRateLimit?: number;
   storageLimitBytes?: number;
@@ -32,12 +36,12 @@ export async function createPlan(data: {
     `CREATE plan SET
       name = $name,
       description = $description,
-      systemId = $systemId,
+      tenantId = $tenantId,
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,
       benefits = $benefits,
-      permissions = $permissions,
+      roles = $roles,
       ${hasEntityLimits ? "entityLimits = $entityLimits," : ""}
       apiRateLimit = $apiRateLimit,
       storageLimitBytes = $storageLimitBytes,
@@ -51,7 +55,7 @@ export async function createPlan(data: {
       isActive = $isActive`,
     {
       ...data,
-      systemId: rid(data.systemId),
+      tenantId: rid(data.tenantId),
       currency: data.currency ?? "USD",
       entityLimits: hasEntityLimits ? data.entityLimits : undefined,
       apiRateLimit: data.apiRateLimit ?? 1000,
@@ -84,7 +88,7 @@ export async function updatePlan(
     "currency",
     "recurrenceDays",
     "benefits",
-    "permissions",
+    "roles",
     "entityLimits",
     "apiRateLimit",
     "storageLimitBytes",

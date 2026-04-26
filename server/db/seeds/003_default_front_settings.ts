@@ -49,10 +49,19 @@ const defaults: DefaultFrontSetting[] = [
 ];
 
 export async function seed(db: Surreal): Promise<void> {
+  const tenantResult = await db.query<[{ id: string }[]]>(
+    `SELECT id FROM tenant WHERE actorId IS NONE AND companyId IS NONE AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id LIMIT 1`,
+  );
+  const tenantId = tenantResult[0]?.[0]?.id;
+  if (!tenantId) {
+    console.log("[seed] core system tenant not found, skipping front settings");
+    return;
+  }
+
   for (const setting of defaults) {
     const existing = await db.query<[{ id: string }[]]>(
-      `SELECT id FROM front_setting WHERE key = $key AND systemSlug = "core" LIMIT 1`,
-      { key: setting.key },
+      `SELECT id FROM front_setting WHERE key = $key AND tenantId = $tenantId LIMIT 1`,
+      { key: setting.key, tenantId },
     );
     if ((existing[0] ?? []).length > 0) continue;
     await db.query(
@@ -60,11 +69,12 @@ export async function seed(db: Surreal): Promise<void> {
         key = $key,
         value = $value,
         description = $description,
-        systemSlug = "core"`,
+        tenantId = $tenantId`,
       {
         key: setting.key,
         value: setting.value,
         description: setting.description,
+        tenantId,
       },
     );
     console.log(`[seed] front setting created: ${setting.key}`);

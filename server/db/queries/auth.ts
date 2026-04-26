@@ -64,16 +64,19 @@ function normalizeVerificationRequest(
     ...request,
     id: normalizeRecordId(request.id) ?? request.id,
     ownerId: normalizeRecordId(request.ownerId) ?? request.ownerId,
-    companyId: normalizeRecordId(request.companyId) ?? request.companyId,
-    systemId: normalizeRecordId(request.systemId) ?? request.systemId,
+    tenantId: normalizeRecordId(request.tenantId) ?? request.tenantId,
   };
 }
+
+// ---------------------------------------------------------------------------
+// User lookups
+// ---------------------------------------------------------------------------
 
 /**
  * Look up a user by a verified entity_channel value (§8.4).
  *
  * Returns the user with its profile + channels resolved. Ignores unverified
- * channels. Traverses `user.channels` (never `profile.*`).
+ * channels. Traverses `user.channelIds` (never `profile.*`).
  */
 export async function findUserByVerifiedChannel(
   value: string,
@@ -120,11 +123,15 @@ export async function verifyPassword(
   );
 }
 
+// ---------------------------------------------------------------------------
+// User creation
+// ---------------------------------------------------------------------------
+
 /**
  * Create a new user + profile + initial entity_channel rows in one batched
- * query (§7.2). The entity_channel rows are created first (composable rows
- * carry no back-pointer — §3.1.10), then the profile (with empty
- * recoveryChannelIds), then the user whose `channels` array references all
+ * query (§2.4). The entity_channel rows are created first (composable rows
+ * carry no back-pointer — §3.3), then the profile (with empty
+ * recoveryChannelIds), then the user whose `channelIds` array references all
  * the created entity_channel rows. Channels are created unverified; caller
  * issues the human confirmation via communicationGuard +
  * dispatchCommunication(…).
@@ -185,6 +192,10 @@ export async function createUserWithChannels(params: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Password management
+// ---------------------------------------------------------------------------
+
 export async function updatePassword(
   userId: string,
   newPassword: string,
@@ -231,6 +242,10 @@ export async function applyPasswordHash(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Verification requests
+// ---------------------------------------------------------------------------
+
 export async function findVerificationRequest(
   token: string,
 ): Promise<VerificationRequest | null> {
@@ -254,13 +269,13 @@ export async function markVerificationUsed(requestId: string): Promise<void> {
 /**
  * Hard-delete abandoned user accounts before registration reuses their
  * channel values (§8.3). "Abandoned" means:
- *   - the user has no verified entity_channel in its `channels` array, AND
+ *   - the user has no verified entity_channel in its `channelIds` array, AND
  *   - the user has no unused, non-expired verification_request with
  *     actionKey = "auth.action.register".
  *
  * Deletes every user in `userIds`, their referenced entity_channel rows,
- * their profile records, and all verification_requests pointing at them —
- * in a single batched query (§7.2).
+ * their profile records, tenant rows, tenant_role rows, and all
+ * verification_requests pointing at them — in a single batched query (§2.4).
  */
 export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return;
@@ -271,7 +286,10 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
      LET $users = (SELECT id, profileId, channelIds FROM user WHERE id IN $targets);
      LET $profileIds = array::distinct($users.profileId);
      LET $channelIds = array::distinct(array::flatten($users.channelIds));
+     LET $tenantIds = (SELECT VALUE id FROM tenant WHERE actorId IN $targets);
      DELETE verification_request WHERE ownerId IN $targets;
+     DELETE tenant_role WHERE tenantId IN $tenantIds;
+     DELETE tenant WHERE actorId IN $targets;
      DELETE user WHERE id IN $targets;
      FOR $cid IN $channelIds { DELETE $cid; };
      FOR $pid IN $profileIds { DELETE $pid; };`,
@@ -279,134 +297,139 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Tenant & membership resolution
+// ---------------------------------------------------------------------------
+
 /**
- * Resolve the first user_company_system membership for a user, including the
- * system slug and flattened role permissions. Returns null when the user has
- * no memberships (e.g. superuser without tenant).
+ * Resolve the first user-access tenant row for a user (actorId=user with a
+ * companyId and systemId set), including the system slug and role names from
+ * tenant_role. Returns null when the user has no memberships.
  *
- * Used by login and login-fallback flows (§8.4, §8.8.3).
+ * Used by login and login-fallback flows (§8.4, §8.8).
  */
 export async function resolveUserMembership(userId: string): Promise<
   {
+    tenantId: string;
     companyId: string;
     systemId: string;
     systemSlug: string;
     roles: string[];
-    permissions: string[];
   } | null
 > {
   const db = await getDb();
-  const membership = await db.query<
-    [{
-      companyId: string;
-      systemId: string;
-      systemSlug: string;
-      roles: string[];
-      permissions: string[];
-    }[]]
-  >(
-    `LET $ucs = (SELECT companyId, systemId, roleIds FROM user_company_system WHERE userId = $userId LIMIT 1);
-     IF array::len($ucs) > 0 {
-       LET $sys = (SELECT slug FROM system WHERE id = $ucs[0].systemId LIMIT 1);
-       LET $roleRecs = (SELECT permissions FROM role WHERE systemId = $ucs[0].systemId AND id IN $ucs[0].roleIds);
-       LET $roleNames = (SELECT VALUE name FROM role WHERE id IN $ucs[0].roleIds);
-       SELECT
-         $ucs[0].companyId AS companyId,
-         $ucs[0].systemId AS systemId,
-         $sys[0].slug AS systemSlug,
-         $roleNames AS roles,
-         array::flatten($roleRecs[*].permissions) AS permissions
-       FROM system WHERE id = $ucs[0].systemId LIMIT 1;
-     } ELSE {
-       RETURN [];
-     };`,
+  const result = await db.query<unknown[]>(
+    `LET $t = (SELECT id, companyId, systemId FROM tenant
+       WHERE actorId = $userId
+         AND companyId IS NOT NONE
+         AND systemId IS NOT NONE
+       LIMIT 1);
+     LET $sys = IF array::len($t) > 0
+       THEN (SELECT slug FROM system WHERE id = $t[0].systemId LIMIT 1)
+       ELSE [] END;
+     LET $roleNames = IF array::len($t) > 0
+       THEN (SELECT VALUE roleId.name FROM tenant_role WHERE tenantId = $t[0].id FETCH roleId)
+       ELSE [] END;
+     [{ tenantId: $t[0].id, companyId: $t[0].companyId, systemId: $t[0].systemId,
+        systemSlug: $sys[0].slug, roles: $roleNames }];`,
     { userId: rid(userId) },
   );
-  const lastResult = membership[membership.length - 1];
-  return Array.isArray(lastResult) ? lastResult[0] ?? null : null;
+  const last = result[result.length - 1] as Record<string, unknown>[];
+  const row = last?.[0] as Record<string, unknown> | undefined;
+  if (!row || !row.tenantId) return null;
+  return {
+    tenantId: String(row.tenantId),
+    companyId: String(row.companyId),
+    systemId: String(row.systemId),
+    systemSlug: (row.systemSlug as string) ?? "core",
+    roles: Array.isArray(row.roles) ? (row.roles as string[]) : [],
+  };
 }
 
 /**
- * Verify company_system association exists and resolve system slug for
- * superuser exchange bypass (§8.6).
+ * Verify the company-system tenant row exists and resolve system slug for
+ * superuser exchange bypass (§8.6). Looks up the tenant row where
+ * actorId=NONE, companyId=$companyId, systemId=$systemId.
  */
 export async function resolveSuperuserExchange(
   companyId: string,
   systemId: string,
-): Promise<{ exists: boolean; slug: string }> {
+): Promise<{ exists: boolean; slug: string; tenantId: string | null }> {
   const db = await getDb();
   const result = await db.query<
     [{ id: string }[], { slug: string }[]]
   >(
-    `SELECT id FROM company_system
-       WHERE companyId = $companyId AND systemId = $systemId LIMIT 1;
+    `SELECT id FROM tenant
+       WHERE actorId IS NONE
+         AND companyId = $companyId
+         AND systemId = $systemId
+       LIMIT 1;
      SELECT slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       companyId: rid(companyId),
       systemId: rid(systemId),
     },
   );
+  const tenantRow = result[0]?.[0];
   return {
-    exists: result[0] != null && result[0].length > 0,
+    exists: !!tenantRow,
     slug: result[1]?.[0]?.slug ?? "core",
+    tenantId: tenantRow ? String(tenantRow.id) : null,
   };
 }
 
 /**
- * Verify user membership in a (company, system) and resolve slug + flattened
- * role permissions. Used by the token exchange flow (§8.6).
+ * Verify user membership in a (company, system) tenant and resolve slug +
+ * role names from tenant_role. Used by the token exchange flow (§8.6).
+ *
+ * Finds the tenant row where actorId=$userId, companyId=$companyId,
+ * systemId=$systemId, then resolves roles via tenant_role.
  */
 export async function resolveUserExchange(
   userId: string,
   companyId: string,
   systemId: string,
 ): Promise<{
-  membership: { id: string; roles: string[] } | null;
+  tenantId: string | null;
+  roles: string[];
   slug: string;
-  permissions: string[];
 }> {
   const db = await getDb();
-  const result = await db.query<
-    [
-      { id: string; roleIds: string[] }[],
-      { slug: string }[],
-      { permissions: string[] }[],
-      { name: string }[],
-    ]
-  >(
-    `SELECT id, roleIds FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId
-       LIMIT 1;
-     SELECT slug FROM system WHERE id = $systemId LIMIT 1;
-     SELECT permissions FROM role WHERE id IN array::flatten(SELECT VALUE roleIds FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1)
-       AND systemId = $systemId;
-     SELECT VALUE name FROM role WHERE id IN array::flatten(SELECT VALUE roleIds FROM user_company_system
-       WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);`,
+  const result = await db.query<unknown[]>(
+    `LET $t = (SELECT id FROM tenant
+       WHERE actorId = $userId
+         AND companyId = $companyId
+         AND systemId = $systemId
+       LIMIT 1);
+     LET $sys = (SELECT slug FROM system WHERE id = $systemId LIMIT 1);
+     LET $roleNames = IF array::len($t) > 0
+       THEN (SELECT VALUE roleId.name FROM tenant_role WHERE tenantId = $t[0].id FETCH roleId)
+       ELSE [] END;`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
       systemId: rid(systemId),
     },
   );
-  const mem = result[0]?.[0] ?? null;
-  const permissions = [
-    ...new Set(result[2]?.flatMap((r) => r.permissions ?? []) ?? []),
-  ];
-  const roleNames = result[3] ?? [];
+  const tenantRows = result[0] as { id: string }[] | undefined;
+  const sysRows = result[1] as { slug: string }[] | undefined;
+  const roleResult = result[2] as string[] | undefined;
+  const tenantRow = tenantRows?.[0] ?? null;
   return {
-    membership: mem
-      ? { id: String(mem.id), roles: roleNames.map((r) => r.name ?? String(r)) }
-      : null,
-    slug: result[1]?.[0]?.slug ?? "core",
-    permissions,
+    tenantId: tenantRow ? String(tenantRow.id) : null,
+    roles: Array.isArray(roleResult) ? roleResult : [],
+    slug: sysRows?.[0]?.slug ?? "core",
   };
 }
 
+// ---------------------------------------------------------------------------
+// Two-factor authentication
+// ---------------------------------------------------------------------------
+
 /**
  * Promote the user's pendingTwoFactorSecret to twoFactorSecret and enable 2FA
- * (§8.8.2). The secret stays on the user row — it never travels through
- * verification_request.payload (§5.1 rule 5).
+ * (§8.8). The secret stays on the user row — it never travels through
+ * verification_request.payload.
  */
 export async function promoteTwoFactorSecret(userId: string): Promise<void> {
   const db = await getDb();
@@ -424,7 +447,7 @@ export async function promoteTwoFactorSecret(userId: string): Promise<void> {
 }
 
 /**
- * Disable two-factor authentication for a user (§8.8.2).
+ * Disable two-factor authentication for a user (§8.8).
  * Clears the secret and the pending secret in one batched update.
  */
 export async function disableTwoFactor(userId: string): Promise<void> {
@@ -438,6 +461,25 @@ export async function disableTwoFactor(userId: string): Promise<void> {
     { userId: rid(userId) },
   );
 }
+
+/**
+ * Store an AES-256-GCM envelope as the user's pendingTwoFactorSecret.
+ * The plaintext base32 secret never touches the DB (§4.7).
+ */
+export async function storePendingTwoFactorSecret(
+  userId: string,
+  encrypted: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `UPDATE $userId SET pendingTwoFactorSecret = $secret, updatedAt = time::now()`,
+    { userId: rid(userId), secret: encrypted },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// User profile / data fetches
+// ---------------------------------------------------------------------------
 
 /**
  * Fetch a user row with profile and channels resolved. Used by routes that
@@ -485,24 +527,9 @@ export async function getUserProfile(userId: string): Promise<
 }
 
 /**
- * Store an AES-256-GCM envelope as the user's pendingTwoFactorSecret.
- * The plaintext base32 secret never touches the DB (§7.1.1, §12.15).
- */
-export async function storePendingTwoFactorSecret(
-  userId: string,
-  encrypted: string,
-): Promise<void> {
-  const db = await getDb();
-  await db.query(
-    `UPDATE $userId SET pendingTwoFactorSecret = $secret, updatedAt = time::now()`,
-    { userId: rid(userId), secret: encrypted },
-  );
-}
-
-/**
  * Fetch user fields needed by the refresh-token flow: stayLoggedIn,
  * twoFactorEnabled, profile, and channels — all in a single batched query
- * with FETCH resolution (§7.2).
+ * with FETCH resolution (§2.4).
  */
 export async function getUserForRefresh(userId: string): Promise<
   {
@@ -531,6 +558,10 @@ export async function getUserForRefresh(userId: string): Promise<
   return result[0]?.[0] ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// System lookup
+// ---------------------------------------------------------------------------
+
 /**
  * Look up a system id by its slug. Returns the system id string or null.
  */
@@ -541,4 +572,139 @@ export async function findSystemIdBySlug(slug: string): Promise<string | null> {
     { slug },
   );
   return result[0]?.[0]?.id ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// OAuth identity
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an oauth_identity row linking a provider subject to a user.
+ * One row per (provider, providerUserId); multiple providers per user allowed.
+ */
+export async function createOAuthIdentity(params: {
+  provider: string;
+  providerUserId: string;
+  userId: string;
+}): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `CREATE oauth_identity SET
+       provider = $provider,
+       providerUserId = $providerUserId,
+       userId = $userId;`,
+    {
+      provider: params.provider,
+      providerUserId: params.providerUserId,
+      userId: rid(params.userId),
+    },
+  );
+}
+
+/**
+ * Look up an oauth_identity by (provider, providerUserId). Returns the full
+ * row including the linked userId, or null.
+ */
+export async function findOAuthIdentity(
+  provider: string,
+  providerUserId: string,
+): Promise<{ id: string; userId: string; provider: string } | null> {
+  const db = await getDb();
+  const result = await db.query<
+    [{ id: string; userId: string; provider: string }[]]
+  >(
+    `SELECT id, userId, provider FROM oauth_identity
+       WHERE provider = $provider AND providerUserId = $providerUserId
+       LIMIT 1;`,
+    { provider, providerUserId },
+  );
+  return result[0]?.[0] ?? null;
+}
+
+/**
+ * List all oauth_identity rows linked to a user.
+ */
+export async function findOAuthIdentitiesByUser(
+  userId: string,
+): Promise<{ id: string; provider: string; providerUserId: string }[]> {
+  const db = await getDb();
+  const result = await db.query<
+    [{ id: string; provider: string; providerUserId: string }[]]
+  >(
+    `SELECT id, provider, providerUserId FROM oauth_identity
+       WHERE userId = $userId;`,
+    { userId: rid(userId) },
+  );
+  return result[0] ?? [];
+}
+
+/**
+ * Delete a specific oauth_identity row by its record id.
+ */
+export async function deleteOAuthIdentity(id: string): Promise<void> {
+  const db = await getDb();
+  await db.query("DELETE $id", { id: rid(id) });
+}
+
+// ---------------------------------------------------------------------------
+// API token creation with tenant
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an api_token record and its associated tenant row in one batched
+ * query. The api_token row id serves as the universal actor id. The tenant
+ * row scopes the token to a (company, system) context.
+ *
+ * Returns the created api_token id.
+ */
+export async function createApiTokenWithTenant(params: {
+  tokenId: string;
+  companyId: string;
+  systemId: string;
+  roles: string[];
+  name: string;
+  description?: string;
+  neverExpires?: boolean;
+  expiresAt?: string;
+  frontendUse?: boolean;
+  frontendDomains?: string[];
+  monthlySpendLimit?: number;
+  maxOperationCount?: Record<string, number>;
+}): Promise<string> {
+  const db = await getDb();
+
+  const bindings: Record<string, unknown> = {
+    tokenId: params.tokenId,
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    name: params.name,
+    description: params.description ?? undefined,
+    neverExpires: params.neverExpires ?? false,
+    expiresAt: params.expiresAt ?? undefined,
+    frontendUse: params.frontendUse ?? false,
+    frontendDomains: params.frontendDomains ?? [],
+    monthlySpendLimit: params.monthlySpendLimit ?? undefined,
+    maxOperationCount: params.maxOperationCount ?? undefined,
+  };
+
+  await db.query(
+    `LET $t = CREATE tenant SET
+       actorId = $tokenId,
+       companyId = $companyId,
+       systemId = $systemId;
+     CREATE $tokenId SET
+       tenantId = $t[0].id,
+       name = $name,
+       description = $description,
+       roles = $roles,
+       neverExpires = $neverExpires,
+       expiresAt = $expiresAt,
+       frontendUse = $frontendUse,
+       frontendDomains = $frontendDomains,
+       monthlySpendLimit = $monthlySpendLimit,
+       maxOperationCount = $maxOperationCount;`,
+    { ...bindings, roles: params.roles },
+  );
+
+  return params.tokenId;
 }

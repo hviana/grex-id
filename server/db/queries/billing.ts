@@ -9,31 +9,30 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("billing");
 
 export async function getActiveSubscription(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<Subscription | null> {
   const db = await getDb();
   const result = await db.query<[Subscription[]]>(
     `SELECT * FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     WHERE tenantId = $tenantId AND status = "active"
      LIMIT 1`,
-    { companyId, systemId },
+    { tenantId: rid(tenantId) },
   );
   return result[0]?.[0] ?? null;
 }
 
 export async function listPaymentMethods(
-  companyId: string,
+  tenantId: string,
 ): Promise<PaymentMethod[]> {
   const db = await getDb();
   const result = await db.query<[PaymentMethod[]]>(
-    "SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId",
-    { companyId },
+    "SELECT * FROM payment_method WHERE tenantId = $tenantId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId",
+    { tenantId: rid(tenantId) },
   );
   return result[0] ?? [];
 }
 
-// ─── GET billing data ────────────────────────────────────────────────────────
+// --- GET billing data --------------------------------------------------------
 
 export interface BillingGetData {
   subscriptions: Record<string, unknown>[];
@@ -46,8 +45,7 @@ export interface BillingGetData {
 }
 
 export async function getBillingData(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   startDate?: string;
   endDate?: string;
   paymentCursor?: string;
@@ -56,15 +54,13 @@ export async function getBillingData(params: {
   const db = await getDb();
 
   const queryParams: Record<string, unknown> = {
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
+    tenantId: rid(params.tenantId),
   };
 
   let paymentQuery = "";
   if (params.includePayments) {
     const whereClauses = [
-      "companyId = $companyId",
-      "systemId = $systemId",
+      "tenantId = $tenantId",
     ];
     if (params.startDate) {
       whereClauses.push("createdAt >= $startDate");
@@ -95,15 +91,14 @@ export async function getBillingData(params: {
       Record<string, unknown>[]?,
     ]
   >(
-    `SELECT * FROM subscription WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC FETCH voucherId;
-     SELECT * FROM payment_method WHERE companyId = $companyId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId;
-     SELECT * FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId ORDER BY createdAt DESC LIMIT 20;
-     SELECT math::sum(value) AS balance FROM usage_record WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits" GROUP ALL;
+    `SELECT * FROM subscription WHERE tenantId = $tenantId ORDER BY createdAt DESC FETCH voucherId;
+     SELECT * FROM payment_method WHERE tenantId = $tenantId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId;
+     SELECT * FROM credit_purchase WHERE tenantId = $tenantId ORDER BY createdAt DESC LIMIT 20;
+     SELECT math::sum(value) AS balance FROM usage_record WHERE tenantId = $tenantId AND resource = "credits" GROUP ALL;
      ${paymentQuery}
      SELECT id, amount, currency, kind, continuityData, expiresAt, createdAt
        FROM payment
-       WHERE companyId = $companyId
-         AND systemId = $systemId
+       WHERE tenantId = $tenantId
          AND status = "pending"
          AND continuityData IS NOT NONE
        ORDER BY createdAt DESC
@@ -133,14 +128,15 @@ export async function getBillingData(params: {
   return responseData;
 }
 
-// ─── subscribe ───────────────────────────────────────────────────────────────
+// --- subscribe ---------------------------------------------------------------
 
 export async function subscribe(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   planId: string;
   paymentMethodId: string | null;
   userId: string | null;
+  companyId: string;
+  systemId: string;
   planCredits: number;
   operationCountMap: Record<string, number> | null;
   start: Date;
@@ -149,8 +145,7 @@ export async function subscribe(params: {
   const db = await getDb();
 
   const queryParams: Record<string, unknown> = {
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
+    tenantId: rid(params.tenantId),
     planId: rid(params.planId),
     planCredits: params.planCredits,
     operationCountMap: params.operationCountMap,
@@ -163,25 +158,31 @@ export async function subscribe(params: {
   if (params.userId) {
     queryParams.userId = rid(params.userId);
   }
+  if (params.companyId) {
+    queryParams.companyId = rid(params.companyId);
+  }
+  if (params.systemId) {
+    queryParams.systemId = rid(params.systemId);
+  }
 
   const userClauses = params.userId
-    ? `IF array::len((SELECT id FROM company_user WHERE userId = $userId AND companyId = $companyId)) = 0 {
-         CREATE company_user SET userId = $userId, companyId = $companyId;
+    ? `IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = NONE)) = 0 {
+         CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
        };
-       IF array::len((SELECT id FROM user_company_system WHERE userId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND systemId = $systemId LIMIT 1)[0];
-         CREATE user_company_system SET userId = $userId, companyId = $companyId, systemId = $systemId, roleIds = [$adminRoleId];
+       IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
+         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND tenantId = (SELECT VALUE id FROM tenant WHERE actorId = NONE AND companyId = NONE AND systemId = $systemId LIMIT 1)[0] LIMIT 1)[0];
+         LET $newUserTenant = CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = $systemId, isOwner = false;
+         CREATE tenant_role SET tenantId = $newUserTenant[0].id, roleId = $adminRoleId;
        };`
     : "";
 
   return db.query(
-    `IF array::len((SELECT id FROM company_system WHERE companyId = $companyId AND systemId = $systemId)) = 0 {
-       CREATE company_system SET companyId = $companyId, systemId = $systemId;
+    `IF array::len((SELECT id FROM tenant WHERE actorId = NONE AND companyId = $companyId AND systemId = $systemId)) = 0 {
+       CREATE tenant SET actorId = NONE, companyId = $companyId, systemId = $systemId, isOwner = false;
      };
-     UPDATE subscription SET status = "cancelled" WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
+     UPDATE subscription SET status = "cancelled" WHERE tenantId = $tenantId AND status = "active";
      CREATE subscription SET
-       companyId = $companyId,
-       systemId = $systemId,
+       tenantId = $tenantId,
        planId = $planId,
        paymentMethodId = ${
       params.paymentMethodId ? "$paymentMethodId" : "NONE"
@@ -205,24 +206,23 @@ export async function subscribe(params: {
   );
 }
 
-// ─── cancel ──────────────────────────────────────────────────────────────────
+// --- cancel ------------------------------------------------------------------
 
 export async function cancelSubscription(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<void> {
   const db = await getDb();
   await db.query(
     `UPDATE subscription SET status = "cancelled"
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
-    { companyId: rid(companyId), systemId: rid(systemId) },
+     WHERE tenantId = $tenantId AND status = "active"`,
+    { tenantId: rid(tenantId) },
   );
 }
 
-// ─── add_payment_method ──────────────────────────────────────────────────────
+// --- add_payment_method ------------------------------------------------------
 
 export async function addPaymentMethod(data: {
-  companyId: string;
+  tenantId: string;
   cardToken: string;
   cardMask: string;
   holderName: string;
@@ -244,9 +244,9 @@ export async function addPaymentMethod(data: {
       state = $state,
       country = $country,
       postalCode = $postalCode;
-    LET $existingCount = (SELECT count() FROM payment_method WHERE companyId = $companyId GROUP ALL).count ?? 0;
+    LET $existingCount = (SELECT count() FROM payment_method WHERE tenantId = $tenantId GROUP ALL).count ?? 0;
     LET $pm = CREATE payment_method SET
-      companyId = $companyId,
+      tenantId = $tenantId,
       type = "credit_card",
       cardMask = $cardMask,
       cardToken = $cardToken,
@@ -264,7 +264,7 @@ export async function addPaymentMethod(data: {
       state: addr.state ?? "",
       country: addr.country ?? "",
       postalCode: addr.postalCode ?? "",
-      companyId: rid(data.companyId),
+      tenantId: rid(data.tenantId),
       cardMask: data.cardMask,
       cardToken: data.cardToken,
       holderName: data.holderName,
@@ -275,34 +275,34 @@ export async function addPaymentMethod(data: {
   return result[3]?.[0];
 }
 
-// ─── set_default_payment_method ──────────────────────────────────────────────
+// --- set_default_payment_method ----------------------------------------------
 
 export async function setDefaultPaymentMethod(
-  companyId: string,
+  tenantId: string,
   paymentMethodId: string,
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `UPDATE payment_method SET isDefault = false WHERE companyId = $companyId;
+    `UPDATE payment_method SET isDefault = false WHERE tenantId = $tenantId;
      UPDATE $pmId SET isDefault = true;`,
-    { companyId: rid(companyId), pmId: rid(paymentMethodId) },
+    { tenantId: rid(tenantId), pmId: rid(paymentMethodId) },
   );
 }
 
-// ─── remove_payment_method ───────────────────────────────────────────────────
+// --- remove_payment_method ---------------------------------------------------
 
 export async function removePaymentMethod(
   paymentMethodId: string,
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $pm = (SELECT billingAddressId, companyId, isDefault FROM $id);
+    `LET $pm = (SELECT billingAddressId, tenantId, isDefault FROM $id);
      DELETE $id;
      IF $pm[0].billingAddressId != NONE {
        DELETE $pm[0].billingAddressId;
      };
      IF $pm[0].isDefault = true {
-       LET $next = (SELECT id FROM payment_method WHERE companyId = $pm[0].companyId LIMIT 1);
+       LET $next = (SELECT id FROM payment_method WHERE tenantId = $pm[0].tenantId LIMIT 1);
        IF $next[0].id != NONE {
          UPDATE $next[0].id SET isDefault = true;
        };
@@ -311,7 +311,7 @@ export async function removePaymentMethod(
   );
 }
 
-// ─── purchase_credits ────────────────────────────────────────────────────────
+// --- purchase_credits --------------------------------------------------------
 
 export interface PurchaseCreditsResult {
   purchase: Record<string, unknown>;
@@ -319,8 +319,7 @@ export interface PurchaseCreditsResult {
 }
 
 export async function purchaseCredits(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
   paymentMethodId: string;
 }): Promise<PurchaseCreditsResult> {
@@ -329,22 +328,20 @@ export async function purchaseCredits(params: {
     [Record<string, unknown>[], { id: string }[]]
   >(
     `LET $subId = (SELECT id FROM subscription
-      WHERE companyId = $companyId AND systemId = $systemId AND status = "active" LIMIT 1)[0].id;
+      WHERE tenantId = $tenantId AND status = "active" LIMIT 1)[0].id;
      CREATE credit_purchase SET
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       amount = $amount,
       paymentMethodId = $paymentMethodId,
       subscriptionId = $subId,
       status = "pending";
      UPDATE subscription SET creditAlertSent = false
-      WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
+      WHERE tenantId = $tenantId AND status = "active";
      SELECT id FROM subscription
-      WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+      WHERE tenantId = $tenantId AND status = "active"
       LIMIT 1;`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       amount: params.amount,
       paymentMethodId: rid(params.paymentMethodId),
     },
@@ -359,7 +356,7 @@ export async function purchaseCredits(params: {
   };
 }
 
-// ─── apply_voucher (lookup phase) ───────────────────────────────────────────
+// --- apply_voucher (lookup phase) --------------------------------------------
 
 export interface VoucherLookupResult {
   voucher: Record<string, unknown> | undefined;
@@ -376,8 +373,7 @@ export interface VoucherLookupResult {
 
 export async function lookupVoucherAndSubscription(params: {
   voucherCode: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<VoucherLookupResult> {
   const db = await getDb();
   const batchResult = await db.query<
@@ -396,10 +392,10 @@ export async function lookupVoucherAndSubscription(params: {
   >(
     `SELECT * FROM voucher WHERE code = $code LIMIT 1;
      SELECT planId, voucherId, remainingOperationCount FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       WHERE tenantId = $tenantId AND status = "active"
        LIMIT 1;
      LET $oldVoucherId = (SELECT VALUE voucherId FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       WHERE tenantId = $tenantId AND status = "active"
        LIMIT 1)[0];
      IF $oldVoucherId != NONE {
        SELECT creditModifier, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
@@ -408,8 +404,7 @@ export async function lookupVoucherAndSubscription(params: {
      };`,
     {
       code: params.voucherCode,
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
     },
   );
 
@@ -420,11 +415,10 @@ export async function lookupVoucherAndSubscription(params: {
   };
 }
 
-// ─── apply_voucher (update phase) ───────────────────────────────────────────
+// --- apply_voucher (update phase) --------------------------------------------
 
 export async function applyVoucherToSubscription(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   voucherId: string;
   creditDelta: number;
   opCountNewValues?: Record<string, number>;
@@ -446,45 +440,42 @@ export async function applyVoucherToSubscription(params: {
 
   const updateQuery = creditClause || opCountMergeClause
     ? `UPDATE subscription SET voucherId = $voucherId${creditClause}${opCountMergeClause}
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`
+       WHERE tenantId = $tenantId AND status = "active"`
     : `UPDATE subscription SET voucherId = $voucherId
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`;
+       WHERE tenantId = $tenantId AND status = "active"`;
 
   await db.query(updateQuery, {
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
+    tenantId: rid(params.tenantId),
     voucherId: rid(params.voucherId),
     ...(creditDelta !== 0 ? { creditDelta } : {}),
     ...(hasOpCountChanges ? { opCountNewValues, alertResets } : {}),
   });
 }
 
-// ─── set_auto_recharge (enable) ─────────────────────────────────────────────
+// --- set_auto_recharge (enable) ----------------------------------------------
 
 export interface EnableAutoRechargeResult {
   hasDefaultPaymentMethod: boolean;
 }
 
 export async function enableAutoRecharge(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
 }): Promise<EnableAutoRechargeResult> {
   const db = await getDb();
   const pmResult = await db.query<
     [{ id: string }[], unknown[]]
   >(
-    `LET $pm = (SELECT id FROM payment_method WHERE companyId = $companyId AND isDefault = true LIMIT 1);
+    `LET $pm = (SELECT id FROM payment_method WHERE tenantId = $tenantId AND isDefault = true LIMIT 1);
      IF array::len($pm) > 0 {
        UPDATE subscription SET
          autoRechargeEnabled = true,
          autoRechargeAmount = $amount
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active";
+       WHERE tenantId = $tenantId AND status = "active";
      };
      RETURN $pm;`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       amount: params.amount,
     },
   );
@@ -499,11 +490,10 @@ export async function enableAutoRecharge(params: {
   return { hasDefaultPaymentMethod: !!hasDefault };
 }
 
-// ─── set_auto_recharge (disable) ────────────────────────────────────────────
+// --- set_auto_recharge (disable) ---------------------------------------------
 
 export async function disableAutoRecharge(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<void> {
   const db = await getDb();
   await db.query(
@@ -511,15 +501,14 @@ export async function disableAutoRecharge(
       autoRechargeEnabled = false,
       autoRechargeAmount = 0,
       autoRechargeInProgress = false
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"`,
+     WHERE tenantId = $tenantId AND status = "active"`,
     {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
+      tenantId: rid(tenantId),
     },
   );
 }
 
-// ─── retry_payment ───────────────────────────────────────────────────────────
+// --- retry_payment -----------------------------------------------------------
 
 export interface RetryPaymentResult {
   status: "not_found" | "conflict" | "ok";
@@ -527,15 +516,14 @@ export interface RetryPaymentResult {
 }
 
 export async function retryPayment(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<RetryPaymentResult> {
   const db = await getDb();
   const retryResult = await db.query<
     [{ result: string; id?: string }[]]
   >(
     `LET $sub = (SELECT id, retryPaymentInProgress FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "past_due"
+       WHERE tenantId = $tenantId AND status = "past_due"
        LIMIT 1);
      IF array::len($sub) = 0 {
        RETURN [{ result: "not_found" }];
@@ -545,7 +533,7 @@ export async function retryPayment(
        UPDATE $sub[0].id SET retryPaymentInProgress = true;
        RETURN [{ result: "ok", id: $sub[0].id }];
      };`,
-    { companyId: rid(companyId), systemId: rid(systemId) },
+    { tenantId: rid(tenantId) },
   );
 
   const retryRow = retryResult[0]?.[0];
@@ -558,10 +546,10 @@ export async function retryPayment(
   return { status: "ok", subscriptionId: String(retryRow.id) };
 }
 
-// ─── createPaymentMethod (used by other routes) ─────────────────────────────
+// --- createPaymentMethod (used by other routes) ------------------------------
 
 export async function createPaymentMethod(data: {
-  companyId: string;
+  tenantId: string;
   cardMask: string;
   cardToken: string;
   holderName: string;
@@ -582,7 +570,7 @@ export async function createPaymentMethod(data: {
       country = $country,
       postalCode = $postalCode;
     LET $pm = CREATE payment_method SET
-      companyId = $companyId,
+      tenantId = $tenantId,
       type = "credit_card",
       cardMask = $cardMask,
       cardToken = $cardToken,
@@ -600,7 +588,7 @@ export async function createPaymentMethod(data: {
       state: addr.state ?? "",
       country: addr.country ?? "",
       postalCode: addr.postalCode ?? "",
-      companyId: data.companyId,
+      tenantId: rid(data.tenantId),
       cardMask: data.cardMask,
       cardToken: data.cardToken,
       holderName: data.holderName,
@@ -610,21 +598,21 @@ export async function createPaymentMethod(data: {
   return result[2][0];
 }
 
-// ─── setDefaultPaymentMethodById (used by other routes) ──────────────────────
+// --- setDefaultPaymentMethodById (used by other routes) ----------------------
 
 export async function setDefaultPaymentMethodById(
   id: string,
-  companyId: string,
+  tenantId: string,
 ): Promise<void> {
   const db = await getDb();
   await db.query(
-    `UPDATE payment_method SET isDefault = false WHERE companyId = $companyId;
+    `UPDATE payment_method SET isDefault = false WHERE tenantId = $tenantId;
     UPDATE $id SET isDefault = true;`,
-    { companyId, id: rid(id) },
+    { tenantId: rid(tenantId), id: rid(id) },
   );
 }
 
-// ─── deletePaymentMethod (used by other routes) ──────────────────────────────
+// --- deletePaymentMethod (used by other routes) ------------------------------
 
 export async function deletePaymentMethod(id: string): Promise<void> {
   const db = await getDb();
@@ -638,11 +626,10 @@ export async function deletePaymentMethod(id: string): Promise<void> {
   );
 }
 
-// ─── createCreditPurchase (used by other routes) ─────────────────────────────
+// --- createCreditPurchase (used by other routes) -----------------------------
 
 export async function createCreditPurchase(data: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
   paymentMethodId: string;
   subscriptionId?: string;
@@ -650,14 +637,15 @@ export async function createCreditPurchase(data: {
   const db = await getDb();
   const result = await db.query<[CreditPurchase[]]>(
     `CREATE credit_purchase SET
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       amount = $amount,
       paymentMethodId = $paymentMethodId,
       subscriptionId = $subscriptionId,
       status = "pending"`,
     {
-      ...data,
+      tenantId: rid(data.tenantId),
+      amount: data.amount,
+      paymentMethodId: rid(data.paymentMethodId),
       subscriptionId: data.subscriptionId
         ? rid(data.subscriptionId)
         : undefined,
@@ -666,7 +654,7 @@ export async function createCreditPurchase(data: {
   return result[0][0];
 }
 
-// ─── getDueSubscriptions (used by recurring billing job) ─────────────────────
+// --- getDueSubscriptions (used by recurring billing job) ---------------------
 
 export async function getDueSubscriptions(): Promise<Subscription[]> {
   const db = await getDb();
@@ -677,7 +665,7 @@ export async function getDueSubscriptions(): Promise<Subscription[]> {
   return result[0] ?? [];
 }
 
-// ─── findPaymentByTransactionId (used by webhook) ────────────────────────────
+// --- findPaymentByTransactionId (used by webhook) ----------------------------
 
 export async function findPaymentByTransactionId(
   transactionId: string,
@@ -690,12 +678,11 @@ export async function findPaymentByTransactionId(
   return result[0]?.[0] ?? null;
 }
 
-// ─── Expire pending payments (used by expire-pending-payments job) ─────────
+// --- Expire pending payments (used by expire-pending-payments job) -----------
 
 export interface ExpiredPaymentRow {
   id: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   subscriptionId: string;
   kind: string;
   amount: number;
@@ -709,7 +696,7 @@ export async function markExpiredPayments(): Promise<ExpiredPaymentRow[]> {
      WHERE status = "pending"
        AND expiresAt IS NOT NONE
        AND expiresAt <= time::now()
-     RETURN id, companyId, systemId, subscriptionId, kind, amount, currency;`,
+     RETURN id, tenantId, subscriptionId, kind, amount, currency;`,
   );
   return expired[0] ?? [];
 }
@@ -720,16 +707,17 @@ export interface ExpiredPaymentOwnerInfo {
 }
 
 export async function resolveExpiredPaymentContext(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   subscriptionId: string;
 }): Promise<ExpiredPaymentOwnerInfo> {
   const db = await getDb();
   const result = await db.query<
     [{ id: string; name: string }[], { name: string; slug: string }[]]
   >(
-    `LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
+    `LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
      UPDATE credit_purchase SET status = "expired"
        WHERE subscriptionId = $subId AND status = "pending";
@@ -737,8 +725,7 @@ export async function resolveExpiredPaymentContext(params: {
       retryPaymentInProgress = false,
       autoRechargeInProgress = false;`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       subId: rid(params.subscriptionId),
     },
   );
@@ -749,15 +736,14 @@ export async function resolveExpiredPaymentContext(params: {
   };
 }
 
-// ─── process-payment handler queries ─────────────────────────────────────────
+// --- process-payment handler queries -----------------------------------------
 
 export interface PaymentSubscriptionContext {
   sub: {
     id: string;
     planId: string;
     paymentMethodId: string;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
     status: string;
     currentPeriodEnd: string;
     voucherId: string | null;
@@ -789,8 +775,7 @@ export async function getPaymentSubscriptionContext(params: {
         id: string;
         planId: string;
         paymentMethodId: string;
-        companyId: string;
-        systemId: string;
+        tenantId: string;
         status: string;
         currentPeriodEnd: string;
         voucherId: string | null;
@@ -816,10 +801,11 @@ export async function getPaymentSubscriptionContext(params: {
      } ELSE {
        SELECT NONE FROM NONE;
      };
-     LET $companyId = (SELECT VALUE companyId FROM subscription WHERE id = $id LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE tenantId FROM subscription WHERE id = $id LIMIT 1)[0];
+     LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
-     LET $systemId = (SELECT VALUE systemId FROM subscription WHERE id = $id LIMIT 1)[0];
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
      ${creditPurchaseQuery}`,
     {
@@ -841,8 +827,7 @@ export async function getPaymentSubscriptionContext(params: {
 }
 
 export async function createPaymentRecord(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   subscriptionId: string;
   amount: number;
   currency: string;
@@ -852,8 +837,7 @@ export async function createPaymentRecord(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE payment SET
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       subscriptionId = $subId,
       amount = $amount,
       currency = $currency,
@@ -861,8 +845,7 @@ export async function createPaymentRecord(params: {
       status = "pending",
       paymentMethodId = $pmId`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       subId: rid(params.subscriptionId),
       amount: params.amount,
       currency: params.currency,
@@ -935,8 +918,7 @@ export async function renewSubscriptionOnSuccess(params: {
 }
 
 export async function creditPurchaseOnSuccess(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
   period: string;
   subscriptionId: string;
@@ -954,14 +936,13 @@ export async function creditPurchaseOnSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      companyId = $companyId, systemId = $systemId,
+      tenantId = $tenantId,
       resource = "credits", value += $amount, period = $period
-     WHERE companyId = $companyId AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND resource = "credits";`,
   ];
   const queryParams: Record<string, unknown> = {
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
+    tenantId: rid(params.tenantId),
     amount: params.amount,
     period: params.period,
     subId: rid(params.subscriptionId),
@@ -1034,15 +1015,14 @@ export async function paymentOnFailure(params: {
   }
 }
 
-// ─── resolve-async-payment handler queries ───────────────────────────────────
+// --- resolve-async-payment handler queries -----------------------------------
 
 export interface AsyncPaymentContext {
   payment: {
     id: string;
     status: string;
     subscriptionId: string;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
     amount: number;
     currency: string;
     kind: string;
@@ -1076,8 +1056,7 @@ export async function getAsyncPaymentContext(
         id: string;
         status: string;
         subscriptionId: string;
-        companyId: string;
-        systemId: string;
+        tenantId: string;
         amount: number;
         currency: string;
         kind: string;
@@ -1101,7 +1080,7 @@ export async function getAsyncPaymentContext(
       { status?: string }[],
     ]
   >(
-    `SELECT id, status, subscriptionId, companyId, systemId, amount, currency, kind FROM payment WHERE id = $id LIMIT 1;
+    `SELECT id, status, subscriptionId, tenantId, amount, currency, kind FROM payment WHERE id = $id LIMIT 1;
      LET $subId = (SELECT VALUE subscriptionId FROM payment WHERE id = $id LIMIT 1)[0];
      SELECT id, planId, paymentMethodId, status, currentPeriodEnd FROM subscription WHERE id = $subId LIMIT 1;
      LET $planId = (SELECT VALUE planId FROM subscription WHERE id = $subId LIMIT 1)[0];
@@ -1112,10 +1091,11 @@ export async function getAsyncPaymentContext(
      } ELSE {
        SELECT NONE FROM NONE;
      };
-     LET $companyId = (SELECT VALUE companyId FROM payment WHERE id = $id LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE tenantId FROM payment WHERE id = $id LIMIT 1)[0];
+     LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
-     LET $systemId = (SELECT VALUE systemId FROM payment WHERE id = $id LIMIT 1)[0];
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
      SELECT status FROM credit_purchase WHERE subscriptionId = $subId AND status = "pending" LIMIT 1;`,
     { id: rid(paymentId) },
@@ -1177,8 +1157,7 @@ export async function resolveAsyncRecurringSuccess(params: {
 }
 
 export async function resolveAsyncCreditSuccess(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
   period: string;
   subscriptionId: string | undefined;
@@ -1196,14 +1175,13 @@ export async function resolveAsyncCreditSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      companyId = $companyId, systemId = $systemId,
+      tenantId = $tenantId,
       resource = "credits", value += $amount, period = $period
-     WHERE companyId = $companyId AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND resource = "credits";`,
   ];
   const queryParams: Record<string, unknown> = {
-    companyId: rid(params.companyId),
-    systemId: rid(params.systemId),
+    tenantId: rid(params.tenantId),
     amount: params.amount,
     period: params.period,
     subId: params.subscriptionId ? rid(params.subscriptionId) : undefined,
@@ -1271,7 +1249,7 @@ export async function resolveAsyncPaymentFailure(params: {
   await db.query(stmts.join("\n"), queryParams);
 }
 
-// ─── auto-recharge handler queries ───────────────────────────────────────────
+// --- auto-recharge handler queries -------------------------------------------
 
 export interface AutoRechargeContext {
   sub: {
@@ -1279,8 +1257,7 @@ export interface AutoRechargeContext {
     autoRechargeEnabled: boolean;
     autoRechargeAmount: number;
     autoRechargeInProgress: boolean;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
   } | undefined;
   paymentMethod: { id: string } | undefined;
   owner: { id: string; name: string } | undefined;
@@ -1298,8 +1275,7 @@ export async function getAutoRechargeContext(
         autoRechargeEnabled: boolean;
         autoRechargeAmount: number;
         autoRechargeInProgress: boolean;
-        companyId: string;
-        systemId: string;
+        tenantId: string;
       }[],
       { id: string }[],
       { id: string; name: string }[],
@@ -1307,14 +1283,17 @@ export async function getAutoRechargeContext(
     ]
   >(
     `SELECT id, autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
-            companyId, systemId
+            tenantId
      FROM subscription WHERE id = $subId LIMIT 1;
      SELECT id FROM payment_method
-       WHERE companyId = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0]
+       WHERE tenantId = (SELECT VALUE tenantId FROM subscription WHERE id = $subId LIMIT 1)[0]
        AND isDefault = true LIMIT 1;
-     LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = (SELECT VALUE companyId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE tenantId FROM subscription WHERE id = $subId LIMIT 1)[0];
+     LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
-     SELECT name, slug FROM system WHERE id = (SELECT VALUE systemId FROM subscription WHERE id = $subId LIMIT 1)[0] LIMIT 1;`,
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     { subId: rid(subscriptionId) },
   );
 
@@ -1337,8 +1316,7 @@ export async function clearAutoRechargeFlag(
 }
 
 export async function createAutoRechargePurchase(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   amount: number;
   paymentMethodId: string;
   subscriptionId: string;
@@ -1346,15 +1324,13 @@ export async function createAutoRechargePurchase(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
-       companyId = $companyId,
-       systemId = $systemId,
+       tenantId = $tenantId,
        amount = $amount,
        paymentMethodId = $paymentMethodId,
        subscriptionId = $subscriptionId,
        status = "pending"`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       amount: params.amount,
       paymentMethodId: rid(params.paymentMethodId),
       subscriptionId: rid(params.subscriptionId),

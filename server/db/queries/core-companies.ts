@@ -30,6 +30,11 @@ export interface RevenueChart {
   errors: number;
 }
 
+/**
+ * Core admin company listing. Uses the `tenant` table to resolve
+ * company-system associations (actorId=NONE rows) and owner
+ * (isOwner=true rows) instead of `company_system`/`company_user`.
+ */
 export async function listCoreCompanies(
   params: CursorParams & {
     search?: string;
@@ -52,7 +57,7 @@ export async function listCoreCompanies(
 
   if (params.systemIds?.length) {
     conditions.push(
-      "id IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
     );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }
@@ -64,11 +69,11 @@ export async function listCoreCompanies(
       bindings.planIds = params.planIds.map((id) => rid(id));
     }
     conditions.push(
-      `id IN (SELECT VALUE companyId FROM subscription WHERE status IN $statuses${planClause})`,
+      `id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantId FROM subscription WHERE status IN $statuses${planClause}))`,
     );
   } else if (params.planIds?.length) {
     conditions.push(
-      "id IN (SELECT VALUE companyId FROM subscription WHERE planId IN $planIds)",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantId FROM subscription WHERE planId IN $planIds))",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
@@ -82,7 +87,7 @@ export async function listCoreCompanies(
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Single batched query: pagination + enrichment (§7.2)
+  // Single batched query: pagination + enrichment (§2.4)
   const result = await db.query<
     [
       unknown,
@@ -95,6 +100,7 @@ export async function listCoreCompanies(
       }[],
       {
         id: string;
+        tenantId: string;
         companyId: string;
         systemId: string;
         status: string;
@@ -110,18 +116,19 @@ export async function listCoreCompanies(
        systemId,
        (SELECT VALUE name FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemName,
        (SELECT VALUE slug FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemSlug
-     FROM company_system
-     WHERE companyId IN $companyIds
+     FROM tenant
+     WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE
      ORDER BY systemId;
      SELECT
        id,
+       tenantId,
        companyId,
        systemId,
        status,
-       (SELECT VALUE name FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planName,
-       (SELECT VALUE price FROM plan WHERE id = $value.planId LIMIT 1)[0] AS planPrice
+       (SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planName,
+       (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
      FROM subscription
-     WHERE companyId IN $companyIds;`,
+     WHERE tenantId IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE);`,
     bindings,
   );
 
@@ -203,13 +210,13 @@ export async function getRevenueChart(params: {
   }
   if (params.systemIds?.length) {
     extraFilters.push(
-      "companyId IN (SELECT VALUE companyId FROM company_system WHERE systemId IN $systemIds)",
+      "tenantId IN (SELECT VALUE id FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
     );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }
   const extra = extraFilters.length ? `AND ${extraFilters.join(" AND ")}` : "";
 
-  // Status filter: when provided, only aggregate subscriptions matching the given statuses
+  // Status filter
   const statusFilterActive = params.statuses?.length;
   if (statusFilterActive) {
     bindings.statuses = params.statuses;

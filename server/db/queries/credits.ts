@@ -6,10 +6,11 @@ assertServerOnly("credits");
 /**
  * Fetches the active subscription with auto-recharge guard,
  * and the purchased credit balance, in a single batched query.
+ *
+ * The subscription is scoped by tenantId (the company-system tenant row).
  */
 export async function fetchSubscriptionAndCreditBalance(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<
   [
     {
@@ -21,8 +22,7 @@ export async function fetchSubscriptionAndCreditBalance(params: {
       autoRechargeEnabled: boolean;
       autoRechargeAmount: number;
       autoRechargeInProgress: boolean;
-      companyId: string;
-      systemId: string;
+      tenantId: string;
       autoRechargeGuardSet: boolean;
     }[],
     { balance: number }[],
@@ -32,26 +32,25 @@ export async function fetchSubscriptionAndCreditBalance(params: {
   return db.query(
     `LET $sub = (SELECT id, remainingPlanCredits, remainingOperationCount, creditAlertSent, operationCountAlertSent,
             autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
-            companyId, systemId
+            tenantId
      FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     WHERE tenantId = $tenantId AND status = "active"
      LIMIT 1)[0];
      IF $sub != NONE AND $sub.autoRechargeEnabled = true AND $sub.autoRechargeInProgress = false {
        UPDATE $sub.id SET autoRechargeInProgress = true;
      };
      SELECT id, remainingPlanCredits, remainingOperationCount, creditAlertSent, operationCountAlertSent,
             autoRechargeEnabled, autoRechargeAmount, autoRechargeInProgress,
-            companyId, systemId,
+            tenantId,
             (IF autoRechargeEnabled = true AND autoRechargeInProgress = false THEN true ELSE false END) AS autoRechargeGuardSet
      FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     WHERE tenantId = $tenantId AND status = "active"
      LIMIT 1;
      SELECT math::sum(value) AS balance FROM usage_record
-     WHERE companyId = $companyId AND systemId = $systemId AND resource = "credits"
+     WHERE tenantId = $tenantId AND resource = "credits"
      GROUP ALL;`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
     },
   );
 }
@@ -59,11 +58,12 @@ export async function fetchSubscriptionAndCreditBalance(params: {
 /**
  * Sets creditAlertSent=true on the subscription and fetches company owner + system info
  * for the insufficient-credit alert notification.
+ *
+ * Resolves owner via the tenant row: subscription.tenantId -> tenant.companyId -> owner.
  */
 export async function setCreditAlertAndFetchOwner(params: {
   subId: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<
   [
     unknown[],
@@ -75,14 +75,15 @@ export async function setCreditAlertAndFetchOwner(params: {
   const db = await getDb();
   return db.query(
     `UPDATE $subId SET creditAlertSent = true;
+     LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, ownerId FROM company WHERE id = $companyId LIMIT 1;
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT id, profileId.name AS name, profileId.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       subId: rid(params.subId),
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
     },
   );
 }
@@ -94,8 +95,7 @@ export async function setCreditAlertAndFetchOwner(params: {
 export async function deductFromPlanCredits(params: {
   subId: string;
   amount: number;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   resourceKey: string;
   day: string;
   actorId: string | null;
@@ -109,16 +109,15 @@ export async function deductFromPlanCredits(params: {
         : ""
     };
      UPSERT credit_expense SET
-       companyId = $companyId, systemId = $systemId,
+       tenantId = $tenantId,
        resourceKey = $resourceKey, amount += $amount, count += 1, day = $day,
        actorId = $actorId
-     WHERE companyId = $companyId AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND resourceKey = $resourceKey AND day = $day;`,
     {
       subId: rid(params.subId),
       amount: params.amount,
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       resourceKey: params.resourceKey,
       day: params.day,
       actorId: params.actorId,
@@ -133,8 +132,7 @@ export async function deductFromPlanCredits(params: {
  */
 export async function deductFromPurchasedCredits(params: {
   subId: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   fromPurchased: number;
   totalAmount: number;
   resourceKey: string;
@@ -151,21 +149,19 @@ export async function deductFromPurchasedCredits(params: {
         : ""
     };
      UPSERT usage_record SET
-       actorType = "user", actorId = "system",
-       companyId = $companyId, systemId = $systemId,
+       tenantId = $tenantId,
        resource = "credits", value -= $fromPurchased, period = $period
-     WHERE companyId = $companyId AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND resource = "credits";
      UPSERT credit_expense SET
-       companyId = $companyId, systemId = $systemId,
+       tenantId = $tenantId,
        resourceKey = $resourceKey, amount += $totalAmount, count += 1, day = $day,
        actorId = $actorId
-     WHERE companyId = $companyId AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND resourceKey = $resourceKey AND day = $day;`,
     {
       subId: rid(params.subId),
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       fromPurchased: params.fromPurchased,
       totalAmount: params.totalAmount,
       resourceKey: params.resourceKey,
@@ -185,8 +181,7 @@ export async function fetchActorOperationCap(params: {
   actorRid: ReturnType<typeof rid>;
   actorStr: string;
   resourceKey: string;
-  companyId: ReturnType<typeof rid>;
-  systemId: ReturnType<typeof rid>;
+  tenantId: ReturnType<typeof rid>;
   periodStart: string;
   actorType: string;
 }): Promise<
@@ -205,16 +200,14 @@ export async function fetchActorOperationCap(params: {
      SELECT math::sum(count) AS count FROM credit_expense
      WHERE actorId = $actorStr
        AND resourceKey = $resourceKey
-       AND companyId = $companyId
-       AND systemId = $systemId
+       AND tenantId = $tenantId
        AND day >= $periodStart
      GROUP ALL;`,
     {
       actorRid: params.actorRid,
       actorStr: params.actorStr,
       resourceKey: params.resourceKey,
-      companyId: params.companyId,
-      systemId: params.systemId,
+      tenantId: params.tenantId,
       periodStart: params.periodStart,
     },
   );
@@ -223,11 +216,12 @@ export async function fetchActorOperationCap(params: {
 /**
  * Sets the operation-count alert flag on the subscription and fetches
  * company owner + system info for the notification.
+ *
+ * Resolves owner via the tenant row: subscription.tenantId -> tenant.companyId -> owner.
  */
 export async function setOperationCountAlertAndFetchOwner(params: {
   subId: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   alertMerge: Record<string, boolean>;
 }): Promise<
   [
@@ -239,14 +233,14 @@ export async function setOperationCountAlertAndFetchOwner(params: {
   const db = await getDb();
   return db.query(
     `UPDATE $subId SET operationCountAlertSent = object::extend(IF operationCountAlertSent IS NONE OR operationCountAlertSent = false THEN {} ELSE operationCountAlertSent END, $alertMerge);
-     LET $companyId = $cId;
+     LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      LET $ownerId = (SELECT VALUE ownerId FROM company WHERE id = $companyId LIMIT 1)[0];
      SELECT id, profileId.name AS name, profileId.locale AS locale FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,
     {
       subId: rid(params.subId),
-      cId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       alertMerge: params.alertMerge,
     },
   );
@@ -256,8 +250,7 @@ export async function setOperationCountAlertAndFetchOwner(params: {
  * Records a credit expense for reporting purposes only (no deduction).
  */
 export async function upsertCreditExpense(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   resourceKey: string;
   amount: number;
   day: string;
@@ -266,20 +259,17 @@ export async function upsertCreditExpense(params: {
   const db = await getDb();
   await db.query(
     `UPSERT credit_expense SET
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       resourceKey = $resourceKey,
       amount += $amount,
       count += 1,
       day = $day,
       actorId = $actorId
-    WHERE companyId = $companyId
-      AND systemId = $systemId
+    WHERE tenantId = $tenantId
       AND resourceKey = $resourceKey
       AND day = $day`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       resourceKey: params.resourceKey,
       amount: params.amount,
       day: params.day,
@@ -289,11 +279,10 @@ export async function upsertCreditExpense(params: {
 }
 
 /**
- * Queries aggregated credit expenses for a company+system within a date range.
+ * Queries aggregated credit expenses for a tenant within a date range.
  */
 export async function queryCreditExpenses(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   startDate: string;
   endDate: string;
 }): Promise<
@@ -305,15 +294,13 @@ export async function queryCreditExpenses(params: {
   >(
     `SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount
      FROM credit_expense
-     WHERE companyId = $companyId
-       AND systemId = $systemId
+     WHERE tenantId = $tenantId
        AND day >= $startDate
        AND day <= $endDate
      GROUP BY resourceKey
      ORDER BY totalAmount DESC`,
     {
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       startDate: params.startDate,
       endDate: params.endDate,
     },

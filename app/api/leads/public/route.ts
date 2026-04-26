@@ -189,6 +189,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             : undefined,
         },
         tenant: {
+          id: ctx.tenant.id,
           systemSlug,
           companyId: ctx.tenant?.companyId,
           systemId: ctx.tenant?.systemId,
@@ -294,6 +295,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       actionKey: "auth.action.leadRegister",
       payload: { channelIds },
       tenant: {
+        id: ctx.tenant.id,
         systemSlug,
         companyId: ctx.tenant?.companyId,
         systemId: ctx.tenant?.systemId,

@@ -9,26 +9,9 @@ import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("withAuth");
 
-/**
- * Authenticates a request without touching the database (§8.11).
- *
- * Flow:
- *   1. No `Authorization: Bearer` and not an auth route → return 401.
- *      Every non-auth route requires a bearer token (including the
- *      anonymous API token for public operations).
- *   2. No `Authorization: Bearer` on auth routes → proceed without
- *      populating ctx.tenant/ctx.claims (auth routes only use withRateLimit).
- *   3. Otherwise verify the JWT; claims carry Tenant + universal actorId +
- *      frontendUse/frontendDomains (for api_token actors).
- *   4. Load the tenant's actor-validity partition on first use and check
- *      `isActorValid(tenant, actorId)`.
- *   5. Enforce CORS using the claims (no DB read).
- *   6. Apply role/permission gates; superusers bypass them.
- */
 export function withAuth(
   options?: {
     roles?: string[];
-    permissions?: string[];
     requireAuthenticated?: boolean;
   },
 ): Middleware {
@@ -40,18 +23,13 @@ export function withAuth(
       const isAuthRoute = url.pathname.startsWith("/api/auth/");
 
       if (isAuthRoute) {
-        // Auth routes proceed without tenant context
         return next();
       }
 
-      // All other routes require a bearer token
       return Response.json(
         {
           success: false,
-          error: {
-            code: "UNAUTHORIZED",
-            message: "auth.error.unauthorized",
-          },
+          error: { code: "UNAUTHORIZED", message: "auth.error.unauthorized" },
         },
         { status: 401 },
       );
@@ -59,7 +37,6 @@ export function withAuth(
 
     const token = authHeader.slice(7);
 
-    // Auth-only verification — narrow catch so handler errors propagate.
     let claims;
     try {
       claims = await verifyTenantToken(token);
@@ -67,44 +44,37 @@ export function withAuth(
       return Response.json(
         {
           success: false,
-          error: {
-            code: "UNAUTHORIZED",
-            message: "auth.error.invalidToken",
-          },
+          error: { code: "UNAUTHORIZED", message: "auth.error.invalidToken" },
         },
         { status: 401 },
       );
     }
 
-    // Cache-only validity check (§8.11). One call covers every actor
-    // type because the cache is keyed by (tenant, actorId).
-    await ensureActorValidityLoaded(claims);
-    if (!claims.actorId || !isActorValid(claims, claims.actorId)) {
+    // Actor-validity check keyed by tenant record ID (§8.11)
+    await ensureActorValidityLoaded(claims.id);
+    if (!claims.actorId || !isActorValid(claims.id, claims.actorId)) {
       return Response.json(
         {
           success: false,
-          error: {
-            code: "UNAUTHORIZED",
-            message: "auth.error.tokenRevoked",
-          },
+          error: { code: "UNAUTHORIZED", message: "auth.error.tokenRevoked" },
         },
         { status: 401 },
       );
     }
 
-    // CORS policy lives on the JWT itself for non-user actors (§8.12).
     const corsError = enforceCors(req, claims);
     if (corsError) return corsError;
 
     ctx.tenant = {
+      id: claims.id,
       systemId: claims.systemId,
       companyId: claims.companyId,
       systemSlug: claims.systemSlug,
       roles: claims.roles,
-      permissions: claims.permissions,
     };
     ctx.claims = claims;
 
+    // Superuser bypasses role checks
     if (ctx.tenant.roles.includes("superuser")) {
       const response = await next();
       if (ctx.claims.actorType !== "user") {
@@ -116,6 +86,7 @@ export function withAuth(
       return response;
     }
 
+    // Role-based authorization (roles only, no permissions)
     if (options?.roles && options.roles.length > 0) {
       const hasRole = options.roles.some((r) => ctx.tenant.roles.includes(r));
       if (!hasRole) {
@@ -125,23 +96,6 @@ export function withAuth(
             error: {
               code: "FORBIDDEN",
               message: "auth.error.insufficientRole",
-            },
-          },
-          { status: 403 },
-        );
-      }
-    }
-
-    if (options?.permissions && options.permissions.length > 0) {
-      const hasPermission = ctx.tenant.permissions.includes("*") ||
-        options.permissions.some((p) => ctx.tenant.permissions.includes(p));
-      if (!hasPermission) {
-        return Response.json(
-          {
-            success: false,
-            error: {
-              code: "FORBIDDEN",
-              message: "auth.error.insufficientPermissions",
             },
           },
           { status: 403 },

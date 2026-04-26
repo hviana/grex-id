@@ -10,34 +10,43 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("core-settings");
 
-function resolveScope(systemSlug?: string): string {
-  // systemSlug is NEVER empty at rest (DB ASSERT). "core" is the default scope;
-  // any non-"core" value is a per-system override.
-  return systemSlug && systemSlug.length > 0 ? systemSlug : "core";
-}
-
+/**
+ * Settings are keyed by (key, tenantId). The tenantId references a system-level
+ * tenant row. The core system's tenant is the core-level default; any other
+ * system's tenant is a per-system override.
+ */
 export async function listSettings(
-  systemSlug?: string,
+  tenantId?: string,
 ): Promise<CoreSetting[]> {
   const db = await getDb();
-  const scope = resolveScope(systemSlug);
-  const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM setting WHERE systemSlug = $systemSlug ORDER BY key ASC",
-    { systemSlug: scope },
-  );
+  const bindings: Record<string, unknown> = {};
+
+  let query = "SELECT * FROM setting";
+  if (tenantId) {
+    query += " WHERE tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
+  }
+  query += " ORDER BY key ASC";
+
+  const result = await db.query<[CoreSetting[]]>(query, bindings);
   return result[0] ?? [];
 }
 
 export async function getSetting(
   key: string,
-  systemSlug?: string,
+  tenantId?: string,
 ): Promise<CoreSetting | null> {
   const db = await getDb();
-  const scope = resolveScope(systemSlug);
-  const result = await db.query<[CoreSetting[]]>(
-    "SELECT * FROM setting WHERE key = $key AND systemSlug = $systemSlug LIMIT 1",
-    { key, systemSlug: scope },
-  );
+  const bindings: Record<string, unknown> = { key };
+
+  let query = "SELECT * FROM setting WHERE key = $key";
+  if (tenantId) {
+    query += " AND tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
+  }
+  query += " LIMIT 1";
+
+  const result = await db.query<[CoreSetting[]]>(query, bindings);
   return result[0]?.[0] ?? null;
 }
 
@@ -45,38 +54,47 @@ export async function upsertSetting(data: {
   key: string;
   value: string;
   description: string;
-  systemSlug?: string;
+  tenantId?: string;
 }): Promise<CoreSetting> {
   const db = await getDb();
-  const scope = resolveScope(data.systemSlug);
+  const bindings: Record<string, unknown> = {
+    key: data.key,
+    value: data.value,
+    description: data.description,
+  };
+
+  let whereClause = "WHERE key = $key";
+  if (data.tenantId) {
+    bindings.tenantId = rid(data.tenantId);
+    whereClause += " AND tenantId = $tenantId";
+  }
+
   const result = await db.query<[CoreSetting[]]>(
     `UPSERT setting SET
       key = $key,
       value = $value,
       description = $description,
-      systemSlug = $systemSlug,
       updatedAt = time::now()
-    WHERE key = $key AND systemSlug = $systemSlug`,
-    {
-      key: data.key,
-      value: data.value,
-      description: data.description,
-      systemSlug: scope,
-    },
+    ${whereClause}`,
+    bindings,
   );
   return result[0][0];
 }
 
 export async function deleteSetting(
   key: string,
-  systemSlug?: string,
+  tenantId?: string,
 ): Promise<void> {
   const db = await getDb();
-  const scope = resolveScope(systemSlug);
-  await db.query(
-    "DELETE setting WHERE key = $key AND systemSlug = $systemSlug",
-    { key, systemSlug: scope },
-  );
+  const bindings: Record<string, unknown> = { key };
+
+  let query = "DELETE setting WHERE key = $key";
+  if (tenantId) {
+    query += " AND tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
+  }
+
+  await db.query(query, bindings);
 }
 
 export async function batchUpsertSettings(
@@ -84,21 +102,22 @@ export async function batchUpsertSettings(
     key: string;
     value: string;
     description: string;
-    systemSlug?: string;
+    tenantId?: string;
   }[],
 ): Promise<void> {
   if (items.length === 0) return;
   const db = await getDb();
-  const stmts = items.map(
-    (_, i) =>
-      `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, systemSlug = $s${i}, updatedAt = time::now() WHERE key = $k${i} AND systemSlug = $s${i}`,
-  );
+  const stmts: string[] = [];
   const bindings: Record<string, string> = {};
   items.forEach((item, i) => {
     bindings[`k${i}`] = item.key;
     bindings[`v${i}`] = item.value;
     bindings[`d${i}`] = item.description;
-    bindings[`s${i}`] = resolveScope(item.systemSlug);
+    const tKey = `t${i}`;
+    bindings[tKey] = item.tenantId ?? "core";
+    stmts.push(
+      `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantId = $${tKey}, updatedAt = time::now() WHERE key = $k${i} AND tenantId = $${tKey}`,
+    );
   });
   await db.query(stmts.join("; "), bindings);
 }
@@ -124,18 +143,17 @@ export async function fetchAllCoreData(): Promise<
 }
 
 /**
- * Fetches the active subscription for a company+system pair.
+ * Fetches the active subscription for a tenant.
  */
 export async function fetchActiveSubscription(params: {
-  companyId: string;
-  systemId: string;
+  tenantId: string;
 }): Promise<Subscription[]> {
   const db = await getDb();
   const result = await db.query<[Subscription[]]>(
     `SELECT * FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     WHERE tenantId = $tenantId AND status = "active"
      LIMIT 1`,
-    { companyId: rid(params.companyId), systemId: rid(params.systemId) },
+    { tenantId: rid(params.tenantId) },
   );
   return result[0] ?? [];
 }

@@ -69,10 +69,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const oldTenant = {
-    companyId: String(claims.companyId),
-    systemId: String(claims.systemId),
-  };
+  const oldTenantId = claims.id;
 
   // Superuser company-access bypass (§8.6.1)
   const isSuperuser = claims.roles.includes("superuser");
@@ -80,7 +77,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   if (isSuperuser) {
     const suResult = await resolveSuperuserExchange(companyId, systemId);
 
-    if (!suResult.exists) {
+    if (!suResult.exists || !suResult.tenantId) {
       return Response.json(
         {
           success: false,
@@ -91,15 +88,16 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     }
 
     const systemSlug = suResult.slug;
+    const newTenantId = suResult.tenantId;
     const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
 
     const newToken = await createTenantToken(
       {
+        id: newTenantId,
         systemId,
         companyId,
         systemSlug,
         roles: ["admin"],
-        permissions: ["*"],
         actorType: "user",
         actorId: claims.actorId,
         exchangeable: true,
@@ -110,36 +108,32 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     // Move the user id from the old tenant's partition to the new one
     // (§8.11, §8.6 step 6).
-    const newTenant = {
-      companyId: String(companyId),
-      systemId: String(systemId),
-    };
-    await forgetActor(oldTenant, String(claims.actorId));
-    await rememberActor(newTenant, String(claims.actorId));
+    await forgetActor(oldTenantId, String(claims.actorId));
+    await rememberActor(newTenantId, String(claims.actorId));
 
     return Response.json({
       success: true,
       data: {
         systemToken: newToken,
         tenant: {
+          id: newTenantId,
           systemId,
           companyId,
           systemSlug,
           roles: ["admin"],
-          permissions: ["*"],
         },
       },
     });
   }
 
-  // Verify membership + resolve slug/permissions (§7.2, §8.6)
+  // Verify membership + resolve slug/roles (§7.2, §8.6)
   const result = await resolveUserExchange(
     claims.actorId,
     companyId,
     systemId,
   );
 
-  if (!result.membership) {
+  if (!result.tenantId) {
     return Response.json(
       {
         success: false,
@@ -149,20 +143,20 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const userRoles = result.membership.roles ?? [];
+  const userRoles = result.roles;
   const systemSlug = result.slug;
-  const permissions = result.permissions;
+  const newTenantId = result.tenantId;
 
   // Carry over remaining lifetime from the old token (§8.6 step 6)
   const oldExp = claims.exp ? new Date(claims.exp * 1000) : undefined;
 
   const newToken = await createTenantToken(
     {
+      id: newTenantId,
       systemId,
       companyId,
       systemSlug,
       roles: userRoles,
-      permissions,
       actorType: "user",
       actorId: claims.actorId,
       exchangeable: true,
@@ -173,23 +167,19 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   // Move the user id from the old tenant's partition to the new one
   // (§8.11, §8.6 step 6).
-  const newTenant = {
-    companyId: String(companyId),
-    systemId: String(systemId),
-  };
-  await forgetActor(oldTenant, String(claims.actorId));
-  await rememberActor(newTenant, String(claims.actorId));
+  await forgetActor(oldTenantId, String(claims.actorId));
+  await rememberActor(newTenantId, String(claims.actorId));
 
   return Response.json({
     success: true,
     data: {
       systemToken: newToken,
       tenant: {
+        id: newTenantId,
         systemId,
         companyId,
         systemSlug,
         roles: userRoles,
-        permissions,
       },
     },
   });

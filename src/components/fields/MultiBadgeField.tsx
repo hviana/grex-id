@@ -17,7 +17,7 @@ interface MultiBadgeFieldProps {
   debounceMs?: number;
   /**
    * Optional custom renderer for each selected badge — enables consumers
-   * (roles/permissions/entities/resources forms) to swap the default chip
+   * (roles/entities/resources forms) to swap the default chip
    * for `TranslatedBadge` so both the raw token and its translation appear
    * (§5.6.1, §18.1.2). Receives the badge value and a remove callback; the
    * default chip is used when this prop is omitted.

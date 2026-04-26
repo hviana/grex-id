@@ -1,5 +1,4 @@
 import type { HandlerFn } from "../worker.ts";
-import { publish } from "../publisher.ts";
 import { dispatchCommunication } from "./send-communication.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
@@ -21,6 +20,7 @@ export const processPayment: HandlerFn = async (payload) => {
   const explicitAmount = payload.amount as string | undefined;
   const purpose = payload.purpose as string | undefined;
   const creditPurchaseId = payload.creditPurchaseId as string | undefined;
+  const tenantId = payload.tenantId as string | undefined;
   const isRecurring = !explicitAmount;
   const isRetry = purpose === "retry";
 
@@ -37,7 +37,8 @@ export const processPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  // Idempotency: if recurring already processed, skip (§14.5)
+  const effectiveTenantId = tenantId ?? String(sub.tenantId);
+
   if (
     isRecurring && sub.status === "active" &&
     new Date(sub.currentPeriodEnd) > new Date()
@@ -48,7 +49,6 @@ export const processPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  // Idempotency: if credit purchase already processed, skip (§14.5)
   if (
     creditPurchaseId && ctx.purchaseStatus && ctx.purchaseStatus !== "pending"
   ) {
@@ -80,12 +80,10 @@ export const processPayment: HandlerFn = async (payload) => {
     ? "credits"
     : "recurring";
 
-  // Create payment record (§22.8) — only if payment method exists
   let paymentId: string | undefined;
   if (sub.paymentMethodId) {
     paymentId = await createPaymentRecord({
-      companyId: String(sub.companyId),
-      systemId: String(sub.systemId),
+      tenantId: effectiveTenantId,
       subscriptionId: sub.id,
       amount: chargeAmount,
       currency,
@@ -94,9 +92,6 @@ export const processPayment: HandlerFn = async (payload) => {
     });
   }
 
-  // TODO: Call actual payment provider with chargeAmount (Phase 6)
-  // const providerResult = await provider.charge(chargeAmount, { ... });
-  // For now, stub returns synchronous success:
   const providerResult: PaymentResult = {
     success: true,
   };
@@ -108,7 +103,6 @@ export const processPayment: HandlerFn = async (payload) => {
   const ownerName = owner?.name ?? "";
   const ownerId = owner?.id ? String(owner.id) : "";
 
-  // Async payment detection (§22.9)
   const isAsync = providerResult.expiresInSeconds != null &&
     providerResult.continuityData != null;
 
@@ -125,7 +119,6 @@ export const processPayment: HandlerFn = async (payload) => {
       });
     }
 
-    // Send payment-pending notification (§22.9)
     if (ownerId) {
       await dispatchCommunication({
         recipients: [ownerId],
@@ -148,14 +141,11 @@ export const processPayment: HandlerFn = async (payload) => {
       });
     }
 
-    // Do NOT activate subscription, credits, or credit purchase.
-    // The webhook handler will resolve the payment later (§22.9).
     return;
   }
 
   if (success) {
     if (isRecurring) {
-      // Recurring billing success — advance period, reset credits (§16)
       const newStart = new Date(sub.currentPeriodEnd);
       const newEnd = new Date(
         newStart.getTime() + plan.recurrenceDays * 86400000,
@@ -164,8 +154,7 @@ export const processPayment: HandlerFn = async (payload) => {
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
-        companyId: String(sub.companyId),
-        systemId: String(sub.systemId),
+        tenantId: effectiveTenantId,
       });
 
       await renewSubscriptionOnSuccess({
@@ -179,17 +168,12 @@ export const processPayment: HandlerFn = async (payload) => {
         invoiceUrl: invoiceUrl || undefined,
       });
 
-      await Core.getInstance().reloadSubscription(
-        String(sub.companyId),
-        String(sub.systemId),
-      );
+      await Core.getInstance().reloadSubscription(effectiveTenantId);
     } else {
-      // Credit purchase or auto-recharge — increment purchased credits (§22.3)
       const period = new Date().toISOString().slice(0, 7);
 
       await creditPurchaseOnSuccess({
-        companyId: String(sub.companyId),
-        systemId: String(sub.systemId),
+        tenantId: effectiveTenantId,
         amount: chargeAmount,
         period,
         subscriptionId: sub.id,
@@ -199,13 +183,9 @@ export const processPayment: HandlerFn = async (payload) => {
         invoiceUrl: invoiceUrl || undefined,
       });
 
-      await Core.getInstance().reloadSubscription(
-        String(sub.companyId),
-        String(sub.systemId),
-      );
+      await Core.getInstance().reloadSubscription(effectiveTenantId);
     }
 
-    // Notification on success (§16)
     if (ownerId) {
       await dispatchCommunication({
         recipients: [ownerId],
@@ -225,7 +205,6 @@ export const processPayment: HandlerFn = async (payload) => {
       });
     }
   } else {
-    // Payment failed
     await paymentOnFailure({
       subscriptionId: sub.id,
       isRecurring,
@@ -236,10 +215,7 @@ export const processPayment: HandlerFn = async (payload) => {
       failureReason: failureReason || "billing.payment.genericFailure",
     });
 
-    await Core.getInstance().reloadSubscription(
-      String(sub.companyId),
-      String(sub.systemId),
-    );
+    await Core.getInstance().reloadSubscription(effectiveTenantId);
 
     if (ownerId) {
       await dispatchCommunication({

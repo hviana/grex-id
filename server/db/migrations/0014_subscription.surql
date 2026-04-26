@@ -1,7 +1,6 @@
 DEFINE TABLE subscription SCHEMAFULL;
-DEFINE FIELD companyId          ON subscription TYPE record<company>;
-DEFINE FIELD systemId           ON subscription TYPE record<system>;
-DEFINE FIELD planId             ON subscription TYPE record<plan>;
+DEFINE FIELD tenantId               ON subscription TYPE record<tenant>;
+DEFINE FIELD planId                 ON subscription TYPE record<plan>;
 DEFINE FIELD paymentMethodId        ON subscription TYPE option<record<payment_method>>;
 DEFINE FIELD status                 ON subscription TYPE string
   ASSERT $value IN ["active", "past_due", "cancelled"];
@@ -15,15 +14,15 @@ DEFINE FIELD autoRechargeAmount     ON subscription TYPE option<int> DEFAULT 0;
 DEFINE FIELD autoRechargeInProgress ON subscription TYPE option<bool> DEFAULT false;
 DEFINE FIELD remainingOperationCount ON subscription TYPE option<object> FLEXIBLE;
 DEFINE FIELD operationCountAlertSent ON subscription TYPE option<object> FLEXIBLE;
+DEFINE FIELD retryPaymentInProgress ON subscription TYPE bool DEFAULT false;
 DEFINE FIELD createdAt              ON subscription TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt              ON subscription TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_sub_company_system          ON subscription FIELDS companyId, systemId;
-DEFINE INDEX idx_sub_company_system_status   ON subscription FIELDS companyId, systemId, status;
-DEFINE INDEX idx_sub_status                  ON subscription FIELDS status;
-DEFINE INDEX idx_sub_period_end              ON subscription FIELDS currentPeriodEnd;
-DEFINE INDEX idx_sub_status_period           ON subscription FIELDS status, currentPeriodEnd;
-DEFINE INDEX idx_sub_status_period_start     ON subscription FIELDS status, currentPeriodStart;
-DEFINE INDEX idx_sub_voucher                 ON subscription FIELDS voucherId;
-DEFINE INDEX idx_sub_plan                    ON subscription FIELDS planId;
-DEFINE INDEX idx_sub_updated                 ON subscription FIELDS updatedAt;
+DEFINE INDEX idx_sub_tenant          ON subscription FIELDS tenantId;
+DEFINE INDEX idx_sub_tenant_status   ON subscription FIELDS tenantId, status;
+DEFINE INDEX idx_sub_status          ON subscription FIELDS status;
+DEFINE INDEX idx_sub_period_end      ON subscription FIELDS currentPeriodEnd;
+DEFINE INDEX idx_sub_status_period   ON subscription FIELDS status, currentPeriodEnd;
+DEFINE INDEX idx_sub_voucher         ON subscription FIELDS voucherId;
+DEFINE INDEX idx_sub_plan            ON subscription FIELDS planId;
+DEFINE INDEX idx_sub_updated         ON subscription FIELDS updatedAt;

@@ -6,8 +6,14 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("files");
 
+/**
+ * Files use `companyId`/`systemSlug`/`userId` in path segments (via
+ * @hviana/surreal-fs). Any DB-level queries scope by `tenantId`.
+ */
+
 export async function listFiles(
   params: CursorParams & {
+    tenantId?: string;
     userId?: string;
     companyId?: string;
     systemSlug?: string;
@@ -18,6 +24,10 @@ export async function listFiles(
   const bindings: Record<string, unknown> = { limit: limit + 1 };
   const conditions: string[] = [];
 
+  if (params.tenantId) {
+    conditions.push("tenantId = $tenantId");
+    bindings.tenantId = rid(params.tenantId);
+  }
   if (params.userId) {
     conditions.push("userId = $userId");
     bindings.userId = params.userId;
@@ -63,6 +73,7 @@ export async function findFileByUri(uri: string): Promise<FileMetadata | null> {
 }
 
 export async function createFileMetadata(data: {
+  tenantId: string;
   systemSlug: string;
   companyId: string;
   userId: string;
@@ -76,6 +87,7 @@ export async function createFileMetadata(data: {
   const db = await getDb();
   const result = await db.query<[FileMetadata[]]>(
     `CREATE file_metadata SET
+      tenantId = $tenantId,
       systemSlug = $systemSlug,
       companyId = $companyId,
       userId = $userId,
@@ -85,26 +97,23 @@ export async function createFileMetadata(data: {
       sizeBytes = $sizeBytes,
       mimeType = $mimeType,
       description = $description`,
-    { ...data, description: data.description ?? undefined },
+    {
+      ...data,
+      tenantId: rid(data.tenantId),
+      description: data.description ?? undefined,
+    },
   );
   return result[0][0];
 }
 
 export async function getStorageUsage(
-  companyId: string,
-  systemSlug?: string,
+  tenantId: string,
 ): Promise<number> {
   const db = await getDb();
-  const bindings: Record<string, unknown> = { companyId };
-  let query =
-    "SELECT math::sum(sizeBytes) AS total FROM file_metadata WHERE companyId = $companyId";
-  if (systemSlug) {
-    query += " AND systemSlug = $systemSlug";
-    bindings.systemSlug = systemSlug;
-  }
-  query += " GROUP ALL";
-
-  const result = await db.query<[{ total: number }[]]>(query, bindings);
+  const result = await db.query<[{ total: number }[]]>(
+    "SELECT math::sum(sizeBytes) AS total FROM file_metadata WHERE tenantId = $tenantId GROUP ALL",
+    { tenantId: rid(tenantId) },
+  );
   return result[0]?.[0]?.total ?? 0;
 }
 

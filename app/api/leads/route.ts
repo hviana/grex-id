@@ -52,8 +52,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     limit,
     cursor,
     search,
-    companyId,
-    systemId,
+    tenantId: ctx.tenant.id,
   });
 
   return Response.json({ success: true, ...result });

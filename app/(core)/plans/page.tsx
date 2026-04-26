@@ -23,7 +23,7 @@ interface PlanItem {
   currency: string;
   recurrenceDays: number;
   benefits: string[];
-  permissions: string[];
+  roles: string[];
   entityLimits: Record<string, number> | null;
   apiRateLimit: number;
   storageLimitBytes: number;
@@ -116,7 +116,7 @@ export default function PlansPage() {
       recurrenceDays: item.recurrenceDays ?? 30,
       benefits: item.benefits ?? [],
       isActive: item.isActive ?? true,
-      permissions: item.permissions ?? [],
+      roles: item.roles ?? [],
       entityLimits: item.entityLimits,
       apiRateLimit: item.apiRateLimit ?? 1000,
       storageLimitBytes: item.storageLimitBytes ?? 1073741824,

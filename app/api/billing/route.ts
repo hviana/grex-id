@@ -36,18 +36,15 @@ function tenantGuard(ctx: RequestContext): Response | null {
 }
 
 async function getHandler(req: Request, ctx: RequestContext) {
-  // §9.2: read companyId/systemId from ctx.tenant only
   const guard = tenantGuard(ctx);
   if (guard) return guard;
 
-  const { companyId, systemId } = ctx.tenant;
   const url = new URL(req.url);
   const includePayments = url.searchParams.get("include")?.includes("payments");
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
   const paymentCursor = url.searchParams.get("cursor");
 
-  // Validate date range (max 365 days) when requesting payments
   if (includePayments && startDate && endDate) {
     const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
     if (diffMs > 365 * 86400000) {
@@ -65,8 +62,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   const data = await getBillingData({
-    companyId,
-    systemId,
+    tenantId: ctx.tenant.id,
     startDate: startDate ?? undefined,
     endDate: endDate ?? undefined,
     paymentCursor: paymentCursor ?? undefined,
@@ -109,7 +105,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    // Use Core cache for plan lookup (no db.query) — §7.2 single-call rule
     const plan = await core.getPlanById(planId);
     if (!plan || String(plan.systemId) !== String(systemId)) {
       return Response.json(
@@ -140,8 +135,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    // Resolve operation counts from the plan directly (no subscription exists yet,
-    // so resolveAllOperationCounts cannot be used — it requires an existing subscription)
     const planOpMap = plan.maxOperationCount ?? {};
     const operationCountMap = Object.keys(planOpMap).length > 0
       ? Object.fromEntries(
@@ -156,6 +149,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
 
     const result = await subscribe({
+      tenantId: ctx.tenant.id,
       companyId,
       systemId,
       planId,
@@ -167,10 +161,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       end: periodEnd,
     });
 
-    await Core.getInstance().reloadSubscription(
-      String(companyId),
-      String(systemId),
-    );
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json({ success: true, data: result }, { status: 201 });
   }
@@ -179,9 +170,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    await cancelSubscription(companyId, systemId);
+    await cancelSubscription(ctx.tenant.id);
 
-    await Core.getInstance().reloadSubscription(companyId, systemId);
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json({ success: true });
   }
@@ -211,7 +202,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const pm = await addPaymentMethod({
-      companyId,
+      tenantId: ctx.tenant.id,
       cardToken,
       cardMask,
       holderName,
@@ -241,7 +232,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await setDefaultPaymentMethod(companyId, paymentMethodId);
+    await setDefaultPaymentMethod(ctx.tenant.id, paymentMethodId);
 
     return Response.json({ success: true });
   }
@@ -287,8 +278,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     if (guard) return guard;
 
     const { purchase, activeSubscriptionId } = await purchaseCredits({
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       amount: Number(amount),
       paymentMethodId,
     });
@@ -296,13 +286,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     await publish("process_payment", {
       creditPurchaseId: String(purchase?.id ?? ""),
       subscriptionId: activeSubscriptionId,
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       amount: String(amount),
       purpose: "credits",
     });
 
-    await Core.getInstance().reloadSubscription(companyId, systemId);
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json(
       { success: true, data: purchase },
@@ -332,8 +321,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const { voucher, subscription: activeSub, oldVoucher } =
       await lookupVoucherAndSubscription({
         voucherCode,
-        companyId,
-        systemId,
+        tenantId: ctx.tenant.id,
       });
 
     if (!voucher) {
@@ -419,8 +407,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (delta !== 0) opCountDeltas[key] = delta;
     }
 
-    // Compute the new values (current + delta, clamped to >= 0) for each key
-    // Also compute alert resets for keys where count increased above 0
     const opCountNewValues: Record<string, number> = {};
     const alertResets: Record<string, boolean> = {};
     const currentOpCounts = activeSub?.remainingOperationCount ?? {};
@@ -435,15 +421,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     await applyVoucherToSubscription({
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       voucherId: voucher.id as string,
       creditDelta,
       opCountNewValues,
       alertResets,
     });
 
-    await Core.getInstance().reloadSubscription(companyId, systemId);
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json({
       success: true,
@@ -499,8 +484,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
 
       const { hasDefaultPaymentMethod } = await enableAutoRecharge({
-        companyId,
-        systemId,
+        tenantId: ctx.tenant.id,
         amount: Number(amount),
       });
 
@@ -517,10 +501,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
         );
       }
     } else {
-      await disableAutoRecharge(companyId, systemId);
+      await disableAutoRecharge(ctx.tenant.id);
     }
 
-    await Core.getInstance().reloadSubscription(companyId, systemId);
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json({ success: true });
   }
@@ -529,7 +513,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    const result = await retryPayment(companyId, systemId);
+    const result = await retryPayment(ctx.tenant.id);
 
     if (result.status === "not_found") {
       return Response.json(
@@ -553,12 +537,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     await publish("process_payment", {
       subscriptionId: result.subscriptionId!,
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       purpose: "retry",
     });
 
-    await Core.getInstance().reloadSubscription(companyId, systemId);
+    await Core.getInstance().reloadSubscription(ctx.tenant.id);
 
     return Response.json({ success: true });
   }

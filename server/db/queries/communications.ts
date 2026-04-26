@@ -7,7 +7,7 @@ assertServerOnly("communications");
 /**
  * Resolve recipient channel values from entity record ids.
  *
- * - Each entry must resolve to a user:… / lead:… record id.
+ * - Each entry must resolve to a user:... / lead:... record id.
  * - Fetches the owner's entity_channels of the requested type and returns
  *   their values (emails, phone numbers, etc.).
  * - Only verified channels are included by default.
@@ -16,6 +16,9 @@ assertServerOnly("communications");
  *   already verified by a DIFFERENT entity.
  *
  * All owner lookups are batched into a single db.query() call.
+ *
+ * Channels are composable and not directly tenant-scoped — they are linked via
+ * the parent's channelIds array. No tenant model changes needed here.
  */
 export async function resolveChannelRecipients(
   rawRecipients: string[],
@@ -83,19 +86,16 @@ export async function resolveChannelRecipients(
   );
 
   if (includeUnverified) {
-    // Collect the values of unverified channels so we can check for conflicts.
     letStmts.push(
       `LET $unverifiedValues = array::distinct(
          SELECT VALUE value FROM $ownerChannels WHERE verified = false
        );`,
     );
-    // Find channels verified by OTHER entities that share those values.
     letStmts.push(
       `LET $conflictingValues = SELECT VALUE value FROM entity_channel
          WHERE value IN $unverifiedValues AND verified = true
            AND id NOT IN $allChannels;`,
     );
-    // Final set: all verified + unverified whose value isn't claimed elsewhere.
     letStmts.push(
       `LET $result = (SELECT VALUE value FROM $ownerChannels
          WHERE verified = true OR value NOT IN $conflictingValues);`,

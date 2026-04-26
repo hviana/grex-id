@@ -200,21 +200,13 @@ async function handler(
     );
   }
 
-  const tenant = {
-    systemId: String(mem.systemId),
-    companyId: String(mem.companyId),
-    systemSlug: mem.systemSlug ?? "core",
-    roles: (mem.roles ?? []) as string[],
-    permissions: (mem.permissions ?? []) as string[],
-  };
-
-  if (tenant.roles.includes("superuser")) {
-    tenant.permissions = ["*"];
-  }
-
   const systemToken = await createTenantToken(
     {
-      ...tenant,
+      id: mem.tenantId,
+      systemId: mem.systemId,
+      companyId: mem.companyId,
+      systemSlug: mem.systemSlug,
+      roles: mem.roles,
       actorType: "user",
       actorId: String(user.id),
       exchangeable: true,
@@ -224,7 +216,7 @@ async function handler(
 
   // Register the user in the tenant's actor-validity partition (§8.11).
   // This is the only signal withAuth consults on subsequent requests.
-  await rememberActor(tenant, String(user.id));
+  await rememberActor(mem.tenantId, String(user.id));
 
   return Response.json({
     success: true,

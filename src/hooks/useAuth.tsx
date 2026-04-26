@@ -42,9 +42,6 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Decodes JWT payload without verification (frontend trusts the server-issued token).
- */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
@@ -59,53 +56,46 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Extracts Tenant from a JWT token. All values are real SurrealDB record IDs.
- */
 function extractTenant(token: string): Tenant {
   const payload = decodeJwtPayload(token);
   const t = payload?.tenant as
     | {
+      id: string;
       systemId: string;
       companyId: string;
       systemSlug: string;
       roles: string[];
-      permissions: string[];
     }
     | undefined;
-  if (!t?.systemId || !t?.companyId) {
+  if (!t?.id || !t?.systemId || !t?.companyId) {
     throw new Error("Invalid token: missing tenant fields");
   }
   return {
+    id: t.id,
     systemId: t.systemId,
     companyId: t.companyId,
     systemSlug: t.systemSlug ?? "core",
     roles: t.roles ?? [],
-    permissions: t.permissions ?? [],
   };
 }
 
-/**
- * Extracts full TenantClaims from a JWT token. All values are real SurrealDB record IDs.
- */
 function extractClaims(token: string): TenantClaims | null {
   const payload = decodeJwtPayload(token);
   if (!payload) return null;
-  const t = payload.tenant as Tenant;
-  if (!t?.systemId || !t?.companyId) return null;
+  const t = payload.tenant as Tenant | undefined;
+  if (!t?.id || !t?.systemId || !t?.companyId) return null;
   return {
+    id: t.id,
     systemId: t.systemId,
     companyId: t.companyId,
     systemSlug: t.systemSlug ?? "core",
     roles: t.roles ?? [],
-    permissions: t.permissions ?? [],
     actorType: payload.actorType as TenantClaims["actorType"],
     actorId: payload.actorId as string,
     exchangeable: (payload.exchangeable as boolean) ?? false,
   };
 }
 
-/** Fetches the anonymous token from the public endpoint. */
 async function fetchAnonymousToken(): Promise<string | null> {
   try {
     const res = await fetch("/api/public/anonymous-token");
@@ -171,7 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       });
     } else {
-      // No user token — fetch the anonymous token for public operations
       fetchAnonymousToken().then((anonToken) => {
         setState({
           user: null,
@@ -238,7 +227,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     removeCookie(TOKEN_COOKIE_NAME);
 
-    // Re-fetch anonymous token for public operations
     fetchAnonymousToken().then((anonToken) => {
       setState({
         user: null,
@@ -290,18 +278,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [state.systemToken],
   );
 
-  /** The active bearer token — user token when logged in, anonymous token otherwise. */
   const activeToken = state.systemToken ?? state.anonymousToken;
 
   const tenant: Tenant = useMemo(() => {
     if (!activeToken) {
-      // Still loading or anonymous token fetch failed — return a safe default
       return {
+        id: "",
         systemId: "",
         companyId: "",
         systemSlug: "core",
         roles: [],
-        permissions: [],
       };
     }
     return extractTenant(activeToken);
@@ -340,10 +326,6 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-/**
- * Returns the active bearer token for use in fetch wrappers.
- * User token when logged in, anonymous token when logged out.
- */
 export function useBearerToken(): string | null {
   const { systemToken, anonymousToken } = useAuth();
   return systemToken ?? anonymousToken;

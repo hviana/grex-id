@@ -22,9 +22,10 @@ export function startPaymentExpiry(): void {
       console.log(`[expiry] Marked ${payments.length} expired payments.`);
 
       for (const payment of payments) {
+        const tenantId = String(payment.tenantId);
+
         const { owner, systemInfo } = await resolveExpiredPaymentContext({
-          companyId: String(payment.companyId),
-          systemId: String(payment.systemId),
+          tenantId,
           subscriptionId: String(payment.subscriptionId),
         });
 
@@ -52,10 +53,7 @@ export function startPaymentExpiry(): void {
           });
         }
 
-        await core.reloadSubscription(
-          String(payment.companyId),
-          String(payment.systemId),
-        );
+        await core.reloadSubscription(tenantId);
       }
     } catch (err) {
       console.error("[expiry] Error checking expired payments:", err);

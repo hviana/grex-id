@@ -3,6 +3,12 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("file-access");
 
+/**
+ * File access rule queries. file_access uses `roles: array<string>` instead
+ * of `permissions`. The rules are not tenant-scoped — they are global
+ * configuration loaded into cache.
+ */
+
 export async function updateFileAccessRule(
   id: string,
   sets: string[],

@@ -37,11 +37,10 @@ export interface TransferLimitResult {
 }
 
 async function resolveSubscription(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<Subscription | null> {
   const core = Core.getInstance();
-  return core.ensureSubscription(companyId, systemId);
+  return core.ensureSubscription(tenantId);
 }
 
 async function resolvePlan(planId: string): Promise<Plan | undefined> {
@@ -56,11 +55,10 @@ async function resolveVoucher(
 }
 
 export async function resolveEntityLimit(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
   entityName: string;
 }): Promise<EntityLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) {
     return { limit: null, planLimit: null, voucherModifier: 0 };
   }
@@ -89,13 +87,13 @@ export async function resolveEntityLimit(params: {
 
 export async function checkPlanAccess(
   tenant: Tenant,
-  featureNames: string[],
+  roleNames: string[],
 ): Promise<PlanAccessResult> {
   if (tenant.roles.includes("superuser")) {
     return { granted: true };
   }
 
-  const sub = await resolveSubscription(tenant.companyId, tenant.systemId);
+  const sub = await resolveSubscription(tenant.id);
   if (!sub) {
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
@@ -109,11 +107,8 @@ export async function checkPlanAccess(
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
 
-  if (plan.permissions.includes("*")) {
-    return { granted: true };
-  }
-
-  const hasAccess = featureNames.some((f) => plan.permissions.includes(f));
+  // Check if the plan grants any of the required roles
+  const hasAccess = roleNames.some((r) => plan.roles.includes(r));
   if (!hasAccess) {
     return { granted: false, denyCode: "PLAN_LIMIT" };
   }
@@ -122,10 +117,9 @@ export async function checkPlanAccess(
 }
 
 export async function resolveRateLimitConfig(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<RateLimitConfigResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) {
     return { globalLimit: 0, planRateLimit: 0, voucherModifier: 0 };
   }
@@ -147,10 +141,9 @@ export async function resolveRateLimitConfig(params: {
 }
 
 export async function resolveFileCacheLimit(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<FileCacheLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) {
     return { maxBytes: 0, planLimit: 0, voucherModifier: 0 };
   }
@@ -172,10 +165,9 @@ export async function resolveFileCacheLimit(params: {
 }
 
 export async function resolveMaxConcurrentDownloads(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
@@ -195,10 +187,9 @@ export async function resolveMaxConcurrentDownloads(params: {
 }
 
 export async function resolveMaxConcurrentUploads(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
@@ -218,10 +209,9 @@ export async function resolveMaxConcurrentUploads(params: {
 }
 
 export async function resolveMaxDownloadBandwidth(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
@@ -241,10 +231,9 @@ export async function resolveMaxDownloadBandwidth(params: {
 }
 
 export async function resolveMaxUploadBandwidth(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
@@ -264,11 +253,10 @@ export async function resolveMaxUploadBandwidth(params: {
 }
 
 export async function resolveMaxOperationCount(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
   resourceKey: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
@@ -293,10 +281,9 @@ export async function resolveMaxOperationCount(params: {
  * subscription initialization and renewal.
  */
 export async function resolveAllOperationCounts(params: {
-  companyId: string;
-  systemId: string;
+  tenant: Tenant;
 }): Promise<Record<string, number>> {
-  const sub = await resolveSubscription(params.companyId, params.systemId);
+  const sub = await resolveSubscription(params.tenant.id);
   if (!sub) return {};
 
   const plan = await resolvePlan(sub.planId);

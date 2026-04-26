@@ -7,30 +7,33 @@ import { genericVerify } from "./generics.ts";
 assertServerOnly("data-deletion");
 
 /**
- * Deletes all data scoped to a company+system pair.
+ * Deletes all data scoped to a tenant.
  * Does NOT delete the company or system records themselves.
+ * All scoped tables use `tenantId` as the single scope key.
  */
-export async function deleteCompanySystemData(
+export async function deleteTenantData(
+  tenantId: string,
   companyId: string,
-  systemId: string,
   systemSlug: string,
 ): Promise<void> {
   const db = await getDb();
 
-  // Delete association tables and scoped data
+  // Delete tenant-scoped data. All tables use tenantId.
   await db.query(
     `
-    DELETE FROM company_system WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM user_company_system WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM subscription WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM lead_company_system WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM usage_record WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM connected_app WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM api_token WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM credit_purchase WHERE companyId = $companyId AND systemId = $systemId;
-    DELETE FROM tag WHERE companyId = $companyId AND systemId = $systemId;
+    DELETE FROM subscription WHERE tenantId = $tenantId;
+    DELETE FROM lead_company_system WHERE tenantId = $tenantId;
+    DELETE FROM usage_record WHERE tenantId = $tenantId;
+    DELETE FROM connected_app WHERE tenantId = $tenantId;
+    DELETE FROM api_token WHERE tenantId = $tenantId;
+    DELETE FROM credit_purchase WHERE tenantId = $tenantId;
+    DELETE FROM credit_expense WHERE tenantId = $tenantId;
+    DELETE FROM tag WHERE tenantId = $tenantId;
+    DELETE FROM location WHERE tenantId = $tenantId;
+    DELETE FROM tenant_role WHERE tenantId = $tenantId;
+    DELETE FROM tenant WHERE id = $tenantId;
     `,
-    { companyId: rid(companyId), systemId: rid(systemId) },
+    { tenantId: rid(tenantId) },
   );
 
   // Delete all uploaded files under {companyId}/{systemSlug}/
@@ -41,7 +44,7 @@ export async function deleteCompanySystemData(
     // If directory doesn't exist or fs fails, continue — data may not have files
   }
 
-  FileCacheManager.getInstance().clearTenant(`${companyId}:${systemSlug}`);
+  FileCacheManager.getInstance().clearTenant(tenantId);
 }
 
 /**

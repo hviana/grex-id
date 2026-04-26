@@ -98,10 +98,7 @@ async function handler(
     // `identifier` is public (user submitted it); `stayLoggedIn` is a plain
     // boolean flag. No password / hash is stored in the payload per §5.1.5.
     payload: { identifier: value, stayLoggedIn: !!stayLoggedIn },
-    tenant: {
-      actorId: String(user.id),
-      actorType: "user",
-    },
+    tenant: {},
   });
 
   if (!guard.allowed) {

@@ -3,7 +3,7 @@ export interface CoreSetting {
   key: string;
   value: string;
   description: string;
-  systemSlug?: string;
+  tenantId: string; // references system-only tenant row
   createdAt: string;
   updatedAt: string;
 }
@@ -13,7 +13,7 @@ export interface FrontCoreSetting {
   key: string;
   value: string;
   description: string;
-  systemSlug?: string;
+  tenantId: string; // references system-only tenant row
   createdAt: string;
   updatedAt: string;
 }

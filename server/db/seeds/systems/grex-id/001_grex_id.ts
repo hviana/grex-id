@@ -15,30 +15,40 @@ export async function seed(db: Surreal): Promise<void> {
   const systemId = systemResult[0][0].id;
   console.log("[seed] system created: GrexID (grex-id)");
 
-  // 2. Create the admin role for GrexID
+  // 2. Create system-level tenant row for grex-id (actorId=NONE, companyId=NONE)
+  const tenantResult = await db.query<[{ id: string }[]]>(
+    `CREATE tenant SET
+       actorId = NONE,
+       companyId = NONE,
+       systemId = $systemId`,
+    { systemId },
+  );
+  const systemTenantId = tenantResult[0][0].id;
+  console.log("[seed] system-level tenant created for grex-id");
+
+  // 3. Create the admin role for GrexID linked to system-level tenant
   await db.query(
-    `IF array::len((SELECT id FROM role WHERE name = "admin" AND systemId = $systemId)) = 0 {
+    `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantId = $systemTenantId)) = 0 {
        CREATE role SET
          name = "admin",
-         systemId = $systemId,
-         permissions = ["*"],
+         tenantId = $systemTenantId,
          isBuiltIn = true
      }`,
-    { systemId },
+    { systemTenantId },
   );
   console.log("[seed] role created: admin for grex-id");
 
-  // 3. Create the STANDARD plan
+  // 4. Create the STANDARD plan linked to system-level tenant
   await db.query(
     `CREATE plan SET
       name = $name,
       description = $description,
-      systemId = $systemId,
+      tenantId = $systemTenantId,
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,
       benefits = $benefits,
-      permissions = $permissions,
+      roles = $roles,
       apiRateLimit = 1000,
       storageLimitBytes = 1073741824,
       fileCacheLimitBytes = 20971520,
@@ -47,12 +57,12 @@ export async function seed(db: Surreal): Promise<void> {
     {
       name: "plans.grexId.standard.name",
       description: "plans.grexId.standard.description",
-      systemId,
+      systemTenantId,
       price: 0,
       currency: "USD",
       recurrenceDays: 30,
       benefits: [],
-      permissions: ["grexid.detect", "grexid.list_locations"],
+      roles: ["grexid.detect", "grexid.list_locations"],
     },
   );
   console.log("[seed] plan created: STANDARD for grex-id");

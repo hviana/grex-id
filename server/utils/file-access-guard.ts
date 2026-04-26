@@ -32,13 +32,10 @@ function checkSection(
   section: FileAccessSection,
   params: FileAccessCheckParams,
 ): boolean {
-  // Superuser or wildcard permission bypasses all checks (§6.4)
-  if (params.claims) {
-    if (params.tenant.roles.includes("superuser")) return true;
-    if (params.tenant.permissions.includes("*")) return true;
-  }
+  // Superuser role bypasses all checks (§6.4)
+  if (params.tenant.roles.includes("superuser")) return true;
 
-  const { isolateSystem, isolateCompany, isolateUser, permissions } = section;
+  const { isolateSystem, isolateCompany, isolateUser, roles } = section;
 
   const needsAuth = isolateSystem || isolateCompany || isolateUser;
   if (needsAuth && !params.claims) return false;
@@ -51,12 +48,10 @@ function checkSection(
     return false;
   }
 
-  if (permissions.length > 0) {
+  if (roles.length > 0) {
     if (!params.claims) return false;
-    const hasPermission = permissions.some((p) =>
-      params.tenant.permissions.includes(p)
-    );
-    if (!hasPermission) return false;
+    const hasRole = roles.some((r) => params.tenant.roles.includes(r));
+    if (!hasRole) return false;
   }
 
   return true;
@@ -93,7 +88,6 @@ export async function checkFileAccess(
   const result: FileAccessCheckResult = { allowed: true };
 
   if (params.operation === "upload") {
-    // Collect maxFileSizeBytes: smallest non-null limit across matching rules
     const sizeLimits = matchingAllowed
       .map((r) => (r.upload as FileAccessUploadSection).maxFileSizeMB)
       .filter((v): v is number => v !== undefined && v > 0);
@@ -101,7 +95,6 @@ export async function checkFileAccess(
       result.maxFileSizeBytes = Math.min(...sizeLimits) * 1048576;
     }
 
-    // Collect allowedExtensions: intersection of all non-empty arrays
     const extLists = matchingAllowed
       .map((r) => (r.upload as FileAccessUploadSection).allowedExtensions)
       .filter((arr) => arr.length > 0);

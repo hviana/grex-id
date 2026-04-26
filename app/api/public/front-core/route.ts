@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getCache } from "@/server/utils/cache";
 import type { FrontCoreData } from "@/server/utils/FrontCore";
 import Core from "@/server/utils/Core";
@@ -40,12 +39,12 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: settingsMap,
     });
   } catch {
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: { code: "ERROR", message: "common.error.generic" },

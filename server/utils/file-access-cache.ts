@@ -25,7 +25,7 @@ const defaultSection: FileAccessSection = {
   isolateSystem: false,
   isolateCompany: false,
   isolateUser: false,
-  permissions: [],
+  roles: [],
 };
 
 const defaultUploadSection: FileAccessUploadSection = {
@@ -42,7 +42,7 @@ function normalizeSection(
     isolateSystem: !!raw.isolateSystem,
     isolateCompany: !!raw.isolateCompany,
     isolateUser: !!raw.isolateUser,
-    permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+    roles: Array.isArray(raw.roles) ? raw.roles : [],
   };
 }
 

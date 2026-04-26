@@ -3,7 +3,6 @@ DEFINE FIELD code                  ON voucher TYPE string;
 DEFINE FIELD applicableCompanyIds  ON voucher TYPE array<record<company>>;
 DEFINE FIELD applicablePlanIds     ON voucher TYPE array<record<plan>> DEFAULT [];
 DEFINE FIELD priceModifier         ON voucher TYPE int;
-DEFINE FIELD permissions           ON voucher TYPE array<string>;
 DEFINE FIELD entityLimitModifiers  ON voucher TYPE option<object> FLEXIBLE;
 DEFINE FIELD apiRateLimitModifier  ON voucher TYPE int DEFAULT 0;
 DEFINE FIELD storageLimitModifier    ON voucher TYPE int DEFAULT 0;

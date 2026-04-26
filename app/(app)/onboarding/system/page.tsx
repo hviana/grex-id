@@ -24,7 +24,7 @@ interface PlanOption {
   currency: string;
   recurrenceDays: number;
   benefits: string[];
-  permissions: string[];
+  roles: string[];
   entityLimits?: Record<string, number>;
   apiRateLimit: number;
   storageLimitBytes: number;

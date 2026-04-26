@@ -1,6 +1,5 @@
 DEFINE TABLE payment SCHEMAFULL;
-DEFINE FIELD companyId       ON payment TYPE record<company>;
-DEFINE FIELD systemId        ON payment TYPE record<system>;
+DEFINE FIELD tenantId        ON payment TYPE record<tenant>;
 DEFINE FIELD subscriptionId  ON payment TYPE record<subscription>;
 DEFINE FIELD amount          ON payment TYPE int;
 DEFINE FIELD currency        ON payment TYPE string DEFAULT "USD";
@@ -16,10 +15,8 @@ DEFINE FIELD continuityData  ON payment TYPE option<object> FLEXIBLE;
 DEFINE FIELD expiresAt       ON payment TYPE option<datetime>;
 DEFINE FIELD createdAt       ON payment TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_payment_company_system ON payment FIELDS companyId, systemId;
-DEFINE INDEX idx_payment_created        ON payment FIELDS createdAt;
-DEFINE INDEX idx_payment_kind           ON payment FIELDS kind;
-DEFINE INDEX idx_payment_expires        ON payment FIELDS status, expiresAt;
-DEFINE INDEX idx_payment_transaction    ON payment FIELDS transactionId;
-
-DEFINE FIELD retryPaymentInProgress ON subscription TYPE bool DEFAULT false;
+DEFINE INDEX idx_payment_tenant    ON payment FIELDS tenantId;
+DEFINE INDEX idx_payment_created   ON payment FIELDS createdAt;
+DEFINE INDEX idx_payment_kind      ON payment FIELDS kind;
+DEFINE INDEX idx_payment_expires   ON payment FIELDS status, expiresAt;
+DEFINE INDEX idx_payment_transaction ON payment FIELDS transactionId;

@@ -1,5 +1,5 @@
 import type { Middleware } from "./compose.ts";
-import { countEntitiesByCompany } from "../db/queries/entity-limits.ts";
+import { countEntitiesByTenant } from "../db/queries/entity-limits.ts";
 import { resolveEntityLimit } from "../utils/guards.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
@@ -28,8 +28,7 @@ export function withEntityLimit(
     }
 
     const limitResult = await resolveEntityLimit({
-      companyId: ctx.tenant.companyId,
-      systemId: ctx.tenant.systemId,
+      tenant: ctx.tenant,
       entityName,
     });
 
@@ -37,9 +36,9 @@ export function withEntityLimit(
       return next();
     }
 
-    const currentCount = await countEntitiesByCompany(
+    const currentCount = await countEntitiesByTenant(
       tableName,
-      ctx.tenant.companyId,
+      ctx.tenant.id,
     );
     if (currentCount >= limitResult.limit) {
       return Response.json(

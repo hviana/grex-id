@@ -4,7 +4,7 @@ import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("withPlanAccess");
 
-export function withPlanAccess(featureNames: string[]): Middleware {
+export function withPlanAccess(roleNames: string[]): Middleware {
   return async (_req, ctx, next) => {
     if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
       return Response.json(
@@ -23,7 +23,7 @@ export function withPlanAccess(featureNames: string[]): Middleware {
       return next();
     }
 
-    const result = await checkPlanAccess(ctx.tenant, featureNames);
+    const result = await checkPlanAccess(ctx.tenant, roleNames);
 
     if (!result.granted) {
       const errorMap: Record<string, { code: string; message: string }> = {

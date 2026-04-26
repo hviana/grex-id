@@ -7,23 +7,16 @@ import {
   upsertSettings,
 } from "@/server/db/queries/systems/grex-id/settings";
 
-async function getHandler(req: Request, ctx: RequestContext) {
-  if (
-    !ctx.tenant.companyId || !ctx.tenant.systemId
-  ) {
+async function getHandler(_req: Request, ctx: RequestContext) {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json({ success: true, data: [] });
   }
-  const settings = await getAllSettings(
-    ctx.tenant.companyId,
-    ctx.tenant.systemId,
-  );
+  const settings = await getAllSettings(ctx.tenant.id);
   return Response.json({ success: true, data: settings });
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
-  if (
-    !ctx.tenant.companyId || !ctx.tenant.systemId
-  ) {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json(
       {
         success: false,
@@ -53,22 +46,18 @@ async function putHandler(req: Request, ctx: RequestContext) {
     normalized[key] = String(value);
   }
 
-  const updated = await upsertSettings(
-    ctx.tenant.companyId,
-    ctx.tenant.systemId,
-    normalized,
-  );
+  const updated = await upsertSettings(ctx.tenant.id, normalized);
   return Response.json({ success: true, data: updated });
 }
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_settings"] }),
+  withAuth({ roles: ["grexid.manage_settings"] }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_settings"] }),
+  withAuth({ roles: ["grexid.manage_settings"] }),
   async (req, ctx) => putHandler(req, ctx),
 );

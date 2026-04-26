@@ -15,8 +15,7 @@ export async function handleAutoRecharge(
 ): Promise<void> {
   const payload = rawPayload as {
     subscriptionId: string;
-    companyId: string;
-    systemId: string;
+    tenantId: string;
     resourceKey: string;
   };
 
@@ -63,10 +62,7 @@ export async function handleAutoRecharge(
 
     await clearAutoRechargeFlag(sub.id);
 
-    await Core.getInstance().reloadSubscription(
-      String(sub.companyId),
-      String(sub.systemId),
-    );
+    await Core.getInstance().reloadSubscription(String(sub.tenantId));
     return;
   }
 
@@ -89,8 +85,7 @@ export async function handleAutoRecharge(
   }
 
   const purchaseId = await createAutoRechargePurchase({
-    companyId: String(sub.companyId),
-    systemId: String(sub.systemId),
+    tenantId: String(sub.tenantId),
     amount: sub.autoRechargeAmount,
     paymentMethodId: String(paymentMethod.id),
     subscriptionId: String(sub.id),
@@ -99,8 +94,7 @@ export async function handleAutoRecharge(
   await publish("process_payment", {
     creditPurchaseId: purchaseId,
     subscriptionId: String(sub.id),
-    companyId: String(sub.companyId),
-    systemId: String(sub.systemId),
+    tenantId: String(sub.tenantId),
     amount: String(sub.autoRechargeAmount),
     purpose: "auto-recharge",
   });

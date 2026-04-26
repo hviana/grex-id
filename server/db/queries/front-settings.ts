@@ -1,22 +1,28 @@
-import { getDb } from "../connection.ts";
+import { getDb, rid } from "../connection.ts";
 import type { FrontCoreSetting } from "@/src/contracts/core-settings";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("front-settings");
 
-function resolveScope(systemSlug?: string): string {
-  return systemSlug && systemSlug.length > 0 ? systemSlug : "core";
-}
-
+/**
+ * Front settings are keyed by (key, tenantId). The tenantId references a
+ * system-level tenant row. Same shape as `setting` but physically separate
+ * table so the frontend bundle cannot leak server secrets.
+ */
 export async function listFrontSettings(
-  systemSlug?: string,
+  tenantId?: string,
 ): Promise<FrontCoreSetting[]> {
   const db = await getDb();
-  const scope = resolveScope(systemSlug);
-  const result = await db.query<[FrontCoreSetting[]]>(
-    "SELECT * FROM front_setting WHERE systemSlug = $systemSlug ORDER BY key ASC",
-    { systemSlug: scope },
-  );
+  const bindings: Record<string, unknown> = {};
+
+  let query = "SELECT * FROM front_setting";
+  if (tenantId) {
+    query += " WHERE tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
+  }
+  query += " ORDER BY key ASC";
+
+  const result = await db.query<[FrontCoreSetting[]]>(query, bindings);
   return result[0] ?? [];
 }
 
@@ -24,39 +30,48 @@ export async function upsertFrontSetting(data: {
   key: string;
   value: string;
   description?: string;
-  systemSlug?: string;
+  tenantId?: string;
 }): Promise<FrontCoreSetting> {
   const db = await getDb();
   const desc = data.description ?? "";
-  const scope = resolveScope(data.systemSlug);
+  const bindings: Record<string, unknown> = {
+    key: data.key,
+    value: data.value,
+    description: desc,
+  };
+
+  let whereClause = "WHERE key = $key";
+  if (data.tenantId) {
+    bindings.tenantId = rid(data.tenantId);
+    whereClause += " AND tenantId = $tenantId";
+  }
+
   const result = await db.query<[FrontCoreSetting[]]>(
     `UPSERT front_setting SET
       key = $key,
       value = $value,
       description = $description,
-      systemSlug = $systemSlug,
       updatedAt = time::now()
-    WHERE key = $key AND systemSlug = $systemSlug`,
-    {
-      key: data.key,
-      value: data.value,
-      description: desc,
-      systemSlug: scope,
-    },
+    ${whereClause}`,
+    bindings,
   );
   return result[0][0];
 }
 
 export async function deleteFrontSetting(
   key: string,
-  systemSlug?: string,
+  tenantId?: string,
 ): Promise<void> {
   const db = await getDb();
-  const scope = resolveScope(systemSlug);
-  await db.query(
-    "DELETE front_setting WHERE key = $key AND systemSlug = $systemSlug",
-    { key, systemSlug: scope },
-  );
+  const bindings: Record<string, unknown> = { key };
+
+  let query = "DELETE front_setting WHERE key = $key";
+  if (tenantId) {
+    query += " AND tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
+  }
+
+  await db.query(query, bindings);
 }
 
 export async function batchUpsertFrontSettings(
@@ -64,21 +79,22 @@ export async function batchUpsertFrontSettings(
     key: string;
     value: string;
     description?: string;
-    systemSlug?: string;
+    tenantId?: string;
   }[],
 ): Promise<void> {
   if (items.length === 0) return;
   const db = await getDb();
-  const stmts = items.map(
-    (_, i) =>
-      `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, systemSlug = $s${i}, updatedAt = time::now() WHERE key = $k${i} AND systemSlug = $s${i}`,
-  );
+  const stmts: string[] = [];
   const bindings: Record<string, string> = {};
   items.forEach((item, i) => {
     bindings[`k${i}`] = item.key;
     bindings[`v${i}`] = item.value;
     bindings[`d${i}`] = item.description ?? "";
-    bindings[`s${i}`] = resolveScope(item.systemSlug);
+    const tKey = `t${i}`;
+    bindings[tKey] = item.tenantId ?? "core";
+    stmts.push(
+      `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantId = $${tKey}, updatedAt = time::now() WHERE key = $k${i} AND tenantId = $${tKey}`,
+    );
   });
   await db.query(stmts.join("; "), bindings);
 }

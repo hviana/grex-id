@@ -3,19 +3,15 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("entity-limits");
 
-/**
- * Count entities of a given table scoped to a company.
- * Used by `withEntityLimit` middleware to enforce plan entity caps.
- */
-export async function countEntitiesByCompany(
+export async function countEntitiesByTenant(
   tableName: string,
-  companyId: string,
+  tenantId: string,
 ): Promise<number> {
   const db = await getDb();
   const countResult = await db.query<[{ count: number }[]]>(
-    `SELECT count() AS count FROM type::table($tableName) WHERE companyId = $companyId GROUP ALL;`,
+    `SELECT count() AS count FROM type::table($tableName) WHERE tenantId = $tenantId GROUP ALL;`,
     {
-      companyId: rid(companyId),
+      tenantId: rid(tenantId),
       tableName,
     },
   );

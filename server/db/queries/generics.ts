@@ -38,44 +38,10 @@ async function tableHasField(table: string, field: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 export interface FieldSpec {
-  /** Database column name. */
   field: string;
-  /**
-   * Entity name passed to standardizeField / validateField for entity-specific
-   * overrides. Omit to use generic field resolution.
-   */
   entity?: string;
-  /**
-   * Whether this field should be checked for duplicates before CREATE / UPDATE.
-   * Defaults to false.
-   */
   unique?: boolean;
-  /**
-   * Encryption mode — delegated entirely to `standardizeField`.
-   * `standardizeField` returns the final value (ciphertext envelope for
-   * `aes-256-gcm`, argon2 hash for `argon2-hash`).  The query builder writes
-   * every value as a plain `$binding` — it has no encryption logic.
-   *
-   * Omit for cleartext storage.
-   */
   encryption?: FieldEncryptionMode;
-}
-
-// ---------------------------------------------------------------------------
-// Tenant isolation specification
-// ---------------------------------------------------------------------------
-
-export interface TenantIsolation {
-  /** Filter by companyId column. */
-  companyId?: string;
-  /** Filter by systemId column. */
-  systemId?: string;
-  /**
-   * Filter by a userId column.  The column name in the table may differ from
-   * "userId", so the caller specifies it as a mapping:
-   * `{ userId: "ownerId" }` means `WHERE ownerId = $actorId`.
-   */
-  userId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,60 +49,31 @@ export interface TenantIsolation {
 // ---------------------------------------------------------------------------
 
 export interface GenericListOptions {
-  /** Target SurrealDB table name (e.g. "company", "tag"). */
   table: string;
-  /** Fields to SELECT. Defaults to "*". */
   select?: string;
-  /** Fields to FETCH (resolve record links). */
   fetch?: string;
-  /** Column used as cursor. Defaults to "id". */
   cursorField?: string;
-  /** ORDER BY clause. Defaults to "createdAt DESC". */
   orderBy?: string;
-  /** FULLTEXT searchable columns (will use `@@` with `$search`). */
   searchFields?: string[];
-  /**
-   * Column used for date-range filtering (e.g. "createdAt", "updatedAt").
-   * When set, callers may pass `dateRange` in params with optional
-   * `start` / `end` ISO-8601 datetime strings.
-   */
   dateRangeField?: string;
-  /** Extra WHERE conditions appended via AND. */
   extraConditions?: string[];
-  /** Extra query bindings merged into the parameterized query. */
   extraBindings?: Record<string, unknown>;
-  /**
-   * Maximum page size for this entity.  When specified, the effective limit
-   * is `min(params.limit, limit)`, capped at 200 by the global clamp.
-   */
   limit?: number;
 }
 
 // ---------------------------------------------------------------------------
-// Generic CRUD options — shared by create / update / delete
+// Generic CRUD options
 // ---------------------------------------------------------------------------
 
 export interface GenericCrudOptions {
-  /** Target SurrealDB table name. */
   table: string;
   /**
-   * Optional tenant isolation.  When provided, every generated query includes
-   * AND-combined equality checks for the specified IDs.  Column names default
-   * to `companyId`, `systemId`, and the value of `userId` (used as column
-   * name).  Any ID that is omitted or falsy is silently skipped.
+   * Universal tenant scope key (tenant.id). When set, every generated query
+   * includes `tenantId = $tenantId` for scoping. Omit for global (unscoped)
+   * operations like core admin lookups.
    */
-  ensureTenant?: TenantIsolation;
-  /**
-   * Field specifications.  On CREATE / UPDATE the pipeline runs:
-   *   standardizeField (includes encryption/hashing) → validateField → checkDuplicates → write
-   *
-   * Fields present in the data map but absent from this array are written
-   * as-is (no standardization / validation / dedup / encryption).
-   */
+  tenantId?: string;
   fields?: FieldSpec[];
-  /**
-   * Record links to FETCH on the final SELECT.  Defaults to none.
-   */
   fetch?: string;
 }
 
@@ -160,25 +97,26 @@ export interface GenericResult<T> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildTenantConditions(
-  isolation: TenantIsolation | undefined,
+function addTenantCondition(
+  tenantId: string | undefined,
+  conditions: string[],
   bindings: Record<string, unknown>,
-): string[] {
-  if (!isolation) return [];
-  const conditions: string[] = [];
-  if (isolation.companyId) {
-    conditions.push("companyId = $companyId");
-    bindings.companyId = rid(isolation.companyId);
+): void {
+  if (tenantId) {
+    conditions.push("tenantId = $tenantId");
+    bindings.tenantId = rid(tenantId);
   }
-  if (isolation.systemId) {
-    conditions.push("systemId = $systemId");
-    bindings.systemId = rid(isolation.systemId);
+}
+
+function addTenantSetClause(
+  tenantId: string | undefined,
+  setClauses: string[],
+  bindings: Record<string, unknown>,
+): void {
+  if (tenantId) {
+    setClauses.push("tenantId = $tenantId");
+    bindings.tenantId = rid(tenantId);
   }
-  if (isolation.userId) {
-    conditions.push(`${isolation.userId} = $actorId`);
-    bindings.actorId = rid(isolation.userId);
-  }
-  return conditions;
 }
 
 // ---------------------------------------------------------------------------
@@ -186,48 +124,25 @@ function buildTenantConditions(
 // ---------------------------------------------------------------------------
 
 export interface TagFilter {
-  /**
-   * The column on the entity table that holds `array<record<tag>>`.
-   * Defaults to `"tagIds"`.
-   */
   tagsColumn?: string;
-  /**
-   * Tag names to filter by.  The generated condition is an AND of the tag
-   * group, where each tag name is matched via an OR inside a subquery:
-   *
-   * ```sql
-   * <tagsColumn> CONTAINS (
-   *   SELECT VALUE id FROM tag
-   *   WHERE name = $tagName_N
-   *   LIMIT 1
-   * )
-   * ```
-   *
-   * An entity must match **all** tag names in the list to be included.
-   * Empty array → no tag filter applied.
-   */
   tagNames: string[];
 }
 
 export interface DateRangeFilter {
-  /**
-   * Inclusive lower bound (ISO-8601 datetime).  Omit for no lower bound.
-   */
   start?: string;
-  /**
-   * Inclusive upper bound (ISO-8601 datetime).  Omit for no upper bound.
-   */
   end?: string;
+}
+
+export interface GenericListParams extends CursorParams {
+  search?: string;
+  tenantId?: string;
+  tagFilter?: TagFilter;
+  dateRange?: DateRangeFilter;
 }
 
 export async function genericList<T = Record<string, unknown>>(
   opts: GenericListOptions,
-  params: CursorParams & {
-    search?: string;
-    ensureTenant?: TenantIsolation;
-    tagFilter?: TagFilter;
-    dateRange?: DateRangeFilter;
-  },
+  params: GenericListParams,
 ): Promise<PaginatedResult<T>> {
   const conditions: string[] = [...(opts.extraConditions ?? [])];
   const bindings: Record<string, unknown> = {
@@ -242,9 +157,7 @@ export async function genericList<T = Record<string, unknown>>(
     bindings.search = params.search;
   }
 
-  if (params.ensureTenant) {
-    conditions.push(...buildTenantConditions(params.ensureTenant, bindings));
-  }
+  addTenantCondition(params.tenantId, conditions, bindings);
 
   if (params.dateRange && opts.dateRangeField) {
     if (params.dateRange.start) {
@@ -296,14 +209,12 @@ export async function genericGetById<T = Record<string, unknown>>(
   id: string,
 ): Promise<T | null> {
   const db = await getDb();
-  let query = `SELECT * FROM ${opts.table} WHERE id = $id`;
   const bindings: Record<string, unknown> = { id: rid(id) };
+  const conditions = ["id = $id"];
 
-  if (opts.ensureTenant) {
-    const tenantConds = buildTenantConditions(opts.ensureTenant, bindings);
-    if (tenantConds.length) query += " AND " + tenantConds.join(" AND ");
-  }
+  addTenantCondition(opts.tenantId, conditions, bindings);
 
+  let query = `SELECT * FROM ${opts.table} WHERE ${conditions.join(" AND ")}`;
   if (opts.fetch) query += ` FETCH ${opts.fetch}`;
 
   const result = await db.query<[T[]]>(query, bindings);
@@ -320,7 +231,6 @@ export async function genericCreate<
   opts: GenericCrudOptions,
   data: Record<string, unknown>,
 ): Promise<GenericResult<T>> {
-  // 1. Standardize (includes encryption) & validate
   const fieldSpecs = opts.fields ?? [];
 
   const processed: Record<string, unknown> = { ...data };
@@ -353,7 +263,6 @@ export async function genericCreate<
     };
   }
 
-  // 2. Check duplicates on unique fields
   const uniqueFields: DeduplicationField[] = fieldSpecs
     .filter((s) => s.unique)
     .map((s) => ({ field: s.field, value: processed[s.field] }));
@@ -368,7 +277,6 @@ export async function genericCreate<
     }
   }
 
-  // 3. Build and execute CREATE query — all values are plain $bindings
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
   const setClauses: string[] = [];
@@ -383,18 +291,7 @@ export async function genericCreate<
     setClauses.push(`${key} = $${key}`);
   }
 
-  if (opts.ensureTenant) {
-    if (opts.ensureTenant.companyId) {
-      setClauses.push("companyId = $companyId");
-    }
-    if (opts.ensureTenant.systemId) {
-      setClauses.push("systemId = $systemId");
-    }
-    if (opts.ensureTenant.userId) {
-      setClauses.push(`${opts.ensureTenant.userId} = $actorId`);
-    }
-    buildTenantConditions(opts.ensureTenant, bindings);
-  }
+  addTenantSetClause(opts.tenantId, setClauses, bindings);
 
   const setClause = setClauses.join(", ");
   let query = `LET $created = CREATE ${opts.table} SET ${setClause};`;
@@ -417,7 +314,6 @@ export async function genericUpdate<
   id: string,
   data: Record<string, unknown>,
 ): Promise<GenericResult<T>> {
-  // 1. Standardize (includes encryption) & validate
   const fieldSpecs = opts.fields ?? [];
 
   const processed: Record<string, unknown> = { ...data };
@@ -453,7 +349,6 @@ export async function genericUpdate<
     }
   }
 
-  // 2. Check duplicates on unique fields being updated
   const uniqueFields: DeduplicationField[] = fieldSpecs
     .filter((s) => s.unique && s.field in processed)
     .map((s) => ({ field: s.field, value: processed[s.field] }));
@@ -468,7 +363,6 @@ export async function genericUpdate<
     }
   }
 
-  // 3. Build and execute UPDATE query — all values are plain $bindings
   const db = await getDb();
   const bindings: Record<string, unknown> = { id: rid(id) };
   const setClauses: string[] = [];
@@ -484,11 +378,7 @@ export async function genericUpdate<
   }
 
   const whereParts: string[] = ["id = $id"];
-  if (opts.ensureTenant) {
-    whereParts.push(
-      ...buildTenantConditions(opts.ensureTenant, bindings),
-    );
-  }
+  addTenantCondition(opts.tenantId, whereParts, bindings);
 
   const setClause = setClauses.join(", ");
   const whereClause = whereParts.join(" AND ");
@@ -520,11 +410,7 @@ export async function genericDelete(
   const bindings: Record<string, unknown> = { id: rid(id) };
 
   const whereParts: string[] = ["id = $id"];
-  if (opts.ensureTenant) {
-    whereParts.push(
-      ...buildTenantConditions(opts.ensureTenant, bindings),
-    );
-  }
+  addTenantCondition(opts.tenantId, whereParts, bindings);
 
   const whereClause = whereParts.join(" AND ");
   const query = `DELETE FROM ${opts.table} WHERE ${whereClause} RETURN id;`;
@@ -534,14 +420,14 @@ export async function genericDelete(
 }
 
 // ---------------------------------------------------------------------------
-// Convenience: count — same filters as genericList
+// Convenience: count
 // ---------------------------------------------------------------------------
 
 export async function genericCount(
   opts: GenericListOptions,
   params: {
     search?: string;
-    ensureTenant?: TenantIsolation;
+    tenantId?: string;
     tagFilter?: TagFilter;
     dateRange?: DateRangeFilter;
   },
@@ -560,9 +446,7 @@ export async function genericCount(
     bindings.search = params.search;
   }
 
-  if (params.ensureTenant) {
-    conditions.push(...buildTenantConditions(params.ensureTenant, bindings));
-  }
+  addTenantCondition(params.tenantId, conditions, bindings);
 
   if (params.dateRange && opts.dateRangeField) {
     if (params.dateRange.start) {
@@ -595,17 +479,11 @@ export async function genericCount(
 }
 
 // ---------------------------------------------------------------------------
-// DECRYPT — decrypt AES-256-GCM fields from a fetched record
+// DECRYPT
 // ---------------------------------------------------------------------------
 
 export interface DecryptFieldSpec {
-  /** Database column name holding the ciphertext envelope. */
   field: string;
-  /**
-   * Whether the column is optional (`TYPE option<string>`). When true, uses
-   * `decryptFieldOptional` which returns `undefined` instead of throwing on
-   * null/empty. Defaults to false.
-   */
   optional?: boolean;
 }
 
@@ -613,16 +491,16 @@ export async function genericDecrypt(
   opts: GenericCrudOptions & { decryptFields: DecryptFieldSpec[] },
   id: string,
 ): Promise<Record<string, string | undefined>> {
-  // Fetch only the required columns
   const columns = opts.decryptFields.map((f) => f.field).join(", ");
   const db = await getDb();
-  let query = `SELECT ${columns} FROM ${opts.table} WHERE id = $id`;
   const bindings: Record<string, unknown> = { id: rid(id) };
+  const conditions = ["id = $id"];
 
-  if (opts.ensureTenant) {
-    const tenantConds = buildTenantConditions(opts.ensureTenant, bindings);
-    if (tenantConds.length) query += " AND " + tenantConds.join(" AND ");
-  }
+  addTenantCondition(opts.tenantId, conditions, bindings);
+
+  let query = `SELECT ${columns} FROM ${opts.table} WHERE ${
+    conditions.join(" AND ")
+  }`;
 
   const result = await db.query<[Record<string, string>[]]>(query, bindings);
   const row = result[0]?.[0];
@@ -642,25 +520,25 @@ export async function genericDecrypt(
 }
 
 // ---------------------------------------------------------------------------
-// VERIFY — compare a plaintext value against a stored argon2 hash
+// VERIFY — compare plaintext against stored argon2 hash
 // ---------------------------------------------------------------------------
 
 export async function genericVerify(
   opts: GenericCrudOptions & {
-    /** Column storing the argon2 hash. */
     hashField: string;
   },
   id: string,
   plaintext: string,
 ): Promise<boolean> {
   const db = await getDb();
-  let query = `SELECT ${opts.hashField} FROM ${opts.table} WHERE id = $id`;
   const bindings: Record<string, unknown> = { id: rid(id) };
+  const conditions = ["id = $id"];
 
-  if (opts.ensureTenant) {
-    const tenantConds = buildTenantConditions(opts.ensureTenant, bindings);
-    if (tenantConds.length) query += " AND " + tenantConds.join(" AND ");
-  }
+  addTenantCondition(opts.tenantId, conditions, bindings);
+
+  let query = `SELECT ${opts.hashField} FROM ${opts.table} WHERE ${
+    conditions.join(" AND ")
+  }`;
 
   const result = await db.query<[Record<string, string>[]]>(query, bindings);
   const row = result[0]?.[0];

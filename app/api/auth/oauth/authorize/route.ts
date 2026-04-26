@@ -6,7 +6,10 @@ import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
-import { findSystemIdBySlug } from "@/server/db/queries/auth";
+import {
+  findSystemIdBySlug,
+  resolveUserExchange,
+} from "@/server/db/queries/auth";
 import { createConnectedAppWithToken } from "@/server/db/queries/connected-apps";
 import type { Tenant } from "@/src/contracts/tenant";
 
@@ -49,7 +52,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const {
     clientName,
-    permissions,
+    roles: requestedRoles,
     systemSlug,
     companyId,
     redirectOrigin,
@@ -83,30 +86,42 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const grantedPermissions: string[] = typeof permissions === "string"
-    ? permissions.split(",").map((p: string) => p.trim()).filter(Boolean)
-    : Array.isArray(permissions)
-    ? permissions
+  const grantedRoles: string[] = typeof requestedRoles === "string"
+    ? requestedRoles.split(",").map((r: string) => r.trim()).filter(Boolean)
+    : Array.isArray(requestedRoles)
+    ? requestedRoles
     : [];
 
   const userId = claims.actorId;
 
+  // Resolve the tenant row for this (user, company, system) combination.
+  // The user must already be a member of this tenant to authorize a
+  // connected app on its behalf.
+  const resolved = await resolveUserExchange(userId, companyId, systemId);
+  if (!resolved.tenantId) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "FORBIDDEN", message: "auth.error.notMemberOfTenant" },
+      },
+      { status: 403 },
+    );
+  }
+
   const resolvedSlug = await standardizeField("slug", systemSlug);
   const tokenTenant: Tenant = {
+    id: resolved.tenantId,
     systemId: String(systemId),
     companyId: String(companyId),
     systemSlug: resolvedSlug,
-    roles: [],
-    permissions: grantedPermissions,
+    roles: grantedRoles,
   };
 
   const { app, token: createdToken } = await createConnectedAppWithToken({
-    userId,
     name: clientName,
-    companyId: String(companyId),
-    systemId: String(systemId),
+    tenantId: resolved.tenantId,
     tenant: tokenTenant,
-    permissions: grantedPermissions,
+    roles: grantedRoles,
     monthlySpendLimit: monthlySpendLimit
       ? Number(monthlySpendLimit)
       : undefined,
@@ -138,7 +153,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     farFuture,
   );
 
-  await rememberActor(tokenTenant, String(createdToken.id));
+  await rememberActor(resolved.tenantId, String(createdToken.id));
 
   return Response.json(
     { success: true, data: { token: jwt, app } },

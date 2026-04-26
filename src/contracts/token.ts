@@ -1,18 +1,13 @@
-import type { Tenant } from "./tenant.ts";
-
 /**
  * API token row. The row id is the universal actor id (§8.11); the bearer
  * is a JWT (§8.1) embedding it. There is no separate token hash or jti.
  */
 export interface ApiToken {
   id: string;
-  userId: string;
-  tenant: Tenant;
-  companyId: string; // mirrors tenant.companyId — denormalized for indexing
-  systemId: string; // mirrors tenant.systemId — denormalized for indexing
+  tenantId: string; // references tenant row — universal scope key
   name: string;
   description?: string;
-  permissions: string[]; // duplicated into tenant.permissions at issue time
+  roles: string[]; // duplicated into tenant.roles at issue time
   monthlySpendLimit?: number;
   maxOperationCount?: Record<string, number>; // per-resourceKey operation count cap
   neverExpires: boolean; // mutually exclusive with expiresAt

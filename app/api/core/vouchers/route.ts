@@ -41,7 +41,6 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     applicableCompanyIds,
     applicablePlanIds,
     priceModifier,
-    permissions,
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
@@ -77,7 +76,6 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       applicableCompanyIds: applicableCompanyIds ?? [],
       applicablePlanIds: applicablePlanIds ?? [],
       priceModifier: Number(priceModifier ?? 0),
-      permissions: permissions ?? [],
       entityLimitModifiers: entityLimitModifiers &&
           Object.keys(entityLimitModifiers).length > 0
         ? entityLimitModifiers
@@ -119,7 +117,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
  * PUT — updates a voucher with auto-removal cascade:
  * If applicablePlanIds is non-empty after the update, clears voucherId
  * on any subscription whose planId is NOT in the new list.
- * This runs in the same batched query as the voucher update (§22.7).
+ * This runs in the same batched query as the voucher update (§7.7).
  */
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
@@ -129,7 +127,6 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     applicableCompanyIds,
     applicablePlanIds,
     priceModifier,
-    permissions,
     entityLimitModifiers,
     apiRateLimitModifier,
     storageLimitModifier,
@@ -172,10 +169,6 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (priceModifier !== undefined) {
       sets.push("priceModifier = $priceModifier");
       bindings.priceModifier = Number(priceModifier);
-    }
-    if (permissions !== undefined) {
-      sets.push("permissions = $permissions");
-      bindings.permissions = permissions;
     }
     if (entityLimitModifiers !== undefined) {
       if (

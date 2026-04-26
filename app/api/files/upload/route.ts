@@ -142,8 +142,8 @@ export const POST = compose(
     const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] =
       hasSubscription
         ? await Promise.all([
-          resolveMaxConcurrentUploads({ companyId, systemId }),
-          resolveMaxUploadBandwidth({ companyId, systemId }),
+          resolveMaxConcurrentUploads({ tenant: ctx.tenant }),
+          resolveMaxUploadBandwidth({ tenant: ctx.tenant }),
           core.getSetting("transfer.default.maxConcurrentUploads"),
           core.getSetting("transfer.default.maxUploadBandwidthMB"),
         ])
@@ -206,8 +206,7 @@ export const POST = compose(
       let cacheTenantKey = "core";
       if (system && companyId) {
         const limit = await resolveFileCacheLimit({
-          companyId,
-          systemId: system.id,
+          tenant: ctx.tenant,
         });
         if (limit.maxBytes > 0) cacheTenantKey = `${companyId}:${systemSlug}`;
       }

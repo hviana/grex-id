@@ -5,62 +5,45 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("tokens");
 
 /**
- * Lists live api_tokens (revokedAt IS NONE) owned by `userId`, optionally
- * scoped to `companyId`. Used by the Tokens page (§21.2).
+ * Lists live api_tokens (revokedAt IS NONE) scoped to a tenant.
  */
 export async function listTokens(
-  userId: string,
-  companyId?: string,
+  tenantId: string,
 ): Promise<ApiToken[]> {
   const db = await getDb();
-  const bindings: Record<string, unknown> = { userId: rid(userId) };
-  let query =
-    `SELECT id, userId, tenant, companyId, systemId, name, description,
-            permissions, monthlySpendLimit, maxOperationCount,
+  const result = await db.query<[ApiToken[]]>(
+    `SELECT id, tenantId, name, description,
+            roles, monthlySpendLimit, maxOperationCount,
             neverExpires, expiresAt,
             frontendUse, frontendDomains, revokedAt, createdAt
-     FROM api_token WHERE userId = $userId AND revokedAt IS NONE`;
-
-  if (companyId) {
-    query += " AND companyId = $companyId";
-    bindings.companyId = rid(companyId);
-  }
-
-  query += " ORDER BY createdAt DESC";
-
-  const result = await db.query<[ApiToken[]]>(query, bindings);
+     FROM api_token WHERE tenantId = $tenantId AND revokedAt IS NONE
+     ORDER BY createdAt DESC`,
+    { tenantId: rid(tenantId) },
+  );
   return result[0] ?? [];
 }
 
 /**
  * Lists live api_tokens (revokedAt IS NONE), optionally filtered by
- * `userId` and/or `companyId`. Returns up to 50 results ordered by
- * createdAt DESC. Used by the GET /api/tokens route.
+ * `tenantId`. Returns up to 50 results ordered by createdAt DESC.
  */
 export async function listTokensFiltered(params: {
-  userId?: string;
-  companyId?: string;
+  tenantId?: string;
 }): Promise<ApiToken[]> {
   const db = await getDb();
   const bindings: Record<string, unknown> = {};
-  const conditions: string[] = [];
+  const conditions: string[] = ["revokedAt IS NONE"];
 
-  if (params.userId) {
-    conditions.push("userId = $userId");
-    bindings.userId = rid(params.userId);
-  }
-  if (params.companyId) {
-    conditions.push("companyId = $companyId");
-    bindings.companyId = rid(params.companyId);
+  if (params.tenantId) {
+    conditions.push("tenantId = $tenantId");
+    bindings.tenantId = rid(params.tenantId);
   }
 
-  let query =
-    `SELECT id, name, description, permissions, monthlySpendLimit, maxOperationCount,
+  const query =
+    `SELECT id, name, description, roles, monthlySpendLimit, maxOperationCount,
             neverExpires, expiresAt, frontendUse, frontendDomains, createdAt
-     FROM api_token WHERE revokedAt IS NONE`;
-
-  if (conditions.length) query += " AND " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT 50";
+     FROM api_token WHERE ${conditions.join(" AND ")}
+     ORDER BY createdAt DESC LIMIT 50`;
 
   const result = await db.query<[ApiToken[]]>(query, bindings);
   return result[0] ?? [];
@@ -68,28 +51,24 @@ export async function listTokensFiltered(params: {
 
 /**
  * Revokes an api_token by setting revokedAt = time::now() in a single
- * batched query that first selects the token's companyId and systemId.
- * Returns the tenant info needed to update the actor-validity cache.
+ * batched query. Returns the tenantId needed to update the actor-validity
+ * cache.
  */
 export async function revokeToken(id: string): Promise<
-  {
-    companyId: string;
-    systemId: string;
-  } | null
+  { tenantId: string } | null
 > {
   const db = await getDb();
   const result = await db.query<
-    [{ companyId: string; systemId: string }[], unknown]
+    [{ tenantId: string }[], unknown]
   >(
-    `SELECT companyId, systemId FROM $id LIMIT 1;
+    `SELECT tenantId FROM $id LIMIT 1;
      UPDATE $id SET revokedAt = time::now() WHERE revokedAt IS NONE;`,
     { id: rid(id) },
   );
   const row = result[0]?.[0];
-  if (row?.companyId && row?.systemId) {
+  if (row?.tenantId) {
     return {
-      companyId: String(row.companyId),
-      systemId: String(row.systemId),
+      tenantId: String(row.tenantId),
     };
   }
   return null;

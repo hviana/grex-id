@@ -1,13 +1,11 @@
 import { getDb, rid } from "../connection.ts";
 import type { UsageRecord } from "@/src/contracts/usage";
-import { resolveAllOperationCounts } from "@/server/utils/guards";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("usage");
 
 export async function getUsageForPeriod(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
   period?: string,
 ): Promise<UsageRecord[]> {
   const db = await getDb();
@@ -15,11 +13,10 @@ export async function getUsageForPeriod(
 
   const result = await db.query<[UsageRecord[]]>(
     `SELECT * FROM usage_record
-     WHERE companyId = $companyId AND systemId = $systemId AND period = $period
+     WHERE tenantId = $tenantId AND period = $period
      ORDER BY resource ASC`,
     {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
+      tenantId: rid(tenantId),
       period: currentPeriod,
     },
   );
@@ -27,21 +24,19 @@ export async function getUsageForPeriod(
 }
 
 export async function getUsageHistory(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
   resource: string,
   periodCount: number = 6,
 ): Promise<{ period: string; value: number }[]> {
   const db = await getDb();
   const result = await db.query<[{ period: string; value: number }[]]>(
     `SELECT period, math::sum(value) AS value FROM usage_record
-     WHERE companyId = $companyId AND systemId = $systemId AND resource = $resource
+     WHERE tenantId = $tenantId AND resource = $resource
      GROUP BY period
      ORDER BY period DESC
      LIMIT $limit`,
     {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
+      tenantId: rid(tenantId),
       resource,
       limit: periodCount,
     },
@@ -50,36 +45,33 @@ export async function getUsageHistory(
 }
 
 export async function getOperationCount(
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<{ resourceKey: string; used: number; max: number }[]> {
-  const maxMap = await resolveAllOperationCounts({ companyId, systemId });
-  const keys = Object.keys(maxMap);
-
-  if (keys.length === 0) return [];
-
   const db = await getDb();
   const result = await db.query<
-    [{ remainingOperationCount: Record<string, number> | null }[]]
+    [
+      { remainingOperationCount: Record<string, number> | null }[],
+    ]
   >(
     `SELECT remainingOperationCount FROM subscription
-     WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+     WHERE tenantId = $tenantId AND status = "active"
      LIMIT 1`,
     {
-      companyId: rid(companyId),
-      systemId: rid(systemId),
+      tenantId: rid(tenantId),
     },
   );
 
   const remaining: Record<string, number> =
     (result[0]?.[0]?.remainingOperationCount as Record<string, number>) ?? {};
 
+  const keys = Object.keys(remaining);
+  if (keys.length === 0) return [];
+
   return keys.map((resourceKey) => {
-    const max = maxMap[resourceKey];
-    const rem = remaining[resourceKey] ?? 0;
+    const max = remaining[resourceKey] ?? 0;
     return {
       resourceKey,
-      used: Math.max(0, max - rem),
+      used: max,
       max,
     };
   });
@@ -101,10 +93,8 @@ export interface CoreCreditExpenseRow {
 export async function getCoreCreditExpenses(params: {
   startDate: string;
   endDate: string;
-  companyIds?: string[];
-  systemIds?: string[];
+  tenantIds?: string[];
   planIds?: string[];
-  actorIds?: string[];
 }): Promise<CoreCreditExpenseRow[]> {
   const db = await getDb();
   const conditions: string[] = [
@@ -116,26 +106,16 @@ export async function getCoreCreditExpenses(params: {
     endDate: params.endDate,
   };
 
-  if (params.companyIds?.length) {
-    conditions.push("companyId IN $companyIds");
-    bindings.companyIds = params.companyIds.map((id) => rid(id));
-  }
-
-  if (params.systemIds?.length) {
-    conditions.push("systemId IN $systemIds");
-    bindings.systemIds = params.systemIds.map((id) => rid(id));
+  if (params.tenantIds?.length) {
+    conditions.push("tenantId IN $tenantIds");
+    bindings.tenantIds = params.tenantIds.map((id) => rid(id));
   }
 
   if (params.planIds?.length) {
     conditions.push(
-      "companyId IN (SELECT VALUE companyId FROM subscription WHERE planId IN $planIds AND status = 'active')",
+      "tenantId IN (SELECT VALUE tenantId FROM subscription WHERE planId IN $planIds AND status = 'active')",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
-  }
-
-  if (params.actorIds?.length) {
-    conditions.push("actorId IN $actorIds");
-    bindings.actorIds = params.actorIds;
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
@@ -162,19 +142,11 @@ export interface TenantUsageConfig {
 }
 
 /**
- * Fetches the tenant-mode usage configuration and credit expenses in one
- * batched query: system slug, subscription limits (plan + voucher), and
- * per-resource credit expense aggregation.
- */
-/**
- * Upserts a usage record atomically (§12.2).
- * Creates or increments the value for the given actor + resource + period.
+ * Upserts a usage record atomically (§2.4).
+ * Creates or increments the value for the given tenant + resource + period.
  */
 export async function upsertUsageRecord(params: {
-  actorType: string;
-  actorId: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   resource: string;
   value: number;
   period: string;
@@ -182,24 +154,15 @@ export async function upsertUsageRecord(params: {
   const db = await getDb();
   await db.query(
     `UPSERT usage_record SET
-      actorType = $actorType,
-      actorId = $actorId,
-      companyId = $companyId,
-      systemId = $systemId,
+      tenantId = $tenantId,
       resource = $resource,
       value += $value,
       period = $period
-    WHERE actorType = $actorType
-      AND actorId = $actorId
-      AND companyId = $companyId
-      AND systemId = $systemId
+    WHERE tenantId = $tenantId
       AND resource = $resource
       AND period = $period`,
     {
-      actorType: params.actorType,
-      actorId: params.actorId,
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
+      tenantId: rid(params.tenantId),
       resource: params.resource,
       value: params.value,
       period: params.period,
@@ -207,9 +170,13 @@ export async function upsertUsageRecord(params: {
   );
 }
 
+/**
+ * Fetches the tenant-mode usage configuration and credit expenses in one
+ * batched query: system slug, subscription limits (plan + voucher), and
+ * per-resource credit expense aggregation.
+ */
 export async function getTenantUsageConfig(params: {
-  systemId: string;
-  companyId: string;
+  tenantId: string;
   startDate: string;
   endDate: string;
 }): Promise<TenantUsageConfig> {
@@ -226,50 +193,45 @@ export async function getTenantUsageConfig(params: {
       { resourceKey: string; totalAmount: number; totalCount: number }[],
     ]
   >(
-    `SELECT slug FROM ONLY $systemId;
-     SELECT plan.storageLimitBytes AS storageLimitBytes, plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
+    `LET $sub = (SELECT plan.storageLimitBytes AS storageLimitBytes,
+       plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
        FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
+       WHERE tenantId = $tenantId AND status = "active"
        LIMIT 1
-       FETCH plan;
-     LET $voucherId = (SELECT VALUE voucherId FROM subscription
-       WHERE companyId = $companyId AND systemId = $systemId AND status = "active"
-       LIMIT 1)[0];
+       FETCH plan);
+     LET $voucherId = $sub[0].voucherId;
      IF $voucherId != NONE {
        SELECT storageLimitModifier, fileCacheLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
      } ELSE {
        SELECT NONE FROM NONE;
      };
      SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount FROM credit_expense
-       WHERE companyId = $companyId AND systemId = $systemId
+       WHERE tenantId = $tenantId
          AND day >= $startDate AND day <= $endDate
        GROUP BY resourceKey
        ORDER BY totalAmount DESC`,
     {
-      systemId: rid(params.systemId),
-      companyId: rid(params.companyId),
+      tenantId: rid(params.tenantId),
       startDate: params.startDate,
       endDate: params.endDate,
     },
   );
 
-  const systemSlug = (result[0] as unknown as { slug?: string }[])
-    ?.[0]?.slug ?? null;
-  const subRow = (result[1] as unknown[])?.[0] as {
+  const subRow = (result[0] as unknown[])?.[0] as {
     storageLimitBytes?: number;
     fileCacheLimitBytes?: number;
   } | undefined;
-  const voucherRow = (result[2]?.[0] as unknown as {
+  const voucherRow = (result[1]?.[0] as unknown as {
     storageLimitModifier?: number;
     fileCacheLimitModifier?: number;
   }) ?? {};
 
   return {
-    systemSlug,
+    systemSlug: null,
     subscriptionStorageLimit: subRow?.storageLimitBytes ?? null,
     subscriptionCacheLimit: subRow?.fileCacheLimitBytes ?? null,
     voucherStorageModifier: voucherRow.storageLimitModifier ?? 0,
     voucherCacheModifier: voucherRow.fileCacheLimitModifier ?? 0,
-    creditExpenses: result[3] ?? [],
+    creditExpenses: result[2] ?? [],
   };
 }

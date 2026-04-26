@@ -11,20 +11,13 @@ function getCurrentPeriod(): string {
 }
 
 export async function trackUsage(params: {
-  actorType: "user" | "token" | "connected_app";
-  actorId: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   resource: string;
   value: number;
 }): Promise<void> {
   const period = getCurrentPeriod();
-
   await upsertUsageRecord({
-    actorType: params.actorType,
-    actorId: params.actorId,
-    companyId: params.companyId,
-    systemId: params.systemId,
+    tenantId: params.tenantId,
     resource: params.resource,
     value: params.value,
     period,

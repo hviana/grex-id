@@ -47,7 +47,7 @@ interface ApiToken {
   id: string;
   name: string;
   description?: string;
-  permissions: string[];
+  roles: string[];
   monthlySpendLimit?: number;
   maxOperationCount?: Record<string, number>;
   expiresAt?: string;
@@ -117,24 +117,18 @@ export default function TokensPage() {
     setError(null);
   };
 
-  const fetchSystemPermissions = useCallback(async (search: string) => {
+  const fetchSystemRoles = useCallback(async (search: string) => {
     if (!systemId) return [];
     try {
       const res = await fetch(
         `/api/core/roles?systemId=${encodeURIComponent(systemId)}&limit=100`,
       );
       const json = await res.json();
-      const roles: { permissions: string[] }[] = json.data ?? [];
-      const allPerms = new Set<string>();
-      for (const role of roles) {
-        for (const perm of role.permissions ?? []) {
-          allPerms.add(perm);
-        }
-      }
+      const roles: { name: string }[] = json.data ?? [];
       const lower = search.toLowerCase();
-      return Array.from(allPerms)
-        .filter((p) => p.toLowerCase().includes(lower))
-        .map((p) => p);
+      return roles
+        .filter((r) => r.name.toLowerCase().includes(lower))
+        .map((r) => r.name);
     } catch {
       return [];
     }
@@ -159,7 +153,7 @@ export default function TokensPage() {
           userId: user.id,
           companyId,
           systemId,
-          permissions: newPerms,
+          roles: newPerms,
           monthlySpendLimit: newSpendLimit ? Number(newSpendLimit) : undefined,
           maxOperationCount: kvToOpCount(formMaxOperationCount),
           expiresAt: newExpiry || undefined,
@@ -264,8 +258,8 @@ export default function TokensPage() {
               </p>
             )}
             <TranslatedBadgeList
-              kind="permission"
-              tokens={token.permissions}
+              kind="role"
+              tokens={token.roles}
               systemSlug={systemSlug ?? undefined}
             />
             <TranslatedBadgeList
@@ -309,15 +303,15 @@ export default function TokensPage() {
             className={inputCls}
           />
           <MultiBadgeField
-            name={t("common.permissions")}
+            name={t("common.roles")}
             mode="search"
             value={newPerms}
             onChange={(vals) => setNewPerms(vals as string[])}
-            fetchFn={fetchSystemPermissions}
-            formatHint={t("common.tokens.permissionsHint")}
+            fetchFn={fetchSystemRoles}
+            formatHint={t("common.tokens.rolesHint")}
             renderBadge={(item, remove) => (
               <TranslatedBadge
-                kind="permission"
+                kind="role"
                 token={typeof item === "string" ? item : item.name}
                 systemSlug={systemSlug ?? undefined}
                 onRemove={remove}

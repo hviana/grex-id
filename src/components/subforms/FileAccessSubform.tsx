@@ -14,7 +14,7 @@ const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
   isolateCompany: false,
   isolateUser: false,
-  permissions: [],
+  roles: [],
 });
 
 const emptyUploadSection = (): FileAccessUploadSection => ({
@@ -31,7 +31,7 @@ function normalizeSection(
     isolateSystem: !!raw.isolateSystem,
     isolateCompany: !!raw.isolateCompany,
     isolateUser: !!raw.isolateUser,
-    permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+    roles: Array.isArray(raw.roles) ? raw.roles : [],
   };
 }
 
@@ -97,15 +97,14 @@ function SectionEditor({
         )}
       </div>
       <MultiBadgeField
-        name={t("core.fileAccess.permissions")}
+        name={t("core.fileAccess.roles")}
         mode="custom"
-        value={section.permissions}
-        onChange={(vals) =>
-          onChange({ ...section, permissions: vals as string[] })}
-        formatHint={t("core.fileAccess.permissionsHint")}
+        value={section.roles}
+        onChange={(vals) => onChange({ ...section, roles: vals as string[] })}
+        formatHint={t("core.fileAccess.rolesHint")}
         renderBadge={(item, remove) => (
           <TranslatedBadge
-            kind="permission"
+            kind="role"
             token={typeof item === "string" ? item : item.name}
             onRemove={remove}
           />
@@ -160,15 +159,14 @@ function UploadSectionEditor({
         )}
       </div>
       <MultiBadgeField
-        name={t("core.fileAccess.permissions")}
+        name={t("core.fileAccess.roles")}
         mode="custom"
-        value={section.permissions}
-        onChange={(vals) =>
-          onChange({ ...section, permissions: vals as string[] })}
-        formatHint={t("core.fileAccess.permissionsHint")}
+        value={section.roles}
+        onChange={(vals) => onChange({ ...section, roles: vals as string[] })}
+        formatHint={t("core.fileAccess.rolesHint")}
         renderBadge={(item, remove) => (
           <TranslatedBadge
-            kind="permission"
+            kind="role"
             token={typeof item === "string" ? item : item.name}
             onRemove={remove}
           />

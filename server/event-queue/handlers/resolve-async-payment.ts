@@ -29,7 +29,6 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  // Idempotency (§14.5): already resolved
   if (
     payment.status === "completed" ||
     payment.status === "failed" ||
@@ -53,6 +52,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const kind = payment.kind;
   const chargeAmount = payment.amount;
   const isRecurring = kind === "recurring";
+  const effectiveTenantId = String(payment.tenantId);
 
   const billingUrl = `/billing?systemSlug=${systemSlug}`;
   const ownerName = owner?.name ?? "";
@@ -60,7 +60,6 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
 
   if (success) {
     if (isRecurring && sub) {
-      // Recurring billing success — advance period, reset credits
       const newStart = new Date(sub.currentPeriodEnd);
       const newEnd = new Date(
         newStart.getTime() + (plan?.recurrenceDays ?? 30) * 86400000,
@@ -69,8 +68,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       const remainingPlanCredits = (plan?.planCredits ?? 0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
-        companyId: String(payment.companyId),
-        systemId: String(payment.systemId),
+        tenantId: effectiveTenantId,
       });
 
       await resolveAsyncRecurringSuccess({
@@ -85,12 +83,10 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
         invoiceUrl,
       });
     } else {
-      // Credit purchase or auto-recharge — increment purchased credits
       const period = new Date().toISOString().slice(0, 7);
 
       await resolveAsyncCreditSuccess({
-        companyId: String(payment.companyId),
-        systemId: String(payment.systemId),
+        tenantId: effectiveTenantId,
         amount: chargeAmount,
         period,
         subscriptionId: sub?.id,
@@ -102,10 +98,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       });
     }
 
-    await Core.getInstance().reloadSubscription(
-      String(payment.companyId),
-      String(payment.systemId),
-    );
+    await Core.getInstance().reloadSubscription(effectiveTenantId);
 
     if (ownerId) {
       await dispatchCommunication({
@@ -126,7 +119,6 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       });
     }
   } else {
-    // Payment failed
     await resolveAsyncPaymentFailure({
       subscriptionId: sub?.id,
       paymentId,
@@ -136,10 +128,7 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       failureReason: failureReason || "billing.payment.genericFailure",
     });
 
-    await Core.getInstance().reloadSubscription(
-      String(payment.companyId),
-      String(payment.systemId),
-    );
+    await Core.getInstance().reloadSubscription(effectiveTenantId);
 
     if (ownerId) {
       await dispatchCommunication({

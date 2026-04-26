@@ -3,7 +3,6 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 
 interface RoleFormProps {
   initialData?: Record<string, unknown>;
@@ -17,16 +16,12 @@ const RoleForm = forwardRef<SubformRef, RoleFormProps>(
       (initialData?.systemId as string) ?? "",
     );
     const [isBuiltIn] = useState((initialData?.isBuiltIn as boolean) ?? false);
-    const [permissions, setPermissions] = useState<string[]>(
-      (initialData?.permissions as string[]) ?? [],
-    );
 
     useImperativeHandle(ref, () => ({
       getData: () => ({
         name,
         systemId,
         isBuiltIn,
-        permissions,
       }),
       isValid: () => name.trim().length > 0 && systemId.trim().length > 0,
     }));
@@ -67,13 +62,6 @@ const RoleForm = forwardRef<SubformRef, RoleFormProps>(
             ⚠️ {t("core.roles.builtInWarning")}
           </p>
         )}
-        <MultiBadgeField
-          name={t("core.roles.permissions")}
-          mode="custom"
-          value={permissions}
-          onChange={(vals) => setPermissions(vals as string[])}
-          formatHint={t("core.roles.permissionsHint")}
-        />
       </div>
     );
   },

@@ -16,11 +16,11 @@ function OAuthAuthorizeContent() {
   const { t } = useLocale();
 
   const clientName = searchParams.get("client_name") ?? "";
-  const permissionsParam = searchParams.get("permissions") ?? "";
+  const rolesParam = searchParams.get("roles") ?? "";
   const systemSlug = searchParams.get("systemSlug") ?? "";
   const redirectOrigin = searchParams.get("redirect_origin") ?? "";
 
-  const permissions = permissionsParam
+  const roles = rolesParam
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean);
@@ -40,7 +40,7 @@ function OAuthAuthorizeContent() {
       const params = new URLSearchParams({
         oauth: "1",
         client_name: clientName,
-        permissions: permissionsParam,
+        roles: rolesParam,
         systemSlug: systemSlug,
         redirect_origin: redirectOrigin,
       });
@@ -52,7 +52,7 @@ function OAuthAuthorizeContent() {
     user,
     router,
     clientName,
-    permissionsParam,
+    rolesParam,
     systemSlug,
     redirectOrigin,
   ]);
@@ -106,7 +106,7 @@ function OAuthAuthorizeContent() {
         },
         body: JSON.stringify({
           clientName,
-          permissions: permissionsParam,
+          roles: rolesParam,
           systemSlug,
           companyId: selectedCompanyId,
           redirectOrigin,
@@ -162,21 +162,21 @@ function OAuthAuthorizeContent() {
             </p>
           </div>
 
-          {/* Permissions */}
+          {/* Roles */}
           <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)]">
-              {t("common.connectedApps.requestedPermissions")}
+              {t("common.connectedApps.requestedRoles")}
             </p>
             <TranslatedBadgeList
-              kind="permission"
-              tokens={permissions}
+              kind="role"
+              tokens={roles}
               systemSlug={systemSlug || undefined}
               compact
               mode="column"
               prefix={
                 <span className="text-[var(--color-primary-green)]">✓</span>
               }
-              emptyText={t("common.connectedApps.noPermissions")}
+              emptyText={t("common.connectedApps.noRoles")}
             />
           </div>
 

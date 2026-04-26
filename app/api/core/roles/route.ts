@@ -2,7 +2,6 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { rid } from "@/server/db/connection";
 import { clampPageLimit } from "@/src/lib/validators";
 import {
   genericCreate,
@@ -20,14 +19,24 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const direction = (url.searchParams.get("direction") as "next" | "prev") ??
     "next";
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
-  const systemId = url.searchParams.get("systemId") ?? undefined;
+  const tenantId = url.searchParams.get("tenantId") ?? undefined;
+
+  const extraConditions: string[] = [];
+  const extraBindings: Record<string, unknown> = {};
+
+  if (tenantId) {
+    extraConditions.push("tenantId = $tenantId");
+    extraBindings.tenantId = tenantId;
+  }
 
   const result = await genericList<Role>(
     {
       table: "role",
       searchFields: ["name"],
-      extraConditions: systemId ? ["systemId = $systemId"] : undefined,
-      extraBindings: systemId ? { systemId: rid(systemId) } : undefined,
+      extraConditions: extraConditions.length > 0 ? extraConditions : undefined,
+      extraBindings: Object.keys(extraBindings).length > 0
+        ? extraBindings
+        : undefined,
     },
     { cursor, limit, direction, search },
   );
@@ -41,13 +50,13 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { name, systemId, permissions, isBuiltIn } = body;
+  const { name, tenantId, isBuiltIn } = body;
 
-  if (!systemId) {
+  if (!tenantId) {
     return Response.json(
       {
         success: false,
-        error: { code: "VALIDATION", errors: ["validation.system.required"] },
+        error: { code: "VALIDATION", errors: ["validation.tenant.required"] },
       },
       { status: 400 },
     );
@@ -58,11 +67,10 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       {
         table: "role",
         fields: [{ field: "name", unique: true }],
+        tenantId,
       },
       {
         name,
-        systemId: rid(systemId),
-        permissions: permissions ?? [],
         isBuiltIn: isBuiltIn ?? false,
       },
     );
@@ -130,9 +138,6 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
     if (data.name !== undefined) {
       updates.name = data.name;
-    }
-    if (data.permissions !== undefined) {
-      updates.permissions = data.permissions;
     }
     if (data.isBuiltIn !== undefined) {
       updates.isBuiltIn = data.isBuiltIn;

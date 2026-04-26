@@ -23,15 +23,10 @@ async function getJwtSecret(): Promise<Uint8Array> {
 
 /**
  * Creates the universal tenant-bearing JWT used by every authenticating
- * actor (§8.1). The claims include the full Tenant, the `actorId` used
- * by the actor-validity cache (§8.11), and — for non-user actors — the
+ * actor (§8.1). The claims include the full Tenant with `id`, the `actorId`
+ * used by the actor-validity cache (§8.11), and — for non-user actors — the
  * CORS policy (`frontendUse`, `frontendDomains`) so `withAuth` does not
  * need a DB read.
- *
- * @param expiresAt - When provided, uses this explicit expiry (for token
- *   exchange lifetime carry-over per §8.6, or for `api_token` expiries
- *   that are configured on the row). Otherwise calculates from Core
- *   settings.
  */
 export async function createTenantToken(
   claims: TenantClaims,
@@ -40,12 +35,13 @@ export async function createTenantToken(
 ): Promise<string> {
   const core = Core.getInstance();
   const jwtBuilder = new jose.SignJWT({
+    tenantId: claims.id,
     tenant: {
+      id: claims.id,
       systemId: claims.systemId,
       companyId: claims.companyId,
       systemSlug: claims.systemSlug,
       roles: claims.roles,
-      permissions: claims.permissions,
     },
     actorType: claims.actorType,
     actorId: claims.actorId,
@@ -60,7 +56,6 @@ export async function createTenantToken(
   if (expiresAt) {
     jwtBuilder.setExpirationTime(expiresAt);
   } else {
-    // Setting stores hours for stay-logged-in; convert to total minutes for jose
     const expiryTotalMinutes = stayLoggedIn
       ? Number(
         await core.getSetting("auth.token.expiry.stayLoggedIn.hours"),
@@ -83,19 +78,19 @@ export async function verifyTenantToken(
   });
 
   const tenant = payload.tenant as {
+    id: string;
     systemId: string;
     companyId: string;
     systemSlug: string;
     roles: string[];
-    permissions: string[];
   };
 
   return {
+    id: tenant.id ?? (payload.tenantId as string) ?? "",
     systemId: tenant.systemId,
     companyId: tenant.companyId,
     systemSlug: tenant.systemSlug ?? "core",
     roles: tenant.roles ?? [],
-    permissions: tenant.permissions ?? [],
     actorType: payload.actorType as TenantClaims["actorType"],
     actorId: payload.actorId as string,
     exchangeable: (payload.exchangeable as boolean) ?? false,

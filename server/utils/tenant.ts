@@ -7,8 +7,7 @@ assertServerOnly("tenant.ts");
 
 /**
  * System-level tenant for jobs and workers that operate without a user context.
- * Reads real core company and system IDs from the Core data cache.
- * Has superuser-level permissions.
+ * Returns the core company-system tenant row ID with the superuser role.
  */
 export async function getSystemTenant(): Promise<Tenant> {
   const core = Core.getInstance();
@@ -19,25 +18,68 @@ export async function getSystemTenant(): Promise<Tenant> {
     );
   }
 
-  // Find the core company via company_system link
+  // Find the core company-system tenant row (actorId=NONE)
   const db = await getDb();
-  const [rows] = await db.query<[{ companyId: string }[]]>(
-    `SELECT companyId FROM company_system WHERE systemId = $systemId LIMIT 1`,
+  const [rows] = await db.query<
+    [{ id: string; companyId: string; systemId: string }[]]
+  >(
+    `SELECT id, companyId, systemId FROM tenant WHERE actorId IS NONE AND companyId IS NOT NONE AND systemId = $systemId LIMIT 1`,
     { systemId: coreSystem.id },
   );
-  const coreCompany = (rows ?? [])[0];
-  if (!coreCompany) {
+  const tenantRow = (rows ?? [])[0];
+  if (!tenantRow) {
     throw new Error(
-      "[Tenant] Core company not found. Ensure seeds have been executed.",
+      "[Tenant] Core company-system tenant not found. Ensure seeds have been executed.",
     );
   }
 
   return {
-    systemId: String(coreSystem.id),
-    companyId: String(coreCompany.companyId),
+    id: String(tenantRow.id),
+    systemId: String(tenantRow.systemId),
+    companyId: String(tenantRow.companyId),
     systemSlug: "core",
     roles: ["superuser"],
-    permissions: ["*"],
+  };
+}
+
+/**
+ * Resolve a tenant record by its ID, including roles from tenant_role.
+ */
+export async function resolveTenant(tenantId: string): Promise<Tenant | null> {
+  const db = await getDb();
+  const result = await db.query<
+    [{ id: string; companyId: string; systemId: string }[]][{ name: string }[]]
+  >(
+    `LET $t = (SELECT id, companyId, systemId FROM tenant WHERE id = $tenantId LIMIT 1);
+     IF $t[0] {
+       SELECT VALUE name FROM tenant_role WHERE tenantId = $tenantId FETCH role
+     } ELSE {
+       []
+     }`,
+    { tenantId },
+  );
+
+  const tenantRow = result[0]?.[0];
+  if (!tenantRow) return null;
+
+  const roles = (result[1] ?? []).map((r: { name: string }) => r.name);
+
+  // Resolve systemSlug from system
+  let systemSlug = "";
+  if (tenantRow.systemId) {
+    const sysResult = await db.query<[{ slug: string }[]]>(
+      `SELECT slug FROM system WHERE id = $systemId LIMIT 1`,
+      { systemId: tenantRow.systemId },
+    );
+    systemSlug = sysResult[0]?.[0]?.slug ?? "";
+  }
+
+  return {
+    id: String(tenantRow.id),
+    systemId: String(tenantRow.systemId ?? ""),
+    companyId: String(tenantRow.companyId ?? ""),
+    systemSlug,
+    roles,
   };
 }
 

@@ -33,16 +33,16 @@ async function resolveTokenParam(
     const claims = await verifyTenantToken(tokenStr);
     if (!claims.actorId) return null;
 
-    await ensureActorValidityLoaded(claims);
-    if (!isActorValid(claims, claims.actorId)) return null;
+    await ensureActorValidityLoaded(claims.id);
+    if (!isActorValid(claims.id, claims.actorId)) return null;
 
     return {
       tenant: {
+        id: claims.id,
         systemId: claims.systemId,
         companyId: claims.companyId,
         systemSlug: claims.systemSlug,
         roles: claims.roles,
-        permissions: claims.permissions,
       },
       claims,
     };
@@ -128,8 +128,7 @@ export const GET = compose(
     const system = await core.getSystemBySlug(fileSystemSlug);
     if (system && fileCompanyId) {
       const limit = await resolveFileCacheLimit({
-        companyId: fileCompanyId,
-        systemId: system.id,
+        tenant: effectiveTenant,
       });
       if (limit.maxBytes > 0) {
         cacheTenantKey = `${fileCompanyId}:${fileSystemSlug}`;
@@ -159,21 +158,13 @@ export const GET = compose(
       }
     }
 
-    const systemId = system?.id ?? "";
-    const hasSubscription = fileCompanyId && systemId;
-    const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = hasSubscription
-      ? await Promise.all([
-        resolveMaxConcurrentDownloads({ companyId: fileCompanyId, systemId }),
-        resolveMaxDownloadBandwidth({ companyId: fileCompanyId, systemId }),
+    const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = await Promise
+      .all([
+        resolveMaxConcurrentDownloads({ tenant: effectiveTenant }),
+        resolveMaxDownloadBandwidth({ tenant: effectiveTenant }),
         core.getSetting("transfer.default.maxConcurrentDownloads"),
         core.getSetting("transfer.default.maxDownloadBandwidthMB"),
-      ])
-      : [
-        { max: 0, planLimit: 0, voucherModifier: 0 },
-        { max: 0, planLimit: 0, voucherModifier: 0 },
-        undefined,
-        undefined,
-      ];
+      ]);
 
     const maxConcurrent = dlLimits.max || Number(defaultConcurrent) || 0;
     const maxBWMB = bwLimits.max || Number(defaultBW) || 0;

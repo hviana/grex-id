@@ -72,6 +72,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const body = await req.json().catch(() => ({}));
   const { action } = body as { action?: string };
   const userId = ctx.claims.actorId;
+  const tenantId = ctx.tenant.id;
   const systemSlug = ctx.tenant.systemSlug;
 
   if (action === "setup-totp") {
@@ -174,11 +175,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       actionKey: "auth.action.twoFactorEnable",
       payload: {},
       tenant: {
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
+        tenantId,
         systemSlug,
-        actorId: userId,
-        actorType: "user",
       },
     });
 
@@ -234,11 +232,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       actionKey: "auth.action.twoFactorDisable",
       payload: {},
       tenant: {
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
+        tenantId,
         systemSlug,
-        actorId: userId,
-        actorType: "user",
       },
     });
 

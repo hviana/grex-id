@@ -28,6 +28,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     body = parsedBody;
     const companyId = ctx.tenant.companyId;
     const systemId = ctx.tenant.systemId;
+    const tenantId = ctx.tenant.id;
     const inferredCompanyIds = companyId ? [companyId] : [];
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; age?: number }
@@ -133,7 +134,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        await getSetting(tenantId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,
@@ -147,8 +148,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads:POST",
-          companyId,
-          systemId,
+          tenantId,
         });
       }
     }
@@ -216,6 +216,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     body = parsedBody;
     const companyId = ctx.tenant.companyId;
     const systemId = ctx.tenant.systemId;
+    const tenantId = ctx.tenant.id;
     const id = parsedBody.id as string | undefined;
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; age?: number }
@@ -258,7 +259,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(companyId, systemId, "detection.sensitivity"),
+        await getSetting(tenantId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,
@@ -272,8 +273,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
           embedding_type1: faceDescriptor,
         }, {
           route: "systems/grex-id/leads:PUT",
-          companyId,
-          systemId,
+          tenantId,
         });
       }
     }
@@ -337,12 +337,12 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
 export const POST = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_leads"] }),
+  withAuth({ roles: ["grexid.manage_leads"] }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_leads"] }),
+  withAuth({ roles: ["grexid.manage_leads"] }),
   async (req, ctx) => putHandler(req, ctx),
 );

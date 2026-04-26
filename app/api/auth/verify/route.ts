@@ -222,21 +222,13 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         );
       }
 
-      const tenant = {
-        systemId: String(mem.systemId),
-        companyId: String(mem.companyId),
-        systemSlug: mem.systemSlug ?? "core",
-        roles: (mem.roles ?? []) as string[],
-        permissions: (mem.permissions ?? []) as string[],
-      };
-
-      if (tenant.roles.includes("superuser")) {
-        tenant.permissions = ["*"];
-      }
-
       const systemToken = await createTenantToken(
         {
-          ...tenant,
+          id: mem.tenantId,
+          systemId: mem.systemId,
+          companyId: mem.companyId,
+          systemSlug: mem.systemSlug,
+          roles: mem.roles,
           actorType: "user",
           actorId: String(user.id),
           exchangeable: true,
@@ -244,7 +236,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         stayLoggedIn,
       );
 
-      await rememberActor(tenant, String(user.id));
+      await rememberActor(mem.tenantId, String(user.id));
 
       return Response.json({
         success: true,

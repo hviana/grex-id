@@ -14,8 +14,7 @@ interface Location {
   id: string;
   name: string;
   description?: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string;
   address: Record<string, string>;
   createdAt: string;
   updatedAt: string;
@@ -27,7 +26,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
-    const location = await genericGetById<Location>({ table: "location" }, id);
+    const location = await genericGetById<Location>(
+      { table: "location", tenantId: ctx.tenant.id },
+      id,
+    );
     return Response.json({ success: true, data: location });
   }
 
@@ -35,10 +37,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
-
-  if (!companyId || !systemId) {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json({ success: true, data: [], nextCursor: null });
   }
 
@@ -47,7 +46,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       table: "location",
       searchFields: ["name"],
     },
-    { limit, cursor, search, ensureTenant: { companyId, systemId } },
+    { limit, cursor, search, tenantId: ctx.tenant.id },
   );
 
   return Response.json({ success: true, ...result });
@@ -67,9 +66,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (
-    !ctx.tenant.companyId || !ctx.tenant.systemId
-  ) {
+  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json(
       {
         success: false,
@@ -85,10 +82,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Location>(
     {
       table: "location",
-      ensureTenant: {
-        companyId: ctx.tenant.companyId,
-        systemId: ctx.tenant.systemId,
-      },
+      tenantId: ctx.tenant.id,
     },
     { name, description: description || null, address },
   );
@@ -99,7 +93,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   );
 }
 
-async function putHandler(req: Request, _ctx: RequestContext) {
+async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { id, name, description, address } = body;
 
@@ -119,7 +113,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   if (address !== undefined) data.address = address;
 
   const result = await genericUpdate<Location>(
-    { table: "location" },
+    { table: "location", tenantId: ctx.tenant.id },
     id,
     data,
   );
@@ -127,7 +121,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   return Response.json({ success: true, data: result.data });
 }
 
-async function deleteHandler(req: Request, _ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const id = url.searchParams.get("id") ?? "";
 
@@ -141,30 +135,30 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "location" }, id);
+  await genericDelete({ table: "location", tenantId: ctx.tenant.id }, id);
   return Response.json({ success: true });
 }
 
 export const GET = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.list_locations"] }),
+  withAuth({ roles: ["grexid.list_locations"] }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_locations"] }),
+  withAuth({ roles: ["grexid.manage_locations"] }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_locations"] }),
+  withAuth({ roles: ["grexid.manage_locations"] }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ permissions: ["grexid.manage_locations"] }),
+  withAuth({ roles: ["grexid.manage_locations"] }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

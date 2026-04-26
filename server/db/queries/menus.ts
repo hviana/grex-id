@@ -4,15 +4,19 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("menus");
 
-export async function listMenuItems(systemId?: string): Promise<MenuItem[]> {
+/**
+ * menu_item has `tenantId: record<tenant>` referencing a system-level tenant
+ * row instead of `systemId`. Filtering by tenantId scopes menus to a system.
+ */
+export async function listMenuItems(tenantId?: string): Promise<MenuItem[]> {
   const db = await getDb();
 
   let query = "SELECT * FROM menu_item";
   const bindings: Record<string, unknown> = {};
 
-  if (systemId) {
-    query += " WHERE systemId = $systemId";
-    bindings.systemId = rid(systemId);
+  if (tenantId) {
+    query += " WHERE tenantId = $tenantId";
+    bindings.tenantId = rid(tenantId);
   }
 
   query += " ORDER BY sortOrder ASC";

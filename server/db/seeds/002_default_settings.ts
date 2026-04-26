@@ -18,10 +18,6 @@ const defaults: DefaultSetting[] = [
   },
   {
     key: "auth.encryption.key",
-    // 32-byte (AES-256) key, base64-encoded. SEEDED VALUE IS DEV-ONLY and
-    // MUST be overridden per deployment via the secret-management pipeline
-    // BEFORE any sensitive write happens (§7.1.1, §12.15). Rotation is a
-    // migration (decrypt-with-old + re-encrypt-with-new + swap the setting).
     value: "JX9nKHJd4rIOmW6HH0HYhBmta6NQepyUtxiaS3rnoX8=",
     description:
       "AES-256-GCM key (base64, 32 bytes) for the field encryption wrapper. DEV ONLY — override per deployment.",
@@ -72,7 +68,7 @@ const defaults: DefaultSetting[] = [
     key: "auth.oauth.providers",
     value: "[]",
     description:
-      "JSON array of enabled OAuth provider names. Empty = OAuth login disabled (no redundant flag needed).",
+      "JSON array of enabled OAuth provider names. Empty = OAuth login disabled.",
   },
   {
     key: "communication.email.mailgun_apikey",
@@ -207,10 +203,20 @@ const defaults: DefaultSetting[] = [
 ];
 
 export async function seed(db: Surreal): Promise<void> {
+  // Resolve core system-level tenant row (actorId=NONE, companyId=NONE, systemId=core)
+  const tenantResult = await db.query<[{ id: string }[]]>(
+    `SELECT id FROM tenant WHERE actorId IS NONE AND companyId IS NONE AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id LIMIT 1`,
+  );
+  const tenantId = tenantResult[0]?.[0]?.id;
+  if (!tenantId) {
+    console.log("[seed] core system tenant not found, skipping settings");
+    return;
+  }
+
   for (const setting of defaults) {
     const existing = await db.query<[{ id: string }[]]>(
-      `SELECT id FROM setting WHERE key = $key AND systemSlug = "core" LIMIT 1`,
-      { key: setting.key },
+      `SELECT id FROM setting WHERE key = $key AND tenantId = $tenantId LIMIT 1`,
+      { key: setting.key, tenantId },
     );
     if ((existing[0] ?? []).length > 0) continue;
     await db.query(
@@ -218,11 +224,12 @@ export async function seed(db: Surreal): Promise<void> {
         key = $key,
         value = $value,
         description = $description,
-        systemSlug = "core"`,
+        tenantId = $tenantId`,
       {
         key: setting.key,
         value: setting.value,
         description: setting.description,
+        tenantId,
       },
     );
     console.log(`[seed] setting created: ${setting.key}`);

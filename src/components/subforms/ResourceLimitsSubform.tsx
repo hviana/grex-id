@@ -59,9 +59,9 @@ const ResourceLimitsSubform = forwardRef<
         : `core.vouchers.placeholder.${field}Modifier`,
     );
 
-  const [permissions, setPermissions] = useState<string[]>(
-    Array.isArray(initialData?.permissions)
-      ? [...(initialData.permissions as string[])]
+  const [roles, setRoles] = useState<string[]>(
+    Array.isArray(initialData?.roles)
+      ? [...(initialData.roles as string[])]
       : [],
   );
 
@@ -152,7 +152,7 @@ const ResourceLimitsSubform = forwardRef<
 
       if (mode === "plan") {
         return {
-          permissions,
+          roles,
           entityLimits: entityMap,
           apiRateLimit: Number(apiRateLimit),
           storageLimitBytes: Math.round(Number(storageGB) * 1073741824),
@@ -166,7 +166,7 @@ const ResourceLimitsSubform = forwardRef<
         };
       }
       return {
-        permissions,
+        roles,
         entityLimitModifiers: entityMap,
         apiRateLimitModifier: Number(apiRateLimit),
         storageLimitModifier: Math.round(Number(storageGB) * 1073741824),
@@ -186,14 +186,14 @@ const ResourceLimitsSubform = forwardRef<
     <div className="space-y-4">
       <MultiBadgeField
         name={mode === "plan"
-          ? t("core.plans.permissions")
-          : t("core.vouchers.permissions")}
+          ? t("core.plans.roles")
+          : t("core.vouchers.roles")}
         mode="custom"
-        value={permissions}
-        onChange={(vals) => setPermissions(vals as string[])}
+        value={roles}
+        onChange={(vals) => setRoles(vals as string[])}
         renderBadge={(item, remove) => (
           <TranslatedBadge
-            kind="permission"
+            kind="role"
             token={typeof item === "string" ? item : item.name}
             systemSlug={systemSlug}
             onRemove={remove}

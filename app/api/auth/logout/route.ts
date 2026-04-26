@@ -10,10 +10,7 @@ async function handler(
 ): Promise<Response> {
   const claims = ctx.claims;
   if (claims?.actorType === "user" && claims.actorId) {
-    await forgetActor(
-      { companyId: claims.companyId, systemId: claims.systemId },
-      String(claims.actorId),
-    );
+    await forgetActor(claims.id, String(claims.actorId));
   }
   return Response.json({ success: true });
 }

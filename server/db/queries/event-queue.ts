@@ -4,6 +4,12 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("event-queue");
 
+/**
+ * Event queue queries. queue_event and delivery are not tenant-scoped —
+ * they are infrastructure tables for the worker system. No tenant model
+ * changes needed here.
+ */
+
 export async function getEventById(id: string): Promise<QueueEvent | null> {
   const db = await getDb();
   const result = await db.query<[QueueEvent[]]>(
@@ -50,7 +56,7 @@ export async function getDeliveryStats(): Promise<Record<string, number>> {
   return stats;
 }
 
-// ─── Worker queries (§14.4) ──────────────────────────────────────────────────
+// ─── Worker queries (§5.1) ──────────────────────────────────────────────────
 
 export interface CandidateDelivery {
   id: string;
@@ -151,7 +157,7 @@ export async function retryDelivery(
   );
 }
 
-// ─── Publisher queries (§14.2) ───────────────────────────────────────────────
+// ─── Publisher queries (§5.1) ───────────────────────────────────────────────
 
 export async function createEventAndDelivery(
   name: string,

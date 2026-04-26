@@ -2,8 +2,7 @@ export interface Location {
   id: string;
   name: string;
   description?: string;
-  companyId: string;
-  systemId: string;
+  tenantId: string; // references company-system tenant row
   address: {
     street: string;
     number: string;

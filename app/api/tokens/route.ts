@@ -6,16 +6,12 @@ import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
 import { listTokensFiltered, revokeToken } from "@/server/db/queries/tokens";
 import { genericCreate } from "@/server/db/queries/generics";
-import { rid } from "@/server/db/connection";
-import type { Tenant } from "@/src/contracts/tenant";
 import type { ApiToken } from "@/src/contracts/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
-  const url = new URL(req.url);
-  const userId = url.searchParams.get("userId") || undefined;
-  const companyId = ctx.tenant.companyId;
-
-  const data = await listTokensFiltered({ userId, companyId });
+  const data = await listTokensFiltered({
+    tenantId: ctx.tenant.id,
+  });
   return Response.json({ success: true, data });
 }
 
@@ -24,10 +20,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const {
     name,
     description,
-    userId,
-    companyId,
-    systemId,
-    permissions,
+    roles,
     monthlySpendLimit,
     maxOperationCount,
     neverExpires,
@@ -36,7 +29,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     frontendDomains,
   } = body;
 
-  if (!name || !userId || !companyId || !systemId) {
+  if (!name) {
     return Response.json(
       {
         success: false,
@@ -77,24 +70,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const tenant: Tenant = {
-    systemId: ctx.tenant.systemId,
-    companyId: ctx.tenant.companyId,
-    systemSlug: ctx.tenant.systemSlug,
-    roles: [],
-    permissions: permissions ?? [],
-  };
-
   const result = await genericCreate<ApiToken>(
-    { table: "api_token" },
     {
-      userId: rid(userId),
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      tenant,
+      table: "api_token",
+      tenantId: ctx.tenant.id,
+    },
+    {
+      tenantId: ctx.tenant.id,
       name,
       description: description ?? undefined,
-      permissions: permissions ?? [],
+      roles: roles ?? [],
       monthlySpendLimit: monthlySpendLimit ?? undefined,
       maxOperationCount: maxOperationCount ?? undefined,
       neverExpires: neverExpires === true,
@@ -128,7 +113,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   const jwt = await createTenantToken(
     {
-      ...tenant,
+      id: ctx.tenant.id,
+      systemId: ctx.tenant.systemId,
+      companyId: ctx.tenant.companyId,
+      systemSlug: ctx.tenant.systemSlug,
+      roles: roles ?? [],
       actorType: "api_token",
       actorId: String(createdToken.id),
       exchangeable: false,
@@ -139,7 +128,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     exp,
   );
 
-  await rememberActor(tenant, String(createdToken.id));
+  await rememberActor(ctx.tenant.id, String(createdToken.id));
 
   return Response.json(
     { success: true, data: { token: jwt } },
@@ -164,7 +153,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   // Resolve tenant + revoke in a single batched query (§7.2).
   const row = await revokeToken(id);
   if (row) {
-    await forgetActor(row, id);
+    await forgetActor(row.tenantId, id);
   }
 
   return Response.json({ success: true });

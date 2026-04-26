@@ -12,14 +12,14 @@ import FrontCore from "@/server/utils/FrontCore";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);
-  const systemSlug = url.searchParams.get("systemSlug") || undefined;
+  const tenantId = url.searchParams.get("tenantId") || undefined;
 
-  const settings = (await listFrontSettings(systemSlug)).map((s) => ({
+  const settings = (await listFrontSettings(tenantId)).map((s) => ({
     id: s.id,
     key: s.key,
     value: s.value,
     description: s.description ?? "",
-    systemSlug: s.systemSlug,
+    tenantId: s.tenantId,
   }));
 
   const missing = await FrontCore.getInstance().getMissingSettings();
@@ -32,9 +32,9 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { settings, systemSlug } = body as {
+  const { settings, tenantId } = body as {
     settings: { key: string; value: string; description?: string }[];
-    systemSlug?: string;
+    tenantId?: string;
   };
 
   if (!settings || !Array.isArray(settings)) {
@@ -54,14 +54,14 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     key: string;
     value: string;
     description: string;
-    systemSlug?: string;
+    tenantId?: string;
   }[] = [];
   for (const s of settings.filter((s) => s.key)) {
     items.push({
       key: await standardizeField("name", s.key),
       value: s.value ?? "",
       description: s.description ?? "",
-      systemSlug: systemSlug || undefined,
+      tenantId: tenantId || undefined,
     });
   }
 
@@ -73,7 +73,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { key, systemSlug } = body;
+  const { key, tenantId } = body;
   if (!key) {
     return Response.json(
       {
@@ -86,7 +86,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
       { status: 400 },
     );
   }
-  await deleteFrontSetting(key, systemSlug || undefined);
+  await deleteFrontSetting(key, tenantId || undefined);
   await FrontCore.getInstance().reload();
   return Response.json({ success: true });
 }

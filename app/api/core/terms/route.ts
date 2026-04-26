@@ -12,6 +12,8 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
     { table: "system" },
     { limit: 200 },
   );
+
+  // Generic terms come from core system-level settings (no tenantId override)
   const genericSetting = await getSetting("terms.generic");
   const genericContent = genericSetting?.value ?? "";
 
@@ -36,7 +38,7 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
 
-  // Update generic terms
+  // Update generic terms (core system-level — no tenantId override)
   if (body.generic === true) {
     const content = typeof body.content === "string" ? body.content : "";
     await upsertSetting({

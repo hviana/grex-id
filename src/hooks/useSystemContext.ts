@@ -16,13 +16,10 @@ interface SystemContextState {
 }
 
 export interface SystemContextValue extends SystemContextState {
-  // Derived from useAuth().tenant (read-only)
   companyId: string | null;
   systemId: string | null;
   systemSlug: string | null;
   roles: string[];
-  permissions: string[];
-  // Managed state (fetched, not in JWT)
   setCompanies: (companies: Pick<Company, "id" | "name">[]) => void;
   setSystems: (
     systems: Pick<
@@ -31,7 +28,6 @@ export interface SystemContextValue extends SystemContextState {
     >[],
   ) => void;
   setPlan: (plan: { id: string; name: string } | null) => void;
-  // Switchers — perform token exchange
   switchCompany: (companyId: string) => void;
   switchSystem: (systemId: string) => void;
 }
@@ -76,14 +72,12 @@ export function useSystemContextProvider(): SystemContextValue {
   const switchCompany = useCallback(
     (companyId: string) => {
       setCookie(COMPANY_COOKIE, companyId);
-      // Reset system — the layout will load systems for the new company
       setCookie(SYSTEM_COOKIE, "");
       setState((prev) => ({
         ...prev,
         systems: [],
         plan: null,
       }));
-      // The layout will handle the token exchange after loading systems
     },
     [],
   );
@@ -91,7 +85,6 @@ export function useSystemContextProvider(): SystemContextValue {
   const switchSystem = useCallback(
     (systemId: string) => {
       setCookie(SYSTEM_COOKIE, systemId);
-      // Find the system to get company+system for exchange
       const sys = state.systems.find((s) => s.id === systemId);
       if (sys && tenant.companyId) {
         exchangeTenant(tenant.companyId, systemId).catch(console.error);
@@ -102,15 +95,12 @@ export function useSystemContextProvider(): SystemContextValue {
   );
 
   return {
-    // Derived from tenant (JWT is the single source of truth)
     companyId: tenant.companyId || null,
     systemId: tenant.systemId || null,
     systemSlug: tenant.systemSlug && tenant.systemSlug !== "core"
       ? tenant.systemSlug
       : null,
     roles: tenant.roles,
-    permissions: tenant.permissions,
-    // Managed state
     ...state,
     setCompanies,
     setSystems,

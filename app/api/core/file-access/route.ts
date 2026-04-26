@@ -2,7 +2,6 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { rid } from "@/server/db/connection";
 import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -19,7 +18,7 @@ const defaultSection = () => ({
   isolateSystem: false,
   isolateCompany: false,
   isolateUser: false,
-  permissions: [],
+  roles: [],
 });
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -164,7 +163,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
         const existingId = String(
           dupCheck.conflicts[0]?.existingRecordId ?? "",
         );
-        if (existingId !== rid(String(id)).toString()) {
+        if (existingId !== String(id)) {
           return Response.json(
             {
               success: false,

@@ -2,7 +2,7 @@ export interface FileAccessSection {
   isolateSystem: boolean;
   isolateCompany: boolean;
   isolateUser: boolean;
-  permissions: string[];
+  roles: string[];
 }
 
 export interface FileAccessUploadSection extends FileAccessSection {

@@ -27,7 +27,7 @@ const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
   isolateCompany: false,
   isolateUser: false,
-  permissions: [],
+  roles: [],
 });
 
 const emptyUploadSection = (): FileAccessUploadSection => ({
@@ -136,8 +136,8 @@ export default function FileAccessPage() {
                     </span>
                   )}
                 <TranslatedBadgeList
-                  kind="permission"
-                  tokens={sec.permissions}
+                  kind="role"
+                  tokens={sec.roles}
                   className="mt-1"
                 />
               </div>

@@ -48,11 +48,9 @@ async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
 
   if (action === "context") {
-    if (!companyId || !systemId) {
+    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
       return Response.json(
         {
           success: false,
@@ -66,8 +64,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     }
     const roles = await getUserContext(
       ctx.claims!.actorId,
-      companyId,
-      systemId,
+      ctx.tenant.id,
     );
     return Response.json({ success: true, data: { roles } });
   }
@@ -76,10 +73,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor");
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  if (companyId && systemId) {
+  if (ctx.tenant.companyId && ctx.tenant.systemId) {
     const result = await getUsersForTenant({
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       search: search ?? undefined,
       cursor: cursor ?? undefined,
       limit,
@@ -126,9 +122,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   // Try to find an existing user by any submitted channel value. Resolved
-  // in a single batched query (§7.2). entity_channel rows carry no back-
-  // pointer (§3.1.10) — the query returns (channel, owner) pairs where the
-  // owner's `channels` array references the matching channel id.
+  // in a single batched query (§7.2).
   const matches = await findChannelOwners(channels, "user");
   const existingUserId = matches[0]?.ownerId ?? null;
 
@@ -151,19 +145,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Invite flow: associate existing user with the tenant + notify.
     const inviteResult = await inviteExistingUser({
       userId: existingUserId,
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       roles: roles ?? [],
       inviterId: ctx.claims!.actorId,
+      companyId,
+      systemId,
     });
 
     // Roles changed for the invited user — evict from this tenant's
     // partition so their next request re-authenticates with fresh
-    // roles/permissions (§8.11).
-    await forgetActor(
-      { companyId: String(companyId), systemId: String(systemId) },
-      String(existingUserId),
-    );
+    // roles (§8.11).
+    await forgetActor(ctx.tenant.id, String(existingUserId));
 
     const core = Core.getInstance();
     const baseUrl =
@@ -213,6 +205,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     actionKey: "auth.action.register",
     payload: { channelIds },
     tenant: {
+      id: ctx.tenant.id,
       companyId,
       systemId,
       systemSlug: ctx.tenant.systemSlug,
@@ -325,10 +318,11 @@ async function putHandler(req: Request, ctx: RequestContext) {
   if (
     roles !== undefined && companyId && systemId
   ) {
+    // Resolve the tenantId for the target user's company-system tenant
+    // The admin updates roles in the context of their own tenant
     const errorKey = await updateUserRolesWithAdminCheck({
       userId: String(id),
-      companyId,
-      systemId,
+      tenantId: ctx.tenant.id,
       roles,
     });
 
@@ -346,23 +340,18 @@ async function putHandler(req: Request, ctx: RequestContext) {
     }
 
     // Roles changed — evict from this tenant's partition so the user's
-    // next request re-authenticates with fresh roles/permissions (§8.11).
-    await forgetActor(
-      { companyId: String(companyId), systemId: String(systemId) },
-      String(id),
-    );
+    // next request re-authenticates with fresh roles (§8.11).
+    await forgetActor(ctx.tenant.id, String(id));
   }
 
   return Response.json({ success: true });
 }
 
-async function deleteHandler(req: Request, _ctx: RequestContext) {
+async function deleteHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { userId, companyId, systemId } = body;
+  const { userId } = body;
 
-  if (
-    !userId || !companyId || !systemId
-  ) {
+  if (!userId) {
     return Response.json(
       {
         success: false,
@@ -374,8 +363,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 
   const errorKey = await deleteUserWithAdminCheck({
     userId: String(userId),
-    companyId: String(companyId),
-    systemId: String(systemId),
+    tenantId: ctx.tenant.id,
   });
 
   if (errorKey) {
@@ -392,14 +380,8 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
   }
 
   // Membership removed — evict the user from this tenant's partition so
-  // the user's next request fails at withAuth (§8.11). The user's
-  // api_tokens scoped to this tenant are not affected here (still live
-  // according to `revokedAt`); if they should also be revoked, the caller
-  // is the admin UI which handles token revocation separately.
-  await forgetActor(
-    { companyId: String(companyId), systemId: String(systemId) },
-    String(userId),
-  );
+  // the user's next request fails at withAuth (§8.11).
+  await forgetActor(ctx.tenant.id, String(userId));
 
   // If the user no longer belongs to any tenant, hard-delete the user
   // and all their compositional data (profile, channels, recovery channels).

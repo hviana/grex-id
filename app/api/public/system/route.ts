@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import Core from "@/server/utils/Core";
 
 export async function GET(req: NextRequest) {
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
           currency: p.currency,
           recurrenceDays: p.recurrenceDays,
           benefits: p.benefits,
-          permissions: p.permissions,
+          roles: p.roles,
           entityLimits: p.entityLimits,
           apiRateLimit: p.apiRateLimit,
           storageLimitBytes: p.storageLimitBytes,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
         })),
       });
     }
-    return NextResponse.json({ success: true, data: result });
+    return Response.json({ success: true, data: result });
   }
 
   const core = Core.getInstance();
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   const genericTerms = (await core.getSetting("terms.generic")) || "";
 
   if (!resolvedSlug) {
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: genericTerms
         ? {
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
   const system = await core.getSystemBySlug(resolvedSlug);
   if (!system) {
-    return NextResponse.json({
+    return Response.json({
       success: true,
       data: genericTerms
         ? {
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
   const termsOfService = system.termsOfService || genericTerms || undefined;
 
-  return NextResponse.json({
+  return Response.json({
     success: true,
     data: {
       name: system.name,

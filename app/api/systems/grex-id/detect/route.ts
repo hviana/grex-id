@@ -66,6 +66,6 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
 export const POST = compose(
   withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true, permissions: ["grexid.detect"] }),
+  withAuth({ requireAuthenticated: true, roles: ["grexid.detect"] }),
   async (req, ctx) => postHandler(req, ctx),
 );

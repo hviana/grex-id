@@ -9,9 +9,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
@@ -19,7 +17,6 @@ interface RoleItem {
   id: string;
   name: string;
   systemId: string;
-  permissions: string[];
   isBuiltIn: boolean;
   createdAt: string;
   [key: string]: unknown;
@@ -40,7 +37,6 @@ export default function RolesPage() {
   const [editItem, setEditItem] = useState<RoleItem | null>(null);
   const [formName, setFormName] = useState("");
   const [formSystemId, setFormSystemId] = useState("");
-  const [formPermissions, setFormPermissions] = useState<string[]>([]);
   const [formIsBuiltIn, setFormIsBuiltIn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +108,6 @@ export default function RolesPage() {
     setFormSystemSelected(
       firstSys ? [{ id: firstSys.id, label: firstSys.name }] : [],
     );
-    setFormPermissions([]);
     setFormIsBuiltIn(false);
     setError(null);
     setShowCreate(true);
@@ -125,7 +120,6 @@ export default function RolesPage() {
     setFormSystemSelected(
       sys ? [{ id: sys.id, label: sys.name }] : [],
     );
-    setFormPermissions([...item.permissions]);
     setFormIsBuiltIn(item.isBuiltIn);
     setError(null);
     setEditItem(item);
@@ -141,7 +135,6 @@ export default function RolesPage() {
         id: editItem?.id,
         name: formName,
         systemId: formSystemId,
-        permissions: formPermissions,
         isBuiltIn: formIsBuiltIn,
       };
 
@@ -235,12 +228,6 @@ export default function RolesPage() {
                     </p>
                   </div>
                 </div>
-                <TranslatedBadgeList
-                  kind="permission"
-                  tokens={role.permissions}
-                  systemSlug={sysSlug}
-                  className="mt-2"
-                />
               </div>
               <div className="flex gap-2 ml-3 shrink-0">
                 <EditButton onClick={() => openEdit(role)} />
@@ -290,21 +277,6 @@ export default function RolesPage() {
               placeholder={t("core.roles.selectSystem")}
             />
           </div>
-          <MultiBadgeField
-            name={t("core.roles.permissions")}
-            mode="custom"
-            value={formPermissions}
-            onChange={(vals) => setFormPermissions(vals as string[])}
-            formatHint={t("core.roles.permissionsHint")}
-            renderBadge={(item, remove) => (
-              <TranslatedBadge
-                kind="permission"
-                token={typeof item === "string" ? item : item.name}
-                systemSlug={getSystemSlug(formSystemId)}
-                onRemove={remove}
-              />
-            )}
-          />
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
