@@ -41,13 +41,13 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   try {
-    const claims = await verifyTenantToken(systemToken);
-    await ensureActorValidityLoaded(claims.id);
+    const tenant = await verifyTenantToken(systemToken);
+    await ensureActorValidityLoaded(tenant.id);
 
     // Cache-only validity check (§8.11). Refresh extends the lifetime of
     // an already-valid bearer; it is not a recovery path. A user whose id
     // was evicted (logout, role change, tenant removal) must log in again.
-    if (!claims.actorId || !isActorValid(claims.id, String(claims.actorId))) {
+    if (!tenant.actorId || !isActorValid(tenant.id, String(tenant.actorId))) {
       return Response.json(
         {
           success: false,
@@ -59,7 +59,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     // Only user sessions can refresh here — API-token / connected-app JWTs
     // are issued with their final expiry and do not use this endpoint.
-    if (claims.actorType !== "user") {
+    if (tenant.actorType !== "user") {
       return Response.json(
         {
           success: false,
@@ -73,9 +73,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     }
 
     // Fetch the fields the client needs to re-hydrate its UI state. Roles
-    // are preserved from the current claims — role changes evict the user
+    // are preserved from the current tenant — role changes evict the user
     // (§8.11) and would have rejected this refresh.
-    const user = await getUserForRefresh(String(claims.actorId));
+    const user = await getUserForRefresh(String(tenant.actorId));
     if (!user) {
       return Response.json(
         {
@@ -87,7 +87,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     }
 
     const newToken = await createTenantToken(
-      claims,
+      tenant,
       user.stayLoggedIn ?? false,
     );
 

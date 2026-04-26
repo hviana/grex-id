@@ -4,12 +4,12 @@ import { getSystemTenant } from "@/server/utils/tenant";
 import type { Tenant } from "@/src/contracts/tenant";
 
 registerCache<string>("core", "anonymous-jwt", async () => {
-  const tenant = await getSystemTenant();
+  const systemTenant = await getSystemTenant();
 
-  const claims: Tenant = {
-    id: tenant.id,
-    systemId: tenant.systemId,
-    companyId: tenant.companyId,
+  const tokenTenant: Tenant = {
+    id: systemTenant.id,
+    systemId: systemTenant.systemId,
+    companyId: systemTenant.companyId,
     systemSlug: "core",
     roles: ["anonymous"],
     actorType: "api_token",
@@ -18,7 +18,7 @@ registerCache<string>("core", "anonymous-jwt", async () => {
   };
 
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-  return createTenantToken(claims, false, expiresAt);
+  return createTenantToken(tokenTenant, false, expiresAt);
 });
 
 export async function GET(): Promise<Response> {

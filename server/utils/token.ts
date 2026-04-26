@@ -23,31 +23,31 @@ async function getJwtSecret(): Promise<Uint8Array> {
 
 /**
  * Creates the universal tenant-bearing JWT used by every authenticating
- * actor (§8.1). The claims include the full Tenant with `id`, the `actorId`
+ * actor (§8.1). Includes the full Tenant with `id`, the `actorId`
  * used by the actor-validity cache (§8.11), and — for non-user actors — the
  * CORS policy (`frontendUse`, `frontendDomains`) so `withAuth` does not
  * need a DB read.
  */
 export async function createTenantToken(
-  claims: Tenant,
+  tenant: Tenant,
   stayLoggedIn: boolean = false,
   expiresAt?: Date,
 ): Promise<string> {
   const core = Core.getInstance();
   const jwtBuilder = new jose.SignJWT({
-    tenantId: claims.id,
+    tenantId: tenant.id,
     tenant: {
-      id: claims.id,
-      systemId: claims.systemId,
-      companyId: claims.companyId,
-      systemSlug: claims.systemSlug,
-      roles: claims.roles,
+      id: tenant.id,
+      systemId: tenant.systemId,
+      companyId: tenant.companyId,
+      systemSlug: tenant.systemSlug,
+      roles: tenant.roles,
     },
-    actorType: claims.actorType,
-    actorId: claims.actorId,
-    exchangeable: claims.exchangeable,
-    frontendUse: claims.frontendUse,
-    frontendDomains: claims.frontendDomains,
+    actorType: tenant.actorType,
+    actorId: tenant.actorId,
+    exchangeable: tenant.exchangeable,
+    frontendUse: tenant.frontendUse,
+    frontendDomains: tenant.frontendDomains,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -68,7 +68,7 @@ export async function createTenantToken(
 }
 
 /**
- * Verifies a tenant-bearing JWT and returns the full claims.
+ * Verifies a tenant-bearing JWT and returns the full tenant.
  */
 export async function verifyTenantToken(
   token: string,

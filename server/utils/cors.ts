@@ -5,10 +5,10 @@ assertServerOnly("cors.ts");
 
 /**
  * Enforces CORS for frontend-use API tokens only. Reads `frontendUse` and
- * `frontendDomains` from the JWT claims — no DB touch.
+ * `frontendDomains` from the tenant — no DB touch.
  *
  * Rules:
- * - user-session claims: no CORS enforcement (user sessions always ride on
+ * - user-session tenant: no CORS enforcement (user sessions always ride on
  *   the same-origin frontend).
  * - Tokens with `frontendUse = false`: reject if browser Origin is present
  *   (server-to-server only).
@@ -17,13 +17,13 @@ assertServerOnly("cors.ts");
  */
 export function enforceCors(
   req: Request,
-  claims: Tenant,
+  tenant: Tenant,
 ): Response | null {
-  if (claims.actorType === "user") return null;
+  if (tenant.actorType === "user") return null;
 
   const origin = req.headers.get("Origin");
 
-  if (!claims.frontendUse) {
+  if (!tenant.frontendUse) {
     if (origin) {
       return Response.json(
         {
@@ -46,7 +46,7 @@ export function enforceCors(
     );
   }
 
-  const allowed = claims.frontendDomains ?? [];
+  const allowed = tenant.frontendDomains ?? [];
   if (allowed.length === 0 || !allowed.includes(origin)) {
     return Response.json(
       {
@@ -66,13 +66,13 @@ export function enforceCors(
  */
 export function getCorsHeaders(
   req: Request,
-  claims: Tenant,
+  tenant: Tenant,
 ): Record<string, string> {
   const origin = req.headers.get("Origin");
-  if (!origin || claims.actorType === "user") return {};
+  if (!origin || tenant.actorType === "user") return {};
 
   if (
-    claims.frontendUse && (claims.frontendDomains ?? []).includes(origin)
+    tenant.frontendUse && (tenant.frontendDomains ?? []).includes(origin)
   ) {
     return {
       "Access-Control-Allow-Origin": origin,

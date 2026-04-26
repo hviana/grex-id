@@ -231,7 +231,7 @@ tenant-scoped data is cleaned (§9.4).
   operations use a seeded anonymous API token carrying the `"anonymous"` role
   (§3.5).
 - Backend code **never** reads `companyId`/`systemId`/`roles` from query
-  strings, cookies, or bodies. They come from the tenant/claims only.
+  strings, cookies, or bodies. They come from the tenant only.
 - **Token exchange is the sole mechanism to change tenant.** API tokens and
   connected-app tokens carry `exchangeable: false` and are bound for life to
   their issue-time tenant.
@@ -472,7 +472,7 @@ tenants are constructed.
 ### 4.2 JWT & actor-validity model
 
 Every bearer (user session, API token, connected-app token) is a JWT produced
-via `@panva/jose` with claims
+via `@panva/jose` with payload
 `{ tenantId, tenant, actorType, actorId, exchangeable, exp, iat }`. There is no
 opaque-token path, no token hash, no `jti`. `tenantId` is the `tenant` record
 ID. The seeded anonymous API token follows the same JWT format and is included
@@ -498,7 +498,7 @@ reloadTenant(tenantId): Promise<void>
 | Event                                              | Action                                                                        |
 | -------------------------------------------------- | ----------------------------------------------------------------------------- |
 | Login                                              | `rememberActor(tenant.id, user.id)`                                           |
-| Logout                                             | `forgetActor(claims.id, claims.actorId)`                                      |
+| Logout                                             | `forgetActor(tenant.id, tenant.actorId)`                                      |
 | Token exchange                                     | `forgetActor(oldTenant.id, user.id)` + `rememberActor(newTenant.id, user.id)` |
 | Refresh                                            | No mutation (extension only — fails if id absent)                             |
 | API token / connected-app create / OAuth authorize | `rememberActor(tenant.id, token.id)`                                          |
@@ -958,7 +958,7 @@ sections, each with:
 | -------------------- | ------------------------------- |
 | `isolateSystem`      | `tenant.systemSlug === path[1]` |
 | `isolateCompany`     | `tenant.companyId === path[0]`  |
-| `isolateUser`        | `claims.actorId === path[2]`    |
+| `isolateUser`        | `tenant.actorId === path[2]`    |
 
 - All off → anonymous access (no auth required).
 - Any on → auth required; enabled checks AND-combined.
@@ -1166,9 +1166,9 @@ any chargeable op, `current_month_usage + cost ≤ monthlySpendLimit`.
 
 ### 8.1 Token architecture
 
-The only stored bearer is a short-lived **System API Token** — a JWT with claims
-`{ tenant, actorType, actorId, exchangeable, exp, iat }`. Frontend stores the
-opaque string, never decodes it. All `fetch()` wrappers set
+The only stored bearer is a short-lived **System API Token** — a JWT with
+payload `{ tenant, actorType, actorId, exchangeable, exp, iat }`. Frontend
+stores the opaque string, never decodes it. All `fetch()` wrappers set
 `Authorization: Bearer <token>`.
 
 Refresh via `/api/auth/refresh` (extension — actor must still be in validity
@@ -1231,8 +1231,8 @@ is recovery-only — §3.3).
 
 The **sole** context-change path. Body `{companyId, systemId}`.
 
-1. `withAuth` already verified. Reject if `claims.actorType !== "user"` (403;
-   API/connected-app tokens are bound for life).
+1. `withAuth` already verified. Reject if `ctx.tenant.actorType !== "user"`
+   (403; API/connected-app tokens are bound for life).
 2. Verify target tenant row exists: `tenant(actorId=user, companyId, systemId)`.
    Fail → 403.
 3. Load roles from `tenant_role` for that tenant row. Resolve `systemSlug`.
@@ -1241,7 +1241,7 @@ The **sole** context-change path. Body `{companyId, systemId}`.
 5. `forgetActor(oldTenant.id, user.id)` +
    `rememberActor(newTenant.id, user.id)`. Old JWT now fails immediately.
 
-**Superuser bypass.** When `claims.roles` contains `"superuser"`, skip
+**Superuser bypass.** When `ctx.tenant.roles` contains `"superuser"`, skip
 membership check. Verify the company-system tenant row
 `tenant(actorId=NONE, companyId, systemId)` exists. Issue the new JWT with the
 `admin` role (from the target system's `role` table). No user-access tenant row

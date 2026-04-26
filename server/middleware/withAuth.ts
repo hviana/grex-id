@@ -37,9 +37,9 @@ export function withAuth(
 
     const token = authHeader.slice(7);
 
-    let claims;
+    let tenant;
     try {
-      claims = await verifyTenantToken(token);
+      tenant = await verifyTenantToken(token);
     } catch {
       return Response.json(
         {
@@ -51,8 +51,8 @@ export function withAuth(
     }
 
     // Actor-validity check keyed by tenant record ID (§8.11)
-    await ensureActorValidityLoaded(claims.id);
-    if (!claims.actorId || !isActorValid(claims.id, claims.actorId)) {
+    await ensureActorValidityLoaded(tenant.id);
+    if (!tenant.actorId || !isActorValid(tenant.id, tenant.actorId)) {
       return Response.json(
         {
           success: false,
@@ -62,10 +62,10 @@ export function withAuth(
       );
     }
 
-    const corsError = enforceCors(req, claims);
+    const corsError = enforceCors(req, tenant);
     if (corsError) return corsError;
 
-    ctx.tenant = claims;
+    ctx.tenant = tenant;
 
     // Superuser bypasses role checks
     if (ctx.tenant.roles.includes("superuser")) {

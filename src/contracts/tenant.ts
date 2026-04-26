@@ -9,7 +9,7 @@ export interface Tenant {
   actorType?: TenantActorType;
   actorId?: string; // universal actor id — user id or api_token id; always a real SurrealDB record ID
   exchangeable?: boolean; // true only for actorType="user"
-  exp?: number; // unix seconds — present on JWT-decoded claims
+  exp?: number; // unix seconds — present on JWT-decoded tokens
   // Frontend-bearer CORS policy (§8.12). Only present on tokens issued for
   // non-user actors (api_token / connected_app). Embedded in the JWT so
   // withAuth can enforce CORS without a DB read.
