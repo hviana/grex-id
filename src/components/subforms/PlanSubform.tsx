@@ -1,22 +1,26 @@
 "use client";
 
-import React, { forwardRef, useImperativeHandle, useState } from "react";
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
+import TenantSubform from "@/src/components/subforms/TenantSubform";
 
 interface PlanSubformProps {
   initialData?: Record<string, unknown>;
-  systems: { id: string; slug: string; name: string }[];
 }
 
 const inputCls =
   "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
 const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
-  ({ initialData, systems }, ref) => {
+  ({ initialData }, ref) => {
     const { t } = useLocale();
 
     const [name, setName] = useState(
@@ -25,21 +29,6 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
     const [description, setDescription] = useState(
       (initialData?.description as string) ?? "",
     );
-    const [systemId, setSystemId] = useState(
-      (initialData?.systemId as string) ?? (systems[0]?.id ?? ""),
-    );
-    const [systemSelected, setSystemSelected] = useState<
-      { id: string; label: string }[]
-    >(() => {
-      if (initialData?.systemId) {
-        const sys = systems.find(
-          (s) => s.id === initialData.systemId,
-        );
-        return sys ? [{ id: sys.id, label: sys.name }] : [];
-      }
-      const first = systems[0];
-      return first ? [{ id: first.id, label: first.name }] : [];
-    });
     const [price, setPrice] = useState(
       String((initialData?.price as number) ?? ""),
     );
@@ -58,15 +47,17 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
       (initialData?.isActive as boolean) ?? true,
     );
 
+    const tenantRef = useRef<SubformRef>(null);
     const limitsRef = React.useRef<SubformRef>(null);
 
     useImperativeHandle(ref, () => ({
       getData: () => {
+        const tenantData = tenantRef.current?.getData() ?? {};
         const limitsData = limitsRef.current?.getData() ?? {};
         return {
           name,
           description,
-          systemId,
+          systemId: tenantData.systemId ?? "",
           price: Number(price),
           currency,
           recurrenceDays: Number(recurrenceDays),
@@ -77,59 +68,38 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
       },
       isValid: () => {
         if (!name.trim()) return false;
-        if (!systemId) return false;
+        if (!tenantRef.current?.isValid()) return false;
         if (!price && price !== "0") return false;
         if (!recurrenceDays || Number(recurrenceDays) < 1) return false;
         return true;
       },
     }));
 
-    const getSystemSlug = (sysId: string) => {
-      const sys = systems.find((s) => s.id === sysId);
-      return sys?.slug;
-    };
-
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.plans.name")} *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              placeholder={t("core.plans.placeholder.name")}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.plans.system")} *
-            </label>
-            <SearchableSelectField
-              fetchFn={async (search: string) => {
-                const q = search.toLowerCase();
-                return systems
-                  .filter((s) =>
-                    !q || s.name.toLowerCase().includes(q) ||
-                    s.slug.toLowerCase().includes(q)
-                  )
-                  .map((s) => ({ id: s.id, label: s.name }));
-              }}
-              showAllOnEmpty
-              initialSelected={systemSelected}
-              onChange={(items) => {
-                const id = items.length > 0 ? items[0].id : "";
-                setSystemId(id);
-                setSystemSelected(items);
-              }}
-              placeholder={t("core.plans.selectSystem")}
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+            {t("core.plans.name")} *
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder={t("core.plans.placeholder.name")}
+            className={inputCls}
+          />
         </div>
+
+        <TenantSubform
+          ref={tenantRef}
+          visibleFields={["systemId"]}
+          requiredFields={["systemId"]}
+          initialData={{
+            systemId: (initialData?.systemId as string) ?? "",
+            systemSlug: (initialData?.systemSlug as string) ?? "",
+          }}
+        />
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
@@ -200,7 +170,6 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
           ref={limitsRef}
           mode="plan"
           initialData={initialData}
-          systemSlug={getSystemSlug(systemId)}
         />
 
         <div className="flex items-center gap-3">

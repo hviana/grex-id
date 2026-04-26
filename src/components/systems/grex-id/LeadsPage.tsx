@@ -160,7 +160,7 @@ export default function LeadsPage() {
   ) => {
     const profile =
       (typeof item.profileId === "object" ? item.profileId : null) as
-        | { name?: string; avatarUri?: string; age?: number }
+        | { name?: string; avatarUri?: string; dateOfBirth?: string }
         | null;
     const avatarUri = profile?.avatarUri || (item.avatarUri as string) || null;
     const channels =

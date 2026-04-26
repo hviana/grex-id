@@ -95,7 +95,7 @@
   "vouchers.apiRate": "Taxa API",
   "vouchers.storage": "Armazenamento",
   "vouchers.creditModifier": "Modificador de Créditos",
-  "vouchers.applicableCompanyIds": "Empresas Aplicáveis",
+  "vouchers.applicableTenantIds": "Empresas Aplicáveis",
   "vouchers.applicableCompaniesHint": "Deixe vazio para todas as empresas. Remover uma empresa de uma lista não vazia remove o voucher das assinaturas daquela empresa.",
   "vouchers.applicablePlanIds": "Planos Aplicáveis",
   "vouchers.applicablePlansHint": "Deixe vazio para todos os planos. Remover um plano de uma lista não vazia remove o voucher das assinaturas daquele plano.",

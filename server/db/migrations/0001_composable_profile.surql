@@ -1,7 +1,7 @@
 DEFINE TABLE profile SCHEMAFULL;
 DEFINE FIELD name              ON profile TYPE string;
 DEFINE FIELD avatarUri         ON profile TYPE option<string>;
-DEFINE FIELD age               ON profile TYPE option<int>;
+DEFINE FIELD dateOfBirth ON profile TYPE option<datetime>;
 DEFINE FIELD locale            ON profile TYPE option<string>;
 DEFINE FIELD recoveryChannelIds ON profile TYPE array<record<entity_channel>> DEFAULT [];
 DEFINE FIELD createdAt         ON profile TYPE datetime DEFAULT time::now();

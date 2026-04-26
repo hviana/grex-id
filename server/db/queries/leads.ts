@@ -171,7 +171,7 @@ export async function findLeadByChannelValues(
 
 export async function createLead(data: {
   name: string;
-  profile: { name: string; avatarUri?: string; age?: number };
+  profile: { name: string; avatarUri?: string; dateOfBirth?: string };
   channels: { type: string; value: string }[];
   tenantIds?: string[];
   tags?: string[];
@@ -198,7 +198,7 @@ export async function createLead(data: {
   const bindings: Record<string, unknown> = {
     profileName: data.profile.name,
     avatarUri: data.profile.avatarUri ?? undefined,
-    age: data.profile.age ?? undefined,
+    dateOfBirth: data.profile.dateOfBirth ?? undefined,
     name: data.name,
     tenantIds,
     tagIds: data.tags ?? [],
@@ -213,7 +213,7 @@ export async function createLead(data: {
     LET $prof = CREATE profile SET
       name = $profileName,
       avatarUri = $avatarUri,
-      age = $age,
+      dateOfBirth = $dateOfBirth,
       recoveryChannelIds = [];
     LET $ld = CREATE lead SET
       name = $name,
@@ -232,7 +232,7 @@ export async function updateLead(
   id: string,
   data: {
     name?: string;
-    profile?: { name?: string; avatarUri?: string; age?: number };
+    profile?: { name?: string; avatarUri?: string; dateOfBirth?: string };
     tenantIds?: string[];
     tags?: string[];
   },
@@ -272,9 +272,11 @@ export async function updateLead(
       profileSets.push("avatarUri = $avatarUri");
       bindings.avatarUri = data.profile.avatarUri || undefined;
     }
-    if (data.profile.age !== undefined) {
-      profileSets.push("age = $age");
-      bindings.age = data.profile.age || undefined;
+    if (data.profile.dateOfBirth !== undefined) {
+      profileSets.push("dateOfBirth = $dateOfBirth");
+      bindings.dateOfBirth = data.profile.dateOfBirth
+        ? `<datetime>${data.profile.dateOfBirth}`
+        : undefined;
     }
     statements.push(
       `LET $ld = (SELECT profileId FROM $id);

@@ -268,7 +268,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
   if (action === "profile") {
     const body = await req.json();
-    const { name, avatarUri, age } = body;
+    const { name, avatarUri, dateOfBirth } = body;
     const userId = ctx.tenant.actorId!;
 
     let stdName: string | undefined;
@@ -287,7 +287,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       userId,
       name: stdName,
       avatarUri,
-      age,
+      dateOfBirth,
     });
 
     return Response.json({ success: true, data: updatedUser });

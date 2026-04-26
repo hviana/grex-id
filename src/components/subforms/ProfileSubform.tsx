@@ -22,14 +22,18 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
     const [avatarUri, setAvatarUri] = useState(
       (profile.avatarUri as string) ?? "",
     );
-    const [age, setAge] = useState((profile.age as number)?.toString() ?? "");
+    const [dateOfBirth, setDateOfBirth] = useState(
+      (profile.dateOfBirth as string)
+        ? new Date(profile.dateOfBirth as string).toISOString().split("T")[0]
+        : "",
+    );
 
     useImperativeHandle(ref, () => ({
       getData: () => ({
         profile: {
           name,
           avatarUri: avatarUri || undefined,
-          age: age ? Number(age) : undefined,
+          dateOfBirth: dateOfBirth || undefined,
         },
       }),
       isValid: () => name.trim().length > 0,
@@ -89,15 +93,14 @@ const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
         )}
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {t("common.profile.age")}
+            {t("common.profile.dateOfBirth")}
           </label>
           <input
-            type="number"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            min={1}
-            max={150}
-            placeholder={t("common.placeholder.age")}
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            max={new Date().toISOString().split("T")[0]}
+            placeholder={t("common.placeholder.dateOfBirth")}
             className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
           />
         </div>

@@ -56,9 +56,6 @@ export default function MenusPage() {
     [systems],
   );
 
-  const inputCls =
-    "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[var(--color-primary-green)] transition-colors";
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">

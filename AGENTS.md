@@ -337,11 +337,11 @@ middleware that queries the DB without a cache comes last.
 
 Three reusable composables, each `SCHEMAFULL` and unaware of its parents:
 
-| Table            | Fields (rule-bearing)                                                                        | Referenced by                                                                                 |
-| ---------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `profile`        | name (FULLTEXT), avatarUri, age, locale, `recoveryChannelIds: array<record<entity_channel>>` | `user.profileId`, `lead.profileId`                                                            |
-| `address`        | street, number, …, postalCode                                                                | `company.billingAddressId` (option), `payment_method.billingAddressId`, `location` (embedded) |
-| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)        | `user.channelIds[]`, `lead.channelIds[]`, `profile.recoveryChannelIds[]`                      |
+| Table            | Fields (rule-bearing)                                                                                           | Referenced by                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `profile`        | name (FULLTEXT), avatarUri, dateOfBirth (datetime), locale, `recoveryChannelIds: array<record<entity_channel>>` | `user.profileId`, `lead.profileId`                                                            |
+| `address`        | street, number, …, postalCode                                                                                   | `company.billingAddressId` (option), `payment_method.billingAddressId`, `location` (embedded) |
+| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)                           | `user.channelIds[]`, `lead.channelIds[]`, `profile.recoveryChannelIds[]`                      |
 
 **`profile.recoveryChannelIds`** is reserved **exclusively** for
 account-recovery paths — never read by login, communication dispatch, or the

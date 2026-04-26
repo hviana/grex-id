@@ -329,7 +329,7 @@ export async function updateCurrentUserProfile(params: {
   userId: string;
   name?: string;
   avatarUri?: string;
-  age?: unknown;
+  dateOfBirth?: unknown;
 }): Promise<Record<string, unknown> | null> {
   const db = await getDb();
   const profileSets: string[] = ["updatedAt = time::now()"];
@@ -345,9 +345,11 @@ export async function updateCurrentUserProfile(params: {
     profileSets.push("avatarUri = $avatarUri");
     profileBindings.avatarUri = params.avatarUri || null;
   }
-  if (params.age !== undefined) {
-    profileSets.push("age = $age");
-    profileBindings.age = params.age ? Number(params.age) : null;
+  if (params.dateOfBirth !== undefined) {
+    profileSets.push("dateOfBirth = $dateOfBirth");
+    profileBindings.dateOfBirth = params.dateOfBirth
+      ? `<datetime>${params.dateOfBirth}`
+      : null;
   }
 
   const stmts = [
@@ -380,7 +382,7 @@ export async function updateUser(
       profile: {
         name: string;
         avatarUri?: string;
-        age?: number;
+        dateOfBirth?: string;
         locale?: string;
       };
     }
@@ -402,9 +404,11 @@ export async function updateUser(
       profileSets.push("avatarUri = $avatarUri");
       bindings.avatarUri = data.profile.avatarUri || undefined;
     }
-    if (data.profile.age !== undefined) {
-      profileSets.push("age = $age");
-      bindings.age = data.profile.age || undefined;
+    if (data.profile.dateOfBirth !== undefined) {
+      profileSets.push("dateOfBirth = $dateOfBirth");
+      bindings.dateOfBirth = data.profile.dateOfBirth
+        ? `<datetime>${data.profile.dateOfBirth}`
+        : undefined;
     }
     if (data.profile.locale !== undefined) {
       profileSets.push("locale = $locale");

@@ -54,7 +54,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       : [];
     const botToken = parsedBody.botToken as string | undefined;
     const profile = parsedBody.profile as
-      | { name?: string; avatarUri?: string; age?: number }
+      | { name?: string; avatarUri?: string; dateOfBirth?: string }
       | undefined;
     const systemSlug = parsedBody.systemSlug as string | undefined;
     const termsAccepted = Boolean(parsedBody.termsAccepted);
@@ -257,7 +257,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       profile: mergedProfile as {
         name: string;
         avatarUri?: string;
-        age?: number;
+        dateOfBirth?: string;
       },
       channels,
       tenantIds,

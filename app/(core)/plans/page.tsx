@@ -61,18 +61,6 @@ export default function PlansPage() {
     Record<string, unknown> | undefined
   >(undefined);
 
-  const loadSystems = async () => {
-    try {
-      const res = await fetch("/api/core/systems?limit=200", {
-        headers: { Authorization: `Bearer ${systemToken}` },
-      });
-      const json = await res.json();
-      if (json.success) setSystems(json.data ?? []);
-    } catch {
-      /* ignore */
-    }
-  };
-
   const fetchPlans = useCallback(
     async (
       params: CursorParams & { search?: string },
@@ -97,8 +85,23 @@ export default function PlansPage() {
   const triggerReload = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
-    loadSystems();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!systemToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/core/systems?limit=200", {
+          headers: { Authorization: `Bearer ${systemToken}` },
+        });
+        const json = await res.json();
+        if (json.success && !cancelled) setSystems(json.data ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [systemToken]);
 
   const openCreate = () => {
     setFormInitial(undefined);
@@ -250,7 +253,6 @@ export default function PlansPage() {
             ref={formRef}
             key={editItem?.id ?? "create"}
             initialData={formInitial}
-            systems={systems}
           />
 
           <button

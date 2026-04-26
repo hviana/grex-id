@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
@@ -10,7 +10,8 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
-import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import TenantSubform from "@/src/components/subforms/TenantSubform";
+import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface RoleItem {
@@ -32,47 +33,38 @@ export default function RolesPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
   const [systems, setSystems] = useState<SystemOption[]>([]);
-  const [loadingSystems, setLoadingSystems] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<RoleItem | null>(null);
   const [formName, setFormName] = useState("");
-  const [formSystemId, setFormSystemId] = useState("");
   const [formIsBuiltIn, setFormIsBuiltIn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [formSystemSelected, setFormSystemSelected] = useState<
-    { id: string; label: string }[]
-  >([]);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const loadSystems = async () => {
-    setLoadingSystems(true);
-    try {
-      const res = await fetch("/api/core/systems?limit=200", {
-        headers: { Authorization: `Bearer ${systemToken}` },
-      });
-      const json = await res.json();
-      if (json.success) setSystems(json.data ?? []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingSystems(false);
-    }
-  };
+  const tenantRef = useRef<SubformRef>(null);
+  const [tenantInitial, setTenantInitial] = useState<
+    Record<string, unknown> | undefined
+  >(undefined);
 
-  const systemFetchFn = useCallback(
-    async (search: string) => {
-      const q = search.toLowerCase();
-      return systems
-        .filter((s) =>
-          !q || s.name.toLowerCase().includes(q) ||
-          s.slug.toLowerCase().includes(q)
-        )
-        .map((s) => ({ id: s.id, label: s.name }));
-    },
-    [systems],
-  );
+  useEffect(() => {
+    if (!systemToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/core/systems?limit=200", {
+          headers: { Authorization: `Bearer ${systemToken}` },
+        });
+        const json = await res.json();
+        if (json.success && !cancelled) setSystems(json.data ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [systemToken]);
 
   const fetchRoles = useCallback(
     async (
@@ -97,30 +89,21 @@ export default function RolesPage() {
 
   const triggerReload = () => setReloadKey((k) => k + 1);
 
-  useEffect(() => {
-    loadSystems();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const openCreate = () => {
     setFormName("");
-    const firstSys = systems[0];
-    setFormSystemId(firstSys?.id ?? "");
-    setFormSystemSelected(
-      firstSys ? [{ id: firstSys.id, label: firstSys.name }] : [],
-    );
     setFormIsBuiltIn(false);
+    setTenantInitial(undefined);
     setError(null);
     setShowCreate(true);
   };
 
   const openEdit = (item: RoleItem) => {
     setFormName(item.name);
-    setFormSystemId(item.systemId);
-    const sys = systems.find((s) => s.id === item.systemId);
-    setFormSystemSelected(
-      sys ? [{ id: sys.id, label: sys.name }] : [],
-    );
     setFormIsBuiltIn(item.isBuiltIn);
+    setTenantInitial({
+      systemId: item.systemId,
+      systemSlug: systems.find((s) => s.id === item.systemId)?.slug ?? "",
+    });
     setError(null);
     setEditItem(item);
   };
@@ -131,10 +114,11 @@ export default function RolesPage() {
     setError(null);
     setValidationErrors([]);
     try {
+      const tenantData = tenantRef.current?.getData() ?? {};
       const payload = {
         id: editItem?.id,
         name: formName,
-        systemId: formSystemId,
+        systemId: tenantData.systemId ?? "",
         isBuiltIn: formIsBuiltIn,
       };
 
@@ -238,7 +222,6 @@ export default function RolesPage() {
         }}
       />
 
-      {/* Create/Edit Modal */}
       <Modal
         open={showCreate || !!editItem}
         onClose={() => {
@@ -262,21 +245,15 @@ export default function RolesPage() {
               className={inputCls}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("core.roles.system")} *
-            </label>
-            <SearchableSelectField
-              key={editItem?.id ?? "create"}
-              fetchFn={systemFetchFn}
-              showAllOnEmpty
-              initialSelected={formSystemSelected}
-              onChange={(items) => {
-                setFormSystemId(items.length > 0 ? items[0].id : "");
-              }}
-              placeholder={t("core.roles.selectSystem")}
-            />
-          </div>
+
+          <TenantSubform
+            ref={tenantRef}
+            key={editItem?.id ?? "create"}
+            visibleFields={["systemId"]}
+            requiredFields={["systemId"]}
+            initialData={tenantInitial}
+          />
+
           <div className="flex items-center gap-3">
             <input
               type="checkbox"

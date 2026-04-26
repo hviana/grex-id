@@ -27,7 +27,7 @@ interface LeadUpdatePayload {
   profile?: {
     name?: string;
     avatarUri?: string;
-    age?: number;
+    dateOfBirth?: string;
   };
   tags?: string[];
   tenantIds?: string[];
@@ -48,7 +48,9 @@ function parseLeadUpdatePayload(
       return {
         name: typeof p.name === "string" ? p.name : undefined,
         avatarUri: typeof p.avatarUri === "string" ? p.avatarUri : undefined,
-        age: typeof p.age === "number" ? p.age : undefined,
+        dateOfBirth: typeof p.dateOfBirth === "string"
+          ? p.dateOfBirth
+          : undefined,
       };
     })()
     : undefined;

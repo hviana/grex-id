@@ -29,7 +29,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const tenantId = ctx.tenant.id;
     const inferredTenantIds = tenantId ? [tenantId] : [];
     const profile = parsedBody.profile as
-      | { name?: string; avatarUri?: string; age?: number }
+      | { name?: string; avatarUri?: string; dateOfBirth?: string }
       | undefined;
     const ownerId = parsedBody.ownerId as string | undefined;
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;
@@ -113,7 +113,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         profile: profile as {
           name: string;
           avatarUri?: string;
-          age?: number;
+          dateOfBirth?: string;
         },
         channels: submittedChannels,
         tenantIds: inferredTenantIds,
@@ -211,7 +211,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     const tenantId = ctx.tenant.id;
     const id = parsedBody.id as string | undefined;
     const profile = parsedBody.profile as
-      | { name?: string; avatarUri?: string; age?: number }
+      | { name?: string; avatarUri?: string; dateOfBirth?: string }
       | undefined;
     const ownerId = parsedBody.ownerId as string | undefined;
     const faceDescriptor = parsedBody.faceDescriptor as number[] | undefined;

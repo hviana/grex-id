@@ -18,7 +18,13 @@ export default function ProfilePage() {
 
   const [name, setName] = useState(user?.profileId?.name ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.profileId?.avatarUri ?? "");
-  const [age, setAge] = useState(user?.profileId?.age?.toString() ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(
+    user?.profileId?.dateOfBirth
+      ? new Date(user.profileId.dateOfBirth as string).toISOString().split(
+        "T",
+      )[0]
+      : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -27,7 +33,13 @@ export default function ProfilePage() {
     if (user) {
       setName(user.profileId?.name ?? "");
       setAvatarUri(user.profileId?.avatarUri ?? "");
-      setAge(user.profileId?.age?.toString() ?? "");
+      setDateOfBirth(
+        user.profileId?.dateOfBirth
+          ? new Date(user.profileId.dateOfBirth as string).toISOString().split(
+            "T",
+          )[0]
+          : "",
+      );
     }
   }, [user]);
 
@@ -47,7 +59,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           name,
           avatarUri: avatarUri || undefined,
-          age: age ? Number(age) : undefined,
+          dateOfBirth: dateOfBirth || undefined,
         }),
       });
       const json = await res.json();
@@ -60,7 +72,12 @@ export default function ProfilePage() {
         if (json.data) {
           setName(json.data.profileId?.name ?? name);
           setAvatarUri(json.data.profileId?.avatarUri ?? "");
-          setAge(json.data.profileId?.age?.toString() ?? "");
+          setDateOfBirth(
+            json.data.profileId?.dateOfBirth
+              ? new Date(json.data.profileId.dateOfBirth as string)
+                .toISOString().split("T")[0]
+              : "",
+          );
         }
         setSuccess(true);
         await refresh();
@@ -152,15 +169,14 @@ export default function ProfilePage() {
 
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              {t("common.profile.age")}
+              {t("common.profile.dateOfBirth")}
             </label>
             <input
-              type="number"
-              value={age}
-              onChange={(e) => setAge(e.target.value)}
-              min={1}
-              max={150}
-              placeholder={t("common.placeholder.age")}
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+              placeholder={t("common.placeholder.dateOfBirth")}
               className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
             />
           </div>

@@ -4,7 +4,7 @@ import React from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import TenantView from "@/src/components/shared/TenantView";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
@@ -35,15 +35,6 @@ const emptyUploadSection = (): FileAccessUploadSection => ({
   maxFileSizeMB: undefined,
   allowedExtensions: [],
 });
-
-function IsolationBadge({ label, on }: { label: string; on: boolean }) {
-  if (!on) return null;
-  return (
-    <span className="rounded-full bg-[var(--color-secondary-blue)]/20 px-2 py-0.5 text-xs text-[var(--color-secondary-blue)]">
-      {label}
-    </span>
-  );
-}
 
 const formSubforms: SubformConfig[] = [
   {
@@ -79,6 +70,12 @@ export default function FileAccessPage() {
   const { t } = useLocale();
   const { systemToken } = useAuth();
 
+  const ISOLATION_FIELDS = [
+    "isolateSystem",
+    "isolateCompany",
+    "isolateUser",
+  ] as const;
+
   const renderItem = (item: FileAccessItem, controls: React.ReactNode) => {
     const upload = item.upload ?? emptyUploadSection();
 
@@ -109,37 +106,31 @@ export default function FileAccessPage() {
             const anyIsolation = sec.isolateSystem || sec.isolateCompany ||
               sec.isolateUser;
             return (
-              <div key={op} className="text-sm">
-                <span className="font-medium text-[var(--color-light-text)]">
+              <div key={op}>
+                <span className="text-sm font-medium text-[var(--color-light-text)]">
                   {t(`core.fileAccess.${op}`)}:
-                </span>{" "}
+                </span>
                 {anyIsolation
                   ? (
-                    <span className="inline-flex gap-1 flex-wrap">
-                      <IsolationBadge
-                        label={t("core.fileAccess.isolateSystem")}
-                        on={sec.isolateSystem}
-                      />
-                      <IsolationBadge
-                        label={t("core.fileAccess.isolateCompany")}
-                        on={sec.isolateCompany}
-                      />
-                      <IsolationBadge
-                        label={t("core.fileAccess.isolateUser")}
-                        on={sec.isolateUser}
-                      />
-                    </span>
+                    <TenantView
+                      tenant={{
+                        id: `${item.id}-${op}`,
+                        isolateSystem: sec.isolateSystem,
+                        isolateCompany: sec.isolateCompany,
+                        isolateUser: sec.isolateUser,
+                        roles: sec.roles,
+                      }}
+                      visibleFields={[...ISOLATION_FIELDS, "roles"]}
+                      compact
+                    />
                   )
                   : (
-                    <span className="rounded-full bg-[var(--color-primary-green)]/20 px-2 py-0.5 text-xs text-[var(--color-primary-green)]">
-                      {t("core.fileAccess.anonymous")}
-                    </span>
+                    <div className="mt-1">
+                      <span className="rounded-full bg-[var(--color-primary-green)]/20 px-2 py-0.5 text-xs text-[var(--color-primary-green)]">
+                        {t("core.fileAccess.anonymous")}
+                      </span>
+                    </div>
                   )}
-                <TranslatedBadgeList
-                  kind="role"
-                  tokens={sec.roles}
-                  className="mt-1"
-                />
               </div>
             );
           })}
