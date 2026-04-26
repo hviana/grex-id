@@ -8,7 +8,7 @@ DEFINE FIELD createdAt  ON tenant TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt  ON tenant TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_tenant_unique          ON tenant COLUMNS actorId, companyId, systemId UNIQUE;
-DEFINE INDEX idx_tenant_company_system  ON tenant COLUMNS companyId, systemId WHERE actorId IS NONE;
+DEFINE INDEX idx_tenant_company_system  ON tenant COLUMNS companyId, systemId;
 DEFINE INDEX idx_tenant_actor           ON tenant COLUMNS actorId;
 DEFINE INDEX idx_tenant_company         ON tenant COLUMNS companyId;
 DEFINE INDEX idx_tenant_system          ON tenant COLUMNS systemId;
