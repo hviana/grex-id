@@ -102,12 +102,18 @@ informational surfaces show translation only.
 - **Record-reference field naming.** Every field typed `record<T>` ends with
   `Id` (e.g. `profileId`, `ownerId`, `planId`). Every field typed
   `array<record<T>>` ends with `Ids` (e.g. `channelIds`, `tagIds`,
-  `companyIds`). **Tenant references always use `tenantIds:
-  array<record<tenant>>`** — never a single `tenantId`, and never scattered
-  `companyId`/`systemId`/`userId` columns. Table names are singular, in
-  lowercase with words separated by underscores. Fields are in camel case. No
+  `companyIds`). **Tenant references always use
+  `tenantIds:
+  array<record<tenant>>`** — never a single `tenantId`, and never
+  scattered `companyId`/`systemId`/`userId` columns. Table names are singular,
+  in lowercase with words separated by underscores. Fields are in camel case. No
   exceptions. This applies to migrations, contracts, queries, and frontend code
-  uniformly.
+  uniformly. **Non-shared entities** (not cross-tenant) declare
+  `tenantIds DEFINE FIELD ... TYPE array<record<tenant>> LIMIT 1` to enforce
+  single-tenant consistency at the schema level: `subscription`,
+  `payment_method`, `credit_purchase`, `payment`, `connected_app`,
+  `connected_service`, `api_token`, `usage_record`, `credit_expense`,
+  `location`, `tag`, `role`, `plan`, `menu_item`, `setting`, `front_setting`.
 - **Optimization.** Any field used in queries to select/filter data or used as a
   cursor should be indexed.
 - **Single-batched-query rule.** Every query function batches all statements
@@ -159,8 +165,8 @@ subqueries).
   `"argon2-hash"` (defers to `crypto::argon2::generate` inside SurrealQL —
   plaintext never leaves the query layer).
 - All generic functions that scope by tenant accept `tenant: Tenant` (§4.1).
-  Scoping is by `tenant.id` — queries filter `tenantIds CONTAINS $tenantId`
-  on every scoped table.
+  Scoping is by `tenant.id` — queries filter `tenantIds CONTAINS $tenantId` on
+  every scoped table.
 - `GenericListOptions` — table, select, fetch, cursorField, orderBy,
   searchFields, dateRangeField, extraConditions, extraBindings.
 - `GenericCrudOptions` — table, ensureTenant, fields (FieldSpec[]), fetch.
@@ -214,13 +220,13 @@ the entity would be orphaned after association/dissociation.
 
 **Cascade tree** — deterministic depth-first walk on hard-delete:
 
-| Deleting         | Cascade-deletes (after orphan-check)                                                                                                               |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting         | Cascade-deletes (after orphan-check)                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `user`           | `oauth_identity` rows; `entity_channel` from `channelIds`; `profileId` (→ recurse into `profile`); `tenant` rows for this actor; `api_token` rows via those tenants |
-| `lead`           | `entity_channel` from `channelIds`; `profileId` (→ recurse into `profile`)                                                                                           |
-| `profile`        | `entity_channel` from `recoveryChannelIds`                                                                                                         |
-| `company`        | `address` via `billingAddressId`; `tenant` rows → cascade through tenant-linked entities; `subscription` rows; files via `fs.delete`               |
-| `payment_method` | `address` via `billingAddressId`                                                                                                                   |
+| `lead`           | `entity_channel` from `channelIds`; `profileId` (→ recurse into `profile`)                                                                                          |
+| `profile`        | `entity_channel` from `recoveryChannelIds`                                                                                                                          |
+| `company`        | `address` via `billingAddressId`; `tenant` rows → cascade through tenant-linked entities; `subscription` rows; files via `fs.delete`                                |
+| `payment_method` | `address` via `billingAddressId`                                                                                                                                    |
 
 `company` and `system` records themselves are never hard-deleted — only their
 tenant-scoped data is cleaned (§9.4).
@@ -343,35 +349,35 @@ approval invariant. It is independent of `user.channelIds`.
 
 ### 3.4 Core tables (rule-bearing fields only)
 
-| Table                  | Key rules                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`. No identity fields (email/phone) on the row itself.                                                                                                   |
-| `oauth_identity`       | One row per `(provider, providerUserId)` linked to `userId`. Unique composite index on that pair; secondary index on `userId`. Multiple providers per user allowed.                                                                                                                                                                                   |
-| `company`              | Unique `document`; `billingAddressId: option<record<address>>`. No `ownerId` — owner resolved via `tenant.isOwner = true` for this company.                                                                                                                                                                                                           |
-| `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                                                                                                                           |
+| Table                  | Key rules                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`. No identity fields (email/phone) on the row itself.                                                                                                                                      |
+| `oauth_identity`       | One row per `(provider, providerUserId)` linked to `userId`. Unique composite index on that pair; secondary index on `userId`. Multiple providers per user allowed.                                                                                                                                                                                                                                                          |
+| `company`              | Unique `document`; `billingAddressId: option<record<address>>`. No `ownerId` — owner resolved via `tenant.isOwner = true` for this company.                                                                                                                                                                                                                                                                                  |
+| `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                                                                                                                                                                                                  |
 | `tenant`               | Universal scope table. `actorId: option<record>` (user/api_token/connected_app), `companyId: option<record<company>>`, `systemId: option<record<system>>` (all optional; at least one must be set). `isOwner: bool` (marks company owner). `roleIds: array<record<role>>` (roles granted in this tenant context). Unique `(actorId, companyId, systemId)`. Replaces `company_user`, `user_company_system`, `company_system`. |
-| `role`                 | `tenantIds: array<record<tenant>>` (system-only tenants); unique `(name, tenantIds)`; `isBuiltIn`. Seeded built-in roles per system: core gets `superuser`; each subsystem gets `admin`. Additional roles created via admin panel.                                                                                                                                     |
-| `plan`                 | `tenantIds: array<record<tenant>>` (system-only tenants). See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                                                                     |
-| `voucher`              | Unique `code`; `applicableTenantIds: array<record<tenant>>`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                                                                                                                            |
-| `menu_item`            | `parentId` optional, unlimited depth; `tenantIds: array<record<tenant>>` (system-only tenants); index `(tenantIds, parentId, sortOrder)`                                                                                                                                                                                                                        |
-| `subscription`         | `tenantIds: array<record<tenant>>` (company-system tenants). See §7.2                                                                                                                                                                                                                                                                                          |
-| `payment_method`       | `tenantIds: array<record<tenant>>` (company-only tenants); `billingAddressId: record<address>`; `isDefault`                                                                                                                                                                                                                                                      |
-| `credit_purchase`      | `tenantIds: array<record<tenant>>` (company-system tenants); status `pending`                                                                                                                                                                                                                                                                                  |
-| `payment`              | `tenantIds: array<record<tenant>>` (company-system tenants). Unified payment ledger (§7.5)                                                                                                                                                                                                                                                                     |
-| `connected_app`        | `tenantIds: array<record<tenant>>` (app actor + company + system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                                                                                                 |
-| `connected_service`    | `tenantIds: array<record<tenant>>` (user actor + company + system). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                                                                                               |
-| `api_token`            | Row id = universal actor id. `tenantIds: array<record<tenant>>`. Bearer is a JWT carrying that id. Fields: `neverExpires` XOR `expiresAt`, `frontendUse`, `frontendDomains`, `revokedAt`, per-resource `maxOperationCount`, `monthlySpendLimit`                                                                           |
-| `usage_record`         | `tenantIds: array<record<tenant>>` (actor + company + system); upserted for `YYYY-MM`                                                                                                                                                                                                                                                                         |
-| `credit_expense`       | `tenantIds: array<record<tenant>>` (company-system tenants); daily container; unique `(tenantIds, resourceKey, day)`; fields `amount` (cents total), `count` (ops) — both increment via UPSERT                                                                                                                                                                  |
-| `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                                                                                                                            |
-| `delivery`             | One row per handler per event; status `pending`                                                                                                                                                                                                                                                                                                       |
-| `verification_request` | `actionKey` (i18n), `ownerId: record<user`                                                                                                                                                                                                                                                                                                            |
-| `setting`              | `tenantIds: array<record<tenant>>` (system-only tenants). Unique `(key, tenantIds)`. Core-level default = tenant for core system. Server-only consumption.                                                                                                                                                                                |
-| `front_setting`        | Same shape as `setting`, keyed by `(key, tenantIds)`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                                                                                                     |
-| `lead`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `tagIds: array<record<tag>>`                                                                                                                                                                                                                   |
-| `location`             | `tenantIds: array<record<tenant>>` (company-system tenants); address embedded inline                                                                                                                                                                                                                                                                           |
-| `tag`                  | `tenantIds: array<record<tenant>>` (company-system tenants); unique `(name, tenantIds)`                                                                                                                                                                                                                                                                         |
-| `file_access`          | Unique `name` (FULLTEXT); `categoryPattern`, `download` + `upload` sections (see §6)                                                                                                                                                                                                                                                                  |
+| `role`                 | `tenantIds: array<record<tenant>>` (system-only tenants); unique `(name, tenantIds)`; `isBuiltIn`. Seeded built-in roles per system: core gets `superuser`; each subsystem gets `admin`. Additional roles created via admin panel.                                                                                                                                                                                           |
+| `plan`                 | `tenantIds: array<record<tenant>>` (system-only tenants). See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                                                                                                                                   |
+| `voucher`              | Unique `code`; `applicableTenantIds: array<record<tenant>>`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                                                                                                                                                                             |
+| `menu_item`            | `parentId` optional, unlimited depth; `tenantIds: array<record<tenant>>` (system-only tenants); index `(tenantIds, parentId, sortOrder)`                                                                                                                                                                                                                                                                                     |
+| `subscription`         | `tenantIds: array<record<tenant>>` (company-system tenants). See §7.2                                                                                                                                                                                                                                                                                                                                                        |
+| `payment_method`       | `tenantIds: array<record<tenant>>` (company-only tenants); `billingAddressId: record<address>`; `isDefault`                                                                                                                                                                                                                                                                                                                  |
+| `credit_purchase`      | `tenantIds: array<record<tenant>>` (company-system tenants); status `pending`                                                                                                                                                                                                                                                                                                                                                |
+| `payment`              | `tenantIds: array<record<tenant>>` (company-system tenants). Unified payment ledger (§7.5)                                                                                                                                                                                                                                                                                                                                   |
+| `connected_app`        | `tenantIds: array<record<tenant>>` (app actor + company + system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                                                                                                                                                                |
+| `connected_service`    | `tenantIds: array<record<tenant>>` (user actor + company + system). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                                                                                                                                                              |
+| `api_token`            | Row id = universal actor id. `tenantIds: array<record<tenant>>`. Bearer is a JWT carrying that id. Fields: `neverExpires` XOR `expiresAt`, `frontendUse`, `frontendDomains`, `revokedAt`, per-resource `maxOperationCount`, `monthlySpendLimit`                                                                                                                                                                              |
+| `usage_record`         | `tenantIds: array<record<tenant>>` (actor + company + system); upserted for `YYYY-MM`                                                                                                                                                                                                                                                                                                                                        |
+| `credit_expense`       | `tenantIds: array<record<tenant>>` (company-system tenants); daily container; unique `(tenantIds, resourceKey, day)`; fields `amount` (cents total), `count` (ops) — both increment via UPSERT                                                                                                                                                                                                                               |
+| `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `delivery`             | One row per handler per event; status `pending`                                                                                                                                                                                                                                                                                                                                                                              |
+| `verification_request` | `actionKey` (i18n), `ownerId: record<user`                                                                                                                                                                                                                                                                                                                                                                                   |
+| `setting`              | `tenantIds: array<record<tenant>>` (system-only tenants). Unique `(key, tenantIds)`. Core-level default = tenant for core system. Server-only consumption.                                                                                                                                                                                                                                                                   |
+| `front_setting`        | Same shape as `setting`, keyed by `(key, tenantIds)`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                                                                                                                                                                           |
+| `lead`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `tagIds: array<record<tag>>`                                                                                                                                                                                                                                                                                  |
+| `location`             | `tenantIds: array<record<tenant>>` (company-system tenants); address embedded inline                                                                                                                                                                                                                                                                                                                                         |
+| `tag`                  | `tenantIds: array<record<tenant>>` (company-system tenants); unique `(name, tenantIds)`                                                                                                                                                                                                                                                                                                                                      |
+| `file_access`          | Unique `name` (FULLTEXT); `categoryPattern`, `download` + `upload` sections (see §6)                                                                                                                                                                                                                                                                                                                                         |
 
 **Tenant row types.** The `tenant` table serves multiple roles through optional
 fields:
@@ -505,7 +511,7 @@ reloadTenant(tenantId): Promise<void>
 | Refresh                                            | No mutation (extension only — fails if id absent)                             |
 | API token / connected-app create / OAuth authorize | `rememberActor(tenant.id, token.id)`                                          |
 | API token / connected-app revoke                   | Set `revokedAt` in batched query + `forgetActor`                              |
-| Role/membership change in `tenant` (`roleIds`)      | `forgetActor(tenant.id, userId)`                                              |
+| Role/membership change in `tenant` (`roleIds`)     | `forgetActor(tenant.id, userId)`                                              |
 | Data-deletion scoped to a tenant                   | `reloadTenant(tenant.id)`                                                     |
 
 **Boot-time filter:** lazy tenant load =
@@ -527,12 +533,12 @@ interface RequestContext {
 
 Standard ordering (cheapest → costliest):
 
-| # | Middleware                                 | Cost                                                                            | Notes                                                                                                                          |
-| - | ------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| # | Middleware                                 | Cost                                                                            | Notes                                                                                                                           |
+| - | ------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | 1 | `withRateLimit(config)`                    | In-memory sliding window                                                        | Key `tenant.id` or `{ip}` for auth routes. Global plan limit distributed across active actors: `floor(limit/actorCount)` min 1. |
-| 2 | `withAuth({roles?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant` from the bearer token. Superusers bypass role checks. Routes never parse `Authorization` themselves.    |
-| 3 | `withPlanAccess(roleNames[])`              | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed role                                          |
-| 4 | `withEntityLimit(entityName)`              | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                  |
+| 2 | `withAuth({roles?,requireAuthenticated?})` | JWT verify + CORS (for `frontendUse` tokens) + `isActorValid` — **no DB query** | Populates `ctx.tenant` from the bearer token. Superusers bypass role checks. Routes never parse `Authorization` themselves.     |
+| 3 | `withPlanAccess(roleNames[])`              | Core cache read                                                                 | Verifies subscription active + within `currentPeriodEnd` + plan grants ≥1 listed role                                           |
+| 4 | `withEntityLimit(entityName)`              | DB count                                                                        | Plan + voucher modifier from cache; count is the only DB call                                                                   |
 
 Auth routes (`/api/auth/*`) use only `withRateLimit` — no tenant context is
 populated for these routes. All other routes require a bearer token (including
@@ -561,15 +567,15 @@ and tracked in a `Set` so bulk eviction can iterate.
 
 Core-owned caches:
 
-| Slug             | Name             | Loader                     | Invalidated by                                                                     |
-| ---------------- | ---------------- | -------------------------- | ---------------------------------------------------------------------------------- |
-| `core`           | `data`           | `loadCoreData`             | `Core.reload()` after any core-entity mutation                                     |
-| `core`           | `front-data`     | `loadFrontCoreData`        | `FrontCore.reload()`                                                               |
-| `core`           | `jwt-secret`     | from core settings         | `Core.reload()` (derived)                                                          |
-| `core`           | `file-access`    | load rules + compile regex | rule mutations                                                                     |
-| `core`           | `anonymous-jwt`  | JWT via `getSystemTenant`  | `Core.reload()` (derived — JWT secret may change)                                  |
-| `core`           | `sub:<tenantId>` | load subscription by tenant record id          | `Core.reloadSubscription()` after billing mutations                                |
-| `actor-validity` | `<tenantId>`     | `loadActorValidityTenant`  | login/logout/exchange/token CRUD/role change; includes anonymous API token at boot |
+| Slug             | Name             | Loader                                | Invalidated by                                                                     |
+| ---------------- | ---------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `core`           | `data`           | `loadCoreData`                        | `Core.reload()` after any core-entity mutation                                     |
+| `core`           | `front-data`     | `loadFrontCoreData`                   | `FrontCore.reload()`                                                               |
+| `core`           | `jwt-secret`     | from core settings                    | `Core.reload()` (derived)                                                          |
+| `core`           | `file-access`    | load rules + compile regex            | rule mutations                                                                     |
+| `core`           | `anonymous-jwt`  | JWT via `getSystemTenant`             | `Core.reload()` (derived — JWT secret may change)                                  |
+| `core`           | `sub:<tenantId>` | load subscription by tenant record id | `Core.reloadSubscription()` after billing mutations                                |
+| `actor-validity` | `<tenantId>`     | `loadActorValidityTenant`             | login/logout/exchange/token CRUD/role change; includes anonymous API token at boot |
 
 **Core data** is stored as pre-built `Map` indexes (`systemsBySlug`,
 `rolesBySystem`, `plansBySystem`, `menusBySystem`, `plansById`, `vouchersById`,
@@ -580,9 +586,9 @@ caches.
 
 Both use the cache registry. Both are server-only.
 
-- **`Core`**: settings (getSetting with `(key, tenantIds?)` → per-system override
-  via tenant records → core-level → undefined + missing-key log), cached
-  system/role/plan/menu/voucher accessors, subscription helpers
+- **`Core`**: settings (getSetting with `(key, tenantIds?)` → per-system
+  override via tenant records → core-level → undefined + missing-key log),
+  cached system/role/plan/menu/voucher accessors, subscription helpers
   (`getActiveSubscriptionCached`, `ensureSubscription`, `reloadSubscription`,
   `evictAllSubscriptions`), `reload()`. DB credentials from `database.json`.
 - **`FrontCore`**: same shape, reads exclusively from `front_setting`. Frontend
@@ -723,7 +729,8 @@ transfer/operation limits.
   UPSERTs the daily `credit_expense` incrementing both `amount` and `count`.
   `consumeCredits({resourceKey, amount, tenantId})` deducts atomically (plan
   credits first, then purchased) and enforces the per-resourceKey operation cap,
-  all in one batched query (algorithm in §7.3). Scoped via `tenantIds CONTAINS
+  all in one batched query (algorithm in §7.3). Scoped via
+  `tenantIds CONTAINS
   $tenantId`.
 
 ### 4.11 File-cache manager (`server/utils/file-cache.ts`)
@@ -1444,7 +1451,7 @@ Each uses shared primitives. Per-concern rules:
 
 | Concern            | Rule                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Users (admin)      | Invite flow: existing user (channel match) → no new account, creates user-access tenant row `tenant(actorId=user, companyId, systemId)` + adds role to `tenant.roleIds` + notification with `eventKey="auth.event.tenantInvite"`. Admin invariant enforced in same batched query on role-update and user-remove (last-admin rejection).                                                  |
+| Users (admin)      | Invite flow: existing user (channel match) → no new account, creates user-access tenant row `tenant(actorId=user, companyId, systemId)` + adds role to `tenant.roleIds` + notification with `eventKey="auth.event.tenantInvite"`. Admin invariant enforced in same batched query on role-update and user-remove (last-admin rejection).                                          |
 | Tokens             | Create modal: name, description, roles (`MultiBadgeField mode:"search"` aggregating from system roles), `monthlySpendLimit`, `maxOperationCount` (`DynamicKeyValueField`), `neverExpires` XOR `expiresAt`, `frontendUse` + required `frontendDomains` when on. Issued JWT shown **once** in a modal. Delete sets `revokedAt`.                                                    |
 | Connected apps     | No manual create; only via OAuth flow. Revoke deletes `connected_app` + sets `revokedAt` on linked `api_token` in one batch.                                                                                                                                                                                                                                                     |
 | Connected services | List with search (FULLTEXT). "Connect service" button opens catalog modal (initially empty, expandable). Admin sees all users' services + user name; regular users see only their own. Delete with confirmation modal. Component: `ConnectedServicesPage`.                                                                                                                       |
@@ -1690,20 +1697,20 @@ Each phase builds on the previous; nothing later violates earlier invariants.
 
 ## 13. Technical Trade-offs
 
-| Decision                                            | Rationale                                                                                                                         |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| SurrealDB HTTP (backend) + WS (frontend live only)  | Serverless-compatible; WS reserved for reactivity                                                                                 |
-| In-memory rate limiter + actor-validity cache       | Per-instance; multi-instance needs a broadcast channel (API stays the same)                                                       |
-| Cursor pagination only                              | Stable under concurrent writes, no size degradation                                                                               |
-| Event queue inside SurrealDB                        | One fewer infra dep; move to broker if throughput exceeds DB                                                                      |
-| Argon2 inside the DB                                | Zero native modules in app code                                                                                                   |
-| Tailwind-only + emojis                              | Design consistency + zero icon deps                                                                                               |
-| `@panva/jose` JWT                                   | Pure JS, runs everywhere                                                                                                          |
+| Decision                                            | Rationale                                                                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| SurrealDB HTTP (backend) + WS (frontend live only)  | Serverless-compatible; WS reserved for reactivity                                                                                  |
+| In-memory rate limiter + actor-validity cache       | Per-instance; multi-instance needs a broadcast channel (API stays the same)                                                        |
+| Cursor pagination only                              | Stable under concurrent writes, no size degradation                                                                                |
+| Event queue inside SurrealDB                        | One fewer infra dep; move to broker if throughput exceeds DB                                                                       |
+| Argon2 inside the DB                                | Zero native modules in app code                                                                                                    |
+| Tailwind-only + emojis                              | Design consistency + zero icon deps                                                                                                |
+| `@panva/jose` JWT                                   | Pure JS, runs everywhere                                                                                                           |
 | Token embeds full Tenant with tenant record id      | Single source of context for frontend + backend; `tenant.id` as universal scope key; anonymous API token provides real core tenant |
-| Separate `setting` / `front_setting` tables         | Physical guarantee that frontend bundles cannot leak server-only secrets                                                          |
-| Namespace-isolated subframeworks/systems            | No route/name collisions, no scope leakage; module registry is the only wiring                                                    |
-| Two canonical template families                     | Every comms path funnels through `human-confirmation` or `notification` — no bespoke templates per action                         |
-| Universal actor id = `api_token.id` (no token hash) | Uniform JWT verification across user sessions and API tokens; revocation lives in the validity cache                              |
+| Separate `setting` / `front_setting` tables         | Physical guarantee that frontend bundles cannot leak server-only secrets                                                           |
+| Namespace-isolated subframeworks/systems            | No route/name collisions, no scope leakage; module registry is the only wiring                                                     |
+| Two canonical template families                     | Every comms path funnels through `human-confirmation` or `notification` — no bespoke templates per action                          |
+| Universal actor id = `api_token.id` (no token hash) | Uniform JWT verification across user sessions and API tokens; revocation lives in the validity cache                               |
 
 ---
 

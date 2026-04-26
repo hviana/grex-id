@@ -107,7 +107,11 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   // Resolve the company-system tenant row for scoped deletion
-  const tenant = await resolveCompanySystemTenant(companyId, systemId, systemSlug);
+  const tenant = await resolveCompanySystemTenant(
+    companyId,
+    systemId,
+    systemSlug,
+  );
   if (!tenant) {
     return Response.json(
       {

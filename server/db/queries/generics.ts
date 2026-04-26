@@ -501,8 +501,7 @@ export async function genericAssociate(
   }
 
   const setClause = setClauses.join(", ");
-  const query =
-    `UPDATE ${table} SET ${setClause} WHERE id = $id RETURN AFTER;`;
+  const query = `UPDATE ${table} SET ${setClause} WHERE id = $id RETURN AFTER;`;
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const updated = result[0]?.[0];
@@ -689,7 +688,9 @@ async function buildOrphanChecks(
   );
 
   const queries = [
-    `LET $eid = ${typeof id === "string" && id.includes(":") ? `$id` : `"${id}"`};`,
+    `LET $eid = ${
+      typeof id === "string" && id.includes(":") ? `$id` : `"${id}"`
+    };`,
     `LET $isOrphaned = ${checks.join(" AND ")};`,
   ];
 

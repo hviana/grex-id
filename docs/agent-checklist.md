@@ -80,11 +80,12 @@ file crosses a boundary (§2.7).
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with
-      `Id` (single) or `Ids` (multiple - `array<record<T>>`). **Tenant references
-      always use `tenantIds: array<record<tenant>>`** — never a single `tenantId`
-      column, and never scattered `companyId`/`systemId`/`userId` columns. Table
-      names are singular, in lowercase with words separated by underscores. Fields
-      are in camel case.
+      `Id` (single) or `Ids` (multiple - `array<record<T>>`). **Tenant
+      references always use `tenantIds: array<record<tenant>>`** — never a
+      single `tenantId` column, and never scattered
+      `companyId`/`systemId`/`userId` columns. Table names are singular, in
+      lowercase with words separated by underscores. Fields are in camel case.
+      Non-shared entities must declare `LIMIT 1` on `tenantIds` (§2.4).
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
       logic (compositional creates, complex subqueries).
@@ -249,8 +250,8 @@ Before calling done, answer:
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
 - [ ] **Entity cap?** Added to `entityLimits` + `withEntityLimit` (§4.9).
-- [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id`
-      with covering index (§3.1, §3.4).
+- [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id` with
+      covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).
 - [ ] **User-generated text?** Standardize → validate → dedupe before write
       (§4.8).
