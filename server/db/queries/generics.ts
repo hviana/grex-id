@@ -113,7 +113,7 @@ interface TenantBindings {
  * condition when it does. This makes every generic function tenant-aware
  * without callers needing to know the table schema.
  *
- * - tenant.id  → `tenantId = $tenantId`
+ * - tenant.id  → `tenantIds CONTAINS $tenantId`
  * - tenant.systemId  → `systemId = $tenantSystemId`
  * - tenant.companyId → `companyId = $tenantCompanyId`
  * - tenant.actorId   → `actorId = $tenantActorId`
@@ -125,9 +125,9 @@ async function buildTenantConditions(
   const conditions: string[] = [];
   const bindings: Record<string, unknown> = {};
 
-  const hasTenantId = await tableHasField(table, "tenantId");
-  if (hasTenantId) {
-    conditions.push("tenantId = $tenantId");
+  const hasTenantIds = await tableHasField(table, "tenantIds");
+  if (hasTenantIds) {
+    conditions.push("tenantIds CONTAINS $tenantId");
     bindings.tenantId = rid(tenant.id);
   }
 
@@ -171,6 +171,9 @@ async function addTenantConditions(
 /**
  * Returns tenant-derived SET clause parts for CREATE/UPDATE statements.
  * Used alongside addTenantConditions for write operations.
+ *
+ * For `tenantIds` (array field), emits `tenantIds = [$tenantId]` on create.
+ * For scalar fields (systemId, companyId, actorId), emits `field = $binding`.
  */
 async function addTenantSetClauses(
   tenant: Tenant | undefined,
@@ -181,8 +184,12 @@ async function addTenantSetClauses(
   if (!tenant) return;
   const tb = await buildTenantConditions(tenant, table);
   for (const cond of tb.conditions) {
-    // Convert "field = $binding" into a SET clause (same syntax)
-    setClauses.push(cond);
+    if (cond.startsWith("tenantIds CONTAINS")) {
+      // CREATE: set the array with single element
+      setClauses.push("tenantIds = [$tenantId]");
+    } else {
+      setClauses.push(cond);
+    }
   }
   Object.assign(bindings, tb.bindings);
 }
@@ -570,7 +577,7 @@ export async function genericDelete(
   const db = await getDb();
   const entityId = rid(id);
   const bindings: Record<string, unknown> = { id: entityId };
-  const hasTenantId = await tableHasField(opts.table, "tenantId");
+  const hasTenantIds = await tableHasField(opts.table, "tenantIds");
   const tenant = opts.tenant;
 
   // Build tenant-derived WHERE conditions for scoping the initial lookup
@@ -580,15 +587,15 @@ export async function genericDelete(
     ? " AND " + tenantWhere.join(" AND ")
     : "";
 
-  if (hasTenantId && tenant) {
+  if (hasTenantIds && tenant) {
     // ── Path A: tenant-scoped entity → dissociate first ──────────────────
     const dissociateBindings: Record<string, unknown> = { id: entityId };
     const tenantBind = await buildTenantConditions(tenant, opts.table);
     Object.assign(dissociateBindings, tenantBind.bindings);
 
     const queries: string[] = [
-      // Step 1: Dissociate — clear tenantId on the entity matching tenant conditions
-      `UPDATE ${opts.table} SET tenantId = NONE WHERE id = $id${tenantWhereClause};`,
+      // Step 1: Dissociate — remove this tenant from the entity's tenantIds array
+      `UPDATE ${opts.table} SET tenantIds = tenantIds.filter(|x| x != $tenantId) WHERE id = $id${tenantWhereClause};`,
     ];
 
     // Step 2: Orphan-check — is the entity still referenced by any row in any tenant?
@@ -666,8 +673,8 @@ async function buildOrphanChecks(
   if (cascade?.length) {
     for (let i = 0; i < cascade.length; i++) {
       const child = cascade[i];
-      const parentField = child.parentField ?? "tenantId";
-      const isArray = child.isArray ?? false;
+      const parentField = child.parentField ?? "tenantIds";
+      const isArray = child.isArray ?? true;
 
       if (isArray) {
         checks.push(
@@ -709,7 +716,7 @@ async function buildCascadeStatements(
 
   for (const child of cascade) {
     const parentField = child.parentField ?? (
-      (await tableHasField(child.table, "tenantId")) ? "tenantId" : undefined
+      (await tableHasField(child.table, "tenantIds")) ? "tenantIds" : undefined
     );
 
     if (parentField) {

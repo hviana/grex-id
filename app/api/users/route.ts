@@ -205,12 +205,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     actionKey: "auth.action.register",
     payload: { channelIds },
     tenant: {
-      id: ctx.tenant.id,
-      companyId,
-      systemId,
+      tenantIds: [ctx.tenant.id],
       systemSlug: ctx.tenant.systemSlug,
-      actorId: ctx.tenant.actorId!,
-      actorType: "user",
     },
   });
 

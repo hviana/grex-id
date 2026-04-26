@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { Lead, LeadCompanySystem } from "@/src/contracts/lead";
+import type { Lead } from "@/src/contracts/lead";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { clampPageLimit } from "@/src/lib/validators";
 import { runLifecycleHooks } from "@/server/module-registry";
@@ -66,24 +66,24 @@ function normalizeLead<T extends Partial<Lead>>(lead: T | null): T | null {
   return {
     ...lead,
     ...(normalizedId ? { id: normalizedId } : {}),
-    companyIds: normalizeRecordIds(
-      Array.isArray((lead as { companyIds?: unknown[] }).companyIds)
-        ? (lead as { companyIds?: unknown[] }).companyIds ?? []
+    tenantIds: normalizeRecordIds(
+      Array.isArray((lead as { tenantIds?: unknown[] }).tenantIds)
+        ? (lead as { tenantIds?: unknown[] }).tenantIds ?? []
         : [],
     ),
   };
 }
 
-async function getLeadCompanyIds(id: string): Promise<string[]> {
+async function getLeadTenantIds(id: string): Promise<string[]> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
-  const result = await db.query<[{ companyIds?: unknown[] }[]]>(
-    "SELECT companyIds FROM lead WHERE id = $id LIMIT 1",
+  const result = await db.query<[{ tenantIds?: unknown[] }[]]>(
+    "SELECT tenantIds FROM lead WHERE id = $id LIMIT 1",
     { id: rid(leadId) },
   );
 
-  const companyIds = result[0]?.[0]?.companyIds;
-  return normalizeRecordIds(Array.isArray(companyIds) ? companyIds : []);
+  const tenantIds = result[0]?.[0]?.tenantIds;
+  return normalizeRecordIds(Array.isArray(tenantIds) ? tenantIds : []);
 }
 
 export async function listLeads(
@@ -99,42 +99,33 @@ export async function listLeads(
     tenantId: rid(requireRecordId(params.tenantId, "tenantId")),
   };
 
-  let lcsWhere = `tenantId = $tenantId`;
-
+  let cursorClause = "";
   if (params.cursor) {
-    lcsWhere += params.direction === "prev"
-      ? " AND leadId < $cursor"
-      : " AND leadId > $cursor";
+    cursorClause += params.direction === "prev"
+      ? " AND id < $cursor"
+      : " AND id > $cursor";
     bindings.cursor = rid(requireRecordId(params.cursor, "cursor"));
   }
 
   let searchClause = "";
   if (params.search) {
-    searchClause = " AND name @@ $search";
+    searchClause = " AND profileId.name @@ $search";
     bindings.search = params.search;
   }
 
   const query = `
-    LET $lcs = (SELECT leadId, ownerId, createdAt FROM lead_company_system WHERE ${lcsWhere} ORDER BY createdAt DESC LIMIT $limit);
-    LET $ids = $lcs.leadId;
-    SELECT * FROM lead WHERE id IN $ids${searchClause} FETCH profileId, channelIds, tagIds;
-    SELECT leadId, ownerId FROM lead_company_system WHERE ${lcsWhere};`;
+    SELECT * FROM lead
+     WHERE tenantIds CONTAINS $tenantId${searchClause}${cursorClause}
+     ORDER BY createdAt DESC LIMIT $limit
+     FETCH profileId, channelIds, tagIds;`;
 
   const result = await db.query<
-    [null, null, Lead[], { leadId: unknown; ownerId?: string }[]]
+    [Lead[]]
   >(
     query,
     bindings,
   );
-  const leads = result[2] ?? [];
-
-  const lcsRows = result[3] ?? [];
-  const ownerMap = new Map<string, string | undefined>();
-  for (const row of lcsRows) {
-    const leadId = normalizeRecordId(row.leadId);
-    if (!leadId) continue;
-    ownerMap.set(leadId, row.ownerId);
-  }
+  const leads = result[0] ?? [];
 
   const hasMore = leads.length > limit;
   const sliced = hasMore ? leads.slice(0, limit) : leads;
@@ -142,7 +133,6 @@ export async function listLeads(
     const normalizedLead = normalizeLead(lead)!;
     return {
       ...normalizedLead,
-      ownerId: normalizedLead.id ? ownerMap.get(normalizedLead.id) : undefined,
     };
   });
 
@@ -183,13 +173,13 @@ export async function createLead(data: {
   name: string;
   profile: { name: string; avatarUri?: string; age?: number };
   channels: { type: string; value: string }[];
-  companyIds?: string[];
+  tenantIds?: string[];
   tags?: string[];
 }): Promise<Lead> {
   const db = await getDb();
-  const companyIds = normalizeRecordIds(data.companyIds ?? []).map((
-    companyId,
-  ) => rid(requireRecordId(companyId, "companyId")));
+  const tenantIds = normalizeRecordIds(data.tenantIds ?? []).map((
+    tenantId,
+  ) => rid(requireRecordId(tenantId, "tenantId")));
 
   const channelStmts = data.channels
     .map(
@@ -210,7 +200,7 @@ export async function createLead(data: {
     avatarUri: data.profile.avatarUri ?? undefined,
     age: data.profile.age ?? undefined,
     name: data.name,
-    companyIds,
+    tenantIds,
     tagIds: data.tags ?? [],
   };
   data.channels.forEach((c, i) => {
@@ -229,7 +219,7 @@ export async function createLead(data: {
       name = $name,
       profileId = $prof[0].id,
       channelIds = [${channelsArray}],
-      companyIds = $companyIds,
+      tenantIds = $tenantIds,
       tagIds = $tags;
     SELECT * FROM $ld[0].id FETCH profileId, channelIds;`;
 
@@ -243,15 +233,15 @@ export async function updateLead(
   data: {
     name?: string;
     profile?: { name?: string; avatarUri?: string; age?: number };
-    companyIds?: string[];
+    tenantIds?: string[];
     tags?: string[];
   },
 ): Promise<Lead> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
-  const companyIds = data.companyIds !== undefined
-    ? normalizeRecordIds(data.companyIds).map((companyId) =>
-      requireRecordId(companyId, "companyId")
+  const tenantIds = data.tenantIds !== undefined
+    ? normalizeRecordIds(data.tenantIds).map((tenantId) =>
+      requireRecordId(tenantId, "tenantId")
     )
     : undefined;
   const sets: string[] = ["updatedAt = time::now()"];
@@ -265,9 +255,9 @@ export async function updateLead(
     sets.push("tagIds = $tags");
     bindings.tags = data.tags;
   }
-  if (companyIds !== undefined) {
-    sets.push("companyIds = $companyIds");
-    bindings.companyIds = companyIds.map((companyId) => rid(companyId));
+  if (tenantIds !== undefined) {
+    sets.push("tenantIds = $tenantIds");
+    bindings.tenantIds = tenantIds.map((tenantId) => rid(tenantId));
   }
 
   const statements: string[] = [];
@@ -305,22 +295,6 @@ export async function updateLead(
   return normalizeLead(selectResult[0])!;
 }
 
-export async function syncLeadCompanyIds(leadId: string): Promise<string[]> {
-  const db = await getDb();
-  const normalizedLeadId = requireRecordId(leadId, "leadId");
-
-  const result = await db.query<[unknown, { companyId: unknown }[]]>(
-    `LET $rows = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
-     UPDATE $leadId SET companyIds = $rows[*].companyId, updatedAt = time::now();
-     SELECT companyId FROM lead_company_system WHERE leadId = $leadId`,
-    { leadId: rid(normalizedLeadId) },
-  );
-
-  return normalizeRecordIds(
-    (result[1] ?? []).map((row: { companyId: unknown }) => row.companyId),
-  );
-}
-
 export async function deleteLead(id: string): Promise<void> {
   const db = await getDb();
   const leadId = requireRecordId(id, "leadId");
@@ -334,7 +308,6 @@ export async function deleteLead(id: string): Promise<void> {
                   END;
      LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
-     DELETE lead_company_system WHERE leadId = $id;
      DELETE FROM lead WHERE id = $id;
      FOR $cid IN $chIds { DELETE $cid; };
      FOR $rid IN $recIds { DELETE $rid; };
@@ -345,105 +318,57 @@ export async function deleteLead(id: string): Promise<void> {
   );
 }
 
-export async function associateLeadWithCompanySystem(data: {
+export async function associateLeadWithTenant(data: {
   leadId: string;
-  companyId: string;
-  systemId: string;
-  ownerId?: string;
-}): Promise<LeadCompanySystem> {
+  tenantId: string;
+}): Promise<void> {
   const db = await getDb();
   const leadId = requireRecordId(data.leadId, "leadId");
-  const companyId = requireRecordId(data.companyId, "companyId");
-  const systemId = requireRecordId(data.systemId, "systemId");
-  const result = await db.query<[LeadCompanySystem[], unknown]>(
-    `CREATE lead_company_system SET
-      leadId = $leadId,
-      companyId = $companyId,
-      systemId = $systemId,
-      ownerId = $ownerId;
-     LET $rows = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
-     UPDATE $leadId SET companyIds = $rows[*].companyId, updatedAt = time::now();`,
+  const tenantId = requireRecordId(data.tenantId, "tenantId");
+  await db.query(
+    `UPDATE $leadId SET tenantIds += $tenantId, updatedAt = time::now();`,
     {
       leadId: rid(leadId),
-      companyId: rid(companyId),
-      systemId: rid(systemId),
-      ownerId: data.ownerId
-        ? rid(requireRecordId(data.ownerId, "ownerId"))
-        : undefined,
+      tenantId: rid(tenantId),
     },
   );
-  return result[0][0];
 }
 
 export async function isLeadAssociated(
   leadId: string,
-  companyId: string,
-  systemId: string,
+  tenantId: string,
 ): Promise<boolean> {
   const db = await getDb();
   const normalizedLeadId = requireRecordId(leadId, "leadId");
-  const normalizedCompanyId = requireRecordId(companyId, "companyId");
-  const normalizedSystemId = requireRecordId(systemId, "systemId");
+  const normalizedTenantId = requireRecordId(tenantId, "tenantId");
   const result = await db.query<[{ count: number }[]]>(
-    `SELECT count() AS count FROM lead_company_system
-     WHERE leadId = $leadId AND companyId = $companyId AND systemId = $systemId
+    `SELECT count() AS count FROM lead
+     WHERE id = $leadId AND tenantIds CONTAINS $tenantId
      GROUP ALL`,
     {
       leadId: rid(normalizedLeadId),
-      companyId: rid(normalizedCompanyId),
-      systemId: rid(normalizedSystemId),
+      tenantId: rid(normalizedTenantId),
     },
   );
   return (result[0]?.[0]?.count ?? 0) > 0;
 }
 
-export async function updateLeadOwner(
+export async function removeLeadFromTenant(
   leadId: string,
-  companyId: string,
-  systemId: string,
-  ownerId: string | null,
+  tenantId: string,
 ): Promise<void> {
   const db = await getDb();
   const normalizedLeadId = requireRecordId(leadId, "leadId");
-  const normalizedCompanyId = requireRecordId(companyId, "companyId");
-  const normalizedSystemId = requireRecordId(systemId, "systemId");
+  const normalizedTenantId = requireRecordId(tenantId, "tenantId");
   await db.query(
-    `UPDATE lead_company_system
-     SET ownerId = $ownerId
-     WHERE leadId = $leadId AND companyId = $companyId AND systemId = $systemId`,
+    `UPDATE $leadId SET tenantIds = tenantIds.filter(|$x| $x != $tenantId), updatedAt = time::now();`,
     {
       leadId: rid(normalizedLeadId),
-      companyId: rid(normalizedCompanyId),
-      systemId: rid(normalizedSystemId),
-      ownerId: ownerId ? rid(requireRecordId(ownerId, "ownerId")) : undefined,
+      tenantId: rid(normalizedTenantId),
     },
   );
-}
-
-export async function removeLeadFromCompanySystem(
-  leadId: string,
-  companyId: string,
-  systemId: string,
-): Promise<void> {
-  const db = await getDb();
-  const normalizedLeadId = requireRecordId(leadId, "leadId");
-  const normalizedCompanyId = requireRecordId(companyId, "companyId");
-  const normalizedSystemId = requireRecordId(systemId, "systemId");
-  const result = await db.query<[{ companyId: unknown }[]]>(
-    `DELETE FROM lead_company_system
-     WHERE leadId = $leadId AND companyId = $companyId AND systemId = $systemId;
-     LET $remaining = (SELECT companyId FROM lead_company_system WHERE leadId = $leadId);
-     UPDATE $leadId SET companyIds = $remaining[*].companyId, updatedAt = time::now();
-     SELECT companyId FROM lead_company_system WHERE leadId = $leadId`,
-    {
-      leadId: rid(normalizedLeadId),
-      companyId: rid(normalizedCompanyId),
-      systemId: rid(normalizedSystemId),
-    },
-  );
-  const remaining = normalizeRecordIds(
-    (result[0] ?? []).map((row: { companyId: unknown }) => row.companyId),
-  );
+  // If lead has no remaining tenant associations, delete it
+  const remaining = await getLeadTenantIds(normalizedLeadId);
   if (remaining.length === 0) {
     await deleteLead(normalizedLeadId);
   }

@@ -6,7 +6,7 @@ assertServerOnly("users");
 
 /**
  * Lists users scoped to a specific tenant, including per-tenant context roles
- * from `tenant_role`. Cursor-paginated.
+ * from `tenant.roleIds`. Cursor-paginated.
  */
 export async function getUsersForTenant(params: {
   tenantId: string;
@@ -25,8 +25,8 @@ export async function getUsersForTenant(params: {
   };
 
   let query = `SELECT id, profileId, channelIds, createdAt,
-       (SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleId FROM tenant_role
-         WHERE tenantId = $tenantId AND tenantId.actorId = $parent.id LIMIT 1)) AS contextRoles
+       (SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleIds FROM tenant
+         WHERE id = $tenantId AND actorId = $parent.id LIMIT 1)) AS contextRoles
      FROM user
      WHERE id IN (SELECT VALUE actorId FROM tenant
        WHERE id = $tenantId AND actorId != NONE)`;
@@ -106,8 +106,8 @@ export async function getUserContext(
   const db = await getDb();
   const result = await db.query<[string[]]>(
     `SELECT VALUE name FROM role WHERE id IN (
-       SELECT VALUE roleId FROM tenant_role
-       WHERE tenantId = $tenantId
+       SELECT VALUE roleIds FROM tenant
+       WHERE id = $tenantId
        LIMIT 1
      )`,
     {
@@ -131,7 +131,7 @@ export interface InviteExistingUserResult {
 
 /**
  * Idempotently associates an existing user with a tenant by creating a
- * user-access tenant row and `tenant_role` entries. Returns notification
+ * user-access tenant row with `roleIds` entries. Returns notification
  * metadata (system name, company name, inviter/invitee names).
  */
 export async function inviteExistingUser(params: {
@@ -158,16 +158,14 @@ export async function inviteExistingUser(params: {
       },
     ]
   >(
-    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantId = $systemTenantId);
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $systemTenantId);
      LET $existingUserTenant = (SELECT id FROM tenant WHERE id = $tenantId AND actorId = $userId LIMIT 1);
      IF array::len($existingUserTenant) = 0 {
-       LET $userTenant = CREATE tenant SET
+       CREATE tenant SET
          actorId = $userId,
          companyId = $companyId,
-         systemId = $systemId;
-       FOR $rid IN $resolvedRoleIds {
-         CREATE tenant_role SET tenantId = $userTenant[0].id, roleId = $rid;
-       };
+         systemId = $systemId,
+         roleIds = $resolvedRoleIds;
      };
      LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
      LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
@@ -200,7 +198,7 @@ export async function inviteExistingUser(params: {
 
 /**
  * Creates a company-membership tenant row and a user-access tenant row
- * with `tenant_role` entries for a newly created user in a single batched
+ * with `roleIds` for a newly created user in a single batched
  * query (§2.4).
  */
 export async function createTenantAssociations(params: {
@@ -211,18 +209,16 @@ export async function createTenantAssociations(params: {
 }): Promise<void> {
   const db = await getDb();
   await db.query(
-    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantId = $systemTenantId);
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $systemTenantId);
      LET $companyTenant = (SELECT id FROM tenant WHERE actorId = NONE AND companyId = $companyId AND systemId = NONE LIMIT 1);
      IF array::len($companyTenant) = 0 {
        CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
      };
-     LET $userAccessTenant = CREATE tenant SET
+     CREATE tenant SET
        actorId = $userId,
        companyId = $companyId,
-       systemId = $systemId;
-     FOR $rid IN $resolvedRoleIds {
-       CREATE tenant_role SET tenantId = $userAccessTenant[0].id, roleId = $rid;
-     };`,
+       systemId = $systemId,
+       roleIds = $resolvedRoleIds;`,
     {
       userId: rid(params.userId),
       companyId: rid(params.companyId),
@@ -246,15 +242,16 @@ export async function updateUserRolesWithAdminCheck(params: {
   const res = await db.query(
     `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames);
      LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" LIMIT 1)[0];
-     LET $ac = (SELECT count() AS c FROM tenant_role
-       WHERE tenantId = $tenantId
-         AND roleId = $adminRoleId
-         AND tenantId.actorId != $userId)[0].c;
+     LET $otherTenantsWithAdmin = (SELECT count() AS c FROM tenant
+       WHERE id != $tenantId
+         AND actorId != NONE
+         AND roleIds CONTAINS $adminRoleId
+         AND companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0]
+         AND systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0]
+       LIMIT 1)[0].c;
+     LET $ac = $otherTenantsWithAdmin ?? 0;
      IF $ac > 0 OR $resolvedRoleIds CONTAINS $adminRoleId {
-       DELETE tenant_role WHERE tenantId = $tenantId AND tenantId.actorId = $userId;
-       FOR $rid IN $resolvedRoleIds {
-         CREATE tenant_role SET tenantId = $tenantId, roleId = $rid;
-       };
+       UPDATE $tenantId SET roleIds = $resolvedRoleIds;
      };
      RETURN $ac;`,
     {
@@ -282,14 +279,17 @@ export async function deleteUserWithAdminCheck(params: {
   const db = await getDb();
   const res = await db.query(
     `LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" LIMIT 1)[0];
-     LET $isTargetAdmin = (SELECT count() AS c FROM tenant_role
-       WHERE tenantId = $tenantId AND roleId = $adminRoleId LIMIT 1)[0].c;
-     LET $ac = (SELECT count() AS c FROM tenant_role
-       WHERE tenantId = $tenantId
-         AND roleId = $adminRoleId
-         AND tenantId.actorId != $userId)[0].c;
+     LET $tenant = (SELECT roleIds FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $isTargetAdmin = IF $tenant != NONE AND $tenant.roleIds CONTAINS $adminRoleId THEN 1 ELSE 0 END;
+     LET $otherAdminCount = (SELECT count() AS c FROM tenant
+       WHERE id != $tenantId
+         AND actorId != NONE
+         AND roleIds CONTAINS $adminRoleId
+         AND companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0]
+         AND systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0]
+       LIMIT 1)[0].c;
+     LET $ac = $otherAdminCount ?? 0;
      IF $isTargetAdmin = 0 OR $ac > 0 {
-       DELETE tenant_role WHERE tenantId = $tenantId;
        DELETE $tenantId;
      };
      RETURN [$isTargetAdmin, $ac];`,
@@ -459,7 +459,6 @@ export async function deleteUser(id: string): Promise<void> {
                   END;
      LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
-     DELETE tenant_role WHERE tenantId IN (SELECT VALUE id FROM tenant WHERE actorId = $id);
      DELETE tenant WHERE actorId = $id;
      DELETE $id;
      FOR $cid IN $chIds { DELETE $cid; };
@@ -487,7 +486,6 @@ export async function hardDeleteUserIfOrphaned(
                     END;
        LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
        DELETE verification_request WHERE ownerId = $id;
-       DELETE tenant_role WHERE tenantId IN (SELECT VALUE id FROM tenant WHERE actorId = $id);
        DELETE tenant WHERE actorId = $id;
        DELETE $id;
        FOR $cid IN $chIds { DELETE $cid; };

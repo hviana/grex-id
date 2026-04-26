@@ -3,17 +3,15 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  associateLeadWithCompanySystem,
+  associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
   getLeadById,
   isLeadAssociated,
   listLeads,
-  removeLeadFromCompanySystem,
+  removeLeadFromTenant,
   searchUsersInCompanySystem,
-  syncLeadCompanyIds,
   updateLead,
-  updateLeadOwner,
 } from "@/server/db/queries/leads";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -82,7 +80,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
-  const inferredCompanyIds = companyId ? [companyId] : [];
+  const tenantId = ctx.tenant.id;
+  const inferredTenantIds = tenantId ? [tenantId] : [];
   const { profile, ownerId } = body;
   const channels = await parseChannels(body.channels);
   const name = body.name
@@ -124,11 +123,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const existing = await findLeadByChannelValues(channels.map((c) => c.value));
 
   if (existing) {
-    const alreadyAssociated = await isLeadAssociated(
-      existing.id,
-      companyId,
-      systemId,
-    );
+    const alreadyAssociated = await isLeadAssociated(existing.id, tenantId);
     if (alreadyAssociated) {
       return Response.json(
         {
@@ -141,11 +136,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
         { status: 409 },
       );
     }
-    await associateLeadWithCompanySystem({
+    await associateLeadWithTenant({
       leadId: existing.id,
-      companyId,
-      systemId,
-      ownerId,
+      tenantId,
     });
     const refreshedLead = await getLeadById(existing.id);
     return Response.json({
@@ -159,14 +152,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     name: name!,
     profile,
     channels,
-    companyIds: inferredCompanyIds,
+    tenantIds: inferredTenantIds,
     tags,
   });
-  await associateLeadWithCompanySystem({
+  await associateLeadWithTenant({
     leadId: lead.id,
-    companyId,
-    systemId,
-    ownerId,
+    tenantId,
   });
 
   return Response.json({ success: true, data: lead }, { status: 201 });
@@ -207,11 +198,6 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const tags = body.tags !== undefined ? body.tags : undefined;
   const lead = await updateLead(id, { name, profile, tags });
 
-  if (ownerId !== undefined) {
-    await updateLeadOwner(id, companyId, systemId, ownerId || null);
-  }
-
-  await syncLeadCompanyIds(id);
   const refreshedLead = await getLeadById(id);
 
   return Response.json({
@@ -236,7 +222,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
-  await removeLeadFromCompanySystem(id, companyId, systemId);
+  await removeLeadFromTenant(id, ctx.tenant.id);
   return Response.json({ success: true });
 }
 

@@ -37,7 +37,7 @@ async function sendChannelConfirmation(
     ownerType: "user",
     actionKey,
     payload: { channelIds: [channelId] },
-    tenant: { id: tenantId, systemSlug, actorId: userId, actorType: "user" },
+    tenant: { tenantIds: [tenantId], systemSlug },
   });
 
   if (!guardResult.allowed) return guardResult;

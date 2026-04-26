@@ -8,7 +8,7 @@ export type VerificationActorType =
   | "system";
 
 export interface VerificationRequestTenantContext {
-  tenantId?: string;
+  tenantIds?: string[];
   systemSlug?: string;
 }
 
@@ -21,7 +21,7 @@ export interface VerificationRequest {
   expiresAt: string;
   usedAt: string | null;
   payload?: Record<string, unknown> | null;
-  tenantId?: string;
+  tenantIds?: string[];
   systemSlug?: string;
   createdAt: string;
 }

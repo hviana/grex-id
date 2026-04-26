@@ -2,7 +2,7 @@ export interface Plan {
   id: string;
   name: string;
   description: string;
-  tenantId: string; // references system-only tenant row
+  tenantIds: string[]; // references system-only tenant rows
   price: number;
   currency: string;
   recurrenceDays: number;

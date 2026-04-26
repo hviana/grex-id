@@ -41,7 +41,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ) {
       const tenantId = ctx.tenant.id;
       const sensitivity = parseFloat(
-        await getSetting(tenantId, "detection.sensitivity"),
+        await getSetting(companyId, systemId, "detection.sensitivity"),
       );
       try {
         const orphanMatch = await searchOrphanFaceByEmbedding(

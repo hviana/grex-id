@@ -254,14 +254,13 @@ async function checkActorOperationCap(params: {
 async function sendOperationCountAlert(
   sub: {
     id: string;
-    tenantId: string;
   },
   params: { resourceKey: string; tenantId: string },
   _maxCount: number,
 ): Promise<void> {
   const alertResult = await setOperationCountAlertAndFetchOwner({
     subId: String(sub.id),
-    tenantId: sub.tenantId,
+    tenantId: params.tenantId,
     alertMerge: { [params.resourceKey]: true },
   });
 

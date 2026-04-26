@@ -1,7 +1,7 @@
 export interface Role {
   id: string;
   name: string;
-  tenantId: string; // references system-only tenant row
+  tenantIds: string[]; // references system-only tenant rows
   isBuiltIn: boolean;
   createdAt: string;
   updatedAt: string;

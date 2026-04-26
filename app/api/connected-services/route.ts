@@ -39,7 +39,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       extraBindings,
     },
     {
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
       search,
       limit: 50,
     },
@@ -80,7 +80,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<ConnectedService>(
     {
       table: "connected_service",
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
     },
     {
       userId: rid(ctx.tenant.actorId!),
@@ -117,7 +117,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   await genericDelete(
-    { table: "connected_service", tenantId: ctx.tenant.id },
+    { table: "connected_service", tenant: ctx.tenant },
     id,
   );
   return Response.json({ success: true });

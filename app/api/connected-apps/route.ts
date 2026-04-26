@@ -20,7 +20,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
     },
     {
       limit: 50,
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
     },
   );
   return Response.json({ success: true, data: result.data });

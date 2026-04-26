@@ -64,7 +64,11 @@ function normalizeVerificationRequest(
     ...request,
     id: normalizeRecordId(request.id) ?? request.id,
     ownerId: normalizeRecordId(request.ownerId) ?? request.ownerId,
-    tenantId: normalizeRecordId(request.tenantId) ?? request.tenantId,
+    tenantIds: request.tenantIds
+      ? request.tenantIds
+        .map((t) => normalizeRecordId(t) ?? t)
+        .filter(Boolean)
+      : undefined,
   };
 }
 
@@ -274,7 +278,7 @@ export async function markVerificationUsed(requestId: string): Promise<void> {
  *     actionKey = "auth.action.register".
  *
  * Deletes every user in `userIds`, their referenced entity_channel rows,
- * their profile records, tenant rows, tenant_role rows, and all
+ * their profile records, tenant rows, and all
  * verification_requests pointing at them — in a single batched query (§2.4).
  */
 export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
@@ -288,7 +292,6 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
      LET $channelIds = array::distinct(array::flatten($users.channelIds));
      LET $tenantIds = (SELECT VALUE id FROM tenant WHERE actorId IN $targets);
      DELETE verification_request WHERE ownerId IN $targets;
-     DELETE tenant_role WHERE tenantId IN $tenantIds;
      DELETE tenant WHERE actorId IN $targets;
      DELETE user WHERE id IN $targets;
      FOR $cid IN $channelIds { DELETE $cid; };
@@ -304,7 +307,7 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
 /**
  * Resolve the first user-access tenant row for a user (actorId=user with a
  * companyId and systemId set), including the system slug and role names from
- * tenant_role. Returns null when the user has no memberships.
+ * tenant.roleIds. Returns null when the user has no memberships.
  *
  * Used by login and login-fallback flows (§8.4, §8.8).
  */
@@ -328,7 +331,7 @@ export async function resolveUserMembership(userId: string): Promise<
        THEN (SELECT slug FROM system WHERE id = $t[0].systemId LIMIT 1)
        ELSE [] END;
      LET $roleNames = IF array::len($t) > 0
-       THEN (SELECT VALUE roleId.name FROM tenant_role WHERE tenantId = $t[0].id FETCH roleId)
+       THEN (SELECT VALUE name FROM role WHERE id IN $t[0].roleIds)
        ELSE [] END;
      [{ tenantId: $t[0].id, companyId: $t[0].companyId, systemId: $t[0].systemId,
         systemSlug: $sys[0].slug, roles: $roleNames }];`,
@@ -380,10 +383,10 @@ export async function resolveSuperuserExchange(
 
 /**
  * Verify user membership in a (company, system) tenant and resolve slug +
- * role names from tenant_role. Used by the token exchange flow (§8.6).
+ * role names from tenant.roleIds. Used by the token exchange flow (§8.6).
  *
  * Finds the tenant row where actorId=$userId, companyId=$companyId,
- * systemId=$systemId, then resolves roles via tenant_role.
+ * systemId=$systemId, then resolves roles via tenant.roleIds.
  */
 export async function resolveUserExchange(
   userId: string,
@@ -396,14 +399,14 @@ export async function resolveUserExchange(
 }> {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $t = (SELECT id FROM tenant
+    `LET $t = (SELECT id, roleIds FROM tenant
        WHERE actorId = $userId
          AND companyId = $companyId
          AND systemId = $systemId
        LIMIT 1);
      LET $sys = (SELECT slug FROM system WHERE id = $systemId LIMIT 1);
      LET $roleNames = IF array::len($t) > 0
-       THEN (SELECT VALUE roleId.name FROM tenant_role WHERE tenantId = $t[0].id FETCH roleId)
+       THEN (SELECT VALUE name FROM role WHERE id IN $t[0].roleIds)
        ELSE [] END;`,
     {
       userId: rid(userId),
@@ -693,7 +696,7 @@ export async function createApiTokenWithTenant(params: {
        companyId = $companyId,
        systemId = $systemId;
      CREATE $tokenId SET
-       tenantId = $t[0].id,
+       tenantIds = [$t[0].id],
        name = $name,
        description = $description,
        roles = $roles,

@@ -5,7 +5,7 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("plans");
 
 /**
- * Plan has `tenantId: record<tenant>` (system-level tenant) instead of
+ * Plan has `tenantIds: array<record<tenant>>` (system-level tenant) instead of
  * `systemId`. Uses `roles: array<string>` instead of `permissions`.
  */
 export async function createPlan(data: {
@@ -36,7 +36,7 @@ export async function createPlan(data: {
     `CREATE plan SET
       name = $name,
       description = $description,
-      tenantId = $tenantId,
+      tenantIds = [$tenantId],
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,

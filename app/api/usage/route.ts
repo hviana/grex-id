@@ -43,7 +43,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const companyIdsParam = url.searchParams.get("companyIds");
+    const tenantIdsParam = url.searchParams.get("tenantIds");
     const systemIdsParam = url.searchParams.get("systemIds");
     const planIdsParam = url.searchParams.get("planIds");
     const actorIdsParam = url.searchParams.get("actorIds");
@@ -51,17 +51,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
     const creditExpenses = await getCoreCreditExpenses({
       startDate,
       endDate,
-      companyIds: companyIdsParam
-        ? companyIdsParam.split(",").filter(Boolean)
-        : undefined,
-      systemIds: systemIdsParam
-        ? systemIdsParam.split(",").filter(Boolean)
+      tenantIds: tenantIdsParam
+        ? tenantIdsParam.split(",").filter(Boolean)
         : undefined,
       planIds: planIdsParam
         ? planIdsParam.split(",").filter(Boolean)
-        : undefined,
-      actorIds: actorIdsParam
-        ? actorIdsParam.split(",").filter(Boolean)
         : undefined,
     });
 
@@ -74,6 +68,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   // ── Tenant mode ──
   const companyId = ctx.tenant.companyId;
   const systemId = ctx.tenant.systemId;
+  const tenantId = ctx.tenant.id;
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
@@ -109,8 +104,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   const config = await getTenantUsageConfig({
-    systemId,
-    companyId,
+    tenantId: ctx.tenant.id,
     startDate: start,
     endDate: end,
   });
@@ -136,7 +130,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   let storageLimitBytes = config.subscriptionStorageLimit ?? 1073741824;
   storageLimitBytes += config.voucherStorageModifier;
 
-  const cacheLimitResult = await resolveFileCacheLimit({ companyId, systemId });
+  const cacheLimitResult = await resolveFileCacheLimit({ tenant: ctx.tenant });
   const tenantKey = config.systemSlug
     ? `${companyId}:${config.systemSlug}`
     : null;
@@ -149,7 +143,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const creditExpenses = config.creditExpenses;
 
-  const operationCount = await getOperationCount(companyId, systemId);
+  const operationCount = await getOperationCount(ctx.tenant.id);
 
   return Response.json({
     success: true,

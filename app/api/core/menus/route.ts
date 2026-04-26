@@ -26,7 +26,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
   if (tenantId) {
-    extraConditions.push("tenantId = $tenantId");
+    extraConditions.push("tenantIds CONTAINS $tenantId");
     extraBindings.tenantId = tenantId;
   }
 
@@ -84,7 +84,13 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     const result = await genericCreate<MenuItem>(
       {
         table: "menu_item",
-        tenantId,
+        tenant: {
+          id: tenantId,
+          systemId: "",
+          companyId: "",
+          systemSlug: "",
+          roles: [],
+        },
       },
       {
         parentId: parentId || undefined,

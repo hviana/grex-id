@@ -8,9 +8,11 @@ DEFINE FIELD pendingTwoFactorSecret  ON user TYPE option<string>;
 DEFINE FIELD stayLoggedIn     ON user TYPE bool DEFAULT false;
 DEFINE FIELD createdAt    ON user TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt    ON user TYPE datetime DEFAULT time::now();
+DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>> DEFAULT [];
 
 DEFINE INDEX idx_user_profile  ON user FIELDS profileId UNIQUE;
 DEFINE INDEX idx_user_channels ON user FIELDS channelIds;
+DEFINE INDEX idx_user_tenants  ON user FIELDS tenantIds;
 
 DEFINE TABLE oauth_identity SCHEMAFULL;
 DEFINE FIELD userId         ON oauth_identity TYPE record<user>;

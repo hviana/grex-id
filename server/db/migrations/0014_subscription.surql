@@ -1,5 +1,5 @@
 DEFINE TABLE subscription SCHEMAFULL;
-DEFINE FIELD tenantId               ON subscription TYPE record<tenant>;
+DEFINE FIELD tenantIds              ON subscription TYPE array<record<tenant>, 1> DEFAULT [];
 DEFINE FIELD planId                 ON subscription TYPE record<plan>;
 DEFINE FIELD paymentMethodId        ON subscription TYPE option<record<payment_method>>;
 DEFINE FIELD status                 ON subscription TYPE string
@@ -18,8 +18,8 @@ DEFINE FIELD retryPaymentInProgress ON subscription TYPE bool DEFAULT false;
 DEFINE FIELD createdAt              ON subscription TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt              ON subscription TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_sub_tenant          ON subscription FIELDS tenantId;
-DEFINE INDEX idx_sub_tenant_status   ON subscription FIELDS tenantId, status;
+DEFINE INDEX idx_sub_tenant          ON subscription FIELDS tenantIds;
+DEFINE INDEX idx_sub_tenant_status   ON subscription FIELDS tenantIds, status;
 DEFINE INDEX idx_sub_status          ON subscription FIELDS status;
 DEFINE INDEX idx_sub_period_end      ON subscription FIELDS currentPeriodEnd;
 DEFINE INDEX idx_sub_status_period   ON subscription FIELDS status, currentPeriodEnd;

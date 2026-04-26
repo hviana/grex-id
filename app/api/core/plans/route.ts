@@ -23,7 +23,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const extraBindings: Record<string, unknown> = {};
 
   if (tenantId) {
-    extraConditions.push("tenantId = $tenantId");
+    extraConditions.push("tenantIds CONTAINS $tenantId");
     extraBindings.tenantId = tenantId;
   }
 

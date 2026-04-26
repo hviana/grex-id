@@ -11,7 +11,7 @@ assertServerOnly("connected-apps");
  * (§2.4). Returns both the app row and the token row so the route handler
  * can issue a JWT (§8.1) whose actorId is the api_token id.
  *
- * Both connected_app and api_token have `tenantId: record<tenant>` and
+ * Both connected_app and api_token have `tenantIds: array<record<tenant>>` and
  * `roles: array<string>` instead of `permissions`.
  */
 export async function createConnectedAppWithToken(data: {
@@ -26,7 +26,7 @@ export async function createConnectedAppWithToken(data: {
   const db = await getDb();
   const result = await db.query<[unknown, unknown, ConnectedApp[], ApiToken[]]>(
     `LET $tkn = CREATE api_token SET
-      tenantId = $tenantId,
+      tenantIds = [$tenantId],
       tenant = $tenant,
       name = $name,
       description = $description,
@@ -38,7 +38,7 @@ export async function createConnectedAppWithToken(data: {
       frontendDomains = [];
     LET $app = CREATE connected_app SET
       name = $name,
-      tenantId = $tenantId,
+      tenantIds = [$tenantId],
       roles = $roles,
       monthlySpendLimit = $monthlySpendLimit,
       maxOperationCount = $maxOperationCount,
@@ -78,7 +78,7 @@ export async function revokeConnectedApp(id: string): Promise<
       { apiTokenId: string; tenantId: string }[],
     ]
   >(
-    `LET $app = (SELECT apiTokenId, tenantId FROM $id LIMIT 1);
+    `LET $app = (SELECT apiTokenId, tenantIds[0] AS tenantId FROM $id LIMIT 1);
      IF $app[0].apiTokenId != NONE {
        UPDATE $app[0].apiTokenId SET revokedAt = time::now() WHERE revokedAt IS NONE;
      };

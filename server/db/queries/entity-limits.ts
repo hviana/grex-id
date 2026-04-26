@@ -9,7 +9,7 @@ export async function countEntitiesByTenant(
 ): Promise<number> {
   const db = await getDb();
   const countResult = await db.query<[{ count: number }[]]>(
-    `SELECT count() AS count FROM type::table($tableName) WHERE tenantId = $tenantId GROUP ALL;`,
+    `SELECT count() AS count FROM type::table($tableName) WHERE tenantIds CONTAINS $tenantId GROUP ALL;`,
     {
       tenantId: rid(tenantId),
       tableName,

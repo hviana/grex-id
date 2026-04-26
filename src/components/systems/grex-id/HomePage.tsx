@@ -79,7 +79,7 @@ export default function GrexIdHomePage() {
           ...facialData,
           botToken,
           termsAccepted,
-          companyIds: selectedCompany.map((company) => company.id),
+          tenantIds: selectedCompany.map((company) => company.id),
           systemSlug: "grex-id",
         }),
       });

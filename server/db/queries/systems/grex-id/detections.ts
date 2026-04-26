@@ -18,7 +18,7 @@ export interface Detection {
 // Classification rules (multi-tenant):
 // - unknown: detection has no leadId (face did not match any registered lead)
 // - member:  lead is associated with the CURRENT company + system
-//            (has a lead_company_system row for this tenant)
+//            (lead.tenantIds contains the company-system tenant record)
 // - visitor: lead exists in the database but is NOT associated with the
 //            current company + system (it belongs to another tenant, or
 //            has no tenant at all)
@@ -49,7 +49,7 @@ export interface DetectionReportItem {
 // Contact details are member-only. Visitors and unknown never expose
 // email/phone — that information belongs to the tenant that owns the lead.
 
-// Owner is resolved from lead_company_system for the CURRENT tenant only,
+// Owner is resolved from lead.ownerId for the CURRENT tenant only,
 // so owners from other tenants are never leaked. It is only surfaced for
 // members because visitors have no association in this tenant.
 
@@ -153,16 +153,17 @@ export async function listDetections(
     bindings.cursor = params.cursor;
   }
 
-  // Single batched query (§7.2): detections + lead_company_system membership
+  // Single batched query (§7.2): detections + lead membership via tenantIds
   const query =
     `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
 
     LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId IS NOT NONE ORDER BY detectedAt DESC LIMIT $limit);
 
-    SELECT leadId, ownerId FROM lead_company_system
-      WHERE leadId IN $leadIds
-        AND companyId = $companyId
-        AND systemId = $systemId
+    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND actorId IS NONE LIMIT 1)[0];
+
+    SELECT id AS leadId, ownerId FROM lead
+      WHERE id IN $leadIds
+        AND tenantIds CONTAINS $sysTenant
       FETCH ownerId, ownerId.profileId;`;
 
   const result = await db.query<
@@ -319,7 +320,7 @@ export async function getDetectionStats(params: {
   // Single batched query (§7.2):
   //  1) Per-face aggregation via GROUP BY: count, max score, last detectedAt
   //  2) Raw detections for hourly/daily unique-face counting
-  //  3) lead_company_system membership check for classification
+  //  3) lead membership check via tenantIds for classification
   const result = await db.query<
     [
       AggregatedFaceRow[],
@@ -359,7 +360,7 @@ export async function getDetectionStats(params: {
         AND detectedAt >= type::datetime($startDate)
         AND detectedAt <= type::datetime($endDate)${locationFilter};
 
-    // 3) Batch-check lead_company_system for member classification
+    // 3) Batch-check lead membership via tenantIds for classification
     LET $leadIds = (SELECT VALUE array::first(leadId)
       FROM grexid_detection
       WHERE locationId.companyId = $companyId
@@ -369,10 +370,11 @@ export async function getDetectionStats(params: {
         AND leadId IS NOT NONE
       GROUP BY faceId);
 
-    SELECT leadId, ownerId FROM lead_company_system
-      WHERE leadId IN $leadIds
-        AND companyId = $companyId
-        AND systemId = $systemId
+    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND actorId IS NONE LIMIT 1)[0];
+
+    SELECT id AS leadId, ownerId FROM lead
+      WHERE id IN $leadIds
+        AND tenantIds CONTAINS $sysTenant
       FETCH ownerId, ownerId.profileId;`,
     bindings,
   );

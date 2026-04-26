@@ -109,7 +109,7 @@ informational surfaces show translation only.
   in lowercase with words separated by underscores. Fields are in camel case. No
   exceptions. This applies to migrations, contracts, queries, and frontend code
   uniformly. **Non-shared entities** (not cross-tenant) declare
-  `tenantIds DEFINE FIELD ... TYPE array<record<tenant>> LIMIT 1` to enforce
+  `tenantIds DEFINE FIELD ... TYPE array<record<tenant>, 1>` to enforce
   single-tenant consistency at the schema level: `subscription`,
   `payment_method`, `credit_purchase`, `payment`, `connected_app`,
   `connected_service`, `api_token`, `usage_record`, `credit_expense`,

@@ -43,16 +43,16 @@ export async function getSystemTenant(): Promise<Tenant> {
 }
 
 /**
- * Resolve a tenant record by its ID, including roles from tenant_role.
+ * Resolve a tenant record by its ID, including roles from tenant.roleIds.
  */
 export async function resolveTenant(tenantId: string): Promise<Tenant | null> {
   const db = await getDb();
   const result = await db.query<
-    [{ id: string; companyId: string; systemId: string }[]][{ name: string }[]]
+    [{ id: string; companyId: string; systemId: string }[], { name: string }[]]
   >(
-    `LET $t = (SELECT id, companyId, systemId FROM tenant WHERE id = $tenantId LIMIT 1);
+    `LET $t = (SELECT id, companyId, systemId, roleIds FROM tenant WHERE id = $tenantId LIMIT 1);
      IF $t[0] {
-       SELECT VALUE name FROM tenant_role WHERE tenantId = $tenantId FETCH role
+       SELECT VALUE name FROM role WHERE id IN $t[0].roleIds
      } ELSE {
        []
      }`,

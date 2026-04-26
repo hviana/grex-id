@@ -6,17 +6,9 @@ export interface Lead {
   name: string;
   profileId: Profile;
   channelIds: EntityChannel[];
-  companyIds: string[];
+  tenantIds: string[];
+  ownerId?: string;
   tagIds: string[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface LeadCompanySystem {
-  id: string;
-  leadId: string;
-  companyId: string;
-  systemId: string;
-  ownerId?: string;
-  createdAt: string;
 }

@@ -62,7 +62,9 @@ export async function handleAutoRecharge(
 
     await clearAutoRechargeFlag(sub.id);
 
-    await Core.getInstance().reloadSubscription(String(sub.tenantId));
+    await Core.getInstance().reloadSubscription(
+      String(Array.isArray(sub.tenantIds) ? sub.tenantIds[0] : sub.tenantIds),
+    );
     return;
   }
 
@@ -85,7 +87,9 @@ export async function handleAutoRecharge(
   }
 
   const purchaseId = await createAutoRechargePurchase({
-    tenantId: String(sub.tenantId),
+    tenantId: String(
+      Array.isArray(sub.tenantIds) ? sub.tenantIds[0] : sub.tenantIds,
+    ),
     amount: sub.autoRechargeAmount,
     paymentMethodId: String(paymentMethod.id),
     subscriptionId: String(sub.id),
@@ -94,7 +98,9 @@ export async function handleAutoRecharge(
   await publish("process_payment", {
     creditPurchaseId: purchaseId,
     subscriptionId: String(sub.id),
-    tenantId: String(sub.tenantId),
+    tenantId: String(
+      Array.isArray(sub.tenantIds) ? sub.tenantIds[0] : sub.tenantIds,
+    ),
     amount: String(sub.autoRechargeAmount),
     purpose: "auto-recharge",
   });

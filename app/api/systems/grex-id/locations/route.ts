@@ -14,7 +14,7 @@ interface Location {
   id: string;
   name: string;
   description?: string;
-  tenantId: string;
+  tenantIds: string[];
   address: Record<string, string>;
   createdAt: string;
   updatedAt: string;
@@ -27,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
     const location = await genericGetById<Location>(
-      { table: "location", tenantId: ctx.tenant.id },
+      { table: "location", tenant: ctx.tenant },
       id,
     );
     return Response.json({ success: true, data: location });
@@ -46,7 +46,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
       table: "location",
       searchFields: ["name"],
     },
-    { limit, cursor, search, tenantId: ctx.tenant.id },
+    { limit, cursor, search, tenant: ctx.tenant },
   );
 
   return Response.json({ success: true, ...result });
@@ -82,7 +82,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Location>(
     {
       table: "location",
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
     },
     { name, description: description || null, address },
   );
@@ -113,7 +113,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   if (address !== undefined) data.address = address;
 
   const result = await genericUpdate<Location>(
-    { table: "location", tenantId: ctx.tenant.id },
+    { table: "location", tenant: ctx.tenant },
     id,
     data,
   );
@@ -135,7 +135,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "location", tenantId: ctx.tenant.id }, id);
+  await genericDelete({ table: "location", tenant: ctx.tenant }, id);
   return Response.json({ success: true });
 }
 

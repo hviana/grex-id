@@ -17,7 +17,8 @@ export async function GET() {
     // opaque to the public endpoint (the frontend resolves per-system keys on
     // demand via its own helpers).
     for (const [, setting] of data.settings) {
-      if (setting.systemSlug !== "core") continue;
+      // Only expose core-scoped front settings (tenantIds empty or core-level)
+      if (setting.tenantIds && setting.tenantIds.length > 0) continue;
       settingsMap[setting.key] = {
         value: setting.value,
         description: setting.description ?? "",

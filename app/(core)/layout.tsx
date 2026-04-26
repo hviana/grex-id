@@ -13,7 +13,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
   return [
     {
       id: "c0",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.companies"),
       emoji: "🏢",
       componentName: "companies",
@@ -24,7 +24,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c1",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.systems"),
       emoji: "🔌",
       componentName: "systems",
@@ -35,7 +35,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c2",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.roles"),
       emoji: "🛡️",
       componentName: "roles",
@@ -46,7 +46,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c3",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.plans"),
       emoji: "📋",
       componentName: "plans",
@@ -57,7 +57,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c4",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.vouchers"),
       emoji: "🎟️",
       componentName: "vouchers",
@@ -68,7 +68,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c5",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.menus"),
       emoji: "📑",
       componentName: "menus",
@@ -79,7 +79,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c6",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.terms"),
       emoji: "📜",
       componentName: "terms-manager",
@@ -90,7 +90,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c7",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.dataDeletion"),
       emoji: "🗑️",
       componentName: "data-deletion",
@@ -101,7 +101,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c8",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.settings"),
       emoji: "⚙️",
       componentName: "settings",
@@ -112,7 +112,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c9",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.frontSettings"),
       emoji: "🎨",
       componentName: "front-settings",
@@ -123,7 +123,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c10",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.fileAccess"),
       emoji: "📂",
       componentName: "file-access",
@@ -134,7 +134,7 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
     },
     {
       id: "c11",
-      systemId: "",
+      tenantIds: [],
       label: t("core.nav.usage"),
       emoji: "📊",
       componentName: "usage",

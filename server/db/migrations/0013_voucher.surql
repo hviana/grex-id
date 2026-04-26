@@ -1,6 +1,6 @@
 DEFINE TABLE voucher SCHEMAFULL;
 DEFINE FIELD code                  ON voucher TYPE string;
-DEFINE FIELD applicableCompanyIds  ON voucher TYPE array<record<company>>;
+DEFINE FIELD applicableTenantIds  ON voucher TYPE array<record<tenant>, 1> DEFAULT [];
 DEFINE FIELD applicablePlanIds     ON voucher TYPE array<record<plan>> DEFAULT [];
 DEFINE FIELD priceModifier         ON voucher TYPE int;
 DEFINE FIELD entityLimitModifiers  ON voucher TYPE option<object> FLEXIBLE;

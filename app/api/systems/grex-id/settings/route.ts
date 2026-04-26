@@ -11,7 +11,10 @@ async function getHandler(_req: Request, ctx: RequestContext) {
   if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
     return Response.json({ success: true, data: [] });
   }
-  const settings = await getAllSettings(ctx.tenant.id);
+  const settings = await getAllSettings(
+    ctx.tenant.companyId,
+    ctx.tenant.systemId,
+  );
   return Response.json({ success: true, data: settings });
 }
 
@@ -46,7 +49,11 @@ async function putHandler(req: Request, ctx: RequestContext) {
     normalized[key] = String(value);
   }
 
-  const updated = await upsertSettings(ctx.tenant.id, normalized);
+  const updated = await upsertSettings(
+    ctx.tenant.companyId,
+    ctx.tenant.systemId,
+    normalized,
+  );
   return Response.json({ success: true, data: updated });
 }
 

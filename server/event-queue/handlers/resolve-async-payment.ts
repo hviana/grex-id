@@ -52,7 +52,9 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const kind = payment.kind;
   const chargeAmount = payment.amount;
   const isRecurring = kind === "recurring";
-  const effectiveTenantId = String(payment.tenantId);
+  const effectiveTenantId = String(
+    Array.isArray(payment.tenantIds) ? payment.tenantIds[0] : payment.tenantIds,
+  );
 
   const billingUrl = `/billing?systemSlug=${systemSlug}`;
   const ownerName = owner?.name ?? "";
@@ -68,7 +70,9 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
       const remainingPlanCredits = (plan?.planCredits ?? 0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
-        tenantId: effectiveTenantId,
+        tenant: {
+          id: effectiveTenantId,
+        } as import("../../../src/contracts/tenant.ts").Tenant,
       });
 
       await resolveAsyncRecurringSuccess({

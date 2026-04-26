@@ -1,7 +1,7 @@
 export interface ConnectedApp {
   id: string;
   name: string;
-  tenantId: string; // references app actor + company + system tenant row
+  tenantIds: string[]; // references app actor + company + system tenant rows
   roles: string[];
   monthlySpendLimit?: number;
   maxOperationCount?: Record<string, number>; // per-resourceKey operation count cap

@@ -1,6 +1,6 @@
 export interface MenuItem {
   id: string;
-  tenantId: string; // references system-only tenant row
+  tenantIds: string[]; // references system-only tenant rows
   parentId?: string;
   label: string;
   emoji?: string;

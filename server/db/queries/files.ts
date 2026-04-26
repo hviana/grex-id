@@ -8,7 +8,7 @@ assertServerOnly("files");
 
 /**
  * Files use `companyId`/`systemSlug`/`userId` in path segments (via
- * @hviana/surreal-fs). Any DB-level queries scope by `tenantId`.
+ * @hviana/surreal-fs). Any DB-level queries scope by `tenantIds`.
  */
 
 export async function listFiles(
@@ -25,7 +25,7 @@ export async function listFiles(
   const conditions: string[] = [];
 
   if (params.tenantId) {
-    conditions.push("tenantId = $tenantId");
+    conditions.push("tenantIds CONTAINS $tenantId");
     bindings.tenantId = rid(params.tenantId);
   }
   if (params.userId) {
@@ -87,7 +87,7 @@ export async function createFileMetadata(data: {
   const db = await getDb();
   const result = await db.query<[FileMetadata[]]>(
     `CREATE file_metadata SET
-      tenantId = $tenantId,
+      tenantIds = [$tenantId],
       systemSlug = $systemSlug,
       companyId = $companyId,
       userId = $userId,
@@ -111,7 +111,7 @@ export async function getStorageUsage(
 ): Promise<number> {
   const db = await getDb();
   const result = await db.query<[{ total: number }[]]>(
-    "SELECT math::sum(sizeBytes) AS total FROM file_metadata WHERE tenantId = $tenantId GROUP ALL",
+    "SELECT math::sum(sizeBytes) AS total FROM file_metadata WHERE tenantIds CONTAINS $tenantId GROUP ALL",
     { tenantId: rid(tenantId) },
   );
   return result[0]?.[0]?.total ?? 0;

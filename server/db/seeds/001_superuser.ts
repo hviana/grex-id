@@ -59,7 +59,7 @@ export async function seed(db: Surreal): Promise<void> {
      // 6. Built-in superuser role linked to core system-level tenant
      LET $superuserRole = CREATE role SET
        name = "superuser",
-       tenantId = $coreSystemTenant[0].id,
+       tenantIds = [$coreSystemTenant[0].id],
        isBuiltIn = true;
 
      // 7. Company-membership tenant row (user + company, systemId=NONE, isOwner=true)
@@ -73,20 +73,16 @@ export async function seed(db: Surreal): Promise<void> {
      LET $userCompanySystemTenant = CREATE tenant SET
        actorId = $usr[0].id,
        companyId = $coreCompany[0].id,
-       systemId = $coreSystem[0].id;
+       systemId = $coreSystem[0].id,
+       roleIds = [$superuserRole[0].id];
 
-     // 9. Link user-access tenant to superuser role via tenant_role
-     CREATE tenant_role SET
-       tenantId = $userCompanySystemTenant[0].id,
-       roleId = $superuserRole[0].id;
-
-     // 10. Anonymous API token with its own tenant row
+     // 9. Anonymous API token with its own tenant row
      LET $anonTenant = CREATE tenant SET
        actorId = NONE,
        companyId = $coreCompany[0].id,
        systemId = $coreSystem[0].id;
      CREATE api_token:anonymous SET
-       tenantId = $anonTenant[0].id,
+       tenantIds = [$anonTenant[0].id],
        name = "Anonymous Token",
        roles = ["anonymous"],
        neverExpires = true,

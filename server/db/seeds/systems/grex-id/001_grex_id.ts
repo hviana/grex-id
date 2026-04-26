@@ -28,10 +28,10 @@ export async function seed(db: Surreal): Promise<void> {
 
   // 3. Create the admin role for GrexID linked to system-level tenant
   await db.query(
-    `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantId = $systemTenantId)) = 0 {
+    `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "admin",
-         tenantId = $systemTenantId,
+         tenantIds = [$systemTenantId],
          isBuiltIn = true
      }`,
     { systemTenantId },
@@ -43,7 +43,7 @@ export async function seed(db: Surreal): Promise<void> {
     `CREATE plan SET
       name = $name,
       description = $description,
-      tenantId = $systemTenantId,
+      tenantIds = [$systemTenantId],
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,

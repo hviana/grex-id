@@ -8,7 +8,6 @@ assertServerOnly("data-deletion");
 
 const tenantCascadeTables = [
   "subscription",
-  "lead_company_system",
   "usage_record",
   "connected_app",
   "api_token",
@@ -16,13 +15,12 @@ const tenantCascadeTables = [
   "credit_expense",
   "tag",
   "location",
-  "tenant_role",
 ] as const;
 
 /**
  * Deletes all data scoped to a tenant.
  * Does NOT delete the company or system records themselves.
- * All scoped tables use `tenantId` as the single scope key.
+ * All scoped tables use `tenantIds` as the scope key (array of tenant record IDs).
  */
 export async function deleteTenantData(
   tenant: Tenant,

@@ -13,10 +13,9 @@ import {
 } from "@/server/db/queries/auth";
 import { verifyChannels } from "@/server/db/queries/entity-channels";
 import {
-  associateLeadWithCompanySystem,
+  associateLeadWithTenant,
   isLeadAssociated,
   syncLeadChannels,
-  syncLeadCompanyIds,
   updateLead,
 } from "@/server/db/queries/leads";
 import { runLifecycleHooks } from "@/server/module-registry";
@@ -31,7 +30,7 @@ interface LeadUpdatePayload {
     age?: number;
   };
   tags?: string[];
-  companyIds?: string[];
+  tenantIds?: string[];
   systemId?: string;
   systemSlug?: string;
   faceDescriptor?: number[];
@@ -69,9 +68,9 @@ function parseLeadUpdatePayload(
     tags: Array.isArray(payload.tags)
       ? payload.tags.filter((tag): tag is string => typeof tag === "string")
       : undefined,
-    companyIds: Array.isArray(payload.companyIds)
-      ? payload.companyIds.filter(
-        (companyId): companyId is string => typeof companyId === "string",
+    tenantIds: Array.isArray(payload.tenantIds)
+      ? payload.tenantIds.filter(
+        (tenantId): tenantId is string => typeof tenantId === "string",
       )
       : undefined,
     systemId: typeof payload.systemId === "string"
@@ -272,24 +271,14 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await syncLeadChannels(leadId, leadPayload.channels);
     }
 
-    if (leadPayload.systemId && leadPayload.companyIds?.length) {
-      for (const companyId of leadPayload.companyIds) {
-        const alreadyAssociated = await isLeadAssociated(
-          leadId,
-          companyId,
-          leadPayload.systemId,
-        );
+    if (leadPayload.tenantIds?.length) {
+      for (const tenantId of leadPayload.tenantIds) {
+        const alreadyAssociated = await isLeadAssociated(leadId, tenantId);
         if (!alreadyAssociated) {
-          await associateLeadWithCompanySystem({
-            leadId,
-            companyId,
-            systemId: leadPayload.systemId,
-          });
+          await associateLeadWithTenant({ leadId, tenantId });
         }
       }
     }
-
-    await syncLeadCompanyIds(leadId);
 
     if (leadPayload.faceDescriptor && leadPayload.faceDescriptor.length > 0) {
       await runLifecycleHooks("lead:verify", {

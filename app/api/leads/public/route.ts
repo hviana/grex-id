@@ -3,7 +3,7 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  associateLeadWithCompanySystem,
+  associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
   isLeadAssociated,
@@ -41,13 +41,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyIds: string[] = Array.isArray(parsedBody.companyIds)
+    const tenantIds: string[] = Array.isArray(parsedBody.tenantIds)
       ? [
         ...new Set(
-          parsedBody.companyIds.filter((
-            companyId: unknown,
-          ): companyId is string =>
-            typeof companyId === "string" && companyId.trim().length > 0
+          parsedBody.tenantIds.filter((
+            tenantId: unknown,
+          ): tenantId is string =>
+            typeof tenantId === "string" && tenantId.trim().length > 0
           ),
         ),
       ]
@@ -111,7 +111,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (!companyIds || companyIds.length === 0) {
+    if (!tenantIds || tenantIds.length === 0) {
       return Response.json(
         {
           success: false,
@@ -181,7 +181,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           channels,
           profile: mergedProfile,
           tags,
-          companyIds,
+          tenantIds,
           systemId,
           systemSlug,
           faceDescriptor: Array.isArray(faceDescriptor)
@@ -189,11 +189,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
             : undefined,
         },
         tenant: {
-          id: ctx.tenant.id,
+          tenantIds: [ctx.tenant.id],
           systemSlug,
-          companyId: ctx.tenant?.companyId,
-          systemId: ctx.tenant?.systemId,
-          actorType: ctx.tenant.actorType,
         },
       });
 
@@ -263,21 +260,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
         age?: number;
       },
       channels,
-      companyIds,
+      tenantIds,
       tags,
     });
 
-    for (const companyId of companyIds) {
+    for (const tenantRecordId of tenantIds) {
       const alreadyAssociated = await isLeadAssociated(
         lead.id,
-        companyId,
-        systemId,
+        tenantRecordId,
       );
       if (!alreadyAssociated) {
-        await associateLeadWithCompanySystem({
+        await associateLeadWithTenant({
           leadId: lead.id,
-          companyId,
-          systemId,
+          tenantId: tenantRecordId,
         });
       }
     }
@@ -295,11 +290,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       actionKey: "auth.action.leadRegister",
       payload: { channelIds },
       tenant: {
-        id: ctx.tenant.id,
+        tenantIds: [ctx.tenant.id],
         systemSlug,
-        companyId: ctx.tenant?.companyId,
-        systemId: ctx.tenant?.systemId,
-        actorType: ctx.tenant.actorType,
       },
     });
 
@@ -348,7 +340,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   } catch (err) {
     console.error("Public lead route error:", {
-      companyIds: body?.companyIds,
+      tenantIds: body?.tenantIds,
       systemSlug: body?.systemSlug,
       error: err,
     });

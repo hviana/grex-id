@@ -22,7 +22,11 @@ export function startPaymentExpiry(): void {
       console.log(`[expiry] Marked ${payments.length} expired payments.`);
 
       for (const payment of payments) {
-        const tenantId = String(payment.tenantId);
+        const tenantId = String(
+          Array.isArray(payment.tenantIds)
+            ? payment.tenantIds[0]
+            : payment.tenantIds,
+        );
 
         const { owner, systemInfo } = await resolveExpiredPaymentContext({
           tenantId,

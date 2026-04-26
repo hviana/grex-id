@@ -2,7 +2,7 @@ import type { Address } from "./address.ts";
 
 export interface Subscription {
   id: string;
-  tenantId: string; // references company-system tenant row
+  tenantIds: string[]; // references company-system tenant rows
   planId: string;
   paymentMethodId?: string; // optional for free plans
   status: "active" | "past_due" | "cancelled";
@@ -22,7 +22,7 @@ export interface Subscription {
 
 export interface PaymentMethod {
   id: string;
-  tenantId: string; // references company-only tenant row
+  tenantIds: string[]; // references company-only tenant rows
   type: "credit_card";
   cardMask: string;
   cardToken: string;
@@ -35,7 +35,7 @@ export interface PaymentMethod {
 
 export interface CreditPurchase {
   id: string;
-  tenantId: string; // references company-system tenant row
+  tenantIds: string[]; // references company-system tenant rows
   amount: number;
   paymentMethodId: string;
   status: "pending" | "completed" | "failed" | "expired";
@@ -44,7 +44,7 @@ export interface CreditPurchase {
 
 export interface Payment {
   id: string;
-  tenantId: string; // references company-system tenant row
+  tenantIds: string[]; // references company-system tenant rows
   subscriptionId: string;
   amount: number;
   currency: string;

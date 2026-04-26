@@ -13,7 +13,7 @@ export async function getUsageForPeriod(
 
   const result = await db.query<[UsageRecord[]]>(
     `SELECT * FROM usage_record
-     WHERE tenantId = $tenantId AND period = $period
+     WHERE tenantIds CONTAINS $tenantId AND period = $period
      ORDER BY resource ASC`,
     {
       tenantId: rid(tenantId),
@@ -31,7 +31,7 @@ export async function getUsageHistory(
   const db = await getDb();
   const result = await db.query<[{ period: string; value: number }[]]>(
     `SELECT period, math::sum(value) AS value FROM usage_record
-     WHERE tenantId = $tenantId AND resource = $resource
+     WHERE tenantIds CONTAINS $tenantId AND resource = $resource
      GROUP BY period
      ORDER BY period DESC
      LIMIT $limit`,
@@ -54,7 +54,7 @@ export async function getOperationCount(
     ]
   >(
     `SELECT remainingOperationCount FROM subscription
-     WHERE tenantId = $tenantId AND status = "active"
+     WHERE tenantIds CONTAINS $tenantId AND status = "active"
      LIMIT 1`,
     {
       tenantId: rid(tenantId),
@@ -107,13 +107,13 @@ export async function getCoreCreditExpenses(params: {
   };
 
   if (params.tenantIds?.length) {
-    conditions.push("tenantId IN $tenantIds");
+    conditions.push("array::intersects(tenantIds, $tenantIds)");
     bindings.tenantIds = params.tenantIds.map((id) => rid(id));
   }
 
   if (params.planIds?.length) {
     conditions.push(
-      "tenantId IN (SELECT VALUE tenantId FROM subscription WHERE planId IN $planIds AND status = 'active')",
+      "array::intersects(tenantIds, array::flatten((SELECT VALUE tenantIds FROM subscription WHERE planId IN $planIds AND status = 'active')))",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
@@ -154,11 +154,11 @@ export async function upsertUsageRecord(params: {
   const db = await getDb();
   await db.query(
     `UPSERT usage_record SET
-      tenantId = $tenantId,
+      tenantIds = [$tenantId],
       resource = $resource,
       value += $value,
       period = $period
-    WHERE tenantId = $tenantId
+    WHERE tenantIds CONTAINS $tenantId
       AND resource = $resource
       AND period = $period`,
     {
@@ -183,7 +183,6 @@ export async function getTenantUsageConfig(params: {
   const db = await getDb();
   const result = await db.query<
     [
-      { slug: string }[],
       {
         storageLimitBytes: number;
         fileCacheLimitBytes: number;
@@ -196,7 +195,7 @@ export async function getTenantUsageConfig(params: {
     `LET $sub = (SELECT plan.storageLimitBytes AS storageLimitBytes,
        plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
        FROM subscription
-       WHERE tenantId = $tenantId AND status = "active"
+       WHERE tenantIds CONTAINS $tenantId AND status = "active"
        LIMIT 1
        FETCH plan);
      LET $voucherId = $sub[0].voucherId;
@@ -206,7 +205,7 @@ export async function getTenantUsageConfig(params: {
        SELECT NONE FROM NONE;
      };
      SELECT resourceKey, math::sum(amount) AS totalAmount, math::sum(count) AS totalCount FROM credit_expense
-       WHERE tenantId = $tenantId
+       WHERE tenantIds CONTAINS $tenantId
          AND day >= $startDate AND day <= $endDate
        GROUP BY resourceKey
        ORDER BY totalAmount DESC`,

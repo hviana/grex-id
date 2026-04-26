@@ -12,11 +12,11 @@ export async function listTokens(
 ): Promise<ApiToken[]> {
   const db = await getDb();
   const result = await db.query<[ApiToken[]]>(
-    `SELECT id, tenantId, name, description,
+    `SELECT id, tenantIds, name, description,
             roles, monthlySpendLimit, maxOperationCount,
             neverExpires, expiresAt,
             frontendUse, frontendDomains, revokedAt, createdAt
-     FROM api_token WHERE tenantId = $tenantId AND revokedAt IS NONE
+     FROM api_token WHERE tenantIds CONTAINS $tenantId AND revokedAt IS NONE
      ORDER BY createdAt DESC`,
     { tenantId: rid(tenantId) },
   );
@@ -35,7 +35,7 @@ export async function listTokensFiltered(params: {
   const conditions: string[] = ["revokedAt IS NONE"];
 
   if (params.tenantId) {
-    conditions.push("tenantId = $tenantId");
+    conditions.push("tenantIds CONTAINS $tenantId");
     bindings.tenantId = rid(params.tenantId);
   }
 
@@ -59,16 +59,19 @@ export async function revokeToken(id: string): Promise<
 > {
   const db = await getDb();
   const result = await db.query<
-    [{ tenantId: string }[], unknown]
+    [{ tenantIds: string[] }[], unknown]
   >(
-    `SELECT tenantId FROM $id LIMIT 1;
+    `SELECT tenantIds FROM $id LIMIT 1;
      UPDATE $id SET revokedAt = time::now() WHERE revokedAt IS NONE;`,
     { id: rid(id) },
   );
   const row = result[0]?.[0];
-  if (row?.tenantId) {
+  const tenantId = Array.isArray(row?.tenantIds)
+    ? row!.tenantIds[0]
+    : undefined;
+  if (tenantId) {
     return {
-      tenantId: String(row.tenantId),
+      tenantId: String(tenantId),
     };
   }
   return null;

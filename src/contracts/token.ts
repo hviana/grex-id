@@ -4,7 +4,7 @@
  */
 export interface ApiToken {
   id: string;
-  tenantId: string; // references tenant row — universal scope key
+  tenantIds: string[]; // references tenant rows — universal scope key
   name: string;
   description?: string;
   roles: string[]; // duplicated into tenant.roles at issue time

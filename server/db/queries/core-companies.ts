@@ -69,11 +69,11 @@ export async function listCoreCompanies(
       bindings.planIds = params.planIds.map((id) => rid(id));
     }
     conditions.push(
-      `id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantId FROM subscription WHERE status IN $statuses${planClause}))`,
+      `id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE status IN $statuses${planClause}))`,
     );
   } else if (params.planIds?.length) {
     conditions.push(
-      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantId FROM subscription WHERE planId IN $planIds))",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE planId IN $planIds))",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
@@ -121,14 +121,14 @@ export async function listCoreCompanies(
      ORDER BY systemId;
      SELECT
        id,
-       tenantId,
+       tenantIds[0] AS tenantId,
        companyId,
        systemId,
        status,
        (SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planName,
        (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
      FROM subscription
-     WHERE tenantId IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE);`,
+     WHERE tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE);`,
     bindings,
   );
 
@@ -210,7 +210,7 @@ export async function getRevenueChart(params: {
   }
   if (params.systemIds?.length) {
     extraFilters.push(
-      "tenantId IN (SELECT VALUE id FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
+      "tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
     );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }

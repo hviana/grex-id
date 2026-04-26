@@ -37,7 +37,8 @@ export const processPayment: HandlerFn = async (payload) => {
     return;
   }
 
-  const effectiveTenantId = tenantId ?? String(sub.tenantId);
+  const effectiveTenantId = tenantId ??
+    String(Array.isArray(sub.tenantIds) ? sub.tenantIds[0] : sub.tenantIds);
 
   if (
     isRecurring && sub.status === "active" &&
@@ -154,7 +155,9 @@ export const processPayment: HandlerFn = async (payload) => {
       const remainingPlanCredits = (plan.planCredits ?? 0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
-        tenantId: effectiveTenantId,
+        tenant: {
+          id: effectiveTenantId,
+        } as import("../../../src/contracts/tenant.ts").Tenant,
       });
 
       await renewSubscriptionOnSuccess({

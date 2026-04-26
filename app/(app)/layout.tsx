@@ -27,7 +27,7 @@ function getDefaultMenus(): MenuItem[] {
   return [
     {
       id: "_default_usage",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.usage",
       emoji: "📊",
@@ -39,7 +39,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_billing",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.billing",
       emoji: "💳",
@@ -51,7 +51,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_users",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.users",
       emoji: "👥",
@@ -63,7 +63,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_company",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.company",
       emoji: "🏢",
@@ -75,7 +75,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_apps",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.connectedApps",
       emoji: "🔌",
@@ -87,7 +87,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_tokens",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.tokens",
       emoji: "🔑",
@@ -99,7 +99,7 @@ function getDefaultMenus(): MenuItem[] {
     },
     {
       id: "_default_connected_services",
-      systemId: "",
+      tenantIds: [],
       parentId: undefined,
       label: "common.menu.connectedServices",
       emoji: "🔗",

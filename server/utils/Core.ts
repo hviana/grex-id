@@ -52,11 +52,11 @@ export async function loadCoreData(): Promise<CoreData> {
     systemsBySlug.set(s.slug, s);
   }
 
-  // Index roles by systemId (resolve from tenantId → system via tenant table)
+  // Index roles by systemId (resolve from tenantIds → system via tenant table)
   const rolesBySystem = new Map<string, Role[]>();
   for (const r of roles) {
-    // tenantId references a system-only tenant row — resolve the system
-    const key = String((r as Record<string, unknown>).systemId ?? r.tenantId);
+    const raw = (r as unknown as Record<string, unknown>).tenantIds;
+    const key = String(Array.isArray(raw) ? raw[0] : raw);
     let list = rolesBySystem.get(key);
     if (!list) {
       list = [];
@@ -68,9 +68,8 @@ export async function loadCoreData(): Promise<CoreData> {
   const plansBySystem = new Map<string, Plan[]>();
   const plansById = new Map<string, Plan>();
   for (const p of plans) {
-    const sysKey = String(
-      (p as Record<string, unknown>).systemId ?? p.tenantId,
-    );
+    const raw = (p as unknown as Record<string, unknown>).tenantIds;
+    const sysKey = String(Array.isArray(raw) ? raw[0] : raw);
     let list = plansBySystem.get(sysKey);
     if (!list) {
       list = [];
@@ -82,7 +81,8 @@ export async function loadCoreData(): Promise<CoreData> {
 
   const menusBySystem = new Map<string, MenuItem[]>();
   for (const m of menus) {
-    const key = String((m as Record<string, unknown>).systemId ?? m.tenantId);
+    const raw = (m as unknown as Record<string, unknown>).tenantIds;
+    const key = String(Array.isArray(raw) ? raw[0] : raw);
     let list = menusBySystem.get(key);
     if (!list) {
       list = [];
@@ -99,11 +99,9 @@ export async function loadCoreData(): Promise<CoreData> {
   // Settings indexed by tenantId:key — resolve systemSlug from system lookup
   const settingsMap = new Map<string, CoreSetting>();
   for (const setting of settings) {
-    const mapKey = `${
-      String(
-        (setting as Record<string, unknown>).systemSlug ?? setting.tenantId,
-      )
-    }:${setting.key}`;
+    const raw = (setting as unknown as Record<string, unknown>).tenantIds;
+    const tenantKey = String(Array.isArray(raw) ? raw[0] : raw);
+    const mapKey = `${tenantKey}:${setting.key}`;
     settingsMap.set(mapKey, setting);
   }
 

@@ -18,7 +18,7 @@ export function startRecurringBilling(): void {
       for (const sub of subs) {
         await publish("process_payment", {
           subscriptionId: sub.id,
-          tenantId: sub.tenantId,
+          tenantId: sub.tenantIds?.[0],
           planId: sub.planId,
           paymentMethodId: sub.paymentMethodId,
         });

@@ -175,7 +175,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
       const params = new URLSearchParams({ startDate, endDate, mode: "core" });
 
       const cIds = extractIds(companyFilter);
-      if (cIds.length) params.set("companyIds", cIds.join(","));
+      if (cIds.length) params.set("tenantIds", cIds.join(","));
 
       const sysIds = extractIds(systemFilter);
       if (sysIds.length) params.set("systemIds", sysIds.join(","));

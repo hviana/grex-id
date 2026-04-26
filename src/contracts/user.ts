@@ -14,6 +14,7 @@ export interface User {
    */
   pendingTwoFactorSecret?: string;
   stayLoggedIn: boolean;
+  tenantIds: string[];
   createdAt: string;
   updatedAt: string;
 }

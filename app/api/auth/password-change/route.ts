@@ -99,7 +99,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     actionKey: "auth.action.passwordChange",
     payload: { newPasswordHash },
     tenant: {
-      tenantId,
+      tenantIds: [tenantId],
       systemSlug,
     },
   });

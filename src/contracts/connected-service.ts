@@ -1,6 +1,6 @@
 export interface ConnectedService {
   id: string;
-  tenantId: string; // references user actor + company + system tenant row
+  tenantIds: string[]; // references user actor + company + system tenant rows
   name: string;
   data?: Record<string, unknown>;
   createdAt: string;

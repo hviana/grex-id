@@ -38,7 +38,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
     code,
-    applicableCompanyIds,
+    applicableTenantIds,
     applicablePlanIds,
     priceModifier,
     entityLimitModifiers,
@@ -73,7 +73,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   try {
     const voucher = await createVoucher({
       code: await standardizeField("name", sanitizeString(code)),
-      applicableCompanyIds: applicableCompanyIds ?? [],
+      applicableTenantIds: applicableTenantIds ?? [],
       applicablePlanIds: applicablePlanIds ?? [],
       priceModifier: Number(priceModifier ?? 0),
       entityLimitModifiers: entityLimitModifiers &&
@@ -124,7 +124,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   const {
     id,
     code,
-    applicableCompanyIds,
+    applicableTenantIds,
     applicablePlanIds,
     priceModifier,
     entityLimitModifiers,
@@ -158,9 +158,9 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       sets.push("code = $code");
       bindings.code = await standardizeField("name", sanitizeString(code));
     }
-    if (applicableCompanyIds !== undefined) {
-      sets.push("applicableCompanyIds = $applicableCompanyIds");
-      bindings.applicableCompanyIds = applicableCompanyIds;
+    if (applicableTenantIds !== undefined) {
+      sets.push("applicableTenantIds = $applicableTenantIds");
+      bindings.applicableTenantIds = applicableTenantIds;
     }
     if (applicablePlanIds !== undefined) {
       sets.push("applicablePlanIds = $applicablePlanIds");
@@ -235,15 +235,15 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
     // Auto-removal cascade (§7.7): if applicablePlanIds was updated and is non-empty,
     // strip voucherId from subscriptions whose planId is no longer in the list.
-    // Same for applicableCompanyIds — strip from subscriptions whose companyId
+    // Same for applicableTenantIds — strip from subscriptions whose companyId
     // is no longer in the list.
     const shouldCascadePlans = applicablePlanIds !== undefined &&
       Array.isArray(applicablePlanIds) &&
       applicablePlanIds.length > 0;
 
-    const shouldCascadeCompanies = applicableCompanyIds !== undefined &&
-      Array.isArray(applicableCompanyIds) &&
-      applicableCompanyIds.length > 0;
+    const shouldCascadeCompanies = applicableTenantIds !== undefined &&
+      Array.isArray(applicableTenantIds) &&
+      applicableTenantIds.length > 0;
 
     const updated = await updateVoucherWithCascade(
       id,

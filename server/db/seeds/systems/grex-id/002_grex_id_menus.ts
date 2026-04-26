@@ -15,7 +15,7 @@ export async function seed(db: Surreal): Promise<void> {
   }
 
   const existing = await db.query<[{ id: string }[]]>(
-    `SELECT id FROM menu_item WHERE tenantId = $systemTenantId LIMIT 1`,
+    `SELECT id FROM menu_item WHERE tenantIds CONTAINS $systemTenantId LIMIT 1`,
     { systemTenantId },
   );
   if ((existing[0] ?? []).length > 0) {
@@ -25,7 +25,7 @@ export async function seed(db: Surreal): Promise<void> {
 
   await db.query(
     `CREATE menu_item SET
-       tenantId = $systemTenantId,
+       tenantIds = [$systemTenantId],
        label = "systems.grex-id.menu.locations",
        emoji = "📍",
        componentName = "grexid-locations",
@@ -33,7 +33,7 @@ export async function seed(db: Surreal): Promise<void> {
        requiredRoles = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
-       tenantId = $systemTenantId,
+       tenantIds = [$systemTenantId],
        label = "systems.grex-id.menu.leads",
        emoji = "👤",
        componentName = "grexid-leads",
@@ -41,7 +41,7 @@ export async function seed(db: Surreal): Promise<void> {
        requiredRoles = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
-       tenantId = $systemTenantId,
+       tenantIds = [$systemTenantId],
        label = "systems.grex-id.menu.detections",
        emoji = "🎯",
        componentName = "grexid-detections",
@@ -49,7 +49,7 @@ export async function seed(db: Surreal): Promise<void> {
        requiredRoles = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
-       tenantId = $systemTenantId,
+       tenantIds = [$systemTenantId],
        label = "systems.grex-id.menu.settings",
        emoji = "⚙️",
        componentName = "grexid-settings",

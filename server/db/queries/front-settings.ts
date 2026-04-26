@@ -5,7 +5,7 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("front-settings");
 
 /**
- * Front settings are keyed by (key, tenantId). The tenantId references a
+ * Front settings are keyed by (key, tenantIds). The tenantIds references a
  * system-level tenant row. Same shape as `setting` but physically separate
  * table so the frontend bundle cannot leak server secrets.
  */
@@ -17,7 +17,7 @@ export async function listFrontSettings(
 
   let query = "SELECT * FROM front_setting";
   if (tenantId) {
-    query += " WHERE tenantId = $tenantId";
+    query += " WHERE tenantIds CONTAINS $tenantId";
     bindings.tenantId = rid(tenantId);
   }
   query += " ORDER BY key ASC";
@@ -43,7 +43,7 @@ export async function upsertFrontSetting(data: {
   let whereClause = "WHERE key = $key";
   if (data.tenantId) {
     bindings.tenantId = rid(data.tenantId);
-    whereClause += " AND tenantId = $tenantId";
+    whereClause += " AND tenantIds CONTAINS $tenantId";
   }
 
   const result = await db.query<[FrontCoreSetting[]]>(
@@ -67,7 +67,7 @@ export async function deleteFrontSetting(
 
   let query = "DELETE front_setting WHERE key = $key";
   if (tenantId) {
-    query += " AND tenantId = $tenantId";
+    query += " AND tenantIds CONTAINS $tenantId";
     bindings.tenantId = rid(tenantId);
   }
 
@@ -93,7 +93,7 @@ export async function batchUpsertFrontSettings(
     const tKey = `t${i}`;
     bindings[tKey] = item.tenantId ?? "core";
     stmts.push(
-      `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantId = $${tKey}, updatedAt = time::now() WHERE key = $k${i} AND tenantId = $${tKey}`,
+      `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = [$${tKey}], updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
     );
   });
   await db.query(stmts.join("; "), bindings);

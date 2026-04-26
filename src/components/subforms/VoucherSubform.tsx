@@ -37,10 +37,10 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
       if (!ids) return [];
       return ids.map((id) => ({ id: String(id), label: String(id) }));
     });
-    const [applicableCompanyIds, setApplicableCompanyIds] = useState<
+    const [applicableTenantIds, setApplicableCompanyIds] = useState<
       BadgeValue[]
     >(() => {
-      const ids = initialData?.applicableCompanyIds as string[] | undefined;
+      const ids = initialData?.applicableTenantIds as string[] | undefined;
       if (!ids) return [];
       return ids.map((id) => ({ id: String(id), name: String(id) }));
     });
@@ -53,7 +53,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
         return {
           code,
           priceModifier: Number(priceModifier),
-          applicableCompanyIds: applicableCompanyIds.map((b) =>
+          applicableTenantIds: applicableTenantIds.map((b) =>
             typeof b === "string" ? b : b.id ?? b.name
           ),
           applicablePlanIds: applicablePlanIds.map((p) => p.id),
@@ -117,15 +117,15 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
 
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {t("core.vouchers.applicableCompanyIds")}
+            {t("core.vouchers.applicableTenantIds")}
           </label>
           <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
             {t("core.vouchers.applicableCompaniesHint")}
           </p>
           <MultiBadgeField
-            name={t("core.vouchers.applicableCompanyIds")}
+            name={t("core.vouchers.applicableTenantIds")}
             mode="search"
-            value={applicableCompanyIds}
+            value={applicableTenantIds}
             onChange={setApplicableCompanyIds}
             fetchFn={async (search: string) => {
               const params = new URLSearchParams();

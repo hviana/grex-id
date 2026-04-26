@@ -44,11 +44,13 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const action = url.searchParams.get("action");
   const locationId = url.searchParams.get("locationId") ?? undefined;
-  const tenantId = ctx.tenant.id;
+  const companyId = ctx.tenant.companyId;
+  const systemId = ctx.tenant.systemId;
 
   if (action === "stats") {
     const stats = await getDetectionStats({
-      tenantId,
+      companyId,
+      systemId,
       startDate,
       endDate,
       locationId,
@@ -62,7 +64,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const result = await listDetections({
     limit,
     cursor,
-    tenantId,
+    companyId,
+    systemId,
     startDate,
     endDate,
     locationId,

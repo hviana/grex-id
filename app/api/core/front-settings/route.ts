@@ -19,7 +19,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
     key: s.key,
     value: s.value,
     description: s.description ?? "",
-    tenantId: s.tenantId,
+    tenantIds: s.tenantIds,
   }));
 
   const missing = await FrontCore.getInstance().getMissingSettings();

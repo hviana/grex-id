@@ -3,13 +3,11 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import {
-  associateLeadWithCompanySystem,
+  associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
   isLeadAssociated,
-  syncLeadCompanyIds,
   updateLead,
-  updateLeadOwner,
 } from "@/server/db/queries/leads";
 import {
   linkOrphanFaceToLead,
@@ -29,7 +27,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const companyId = ctx.tenant.companyId;
     const systemId = ctx.tenant.systemId;
     const tenantId = ctx.tenant.id;
-    const inferredCompanyIds = companyId ? [companyId] : [];
+    const inferredTenantIds = tenantId ? [tenantId] : [];
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; age?: number }
       | undefined;
@@ -95,16 +93,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
     if (existing) {
       const alreadyAssociated = await isLeadAssociated(
         existing.id,
-        companyId,
-        systemId,
+        tenantId,
       );
 
       if (!alreadyAssociated) {
-        await associateLeadWithCompanySystem({
+        await associateLeadWithTenant({
           leadId: existing.id,
-          companyId,
-          systemId,
-          ownerId,
+          tenantId,
         });
       }
 
@@ -112,7 +107,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
         name: name!,
         profile,
       });
-      await syncLeadCompanyIds(existing.id);
     } else {
       lead = await createLead({
         name: name!,
@@ -122,19 +116,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
           age?: number;
         },
         channels: submittedChannels,
-        companyIds: inferredCompanyIds,
+        tenantIds: inferredTenantIds,
       });
-      await associateLeadWithCompanySystem({
+      await associateLeadWithTenant({
         leadId: lead.id,
-        companyId,
-        systemId,
-        ownerId,
+        tenantId,
       });
     }
 
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(tenantId, "detection.sensitivity"),
+        await getSetting(companyId, systemId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,
@@ -253,13 +245,9 @@ async function putHandler(req: Request, ctx: RequestContext) {
       profile,
     });
 
-    if (ownerId !== undefined) {
-      await updateLeadOwner(id, companyId, systemId, ownerId || null);
-    }
-
     if (faceDescriptor && Array.isArray(faceDescriptor)) {
       const sensitivity = parseFloat(
-        await getSetting(tenantId, "detection.sensitivity"),
+        await getSetting(companyId, systemId, "detection.sensitivity"),
       );
       const orphanMatch = await searchOrphanFaceByEmbedding(
         faceDescriptor,
@@ -278,7 +266,6 @@ async function putHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    await syncLeadCompanyIds(id);
     return Response.json({
       success: true,
       data: lead,

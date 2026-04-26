@@ -175,7 +175,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       actionKey: "auth.action.twoFactorEnable",
       payload: {},
       tenant: {
-        tenantId,
+        tenantIds: [tenantId],
         systemSlug,
       },
     });
@@ -232,7 +232,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       actionKey: "auth.action.twoFactorDisable",
       payload: {},
       tenant: {
-        tenantId,
+        tenantIds: [tenantId],
         systemSlug,
       },
     });

@@ -73,7 +73,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<ApiToken>(
     {
       table: "api_token",
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
     },
     {
       tenantId: ctx.tenant.id,

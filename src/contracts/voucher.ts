@@ -1,7 +1,7 @@
 export interface Voucher {
   id: string;
   code: string;
-  applicableCompanyIds: string[]; // empty = universal
+  applicableTenantIds: string[]; // empty = universal
   applicablePlanIds: string[]; // empty = valid for every plan
   priceModifier: number;
   entityLimitModifiers?: Record<string, number>;

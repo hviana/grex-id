@@ -25,11 +25,6 @@ const KIND_CLASSES: Record<
       "border-[var(--color-primary-green)]/40 bg-[var(--color-primary-green)]/10 text-[var(--color-primary-green)]",
     translation: "text-[var(--color-primary-green)]",
   },
-  permission: {
-    container:
-      "border-[var(--color-secondary-blue)]/40 bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)]",
-    translation: "text-[var(--color-secondary-blue)]",
-  },
   entity: {
     container:
       "border-[var(--color-light-green)]/40 bg-[var(--color-light-green)]/10 text-[var(--color-light-green)]",

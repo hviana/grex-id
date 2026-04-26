@@ -55,7 +55,6 @@ export async function POST(req: Request) {
 
   await publish("resolve_async_payment", {
     paymentId: String(payment.id),
-    tenantId: payment.tenantId ?? undefined,
     transactionId,
     success,
     invoiceUrl: invoiceUrl ?? undefined,

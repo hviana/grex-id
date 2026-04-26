@@ -25,7 +25,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const extraBindings: Record<string, unknown> = {};
 
   if (tenantId) {
-    extraConditions.push("tenantId = $tenantId");
+    extraConditions.push("tenantIds CONTAINS $tenantId");
     extraBindings.tenantId = tenantId;
   }
 
@@ -67,7 +67,13 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       {
         table: "role",
         fields: [{ field: "name", unique: true }],
-        tenantId,
+        tenant: {
+          id: tenantId,
+          systemId: "",
+          companyId: "",
+          systemSlug: "",
+          roles: [],
+        },
       },
       {
         name,

@@ -11,7 +11,7 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("core-settings");
 
 /**
- * Settings are keyed by (key, tenantId). The tenantId references a system-level
+ * Settings are keyed by (key, tenantIds). The tenantIds references a system-level
  * tenant row. The core system's tenant is the core-level default; any other
  * system's tenant is a per-system override.
  */
@@ -23,7 +23,7 @@ export async function listSettings(
 
   let query = "SELECT * FROM setting";
   if (tenantId) {
-    query += " WHERE tenantId = $tenantId";
+    query += " WHERE tenantIds CONTAINS $tenantId";
     bindings.tenantId = rid(tenantId);
   }
   query += " ORDER BY key ASC";
@@ -41,7 +41,7 @@ export async function getSetting(
 
   let query = "SELECT * FROM setting WHERE key = $key";
   if (tenantId) {
-    query += " AND tenantId = $tenantId";
+    query += " AND tenantIds CONTAINS $tenantId";
     bindings.tenantId = rid(tenantId);
   }
   query += " LIMIT 1";
@@ -66,7 +66,7 @@ export async function upsertSetting(data: {
   let whereClause = "WHERE key = $key";
   if (data.tenantId) {
     bindings.tenantId = rid(data.tenantId);
-    whereClause += " AND tenantId = $tenantId";
+    whereClause += " AND tenantIds CONTAINS $tenantId";
   }
 
   const result = await db.query<[CoreSetting[]]>(
@@ -90,7 +90,7 @@ export async function deleteSetting(
 
   let query = "DELETE setting WHERE key = $key";
   if (tenantId) {
-    query += " AND tenantId = $tenantId";
+    query += " AND tenantIds CONTAINS $tenantId";
     bindings.tenantId = rid(tenantId);
   }
 
@@ -116,7 +116,7 @@ export async function batchUpsertSettings(
     const tKey = `t${i}`;
     bindings[tKey] = item.tenantId ?? "core";
     stmts.push(
-      `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantId = $${tKey}, updatedAt = time::now() WHERE key = $k${i} AND tenantId = $${tKey}`,
+      `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = [$${tKey}], updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
     );
   });
   await db.query(stmts.join("; "), bindings);
@@ -151,7 +151,7 @@ export async function fetchActiveSubscription(params: {
   const db = await getDb();
   const result = await db.query<[Subscription[]]>(
     `SELECT * FROM subscription
-     WHERE tenantId = $tenantId AND status = "active"
+     WHERE tenantIds CONTAINS $tenantId AND status = "active"
      LIMIT 1`,
     { tenantId: rid(params.tenantId) },
   );

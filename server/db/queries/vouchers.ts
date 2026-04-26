@@ -19,7 +19,7 @@ export async function findVoucherByCode(code: string): Promise<Voucher | null> {
 
 export async function createVoucher(data: {
   code: string;
-  applicableCompanyIds: string[];
+  applicableTenantIds: string[];
   applicablePlanIds: string[];
   priceModifier: number;
   entityLimitModifiers?: Record<string, number>;
@@ -40,7 +40,7 @@ export async function createVoucher(data: {
   const result = await db.query<[Voucher[]]>(
     `CREATE voucher SET
       code = $code,
-      applicableCompanyIds = $applicableCompanyIds,
+      applicableTenantIds = $applicableTenantIds,
       applicablePlanIds = $applicablePlanIds,
       priceModifier = $priceModifier,
       ${
@@ -60,7 +60,7 @@ export async function createVoucher(data: {
       expiresAt = $expiresAt`,
     {
       ...data,
-      applicableCompanyIds: data.applicableCompanyIds ?? [],
+      applicableTenantIds: data.applicableTenantIds ?? [],
       applicablePlanIds: data.applicablePlanIds ?? [],
       entityLimitModifiers: hasEntityLimitModifiers
         ? data.entityLimitModifiers
@@ -84,8 +84,8 @@ export async function createVoucher(data: {
  * Updates a voucher with auto-removal cascade (§7.7).
  * If applicablePlanIds is non-empty after the update, clears voucherId
  * on any subscription whose planId is NOT in the new list.
- * If applicableCompanyIds is non-empty after the update, clears voucherId
- * on any subscription whose companyId is NOT in the new list.
+ * If applicableTenantIds is non-empty after the update, clears voucherId
+ * on any subscription whose tenantIds has no overlap with the new list.
  * All operations run in one batched query.
  */
 export async function updateVoucherWithCascade(
@@ -93,7 +93,7 @@ export async function updateVoucherWithCascade(
   sets: string[],
   bindings: Record<string, unknown>,
   shouldCascadePlans: boolean,
-  shouldCascadeCompanies: boolean,
+  shouldCascadeTenants: boolean,
 ): Promise<Voucher | null> {
   if (sets.length === 0) return null;
 
@@ -108,11 +108,11 @@ export async function updateVoucherWithCascade(
          AND planId NOT IN $applicablePlanIds;`,
     );
   }
-  if (shouldCascadeCompanies) {
+  if (shouldCascadeTenants) {
     cascadeParts.push(
       `UPDATE subscription SET voucherId = NONE
        WHERE voucherId = $id
-         AND companyId NOT IN $applicableCompanyIds;`,
+         AND tenantIds NONEINSIDE $applicableTenantIds;`,
     );
   }
 

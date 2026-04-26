@@ -215,7 +215,7 @@ export async function seed(db: Surreal): Promise<void> {
 
   for (const setting of defaults) {
     const existing = await db.query<[{ id: string }[]]>(
-      `SELECT id FROM setting WHERE key = $key AND tenantId = $tenantId LIMIT 1`,
+      `SELECT id FROM setting WHERE key = $key AND tenantIds CONTAINS $tenantId LIMIT 1`,
       { key: setting.key, tenantId },
     );
     if ((existing[0] ?? []).length > 0) continue;
@@ -224,7 +224,7 @@ export async function seed(db: Surreal): Promise<void> {
         key = $key,
         value = $value,
         description = $description,
-        tenantId = $tenantId`,
+        tenantIds = [$tenantId]`,
       {
         key: setting.key,
         value: setting.value,

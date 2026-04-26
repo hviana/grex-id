@@ -85,7 +85,8 @@ file crosses a boundary (§2.7).
       single `tenantId` column, and never scattered
       `companyId`/`systemId`/`userId` columns. Table names are singular, in
       lowercase with words separated by underscores. Fields are in camel case.
-      Non-shared entities must declare `LIMIT 1` on `tenantIds` (§2.4).
+      Non-shared entities must declare `TYPE array<record<tenant>, 1>` on
+      `tenantIds` (§2.4).
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
       logic (compositional creates, complex subqueries).

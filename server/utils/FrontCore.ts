@@ -22,8 +22,8 @@ export async function loadFrontCoreData(): Promise<FrontCoreData> {
 
   const settings = new Map<string, FrontCoreSetting>();
   for (const setting of rows) {
-    const slug = setting.systemSlug && setting.systemSlug.length > 0
-      ? setting.systemSlug
+    const slug = setting.tenantIds && setting.tenantIds.length > 0
+      ? setting.tenantIds[0]
       : "core";
     const mapKey = slug + ":" + setting.key;
     settings.set(mapKey, setting);

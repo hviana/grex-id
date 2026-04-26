@@ -14,9 +14,9 @@ assertServerOnly("verification");
  * in a single batched query. If both pass, atomically creates the new
  * verification_request row.
  *
- * verification_request has `tenantId: record<tenant>` instead of separate
+ * verification_request has `tenantIds: array<record<tenant>>` instead of separate
  * `companyId`/`systemId`/`systemSlug`/`actorId`/`actorType` fields.
- * The tenantId links to the full tenant context.
+ * The tenantIds links to the full tenant context.
  *
  * Returns an array where the last element is a status object with:
  *   blockedByPrevious, blockedByRateLimit, allowed
@@ -66,7 +66,7 @@ export async function atomicCommunicationGuard(params: {
         token = $verificationToken,
         expiresAt = $expiresAt,
         payload = $payload,
-        tenantId = $tenantId
+        tenantIds = [$tenantId]
     ) ELSE [] END;
 
     [{
@@ -83,8 +83,8 @@ export async function atomicCommunicationGuard(params: {
       payload: params.payload ?? undefined,
       windowStart: params.windowStart,
       maxCount: params.maxCount,
-      tenantId: params.tenant?.tenantId
-        ? rid(params.tenant.tenantId)
+      tenantId: params.tenant?.tenantIds?.[0]
+        ? rid(params.tenant.tenantIds[0])
         : undefined,
     },
   );

@@ -27,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     {
       search: search ?? undefined,
       limit: search ? 20 : 200,
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
     },
   );
 
@@ -68,7 +68,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Tag>(
     {
       table: "tag",
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
       fields: [{ field: "name", unique: true, entity: "tag" }],
     },
     { name, color },
@@ -140,7 +140,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const result = await genericUpdate<Tag>(
     {
       table: "tag",
-      tenantId: ctx.tenant.id,
+      tenant: ctx.tenant,
       fields: name ? [{ field: "name", unique: true, entity: "tag" }] : [],
     },
     id,
@@ -183,7 +183,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "tag", tenantId: ctx.tenant.id }, id);
+  await genericDelete({ table: "tag", tenant: ctx.tenant }, id);
   return Response.json({ success: true });
 }
 

@@ -106,7 +106,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const plan = await core.getPlanById(planId);
-    if (!plan || String(plan.systemId) !== String(systemId)) {
+    if (!plan) {
       return Response.json(
         {
           success: false,
@@ -350,7 +350,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const applicableIds = voucher.applicableCompanyIds as string[];
+    const applicableIds = voucher.applicableTenantIds as string[];
     if (applicableIds && applicableIds.length > 0) {
       const companyIdStr = String(companyId);
       if (!applicableIds.some((id) => String(id) === companyIdStr)) {
