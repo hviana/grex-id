@@ -47,8 +47,8 @@ file crosses a boundary (§2.7).
       `DynamicKeyValueField`, `FileUploadField`, `TagSearch` per §10.4 policy.
 - [ ] Entity channels → `EntityChannelsSubform` (never raw email/phone inputs
       for lists).
-- [ ] Role/permission labels → `TranslatedBadge` (§2.3.1). Plan cards → shared
-      `PlanCard` (§9.6).
+- [ ] Role labels → `TranslatedBadge` (§2.3.1). Plan cards → shared `PlanCard`
+      (§9.6).
 - [ ] Sidebar never shows "Core" in `(app)`; shows Spinner while system loads
       (§9.2).
 - [ ] Post-login routes to `/entry`, then layout resolves first menu item
@@ -63,7 +63,7 @@ file crosses a boundary (§2.7).
       `frameworks/<name>`).
 - [ ] DB-stored display labels hold i18n keys; machine identifiers stay raw
       (§2.3).
-- [ ] Role/permission/entity/resource tokens follow §2.3.1 key structure.
+- [ ] Role/entity/resource tokens follow §2.3.1 key structure.
 
 ---
 
@@ -73,6 +73,10 @@ file crosses a boundary (§2.7).
       only (§3.1).
 - [ ] Compositional model: separate tables linked via `record<>`; parent holds
       link, child has no back-pointer (§2.4, §3.3).
+- [ ] Cascade deletion: dissociate → orphan-check → hard-delete cycle; shared
+      data dissociated first, hard-deleted only if orphaned across all tenants
+      (§2.4.2). Human confirmation required before dissociating `user` or `lead`
+      from a tenant.
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with
@@ -88,7 +92,7 @@ file crosses a boundary (§2.7).
       entity-limit → write (§4.8, §2.4).
 - [ ] FULLTEXT on searchable text; indexes on WHERE/ORDER BY columns (§3.1).
 - [ ] Idempotent CREATE on unique keys: existence-check, never raw CREATE
-      (§3.4).
+      (§3.4). Tenant rows unique on `(actorId, companyId, systemId)`.
 - [ ] Live-query tables declare `PERMISSIONS FOR select` (§3.1).
 - [ ] Migrations globally numbered, one table per file; seeds idempotent (§3.5).
 
@@ -105,18 +109,24 @@ file crosses a boundary (§2.7).
 
 ---
 
-## 7. Tenant & Auth (§2.5, §4.1, §8)
+## 7. Tenant & Auth (§2.5, §2.10, §4.1, §8)
 
+- [ ] **Token–Tenant boundary:** frontend uses tokens only; backend uses tenant
+      contracts. No loose `companyId`/`systemId`/`roles` in forms, hooks, or
+      fetch wrappers (§2.10).
 - [ ] Backend reads tenant from `ctx.tenant`/`ctx.claims` only — never query
-      strings, cookies, bodies (§2.5).
+      strings, cookies, bodies (§2.5). Tenant includes `tenant.id` (the record
+      ID used as universal scope key).
 - [ ] All functions accept `tenant: Tenant`, not loose ids (§2.5).
+- [ ] Scoped tables use `tenantId: record<tenant>` instead of separate
+      `companyId`/`systemId` fields (§3.4).
 - [ ] Context change only via `/api/auth/exchange`; API/connected-app tokens
       non-exchangeable (§8.6).
 - [ ] Frontend stores opaque token only; derives context from `useAuth().tenant`
       (§10.2).
-- [ ] Every tenant corresponds to a real `(company, system)` pair — no
-      synthesized tenants. Anonymous operations use the seeded anonymous API
-      token carrying the `"anonymous"` permission (§2.5, §3.5).
+- [ ] Every tenant corresponds to a real `tenant` table row. Anonymous
+      operations use the seeded anonymous API token carrying the `"anonymous"`
+      role (§2.5, §3.5).
 
 ---
 
@@ -146,7 +156,8 @@ Every durable change mutates the cache in the same request:
 - [ ] Exchange → `forgetActor(old)` + `rememberActor(new)`.
 - [ ] Token create/OAuth authorize → `rememberActor`. Revoke → `revokedAt` +
       `forgetActor`.
-- [ ] Role/membership change → `forgetActor`. Data-deletion → `reloadTenant`.
+- [ ] Role/membership change in `tenant`/`tenant_role` → `forgetActor`.
+      Data-deletion → `reloadTenant`.
 
 ---
 
@@ -168,7 +179,8 @@ Every durable change mutates the cache in the same request:
 ## 11. Billing, Credits, Limits (§7)
 
 - [ ] `consumeCredits` before side effects — handles
-      plan→purchased→op-cap→auto-recharge→alert atomically (§7.3).
+      plan→purchased→op-cap→auto-recharge→alert atomically via `tenantId`
+      (§7.3).
 - [ ] Entity limits via `withEntityLimit`; op-count caps via
       `maxOperationCount`; rate limits via plan `apiRateLimit` (§4.9).
 - [ ] `trackUsage` after chargeable ops; `trackCreditExpense` upserts daily
@@ -190,7 +202,7 @@ Every durable change mutates the cache in the same request:
 - [ ] Replacement → `evict()` cache; download streams-first, background tee
       (§6.2, §6.3).
 - [ ] Access via `checkFileAccess` (upload + download); `companyId`/`userId`
-      from tenant (§6.4).
+      resolved from tenant record (§6.4).
 - [ ] No separate `file_metadata` table — metadata in surreal-fs (§6.1).
 
 ---
@@ -234,15 +246,17 @@ Before calling done, answer:
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
 - [ ] **Entity cap?** Added to `entityLimits` + `withEntityLimit` (§4.9).
-- [ ] **Multi-tenant?** Scoped by `companyId`+`systemId` with covering indexes
-      (§3.1).
+- [ ] **Multi-tenant?** Scoped by `tenantId` with covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).
 - [ ] **User-generated text?** Standardize → validate → dedupe before write
       (§4.8).
 - [ ] **Schedules something?** Event queue with idempotent handler + retry
       (§5.1).
 - [ ] **Touches composable?** Parent holds link; no back-pointer; batched
-      mutations (§3.3).
+      mutations (§3.3). Deletion follows cascade: dissociate → orphan-check →
+      hard-delete (§2.4.2).
+- [ ] **Shared across tenants?** Dissociate first; hard-delete only if orphaned
+      across all tenants (§2.4.2).
 - [ ] **Charges money?** `payment` row before charge; async flows set
       `continuityData`+`expiresAt` (§7.5, §7.6).
 - [ ] **Delivers messages?** `dispatchCommunication(…)` + canonical template; no
