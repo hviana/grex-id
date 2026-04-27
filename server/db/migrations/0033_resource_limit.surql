@@ -1,0 +1,15 @@
+DEFINE TABLE resource_limit SCHEMAFULL;
+DEFINE FIELD benefits         ON resource_limit TYPE array<string>;
+DEFINE FIELD roles            ON resource_limit TYPE array<string>;
+DEFINE FIELD entityLimits     ON resource_limit TYPE option<object> FLEXIBLE;
+DEFINE FIELD apiRateLimit     ON resource_limit TYPE int DEFAULT 1000;
+DEFINE FIELD storageLimitBytes   ON resource_limit TYPE int DEFAULT 1073741824;
+DEFINE FIELD fileCacheLimitBytes ON resource_limit TYPE int DEFAULT 20971520;
+DEFINE FIELD credits        ON resource_limit TYPE int DEFAULT 0;
+DEFINE FIELD maxConcurrentDownloads ON resource_limit TYPE int DEFAULT 0;
+DEFINE FIELD maxConcurrentUploads   ON resource_limit TYPE int DEFAULT 0;
+DEFINE FIELD maxDownloadBandwidthMB ON resource_limit TYPE float DEFAULT 0;
+DEFINE FIELD maxUploadBandwidthMB   ON resource_limit TYPE float DEFAULT 0;
+DEFINE FIELD maxOperationCount     ON resource_limit TYPE option<object> FLEXIBLE;
+DEFINE FIELD creditLimitByResourceKey     ON resource_limit TYPE option<object> FLEXIBLE;
+DEFINE FIELD frontendDomains   ON resource_limit TYPE option<array<string>> DEFAULT [];
