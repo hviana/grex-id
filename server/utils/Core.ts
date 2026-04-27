@@ -27,6 +27,23 @@ assertServerOnly("Core");
 export type { SettingScope };
 export { buildScopeKey };
 
+/** Pre-computed merged resource limits (plan + voucher) cached per tenant. */
+export interface TenantResourceLimits {
+  roles: string[];
+  entityLimits: Record<string, number>;
+  apiRateLimit: number;
+  storageLimitBytes: number;
+  fileCacheLimitBytes: number;
+  credits: number;
+  maxConcurrentDownloads: number;
+  maxConcurrentUploads: number;
+  maxDownloadBandwidthMB: number;
+  maxUploadBandwidthMB: number;
+  maxOperationCountByResourceKey: Record<string, number>;
+  creditLimitByResourceKey: Record<string, number>;
+  frontendDomains: string[];
+}
+
 export interface MissingSetting {
   key: string;
   firstRequestedAt: string;
@@ -39,6 +56,7 @@ export interface CoreData {
   vouchers: Voucher[];
   menus: MenuItem[];
   systemsBySlug: Map<string, System>;
+  systemsById: Map<string, System>;
   rolesBySystem: Map<string, Role[]>;
   plansBySystem: Map<string, Plan[]>;
   menusBySystem: Map<string, MenuItem[]>;
@@ -150,8 +168,10 @@ export async function loadCoreData(): Promise<CoreData> {
   const vouchers = results[4] ?? [];
 
   const systemsBySlug = new Map<string, System>();
+  const systemsById = new Map<string, System>();
   for (const s of systems) {
     systemsBySlug.set(s.slug, s);
+    systemsById.set(s.id, s);
   }
 
   const rolesBySystem = new Map<string, Role[]>();
@@ -208,6 +228,7 @@ export async function loadCoreData(): Promise<CoreData> {
     vouchers,
     menus,
     systemsBySlug,
+    systemsById,
     rolesBySystem,
     plansBySystem,
     menusBySystem,

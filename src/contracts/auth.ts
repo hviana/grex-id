@@ -62,10 +62,25 @@ export interface ExchangeResponse {
 }
 
 /**
+ * Transient auth claims carried in the JWT alongside the canonical Tenant.
+ * These are NOT part of the Tenant DB row — they're token-level or resolved
+ * from resource_limit via Core cache.
+ */
+export interface VerifiedAuth {
+  roles: string[];
+  actorType: "user" | "api_token";
+  exchangeable: boolean;
+  frontendDomains: string[];
+  exp?: number;
+}
+
+/**
  * Unified request context — every middleware handler receives this.
- * `tenant` is populated by `withAuth` when a valid bearer token is present.
- * Auth routes (`/api/auth/*`) may leave tenant unset.
+ * `tenant` is populated from the bearer token's tenant payload.
+ * `auth` carries transient JWT claims (roles, actorType, etc.).
+ * Auth routes (`/api/auth/*`) may leave both unset.
  */
 export interface RequestContext {
   tenant: Tenant;
+  auth?: VerifiedAuth;
 }

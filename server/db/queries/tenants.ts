@@ -50,5 +50,35 @@ export async function fetchCompanySystemTenantRow(
 }
 
 /**
- * Fetches the company-system tenant row for a given company + system.
+ * Resolves role names from a tenant's roleIds array.
+ * Used by Core.getTenantRoles() for user-type actors.
  */
+export async function resolveTenantRoleNames(
+  tenantId: string,
+): Promise<string[]> {
+  const db = await getDb();
+  const result = await db.query<[string[]]>(
+    `LET $t = (SELECT roleIds FROM $tenantId LIMIT 1)[0];
+     SELECT VALUE name FROM role WHERE id IN $t.roleIds;`,
+    { tenantId: rid(tenantId) },
+  );
+  return result[0] ?? [];
+}
+
+/**
+ * Fetches the full resource_limit for an api_token actor.
+ * Used by Core to resolve actor-scoped limits.
+ */
+export async function fetchApiTokenResourceLimit(
+  actorId: string,
+): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  const result = await db.query<[Record<string, unknown>[]]>(
+    `SELECT * FROM ONLY $actorId FETCH resourceLimitId;`,
+    { actorId: rid(actorId) },
+  );
+  const row = result[0]?.[0];
+  if (!row) return null;
+  const rl = row.resourceLimitId as Record<string, unknown> | undefined;
+  return rl ?? null;
+}
