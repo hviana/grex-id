@@ -32,8 +32,76 @@ function kvToMap(kv: EntityLimitEntry[]): Record<string, number> | null {
   return result;
 }
 
+export type ResourceLimitField =
+  | "benefits"
+  | "roles"
+  | "entityLimits"
+  | "apiRateLimit"
+  | "storageLimitBytes"
+  | "fileCacheLimitBytes"
+  | "credits"
+  | "maxConcurrentDownloads"
+  | "maxConcurrentUploads"
+  | "maxDownloadBandwidthMB"
+  | "maxUploadBandwidthMB"
+  | "maxOperationCount"
+  | "creditLimitByResourceKey"
+  | "frontendDomains";
+
+const FIELD_LABELS: Record<ResourceLimitField, string> = {
+  benefits: "⭐",
+  roles: "🔑",
+  entityLimits: "📦",
+  apiRateLimit: "📊",
+  storageLimitBytes: "💾",
+  fileCacheLimitBytes: "🗂️",
+  credits: "🪙",
+  maxConcurrentDownloads: "⬇️",
+  maxConcurrentUploads: "⬆️",
+  maxDownloadBandwidthMB: "📶⬇",
+  maxUploadBandwidthMB: "📶⬆",
+  maxOperationCount: "🔢",
+  creditLimitByResourceKey: "🪙🔑",
+  frontendDomains: "🌐",
+};
+
+const FIELD_ORDER: ResourceLimitField[] = [
+  "benefits",
+  "roles",
+  "entityLimits",
+  "apiRateLimit",
+  "storageLimitBytes",
+  "fileCacheLimitBytes",
+  "credits",
+  "maxConcurrentDownloads",
+  "maxConcurrentUploads",
+  "maxDownloadBandwidthMB",
+  "maxUploadBandwidthMB",
+  "maxOperationCount",
+  "creditLimitByResourceKey",
+  "frontendDomains",
+];
+
+/** Fields that are "present" in initialData — used to pre-select checkboxes. */
+function initialSelectedFields(
+  initialData: Record<string, unknown> | undefined,
+): Set<ResourceLimitField> {
+  const selected = new Set<ResourceLimitField>();
+  if (!initialData) return selected;
+  for (const field of FIELD_ORDER) {
+    const v = initialData[field];
+    if (v === null || v === undefined) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (
+      typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0
+    ) continue;
+    selected.add(field);
+  }
+  return selected;
+}
+
 interface ResourceLimitsSubformProps {
-  mode: "plan" | "voucher";
+  valueMode: "absolute" | "modifier";
   initialData?: Record<string, unknown>;
   systemSlug?: string;
 }
@@ -44,20 +112,41 @@ const inputCls =
 const ResourceLimitsSubform = forwardRef<
   SubformRef,
   ResourceLimitsSubformProps
->(({ mode, initialData, systemSlug }, ref) => {
+>(({ valueMode, initialData, systemSlug }, ref) => {
   const { t } = useLocale();
 
+  const isAbsolute = valueMode === "absolute";
+
+  const [selectedFields, setSelectedFields] = useState<Set<ResourceLimitField>>(
+    () => initialSelectedFields(initialData),
+  );
+
+  const show = (field: ResourceLimitField) => selectedFields.has(field);
+
+  const toggleField = (field: ResourceLimitField) => {
+    setSelectedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  };
+
   const label = (field: string) =>
-    mode === "plan"
-      ? t(`core.plans.${field}`)
-      : t(`core.vouchers.${field}Modifier`);
+    isAbsolute
+      ? t(`core.resourceLimits.${field}`)
+      : t(`core.resourceLimits.${field}Modifier`);
+
+  const hint = (field: string) => t(`core.resourceLimits.${field}Hint`);
 
   const placeholder = (field: string) =>
-    t(
-      mode === "plan"
-        ? `core.plans.placeholder.${field}`
-        : `core.vouchers.placeholder.${field}Modifier`,
-    );
+    t(`core.resourceLimits.placeholder.${field}`);
+
+  const [benefits, setBenefits] = useState<string[]>(
+    Array.isArray(initialData?.benefits)
+      ? [...(initialData.benefits as string[])]
+      : [],
+  );
 
   const [roles, setRoles] = useState<string[]>(
     Array.isArray(initialData?.roles)
@@ -67,295 +156,380 @@ const ResourceLimitsSubform = forwardRef<
 
   const [entityLimits, setEntityLimits] = useState<EntityLimitEntry[]>(
     mapToKV(
-      (initialData?.entityLimits ??
-        initialData?.entityLimitModifiers ??
-        null) as Record<string, number> | null,
+      (initialData?.entityLimits ?? null) as Record<string, number> | null,
     ),
   );
 
   const [apiRateLimit, setApiRateLimit] = useState(
-    String(
-      (initialData?.apiRateLimit ??
-        initialData?.apiRateLimitModifier ??
-        (mode === "plan" ? 1000 : 0)) as number,
-    ),
+    String((initialData?.apiRateLimit ?? (isAbsolute ? 1000 : 0)) as number),
   );
 
-  const storageBytes = (initialData?.storageLimitBytes ??
-    initialData?.storageLimitModifier ??
-    (mode === "plan" ? 1073741824 : 0)) as number;
+  const storageBytes =
+    (initialData?.storageLimitBytes ?? (isAbsolute ? 1073741824 : 0)) as number;
   const [storageGB, setStorageGB] = useState(
     String(storageBytes / 1073741824),
   );
 
-  const fileCacheBytes = (initialData?.fileCacheLimitBytes ??
-    initialData?.fileCacheLimitModifier ??
-    (mode === "plan" ? 20971520 : 0)) as number;
+  const fileCacheBytes =
+    (initialData?.fileCacheLimitBytes ?? (isAbsolute ? 20971520 : 0)) as number;
   const [fileCacheMB, setFileCacheMB] = useState(
     String(fileCacheBytes / 1048576),
   );
 
   const [credits, setCredits] = useState(
-    String(
-      (initialData?.planCredits ??
-        initialData?.creditModifier ??
-        0) as number,
-    ),
+    String((initialData?.credits ?? 0) as number),
   );
 
   const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(
-    String(
-      (initialData?.maxConcurrentDownloads ??
-        initialData?.maxConcurrentDownloadsModifier ??
-        0) as number,
-    ),
+    String((initialData?.maxConcurrentDownloads ?? 0) as number),
   );
 
   const [maxConcurrentUploads, setMaxConcurrentUploads] = useState(
-    String(
-      (initialData?.maxConcurrentUploads ??
-        initialData?.maxConcurrentUploadsModifier ??
-        0) as number,
-    ),
+    String((initialData?.maxConcurrentUploads ?? 0) as number),
   );
 
   const [maxDownloadBandwidth, setMaxDownloadBandwidth] = useState(
-    String(
-      (initialData?.maxDownloadBandwidthMB ??
-        initialData?.maxDownloadBandwidthModifier ??
-        0) as number,
-    ),
+    String((initialData?.maxDownloadBandwidthMB ?? 0) as number),
   );
 
   const [maxUploadBandwidth, setMaxUploadBandwidth] = useState(
-    String(
-      (initialData?.maxUploadBandwidthMB ??
-        initialData?.maxUploadBandwidthModifier ??
-        0) as number,
-    ),
+    String((initialData?.maxUploadBandwidthMB ?? 0) as number),
   );
 
   const [maxOperationCount, setMaxOperationCount] = useState<
     EntityLimitEntry[]
   >(
     mapToKV(
-      (initialData?.maxOperationCount ??
-        initialData?.maxOperationCountModifier ??
-        null) as Record<string, number> | null,
+      (initialData?.maxOperationCount ?? null) as Record<string, number> | null,
     ),
+  );
+
+  const [creditLimitByResourceKey, setCreditLimitByResourceKey] = useState<
+    EntityLimitEntry[]
+  >(
+    mapToKV(
+      (initialData?.creditLimitByResourceKey ?? null) as
+        | Record<
+          string,
+          number
+        >
+        | null,
+    ),
+  );
+
+  const [frontendDomains, setFrontendDomains] = useState<string[]>(
+    Array.isArray(initialData?.frontendDomains)
+      ? [...(initialData.frontendDomains as string[])]
+      : [],
   );
 
   useImperativeHandle(ref, () => ({
     getData: () => {
-      const entityMap = kvToMap(entityLimits);
-      const opCountMap = kvToMap(maxOperationCount);
+      const result: Record<string, unknown> = {};
 
-      if (mode === "plan") {
-        return {
-          roles,
-          entityLimits: entityMap,
-          apiRateLimit: Number(apiRateLimit),
-          storageLimitBytes: Math.round(Number(storageGB) * 1073741824),
-          fileCacheLimitBytes: Math.round(Number(fileCacheMB) * 1048576),
-          planCredits: Number(credits),
-          maxConcurrentDownloads: Number(maxConcurrentDownloads),
-          maxConcurrentUploads: Number(maxConcurrentUploads),
-          maxDownloadBandwidthMB: Number(maxDownloadBandwidth),
-          maxUploadBandwidthMB: Number(maxUploadBandwidth),
-          maxOperationCount: opCountMap,
-        };
+      if (show("benefits")) result.benefits = benefits;
+      if (show("roles")) result.roles = roles;
+      if (show("entityLimits")) result.entityLimits = kvToMap(entityLimits);
+      if (show("apiRateLimit")) result.apiRateLimit = Number(apiRateLimit);
+      if (show("storageLimitBytes")) {
+        result.storageLimitBytes = Math.round(Number(storageGB) * 1073741824);
       }
-      return {
-        roles,
-        entityLimitModifiers: entityMap,
-        apiRateLimitModifier: Number(apiRateLimit),
-        storageLimitModifier: Math.round(Number(storageGB) * 1073741824),
-        fileCacheLimitModifier: Math.round(Number(fileCacheMB) * 1048576),
-        creditModifier: Number(credits),
-        maxConcurrentDownloadsModifier: Number(maxConcurrentDownloads),
-        maxConcurrentUploadsModifier: Number(maxConcurrentUploads),
-        maxDownloadBandwidthModifier: Number(maxDownloadBandwidth),
-        maxUploadBandwidthModifier: Number(maxUploadBandwidth),
-        maxOperationCountModifier: opCountMap,
-      };
+      if (show("fileCacheLimitBytes")) {
+        result.fileCacheLimitBytes = Math.round(Number(fileCacheMB) * 1048576);
+      }
+      if (show("credits")) result.credits = Number(credits);
+      if (show("maxConcurrentDownloads")) {
+        result.maxConcurrentDownloads = Number(maxConcurrentDownloads);
+      }
+      if (show("maxConcurrentUploads")) {
+        result.maxConcurrentUploads = Number(maxConcurrentUploads);
+      }
+      if (show("maxDownloadBandwidthMB")) {
+        result.maxDownloadBandwidthMB = Number(maxDownloadBandwidth);
+      }
+      if (show("maxUploadBandwidthMB")) {
+        result.maxUploadBandwidthMB = Number(maxUploadBandwidth);
+      }
+      if (show("maxOperationCount")) {
+        result.maxOperationCount = kvToMap(maxOperationCount);
+      }
+      if (show("creditLimitByResourceKey")) {
+        result.creditLimitByResourceKey = kvToMap(creditLimitByResourceKey);
+      }
+      if (show("frontendDomains")) {
+        result.frontendDomains = frontendDomains.length > 0
+          ? frontendDomains
+          : null;
+      }
+
+      return result;
     },
     isValid: () => true,
   }));
 
   return (
     <div className="space-y-4">
-      <MultiBadgeField
-        name={mode === "plan"
-          ? t("core.plans.roles")
-          : t("core.vouchers.roles")}
-        mode="custom"
-        value={roles}
-        onChange={(vals) => setRoles(vals as string[])}
-        renderBadge={(item, remove) => (
-          <TranslatedBadge
-            kind="role"
-            token={typeof item === "string" ? item : item.name}
-            systemSlug={systemSlug}
-            onRemove={remove}
-          />
-        )}
-      />
-
+      {/* Compact checkbox toggles */}
       <div>
-        <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-          {mode === "plan"
-            ? t("core.plans.entityLimits")
-            : t("core.vouchers.entityLimitModifiers")}
-        </label>
-        <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-          {mode === "plan"
-            ? t("core.plans.entityLimitsHint")
-            : t("core.vouchers.entityLimitModifiersHint")}
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)] mb-2">
+          {t("core.resourceLimits.selectFields")}
         </p>
-        <DynamicKeyValueField
-          fields={entityLimits}
-          onChange={setEntityLimits}
-          showDescription={false}
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          {FIELD_ORDER.map((field) => (
+            <label
+              key={field}
+              className="inline-flex items-center gap-1 text-xs text-[var(--color-light-text)] cursor-pointer hover:text-white transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={selectedFields.has(field)}
+                onChange={() => toggleField(field)}
+                className="h-3 w-3 rounded border-[var(--color-dark-gray)] accent-[var(--color-primary-green)] cursor-pointer"
+              />
+              <span className="select-none">
+                {FIELD_LABELS[field]}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {show("benefits") && (
+        <MultiBadgeField
+          name={t("core.resourceLimits.benefits")}
+          mode="custom"
+          value={benefits}
+          onChange={(vals) => setBenefits(vals as string[])}
+          formatHint={t("core.resourceLimits.benefitsHint")}
         />
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {label("apiRateLimit")}
-          </label>
-          <input
-            type="number"
-            value={apiRateLimit}
-            onChange={(e) => setApiRateLimit(e.target.value)}
-            min={mode === "plan" ? "1" : undefined}
-            placeholder={placeholder("apiRateLimit")}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {mode === "plan"
-              ? t("core.plans.storageLimit")
-              : t("core.vouchers.storageLimitModifier")} (GB)
-          </label>
-          <input
-            type="number"
-            value={storageGB}
-            onChange={(e) => setStorageGB(e.target.value)}
-            min="0"
-            step="0.1"
-            placeholder={placeholder("storageGB")}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {mode === "plan"
-              ? t("core.plans.fileCacheLimit")
-              : t("core.vouchers.fileCacheLimitModifier")} (MB)
-          </label>
-          <input
-            type="number"
-            value={fileCacheMB}
-            onChange={(e) => setFileCacheMB(e.target.value)}
-            min="0"
-            step="1"
-            placeholder={placeholder("fileCacheMB")}
-            className={inputCls}
-          />
-        </div>
-      </div>
+      {show("roles") && (
+        <MultiBadgeField
+          name={t("core.resourceLimits.roles")}
+          mode="custom"
+          value={roles}
+          onChange={(vals) => setRoles(vals as string[])}
+          renderBadge={(item, remove) => (
+            <TranslatedBadge
+              kind="role"
+              token={typeof item === "string" ? item : item.name}
+              systemSlug={systemSlug}
+              onRemove={remove}
+            />
+          )}
+        />
+      )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {show("entityLimits") && (
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {mode === "plan"
-              ? t("core.plans.planCredits")
-              : t("core.vouchers.creditModifier")}
-          </label>
-          <input
-            type="number"
-            value={credits}
-            onChange={(e) => setCredits(e.target.value)}
-            min="0"
-            placeholder="0"
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            ⬇️ {label("maxConcurrentDownloads")}
-          </label>
-          <input
-            type="number"
-            value={maxConcurrentDownloads}
-            onChange={(e) => setMaxConcurrentDownloads(e.target.value)}
-            min="0"
-            placeholder="0"
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            ⬆️ {label("maxConcurrentUploads")}
-          </label>
-          <input
-            type="number"
-            value={maxConcurrentUploads}
-            onChange={(e) => setMaxConcurrentUploads(e.target.value)}
-            min="0"
-            placeholder="0"
-            className={inputCls}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            📶 {label("maxDownloadBandwidth")}
-          </label>
-          <input
-            type="number"
-            value={maxDownloadBandwidth}
-            onChange={(e) => setMaxDownloadBandwidth(e.target.value)}
-            min="0"
-            step="0.1"
-            placeholder="0"
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            📶 {label("maxUploadBandwidth")}
-          </label>
-          <input
-            type="number"
-            value={maxUploadBandwidth}
-            onChange={(e) => setMaxUploadBandwidth(e.target.value)}
-            min="0"
-            step="0.1"
-            placeholder="0"
-            className={inputCls}
-          />
-        </div>
-        <div className="col-span-1 sm:col-span-3">
-          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            🔢 {label("maxOperationCount")}
+            {isAbsolute
+              ? t("core.resourceLimits.entityLimits")
+              : t("core.resourceLimits.entityLimitModifiers")}
           </label>
           <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-            {mode === "plan"
-              ? t("core.plans.maxOperationCountHint")
-              : t("core.vouchers.maxOperationCountModifierHint")}
+            {isAbsolute
+              ? t("core.resourceLimits.entityLimitsHint")
+              : t("core.resourceLimits.entityLimitModifiersHint")}
           </p>
           <DynamicKeyValueField
-            fields={maxOperationCount}
-            onChange={setMaxOperationCount}
+            fields={entityLimits}
+            onChange={setEntityLimits}
             showDescription={false}
           />
         </div>
-      </div>
+      )}
+
+      {(show("apiRateLimit") || show("storageLimitBytes") ||
+        show("fileCacheLimitBytes")) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {show("apiRateLimit") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {label("apiRateLimit")}
+              </label>
+              <input
+                type="number"
+                value={apiRateLimit}
+                onChange={(e) => setApiRateLimit(e.target.value)}
+                min={isAbsolute ? "1" : undefined}
+                placeholder={placeholder("apiRateLimit")}
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("storageLimitBytes") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {label("storageLimit")} (GB)
+              </label>
+              <input
+                type="number"
+                value={storageGB}
+                onChange={(e) => setStorageGB(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                step="0.1"
+                placeholder={placeholder("storageLimit")}
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("fileCacheLimitBytes") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {label("fileCacheLimit")} (MB)
+              </label>
+              <input
+                type="number"
+                value={fileCacheMB}
+                onChange={(e) => setFileCacheMB(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                step="1"
+                placeholder={placeholder("fileCacheLimit")}
+                className={inputCls}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {(show("credits") || show("maxConcurrentDownloads") ||
+        show("maxConcurrentUploads")) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {show("credits") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                {label("credits")}
+              </label>
+              <input
+                type="number"
+                value={credits}
+                onChange={(e) => setCredits(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                placeholder="0"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("maxConcurrentDownloads") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬇️ {label("maxConcurrentDownloads")}
+              </label>
+              <input
+                type="number"
+                value={maxConcurrentDownloads}
+                onChange={(e) => setMaxConcurrentDownloads(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                placeholder="0"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("maxConcurrentUploads") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                ⬆️ {label("maxConcurrentUploads")}
+              </label>
+              <input
+                type="number"
+                value={maxConcurrentUploads}
+                onChange={(e) => setMaxConcurrentUploads(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                placeholder="0"
+                className={inputCls}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {(show("maxDownloadBandwidthMB") || show("maxUploadBandwidthMB") ||
+        show("maxOperationCount")) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {show("maxDownloadBandwidthMB") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {label("maxDownloadBandwidthMB")}
+              </label>
+              <input
+                type="number"
+                value={maxDownloadBandwidth}
+                onChange={(e) => setMaxDownloadBandwidth(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                step="0.1"
+                placeholder="0"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("maxUploadBandwidthMB") && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                📶 {label("maxUploadBandwidthMB")}
+              </label>
+              <input
+                type="number"
+                value={maxUploadBandwidth}
+                onChange={(e) => setMaxUploadBandwidth(e.target.value)}
+                min={isAbsolute ? "0" : undefined}
+                step="0.1"
+                placeholder="0"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {show("maxOperationCount") && (
+            <div className="col-span-1 sm:col-span-3">
+              <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+                🔢 {label("maxOperationCount")}
+              </label>
+              <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+                {hint("maxOperationCount")}
+              </p>
+              <DynamicKeyValueField
+                fields={maxOperationCount}
+                onChange={setMaxOperationCount}
+                showDescription={false}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {show("creditLimitByResourceKey") && (
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+            🪙 {label("creditLimitByResourceKey")}
+          </label>
+          <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+            {hint("creditLimitByResourceKey")}
+          </p>
+          <DynamicKeyValueField
+            fields={creditLimitByResourceKey}
+            onChange={setCreditLimitByResourceKey}
+            showDescription={false}
+          />
+        </div>
+      )}
+
+      {show("frontendDomains") && (
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+            🌐 {label("frontendDomains")}
+          </label>
+          <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
+            {hint("frontendDomains")}
+          </p>
+          <MultiBadgeField
+            name={label("frontendDomains")}
+            mode="custom"
+            value={frontendDomains}
+            onChange={(vals) => setFrontendDomains(vals as string[])}
+          />
+        </div>
+      )}
     </div>
   );
 });

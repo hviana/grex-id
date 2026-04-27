@@ -111,7 +111,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
 
         <ResourceLimitsSubform
           ref={limitsRef}
-          mode="voucher"
+          valueMode="modifier"
           initialData={initialData}
         />
 

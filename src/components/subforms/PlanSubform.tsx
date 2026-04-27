@@ -168,7 +168,7 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
 
         <ResourceLimitsSubform
           ref={limitsRef}
-          mode="plan"
+          valueMode="absolute"
           initialData={initialData}
         />
 
