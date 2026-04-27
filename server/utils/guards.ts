@@ -1,4 +1,5 @@
 import Core, { type TenantResourceLimits } from "./Core.ts";
+import type { Tenant } from "@/src/contracts/tenant";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("guards.ts");
@@ -32,11 +33,11 @@ export interface TransferLimitResult {
   voucherModifier: number;
 }
 
-/** Internal: fetch tenant (CS) limits without subscription checks. */
-async function getLimits(systemId: string, companyId: string): Promise<TenantResourceLimits> {
+/** Internal: fetch tenant limits without subscription checks. */
+async function getLimits(tenant: Tenant): Promise<TenantResourceLimits> {
   const core = Core.getInstance();
   try {
-    return await core.ensureTenantLimits(systemId, companyId);
+    return await core.ensureTenantLimits(tenant);
   } catch {
     return {
       roles: [],
@@ -57,11 +58,10 @@ async function getLimits(systemId: string, companyId: string): Promise<TenantRes
 }
 
 export async function resolveEntityLimit(params: {
-  systemId: string;
-  companyId: string;
+  tenant: Tenant;
   entityName: string;
 }): Promise<EntityLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+  const limits = await getLimits(params.tenant);
   const planLimit = limits.entityLimits[params.entityName];
 
   if (planLimit === undefined) {
@@ -76,8 +76,7 @@ export async function resolveEntityLimit(params: {
 }
 
 export async function checkPlanAccess(
-  systemId: string,
-  companyId: string,
+  tenant: Tenant,
   roles: string[],
 ): Promise<PlanAccessResult> {
   if (roles.includes("superuser")) {
@@ -87,8 +86,13 @@ export async function checkPlanAccess(
   const core = Core.getInstance();
 
   // Resolve the tenant row internally to get subscription
-  const { fetchCompanySystemTenantRow } = await import("../db/queries/tenants.ts");
-  const tenantRow = await fetchCompanySystemTenantRow(companyId, systemId);
+  const { fetchCompanySystemTenantRow } = await import(
+    "../db/queries/tenants.ts"
+  );
+  const tenantRow = await fetchCompanySystemTenantRow(
+    tenant.companyId!,
+    tenant.systemId!,
+  );
   if (!tenantRow) {
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
@@ -102,10 +106,11 @@ export async function checkPlanAccess(
     return { granted: false, denyCode: "SUBSCRIPTION_EXPIRED" };
   }
 
-  const limits = await getLimits(systemId, companyId);
+  const limits = await getLimits(tenant);
   const planRoles = limits.roles;
 
-  const hasAccess = planRoles.length === 0 || planRoles.some((r) => roles.includes(r));
+  const hasAccess = planRoles.length === 0 ||
+    planRoles.some((r) => roles.includes(r));
   if (!hasAccess) {
     return { granted: false, denyCode: "PLAN_LIMIT" };
   }
@@ -113,11 +118,10 @@ export async function checkPlanAccess(
   return { granted: true };
 }
 
-export async function resolveRateLimitConfig(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<RateLimitConfigResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveRateLimitConfig(
+  tenant: Tenant,
+): Promise<RateLimitConfigResult> {
+  const limits = await getLimits(tenant);
   return {
     globalLimit: limits.apiRateLimit,
     planRateLimit: limits.apiRateLimit,
@@ -125,11 +129,10 @@ export async function resolveRateLimitConfig(params: {
   };
 }
 
-export async function resolveFileCacheLimit(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<FileCacheLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveFileCacheLimit(
+  tenant: Tenant,
+): Promise<FileCacheLimitResult> {
+  const limits = await getLimits(tenant);
   const planLimit = limits.fileCacheLimitBytes || 20971520;
   return {
     maxBytes: planLimit,
@@ -138,11 +141,10 @@ export async function resolveFileCacheLimit(params: {
   };
 }
 
-export async function resolveMaxConcurrentDownloads(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<TransferLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveMaxConcurrentDownloads(
+  tenant: Tenant,
+): Promise<TransferLimitResult> {
+  const limits = await getLimits(tenant);
   return {
     max: limits.maxConcurrentDownloads,
     planLimit: limits.maxConcurrentDownloads,
@@ -150,11 +152,10 @@ export async function resolveMaxConcurrentDownloads(params: {
   };
 }
 
-export async function resolveMaxConcurrentUploads(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<TransferLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveMaxConcurrentUploads(
+  tenant: Tenant,
+): Promise<TransferLimitResult> {
+  const limits = await getLimits(tenant);
   return {
     max: limits.maxConcurrentUploads,
     planLimit: limits.maxConcurrentUploads,
@@ -162,11 +163,10 @@ export async function resolveMaxConcurrentUploads(params: {
   };
 }
 
-export async function resolveMaxDownloadBandwidth(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<TransferLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveMaxDownloadBandwidth(
+  tenant: Tenant,
+): Promise<TransferLimitResult> {
+  const limits = await getLimits(tenant);
   return {
     max: limits.maxDownloadBandwidthMB,
     planLimit: limits.maxDownloadBandwidthMB,
@@ -174,11 +174,10 @@ export async function resolveMaxDownloadBandwidth(params: {
   };
 }
 
-export async function resolveMaxUploadBandwidth(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<TransferLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveMaxUploadBandwidth(
+  tenant: Tenant,
+): Promise<TransferLimitResult> {
+  const limits = await getLimits(tenant);
   return {
     max: limits.maxUploadBandwidthMB,
     planLimit: limits.maxUploadBandwidthMB,
@@ -187,11 +186,10 @@ export async function resolveMaxUploadBandwidth(params: {
 }
 
 export async function resolveMaxOperationCount(params: {
-  systemId: string;
-  companyId: string;
+  tenant: Tenant;
   resourceKey: string;
 }): Promise<TransferLimitResult> {
-  const limits = await getLimits(params.systemId, params.companyId);
+  const limits = await getLimits(params.tenant);
   const planLimit = limits.maxOperationCountByResourceKey[params.resourceKey] ??
     0;
   return {
@@ -205,10 +203,9 @@ export async function resolveMaxOperationCount(params: {
  * Resolve all operation counts as a merged map for subscription
  * initialization and renewal.
  */
-export async function resolveAllOperationCounts(params: {
-  systemId: string;
-  companyId: string;
-}): Promise<Record<string, number>> {
-  const limits = await getLimits(params.systemId, params.companyId);
+export async function resolveAllOperationCounts(
+  tenant: Tenant,
+): Promise<Record<string, number>> {
+  const limits = await getLimits(tenant);
   return limits.maxOperationCountByResourceKey;
 }

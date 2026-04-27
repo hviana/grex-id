@@ -72,7 +72,7 @@ export async function consumeCredits(params: {
   const remainingForThisKey = operationCounts[params.resourceKey] ?? 0;
 
   const core = Core.getInstance();
-  const limits = await core.ensureTenantLimits(params.tenant.systemId!, params.tenant.companyId!);
+  const limits = await core.ensureTenantLimits(params.tenant);
   const opCap = limits.maxOperationCountByResourceKey[params.resourceKey] ?? 0;
 
   if (opCap > 0 && remainingForThisKey === 0) {

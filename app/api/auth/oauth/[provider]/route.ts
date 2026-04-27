@@ -3,7 +3,6 @@ import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 
-
 async function getHandler(
   req: Request,
   ctx: RequestContext,
@@ -44,17 +43,23 @@ async function postHandler(
   );
 }
 
-export const GET = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), (req, ctx) => {
-  // Extract params from URL for Next.js dynamic route compatibility
-  const url = new URL(req.url);
-  const segments = url.pathname.split("/");
-  const provider = segments[segments.indexOf("oauth") + 1] ?? "";
-  return getHandler(req, ctx, { params: Promise.resolve({ provider }) });
-});
+export const GET = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  (req, ctx) => {
+    // Extract params from URL for Next.js dynamic route compatibility
+    const url = new URL(req.url);
+    const segments = url.pathname.split("/");
+    const provider = segments[segments.indexOf("oauth") + 1] ?? "";
+    return getHandler(req, ctx, { params: Promise.resolve({ provider }) });
+  },
+);
 
-export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), (req, ctx) => {
-  const url = new URL(req.url);
-  const segments = url.pathname.split("/");
-  const provider = segments[segments.indexOf("oauth") + 1] ?? "";
-  return postHandler(req, ctx, { params: Promise.resolve({ provider }) });
-});
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  (req, ctx) => {
+    const url = new URL(req.url);
+    const segments = url.pathname.split("/");
+    const provider = segments[segments.indexOf("oauth") + 1] ?? "";
+    return postHandler(req, ctx, { params: Promise.resolve({ provider }) });
+  },
+);

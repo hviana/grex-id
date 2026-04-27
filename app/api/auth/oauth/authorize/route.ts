@@ -125,7 +125,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     farFuture,
   );
 
-  await rememberActor(resolved.tenantId, String(createdToken.id));
+  await rememberActor({
+    id: resolved.tenantId,
+    actorId: String(createdToken.id),
+  });
 
   return Response.json(
     { success: true, data: { token: jwt } },

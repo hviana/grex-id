@@ -9,12 +9,19 @@ import SystemBranding from "@/src/components/shared/SystemBranding";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function ResetPasswordContent() {
-  const { t, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
+  const {
+    t,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("systemSlug");
-  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

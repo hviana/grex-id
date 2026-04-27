@@ -5,7 +5,9 @@ to one or more **companies**, each subscribed via a **plan** to one or more
 **systems**. A **superuser** administers a Core layer (systems, roles, plans,
 vouchers, menus, terms, settings, data deletion, file-access rules). Each system
 ships its own UI, menus, and public homepage (`/?systemSlug=<slug>`), branded
-through a `?systemSlug=` query parameter on every public page.
+through a `?systemSlug=` query parameter on every public page. The multi-tenant
+system intelligently and granularly controls permissions, limits, and resource
+allocation.
 
 **Subframeworks** (`frameworks/<name>/`) are design-time code bundles that
 extend Core at build time through a module registry. **Systems**

@@ -15,7 +15,6 @@ import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
 
-
 interface SubmittedChannel {
   type: string;
   value: string;
@@ -212,4 +211,7 @@ async function handler(
   );
 }
 
-export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), handler);
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  handler,
+);

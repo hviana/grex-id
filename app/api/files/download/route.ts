@@ -33,8 +33,8 @@ async function resolveTokenParam(
     const { tenant } = await verifyTenantToken(tokenStr);
     if (!tenant.actorId) return null;
 
-    await ensureActorValidityLoaded(tenant.id!);
-    if (!isActorValid(tenant.id!, tenant.actorId)) return null;
+    await ensureActorValidityLoaded(tenant);
+    if (!isActorValid(tenant)) return null;
 
     return { tenant };
   } catch {
@@ -89,9 +89,7 @@ export const GET = compose(
       fileCompanyId,
       fileSystemSlug,
       fileUserId,
-      actorId: effectiveTenant.actorId,
-      companyId: effectiveTenant.companyId,
-      systemId: effectiveTenant.systemId,
+      tenant: effectiveTenant,
       operation: "download",
     });
     if (!accessCheck.allowed) {
@@ -114,10 +112,7 @@ export const GET = compose(
 
     const system = await core.getSystemBySlug(fileSystemSlug);
     if (system && fileCompanyId) {
-      const limit = await resolveFileCacheLimit({
-        systemId: effectiveTenant.systemId!,
-        companyId: effectiveTenant.companyId!,
-      });
+      const limit = await resolveFileCacheLimit(effectiveTenant);
       if (limit.maxBytes > 0) {
         cacheTenantKey = `${fileCompanyId}:${fileSystemSlug}`;
         cacheMaxSize = limit.maxBytes;
@@ -148,8 +143,8 @@ export const GET = compose(
 
     const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = await Promise
       .all([
-        resolveMaxConcurrentDownloads({ systemId: effectiveTenant.systemId!, companyId: effectiveTenant.companyId! }),
-        resolveMaxDownloadBandwidth({ systemId: effectiveTenant.systemId!, companyId: effectiveTenant.companyId! }),
+        resolveMaxConcurrentDownloads(effectiveTenant),
+        resolveMaxDownloadBandwidth(effectiveTenant),
         core.getSetting("transfer.default.maxConcurrentDownloads"),
         core.getSetting("transfer.default.maxDownloadBandwidthMB"),
       ]);

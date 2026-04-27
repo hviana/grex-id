@@ -366,27 +366,21 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

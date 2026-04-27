@@ -11,7 +11,7 @@ async function handler(
   const actorType = ctx.tenantContext.actorType;
 
   if (actorType === "user" && tenant.actorId) {
-    await forgetActor(tenant.id!, String(tenant.actorId));
+    await forgetActor(tenant);
   }
   return Response.json({ success: true });
 }

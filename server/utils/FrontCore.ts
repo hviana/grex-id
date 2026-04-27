@@ -122,10 +122,9 @@ class FrontCore {
         const system = await core.getSystemBySlug(systemSlug);
         if (!system) return undefined;
 
-        const genericTerms =
-          (await core.getSetting("terms.generic")) || "";
-        const termsOfService =
-          system.termsOfService || genericTerms || undefined;
+        const genericTerms = (await core.getSetting("terms.generic")) || "";
+        const termsOfService = system.termsOfService || genericTerms ||
+          undefined;
 
         const data: PublicSystemData = {
           name: system.name,

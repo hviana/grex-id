@@ -12,7 +12,6 @@ import {
 import { userHasVerifiedChannel } from "@/server/db/queries/auth";
 import { genericGetById } from "@/server/db/queries/generics";
 
-
 function guessChannelType(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return "email";
@@ -121,4 +120,7 @@ async function handler(
   return successResponse;
 }
 
-export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), handler);
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  handler,
+);

@@ -206,7 +206,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
 
       const systemToken = await createTenantToken(tenant, stayLoggedIn);
 
-      await rememberActor(mem.tenantId, String(user.id));
+      await rememberActor({ id: mem.tenantId, actorId: String(user.id) });
 
       return Response.json({
         success: true,

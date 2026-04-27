@@ -121,7 +121,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Rebuild this tenant's actor-validity partition — the batched deletion
   // removed api_tokens and tenant rows scoped to this tenantId (§8.11, §9.4).
-  await reloadTenant(tenant.id!);
+  await reloadTenant(tenant);
 
   return Response.json({
     success: true,
@@ -131,10 +131,8 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
 export const DELETE = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 5 },
     roles: ["superuser"],
-
   }),
   deleteHandler,
 );

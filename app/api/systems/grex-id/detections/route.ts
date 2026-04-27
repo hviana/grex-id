@@ -76,10 +76,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
     roles: ["grexid.view_detections"],
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );

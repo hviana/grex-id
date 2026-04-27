@@ -19,8 +19,16 @@ function LoginContent() {
   const oauthRoles = searchParams.get("roles") ?? "";
   const oauthSystemSlug = searchParams.get("systemSlug") ?? systemSlug ?? "";
   const oauthRedirectOrigin = searchParams.get("redirect_origin") ?? "";
-  const { login, t, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
-  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
+  const {
+    login,
+    t,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");

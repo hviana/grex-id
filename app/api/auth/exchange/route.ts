@@ -78,11 +78,14 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     const newToken = await createTenantToken(newTenant, false, oldExp);
 
-    await forgetActor(oldTenantId, String(tenant.actorId));
-    await rememberActor(suResult.tenantId, String(tenant.actorId));
+    await forgetActor({ id: oldTenantId, actorId: String(tenant.actorId) });
+    await rememberActor({
+      id: suResult.tenantId,
+      actorId: String(tenant.actorId),
+    });
 
-    const newRoles = await core.getTenantRoles(tenant.actorId!);
-    const frontendDomains = await core.getFrontendDomains(systemId, companyId, tenant.actorId);
+    const newRoles = await core.getTenantRoles(newTenant);
+    const frontendDomains = await core.getFrontendDomains(newTenant);
 
     return Response.json({
       success: true,
@@ -125,11 +128,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   const newToken = await createTenantToken(newTenant, false, oldExp);
 
-  await forgetActor(oldTenantId, String(tenant.actorId));
-  await rememberActor(result.tenantId, String(tenant.actorId));
+  await forgetActor({ id: oldTenantId, actorId: String(tenant.actorId) });
+  await rememberActor({ id: result.tenantId, actorId: String(tenant.actorId) });
 
-  const newRoles = await core.getTenantRoles(tenant.actorId!);
-  const frontendDomains = await core.getFrontendDomains(systemId, companyId, tenant.actorId);
+  const newRoles = await core.getTenantRoles(newTenant);
+  const frontendDomains = await core.getFrontendDomains(newTenant);
 
   return Response.json({
     success: true,

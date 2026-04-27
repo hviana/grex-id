@@ -194,7 +194,7 @@ async function handler(
   // Role names are pre-resolved by resolveUserMembership via tenant.roleIds
   const roles = mem.roles;
 
-  await rememberActor(mem.tenantId, String(user.id));
+  await rememberActor({ id: mem.tenantId, actorId: String(user.id) });
 
   return Response.json({
     success: true,

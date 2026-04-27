@@ -14,7 +14,9 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function GrexIdHomePage() {
   const { t, publicSystem: systemInfo, loadPublicSystem } = useTenantContext();
-  useEffect(() => { loadPublicSystem("grex-id"); }, [loadPublicSystem]);
+  useEffect(() => {
+    loadPublicSystem("grex-id");
+  }, [loadPublicSystem]);
   const systemName = systemInfo?.name ?? "Grex ID";
   const [showForm, setShowForm] = useState(false);
   const [botToken, setBotToken] = useState<string | null>(null);

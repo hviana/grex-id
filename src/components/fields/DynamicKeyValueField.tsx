@@ -1,7 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-
 interface KeyValueEntry {
   key: string;
   value: string;

@@ -67,10 +67,8 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 100 },
     roles: ["superuser"],
-
   }),
   getHandler,
 );

@@ -1,2 +1,5 @@
 "use client";
-export { useTenantContext, useBearerToken } from "@/src/providers/TenantProvider";
+export {
+  useBearerToken,
+  useTenantContext,
+} from "@/src/providers/TenantProvider";

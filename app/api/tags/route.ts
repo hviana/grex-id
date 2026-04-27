@@ -14,7 +14,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search");
 
-  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+  if (
+    !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+  ) {
     return Response.json({
       success: true,
       items: [],
@@ -190,36 +192,28 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

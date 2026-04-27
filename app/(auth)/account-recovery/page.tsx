@@ -13,8 +13,15 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 function AccountRecoveryContent() {
   const searchParams = useSearchParams();
   const systemSlug = searchParams.get("systemSlug");
-  const { t, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
-  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
+  const {
+    t,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
 
   const [channelValue, setChannelValue] = useState("");
   const [botToken, setBotToken] = useState<string | null>(null);

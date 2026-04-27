@@ -61,10 +61,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-[var(--color-black)] text-white">
         <TenantProvider>
-              {children}
-              <Suspense fallback={null}>
-                <CookieConsent />
-              </Suspense>
+          {children}
+          <Suspense fallback={null}>
+            <CookieConsent />
+          </Suspense>
         </TenantProvider>
       </body>
     </html>

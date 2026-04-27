@@ -57,14 +57,18 @@ async function fetchAnonymousToken(): Promise<string | null> {
   try {
     const res = await fetch("/api/public/anonymous-token");
     const json = await res.json();
-    return json.success && json.data?.token ? (json.data.token as string) : null;
+    return json.success && json.data?.token
+      ? (json.data.token as string)
+      : null;
   } catch {
     return null;
   }
 }
 
 function resolveBrowserLocale(): SupportedLocale | undefined {
-  if (typeof navigator === "undefined" || !navigator.languages) return undefined;
+  if (typeof navigator === "undefined" || !navigator.languages) {
+    return undefined;
+  }
   const locales = supportedLocales as readonly string[];
   for (const tag of navigator.languages) {
     if (locales.includes(tag)) return tag as SupportedLocale;
@@ -72,7 +76,9 @@ function resolveBrowserLocale(): SupportedLocale | undefined {
   for (const tag of navigator.languages) {
     const prefix = tag.split("-")[0];
     for (const supported of locales) {
-      if (supported.split("-")[0] === prefix) return supported as SupportedLocale;
+      if (supported.split("-")[0] === prefix) {
+        return supported as SupportedLocale;
+      }
     }
   }
   return undefined;
@@ -84,7 +90,9 @@ function resolveInitialLocale(defaultLocale?: string): SupportedLocale {
   if (stored && valid.includes(stored)) return stored as SupportedLocale;
   const browser = resolveBrowserLocale();
   if (browser) return browser;
-  if (defaultLocale && valid.includes(defaultLocale)) return defaultLocale as SupportedLocale;
+  if (defaultLocale && valid.includes(defaultLocale)) {
+    return defaultLocale as SupportedLocale;
+  }
   return fallbackLocale;
 }
 
@@ -105,10 +113,18 @@ export interface TenantContextValue {
   actorType: "user" | "api_token" | null;
   exchangeable: boolean;
   frontendDomains: string[];
-  login: (identifier: string, password: string, stayLoggedIn?: boolean, twoFactorCode?: string) => Promise<{ user: User; systemToken: string }>;
+  login: (
+    identifier: string,
+    password: string,
+    stayLoggedIn?: boolean,
+    twoFactorCode?: string,
+  ) => Promise<{ user: User; systemToken: string }>;
   logout: () => void;
   refresh: (token?: string) => Promise<void>;
-  exchangeTenant: (companyId: string, systemId: string) => Promise<{ token: string }>;
+  exchangeTenant: (
+    companyId: string,
+    systemId: string,
+  ) => Promise<{ token: string }>;
   locale: SupportedLocale;
   setLocale: (locale: SupportedLocale) => void;
   t: (key: string, params?: Record<string, string>) => string;
@@ -120,7 +136,12 @@ export interface TenantContextValue {
   systemId: string | null;
   systemSlug: string | null;
   setCompanies: (companies: Pick<Company, "id" | "name">[]) => void;
-  setSystems: (systems: Pick<System, "id" | "name" | "slug" | "logoUri" | "defaultLocale">[]) => void;
+  setSystems: (
+    systems: Pick<
+      System,
+      "id" | "name" | "slug" | "logoUri" | "defaultLocale"
+    >[],
+  ) => void;
   setPlan: (plan: { id: string; name: string } | null) => void;
   switchCompany: (companyId: string) => void;
   switchSystem: (systemId: string) => void;
@@ -134,18 +155,39 @@ export interface TenantContextValue {
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 
-export function TenantProvider({ children, defaultLocale }: { children: ReactNode; defaultLocale?: string }) {
+export function TenantProvider(
+  { children, defaultLocale }: { children: ReactNode; defaultLocale?: string },
+) {
   const [user, setUser] = useState<User | null>(null);
   const [systemToken, setSystemToken] = useState<string | null>(null);
   const [anonymousToken, setAnonymousToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [claims, setClaims] = useState<AuthClaims>({ roles: [], actorType: null, exchangeable: false, frontendDomains: [] });
+  const [claims, setClaims] = useState<AuthClaims>({
+    roles: [],
+    actorType: null,
+    exchangeable: false,
+    frontendDomains: [],
+  });
 
-  function applyAuthResponse(data: { systemToken: string; user?: User; roles?: string[]; actorType?: "user" | "api_token"; exchangeable?: boolean; frontendDomains?: string[] }) {
+  function applyAuthResponse(
+    data: {
+      systemToken: string;
+      user?: User;
+      roles?: string[];
+      actorType?: "user" | "api_token";
+      exchangeable?: boolean;
+      frontendDomains?: string[];
+    },
+  ) {
     setSystemToken(data.systemToken);
     if (data.user) setUser(data.user);
-    setClaims({ roles: data.roles ?? [], actorType: data.actorType ?? null, exchangeable: data.exchangeable ?? false, frontendDomains: data.frontendDomains ?? [] });
+    setClaims({
+      roles: data.roles ?? [],
+      actorType: data.actorType ?? null,
+      exchangeable: data.exchangeable ?? false,
+      frontendDomains: data.frontendDomains ?? [],
+    });
     setAnonymousToken(null);
     setAuthLoading(false);
   }
@@ -153,17 +195,29 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
   const refresh = useCallback(async (token?: string) => {
     const t = token ?? getCookie(TOKEN_COOKIE_NAME);
     if (!t) return;
-    const res = await fetch("/api/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemToken: t }) });
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ systemToken: t }),
+    });
     const json = await res.json();
     if (!json.success) {
       removeCookie(TOKEN_COOKIE_NAME);
-      setUser(null); setSystemToken(null); setAnonymousToken(null); setAuthLoading(false);
+      setUser(null);
+      setSystemToken(null);
+      setAnonymousToken(null);
+      setAuthLoading(false);
       return;
     }
     setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
     setSystemToken(json.data.systemToken);
     if (json.data.user) setUser(json.data.user);
-    setClaims({ roles: (json.data.roles as string[]) ?? [], actorType: (json.data.actorType as "user" | "api_token") ?? null, exchangeable: (json.data.exchangeable as boolean) ?? false, frontendDomains: (json.data.frontendDomains as string[]) ?? [] });
+    setClaims({
+      roles: (json.data.roles as string[]) ?? [],
+      actorType: (json.data.actorType as "user" | "api_token") ?? null,
+      exchangeable: (json.data.exchangeable as boolean) ?? false,
+      frontendDomains: (json.data.frontendDomains as string[]) ?? [],
+    });
     setAnonymousToken(null);
     setAuthLoading(false);
   }, []);
@@ -171,41 +225,101 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
   useEffect(() => {
     const token = getCookie(TOKEN_COOKIE_NAME);
     if (token) {
-      refresh(token).catch(() => { setUser(null); setSystemToken(null); setAnonymousToken(null); setAuthLoading(false); });
+      refresh(token).catch(() => {
+        setUser(null);
+        setSystemToken(null);
+        setAnonymousToken(null);
+        setAuthLoading(false);
+      });
     } else {
-      fetchAnonymousToken().then((t) => { setAnonymousToken(t); setAuthLoading(false); }).catch(() => { setAnonymousToken(null); setAuthLoading(false); });
+      fetchAnonymousToken().then((t) => {
+        setAnonymousToken(t);
+        setAuthLoading(false);
+      }).catch(() => {
+        setAnonymousToken(null);
+        setAuthLoading(false);
+      });
     }
   }, [refresh]);
 
-  const login = useCallback(async (identifier: string, password: string, stayLoggedIn?: boolean, twoFactorCode?: string) => {
-    const res = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier, password, stayLoggedIn, twoFactorCode }) });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error?.message ?? "auth.login.error.invalid");
-    setCookie(TOKEN_COOKIE_NAME, json.data.systemToken, stayLoggedIn ? 7 : 1);
-    applyAuthResponse(json.data);
-    return json.data;
-  }, []);
+  const login = useCallback(
+    async (
+      identifier: string,
+      password: string,
+      stayLoggedIn?: boolean,
+      twoFactorCode?: string,
+    ) => {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier,
+          password,
+          stayLoggedIn,
+          twoFactorCode,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error?.message ?? "auth.login.error.invalid");
+      }
+      setCookie(TOKEN_COOKIE_NAME, json.data.systemToken, stayLoggedIn ? 7 : 1);
+      applyAuthResponse(json.data);
+      return json.data;
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     const currentToken = systemToken ?? getCookie(TOKEN_COOKIE_NAME);
-    if (currentToken) fetch("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${currentToken}` } }).catch(() => {});
+    if (currentToken) {
+      fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+      }).catch(() => {});
+    }
     removeCookie(TOKEN_COOKIE_NAME);
-    setUser(null); setSystemToken(null);
-    setClaims({ roles: [], actorType: null, exchangeable: false, frontendDomains: [] });
-    fetchAnonymousToken().then((t) => setAnonymousToken(t)).catch(() => setAnonymousToken(null));
+    setUser(null);
+    setSystemToken(null);
+    setClaims({
+      roles: [],
+      actorType: null,
+      exchangeable: false,
+      frontendDomains: [],
+    });
+    fetchAnonymousToken().then((t) => setAnonymousToken(t)).catch(() =>
+      setAnonymousToken(null)
+    );
   }, [systemToken]);
 
-  const exchangeTenant = useCallback(async (companyId: string, systemId: string) => {
-    const currentToken = systemToken ?? getCookie(TOKEN_COOKIE_NAME);
-    if (!currentToken) throw new Error("No token available for exchange");
-    const res = await fetch("/api/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${currentToken}` }, body: JSON.stringify({ companyId, systemId }) });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error?.message ?? "auth.error.exchangeFailed");
-    setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
-    setSystemToken(json.data.systemToken);
-    setClaims({ roles: (json.data.roles as string[]) ?? [], actorType: (json.data.actorType as "user" | "api_token") ?? null, exchangeable: (json.data.exchangeable as boolean) ?? false, frontendDomains: (json.data.frontendDomains as string[]) ?? [] });
-    return json.data;
-  }, [systemToken]);
+  const exchangeTenant = useCallback(
+    async (companyId: string, systemId: string) => {
+      const currentToken = systemToken ?? getCookie(TOKEN_COOKIE_NAME);
+      if (!currentToken) throw new Error("No token available for exchange");
+      const res = await fetch("/api/auth/exchange", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({ companyId, systemId }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error?.message ?? "auth.error.exchangeFailed");
+      }
+      setCookie(TOKEN_COOKIE_NAME, json.data.systemToken);
+      setSystemToken(json.data.systemToken);
+      setClaims({
+        roles: (json.data.roles as string[]) ?? [],
+        actorType: (json.data.actorType as "user" | "api_token") ?? null,
+        exchangeable: (json.data.exchangeable as boolean) ?? false,
+        frontendDomains: (json.data.frontendDomains as string[]) ?? [],
+      });
+      return json.data;
+    },
+    [systemToken],
+  );
 
   const activeToken = systemToken ?? anonymousToken;
   const tenant = useMemo<Tenant>(() => {
@@ -213,28 +327,57 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
     return extractTenant(activeToken);
   }, [activeToken]);
 
-  const [locale, setLocaleState] = useState<SupportedLocale>(() => resolveInitialLocale(defaultLocale));
+  const [locale, setLocaleState] = useState<SupportedLocale>(() =>
+    resolveInitialLocale(defaultLocale)
+  );
 
   const setLocale = useCallback((newLocale: SupportedLocale) => {
     setLocaleState(newLocale);
     setCookie(LOCALE_COOKIE_NAME, newLocale);
     const token = systemToken ?? getCookie(TOKEN_COOKIE_NAME);
-    if (token) fetch("/api/users?action=locale", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ locale: newLocale }) }).catch(() => {});
+    if (token) {
+      fetch("/api/users?action=locale", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ locale: newLocale }),
+      }).catch(() => {});
+    }
   }, [systemToken]);
 
-  const t = useCallback((key: string, params?: Record<string, string>) => translate(key, locale, params), [locale]);
+  const t = useCallback(
+    (key: string, params?: Record<string, string>) =>
+      translate(key, locale, params),
+    [locale],
+  );
 
-  const [companies, setCompanies] = useState<Pick<Company, "id" | "name">[]>([]);
-  const [systems, setSystems] = useState<Pick<System, "id" | "name" | "slug" | "logoUri" | "defaultLocale">[]>([]);
+  const [companies, setCompanies] = useState<Pick<Company, "id" | "name">[]>(
+    [],
+  );
+  const [systems, setSystems] = useState<
+    Pick<System, "id" | "name" | "slug" | "logoUri" | "defaultLocale">[]
+  >([]);
   const [plan, setPlan] = useState<{ id: string; name: string } | null>(null);
 
   const companyId = tenant.companyId || null;
   const systemId: string | null = tenant.systemId || null;
 
-  const switchCompany = useCallback((cId: string) => { setCookie(COMPANY_COOKIE, cId); setCookie(SYSTEM_COOKIE, ""); setSystems([]); setPlan(null); }, []);
+  const switchCompany = useCallback((cId: string) => {
+    setCookie(COMPANY_COOKIE, cId);
+    setCookie(SYSTEM_COOKIE, "");
+    setSystems([]);
+    setPlan(null);
+  }, []);
 
-  const activeSys = useMemo(() => systems.find((s) => s.id === systemId), [systems, systemId]);
-  const systemSlug = activeSys?.slug && activeSys.slug !== "core" ? activeSys.slug : null;
+  const activeSys = useMemo(() => systems.find((s) => s.id === systemId), [
+    systems,
+    systemId,
+  ]);
+  const systemSlug = activeSys?.slug && activeSys.slug !== "core"
+    ? activeSys.slug
+    : null;
 
   const switchSystem = useCallback((sId: string) => {
     setCookie(SYSTEM_COOKIE, sId);
@@ -252,19 +395,31 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
       const json = await res.json();
       if (json.success && json.data) {
         const map = new Map<string, string>();
-        for (const [key, setting] of Object.entries(json.data as Record<string, { value: string }>)) map.set(key, setting.value);
+        for (
+          const [key, setting] of Object.entries(
+            json.data as Record<string, { value: string }>,
+          )
+        ) map.set(key, setting.value);
         setFcSettings(map);
       }
     } catch { /* ignore */ }
     setFrontCoreLoaded(true);
   }, []);
 
-  useEffect(() => { loadFrontCore(); }, [loadFrontCore]);
+  useEffect(() => {
+    loadFrontCore();
+  }, [loadFrontCore]);
 
-  const getSetting = useCallback((key: string) => fcSettings.get(key), [fcSettings]);
-  const reloadFrontCore = useCallback(async () => { await loadFrontCore(); }, [loadFrontCore]);
+  const getSetting = useCallback((key: string) => fcSettings.get(key), [
+    fcSettings,
+  ]);
+  const reloadFrontCore = useCallback(async () => {
+    await loadFrontCore();
+  }, [loadFrontCore]);
 
-  const [publicSystem, setPublicSystem] = useState<PublicSystemInfo | null>(null);
+  const [publicSystem, setPublicSystem] = useState<PublicSystemInfo | null>(
+    null,
+  );
   const [publicSystemLoading, setPublicSystemLoading] = useState(true);
 
   const loadPublicSystem = useCallback(async (slug?: string) => {
@@ -277,7 +432,12 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
       const json = await res.json();
       if (json.success && json.data) {
         setPublicSystem(json.data);
-        if (json.data.defaultLocale && (supportedLocales as readonly string[]).includes(json.data.defaultLocale) && !document.cookie.includes("core_locale")) {
+        if (
+          json.data.defaultLocale &&
+          (supportedLocales as readonly string[]).includes(
+            json.data.defaultLocale,
+          ) && !document.cookie.includes("core_locale")
+        ) {
           setLocale(json.data.defaultLocale as SupportedLocale);
         }
       }
@@ -286,22 +446,80 @@ export function TenantProvider({ children, defaultLocale }: { children: ReactNod
   }, [setLocale]);
 
   const value = useMemo<TenantContextValue>(() => ({
-    user, systemToken, anonymousToken, loading: authLoading, tenant,
+    user,
+    systemToken,
+    anonymousToken,
+    loading: authLoading,
+    tenant,
     ...claims,
-    login, logout, refresh, exchangeTenant,
-    locale, setLocale, t, supportedLocales,
-    companies, systems, plan, companyId, systemId, systemSlug,
-    setCompanies, setSystems, setPlan, switchCompany, switchSystem,
-    getSetting, frontCoreLoaded, reloadFrontCore,
-    publicSystem, publicSystemLoading, loadPublicSystem,
-  }), [user, systemToken, anonymousToken, authLoading, tenant, claims, login, logout, refresh, exchangeTenant, locale, setLocale, t, companies, systems, plan, companyId, systemId, systemSlug, setCompanies, setSystems, setPlan, switchCompany, switchSystem, getSetting, frontCoreLoaded, reloadFrontCore, publicSystem, publicSystemLoading, loadPublicSystem]);
+    login,
+    logout,
+    refresh,
+    exchangeTenant,
+    locale,
+    setLocale,
+    t,
+    supportedLocales,
+    companies,
+    systems,
+    plan,
+    companyId,
+    systemId,
+    systemSlug,
+    setCompanies,
+    setSystems,
+    setPlan,
+    switchCompany,
+    switchSystem,
+    getSetting,
+    frontCoreLoaded,
+    reloadFrontCore,
+    publicSystem,
+    publicSystemLoading,
+    loadPublicSystem,
+  }), [
+    user,
+    systemToken,
+    anonymousToken,
+    authLoading,
+    tenant,
+    claims,
+    login,
+    logout,
+    refresh,
+    exchangeTenant,
+    locale,
+    setLocale,
+    t,
+    companies,
+    systems,
+    plan,
+    companyId,
+    systemId,
+    systemSlug,
+    setCompanies,
+    setSystems,
+    setPlan,
+    switchCompany,
+    switchSystem,
+    getSetting,
+    frontCoreLoaded,
+    reloadFrontCore,
+    publicSystem,
+    publicSystemLoading,
+    loadPublicSystem,
+  ]);
 
-  return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
+  return (
+    <TenantContext.Provider value={value}>{children}</TenantContext.Provider>
+  );
 }
 
 export function useTenantContext(): TenantContextValue {
   const ctx = useContext(TenantContext);
-  if (!ctx) throw new Error("useTenantContext must be used within a <TenantProvider>");
+  if (!ctx) {
+    throw new Error("useTenantContext must be used within a <TenantProvider>");
+  }
   return ctx;
 }
 

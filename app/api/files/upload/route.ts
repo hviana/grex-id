@@ -89,9 +89,7 @@ export const POST = compose(
       fileCompanyId: companyId,
       fileSystemSlug: systemSlug,
       fileUserId: userId,
-      actorId: ctx.tenantContext.tenant.actorId,
-      companyId: ctx.tenantContext.tenant.companyId,
-      systemId: ctx.tenantContext.tenant.systemId,
+      tenant: ctx.tenantContext.tenant,
       operation: "upload",
     });
     if (!accessCheck.allowed) {
@@ -143,8 +141,8 @@ export const POST = compose(
     const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] =
       hasSubscription
         ? await Promise.all([
-          resolveMaxConcurrentUploads({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! }),
-          resolveMaxUploadBandwidth({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! }),
+          resolveMaxConcurrentUploads(ctx.tenantContext.tenant),
+          resolveMaxUploadBandwidth(ctx.tenantContext.tenant),
           core.getSetting("transfer.default.maxConcurrentUploads"),
           core.getSetting("transfer.default.maxUploadBandwidthMB"),
         ])
@@ -206,10 +204,7 @@ export const POST = compose(
       const uri = fs.pathToURIComponent(path);
       let cacheTenantKey = "core";
       if (system && companyId) {
-        const limit = await resolveFileCacheLimit({
-          systemId: ctx.tenantContext.tenant.systemId!,
-          companyId: ctx.tenantContext.tenant.companyId!,
-        });
+        const limit = await resolveFileCacheLimit(ctx.tenantContext.tenant);
         if (limit.maxBytes > 0) cacheTenantKey = `${companyId}:${systemSlug}`;
       }
       FileCacheManager.getInstance().evict(cacheTenantKey, uri);

@@ -48,7 +48,10 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
         return Response.json(
           {
             success: false,
-            error: { code: "RATE_LIMITED", message: "common.error.rateLimited" },
+            error: {
+              code: "RATE_LIMITED",
+              message: "common.error.rateLimited",
+            },
           },
           {
             status: 429,
@@ -83,7 +86,12 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
 
     const token = authHeader.slice(7);
 
-    let tenant: { id?: string; systemId?: string; companyId?: string; actorId?: string };
+    let tenant: {
+      id?: string;
+      systemId?: string;
+      companyId?: string;
+      actorId?: string;
+    };
     try {
       ({ tenant } = await verifyTenantToken(token));
     } catch {
@@ -102,13 +110,11 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     // ── 3. Resolve auth claims from Core cache → build TenantContext ──────
     const core = Core.getInstance();
     const actorType = Core.deriveActorType(actorId) ?? "user";
-    const roles = actorId
-      ? await core.getTenantRoles(actorId)
-      : ["superuser"];
+    const roles = actorId ? await core.getTenantRoles(tenant) : ["superuser"];
     const systemId = tenant.systemId;
     const companyId = tenant.companyId;
     const frontendDomains = (systemId && companyId)
-      ? await core.getFrontendDomains(systemId, companyId, actorId)
+      ? await core.getFrontendDomains(tenant)
       : [];
     const systemSlug = systemId
       ? (await core.getSystemSlug(systemId)) ?? undefined
@@ -132,8 +138,8 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     const tc = ctx.tenantContext;
 
     // ── 4. Actor validity ──────────────────────────────────────────────
-    await ensureActorValidityLoaded(tc.tenant.id!);
-    if (!tc.tenant.actorId || !isActorValid(tc.tenant.id!, tc.tenant.actorId)) {
+    await ensureActorValidityLoaded(tc.tenant);
+    if (!tc.tenant.actorId || !isActorValid(tc.tenant)) {
       return Response.json(
         {
           success: false,
@@ -151,7 +157,11 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     if (tc.roles.includes("superuser")) {
       const response = await next();
       if (tc.actorType !== "user") {
-        const corsHeaders = getCorsHeaders(req, tc.actorType, tc.frontendDomains);
+        const corsHeaders = getCorsHeaders(
+          req,
+          tc.actorType,
+          tc.frontendDomains,
+        );
         for (const [key, value] of Object.entries(corsHeaders)) {
           response.headers.set(key, value);
         }
@@ -178,7 +188,7 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
 
     // ── 8. Plan access (Core cache) ────────────────────────────────────
     if (tc.tenant.companyId && tc.tenant.systemId) {
-      const planResult = await checkPlanAccess(tc.tenant.systemId, tc.tenant.companyId, tc.roles);
+      const planResult = await checkPlanAccess(tc.tenant, tc.roles);
       if (!planResult.granted) {
         const errorMap: Record<string, { code: string; message: string }> = {
           NO_SUBSCRIPTION: {
@@ -209,8 +219,7 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     if (options?.entities && options.entities.length > 0) {
       for (const { entityName, tableName } of options.entities) {
         const limitResult = await resolveEntityLimit({
-          systemId: tc.tenant.systemId!,
-          companyId: tc.tenant.companyId!,
+          tenant: tc.tenant,
           entityName,
         });
 

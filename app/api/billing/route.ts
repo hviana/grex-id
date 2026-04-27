@@ -20,7 +20,9 @@ import {
 } from "@/server/db/queries/billing";
 
 function tenantGuard(ctx: RequestContext): Response | null {
-  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+  if (
+    !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+  ) {
     return Response.json(
       {
         success: false,
@@ -234,7 +236,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await setDefaultPaymentMethod(ctx.tenantContext.tenant.id!, paymentMethodId);
+    await setDefaultPaymentMethod(
+      ctx.tenantContext.tenant.id!,
+      paymentMethodId,
+    );
 
     return Response.json({ success: true });
   }
@@ -453,13 +458,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const minAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.minAmount",
-          { systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! },
+          {
+            systemId: ctx.tenantContext.tenant.systemId!,
+            companyId: ctx.tenantContext.tenant.companyId!,
+          },
         )) ?? "500",
       );
       const maxAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.maxAmount",
-          { systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! },
+          {
+            systemId: ctx.tenantContext.tenant.systemId!,
+            companyId: ctx.tenantContext.tenant.companyId!,
+          },
         )) ?? "50000",
       );
 
@@ -563,18 +574,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => postHandler(req, ctx),
 );

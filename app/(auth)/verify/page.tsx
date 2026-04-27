@@ -11,13 +11,21 @@ import Link from "next/link";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function VerifyContent() {
-  const { t, refresh, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
+  const {
+    t,
+    refresh,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("systemSlug");
   const identifierParam = searchParams.get("identifier") ?? "";
-  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
 
   const [identifier, setIdentifier] = useState(identifierParam);
   const [verifying, setVerifying] = useState(!!token);

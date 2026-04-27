@@ -167,7 +167,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const ctx = useTenantContext();
-  const { systemToken, exchangeTenant, roles, loading: authLoading, t, setLocale } = ctx;
+  const {
+    systemToken,
+    exchangeTenant,
+    roles,
+    loading: authLoading,
+    t,
+    setLocale,
+  } = ctx;
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [initializing, setInitializing] = useState(true);
 
@@ -513,33 +520,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    
-      <div className="flex h-screen bg-[var(--color-black)]">
+    <div className="flex h-screen bg-[var(--color-black)]">
+      {!pathname.startsWith("/onboarding") && (
+        <Sidebar
+          menus={menus}
+          systemLogo={systemLogoUrl}
+          systemName={activeSystem?.name}
+          activeComponent={activeComponent}
+          onNavigate={handleNavigate}
+        />
+      )}
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
         {!pathname.startsWith("/onboarding") && (
-          <Sidebar
-            menus={menus}
-            systemLogo={systemLogoUrl}
-            systemName={activeSystem?.name}
-            activeComponent={activeComponent}
-            onNavigate={handleNavigate}
-          />
+          <header className="flex items-center justify-end gap-3 px-4 py-3 border-b border-[var(--color-dark-gray)] bg-[#0a0a0a]">
+            <LocaleSelector />
+            <ProfileMenu />
+          </header>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Top bar */}
-          {!pathname.startsWith("/onboarding") && (
-            <header className="flex items-center justify-end gap-3 px-4 py-3 border-b border-[var(--color-dark-gray)] bg-[#0a0a0a]">
-              <LocaleSelector />
-              <ProfileMenu />
-            </header>
-          )}
-
-          {/* Content */}
-          <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-            {children}
-          </main>
-        </div>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          {children}
+        </main>
       </div>
-    
+    </div>
   );
 }

@@ -139,9 +139,7 @@ async function handler(
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 5 },
-
   }),
   async (req, ctx) => handler(req, ctx),
 );

@@ -129,7 +129,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     exp,
   );
 
-  await rememberActor(ctx.tenantContext.tenant.id!, String(createdToken.id));
+  await rememberActor({
+    id: ctx.tenantContext.tenant.id!,
+    actorId: String(createdToken.id),
+  });
 
   return Response.json(
     { success: true, data: { token: jwt } },
@@ -153,7 +156,7 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 
   const row = await revokeToken(id);
   if (row) {
-    await forgetActor(row.tenantId, id);
+    await forgetActor({ id: row.tenantId, actorId: id });
   }
 
   return Response.json({ success: true });

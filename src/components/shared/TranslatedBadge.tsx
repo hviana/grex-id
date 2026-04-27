@@ -1,7 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-
 export type TranslatedBadgeKind =
   | "role"
   | "entity"

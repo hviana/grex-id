@@ -5,6 +5,7 @@ import {
   updateCache,
 } from "./cache.ts";
 import { assertServerOnly } from "./server-only.ts";
+import type { Tenant } from "@/src/contracts/tenant";
 import { fetchActiveApiTokenIds } from "../db/queries/actor-validity.ts";
 
 assertServerOnly("actor-validity.ts");
@@ -51,46 +52,44 @@ function ensureRegistered(tenantId: string): string {
  * once per request before the synchronous `isActorValid` check.
  */
 export async function ensureActorValidityLoaded(
-  tenantId: string,
+  tenant: Tenant,
 ): Promise<void> {
-  const key = ensureRegistered(tenantId);
+  const key = ensureRegistered(tenant.id!);
   await getCache<Set<string>>(SLUG, key);
 }
 
 /**
  * Single verification function — the only read used by withAuth.
  */
-export function isActorValid(tenantId: string, actorId: string): boolean {
-  if (!actorId) return false;
-  const set = getCacheIfLoaded<Set<string>>(SLUG, tenantId);
+export function isActorValid(tenant: Tenant): boolean {
+  if (!tenant.actorId) return false;
+  const set = getCacheIfLoaded<Set<string>>(SLUG, tenant.id!);
   if (!set) return false;
-  return set.has(actorId);
+  return set.has(tenant.actorId);
 }
 
 /** Add an actor id to its tenant's partition. */
 export async function rememberActor(
-  tenantId: string,
-  actorId: string,
+  tenant: Tenant,
 ): Promise<void> {
-  if (!actorId) return;
-  const key = ensureRegistered(tenantId);
+  if (!tenant.actorId) return;
+  const key = ensureRegistered(tenant.id!);
   const set = await getCache<Set<string>>(SLUG, key);
-  set.add(actorId);
+  set.add(tenant.actorId);
 }
 
 /** Remove an actor id from its tenant's partition. */
 export async function forgetActor(
-  tenantId: string,
-  actorId: string,
+  tenant: Tenant,
 ): Promise<void> {
-  if (!actorId) return;
-  const key = ensureRegistered(tenantId);
+  if (!tenant.actorId) return;
+  const key = ensureRegistered(tenant.id!);
   const set = await getCache<Set<string>>(SLUG, key);
-  set.delete(actorId);
+  set.delete(tenant.actorId);
 }
 
 /** Force-reload a single tenant's partition from the DB. */
-export async function reloadTenant(tenantId: string): Promise<void> {
-  const key = ensureRegistered(tenantId);
+export async function reloadTenant(tenant: Tenant): Promise<void> {
+  const key = ensureRegistered(tenant.id!);
   await updateCache<Set<string>>(SLUG, key);
 }

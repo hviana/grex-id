@@ -76,20 +76,16 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 100 },
     roles: ["superuser"],
-
   }),
   getHandler,
 );
 
 export const PUT = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 100 },
     roles: ["superuser"],
-
   }),
   putHandler,
 );

@@ -180,9 +180,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 10 },
-
   }),
   async (req, ctx) => handler(req, ctx),
 );

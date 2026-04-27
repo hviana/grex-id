@@ -1,5 +1,6 @@
 import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
 import { fetchCompanySystemTenantRow } from "../db/queries/tenants.ts";
+import type { Tenant } from "@/src/contracts/tenant";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
@@ -669,13 +670,15 @@ class Core {
 
   /** @deprecated Use reloadSubscription(tenantId) instead */
   async reloadSubscriptionByScope(
-    companyId: string,
-    systemId: string,
+    tenant: Tenant,
   ): Promise<Subscription | null> {
     const { fetchCompanySystemTenantRow } = await import(
       "../db/queries/tenants.ts"
     );
-    const tenantRow = await fetchCompanySystemTenantRow(companyId, systemId);
+    const tenantRow = await fetchCompanySystemTenantRow(
+      tenant.companyId!,
+      tenant.systemId!,
+    );
     if (!tenantRow) return null;
     return this.reloadSubscription(tenantRow.id);
   }
@@ -688,16 +691,15 @@ class Core {
    * Internally resolves the tenant row → subscription → plan+voucher limits.
    */
   async ensureTenantLimits(
-    systemId: string,
-    companyId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const cacheName = `limits:${systemId}:${companyId}`;
+    const cacheName = `tenantLimits:${tenant.systemId}:${tenant.companyId}`;
 
     if (!this.tenantLimitsRegistered.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => this.loadTenantLimits(systemId, companyId),
+        () => this.loadTenantLimits(tenant),
       );
       this.tenantLimitsRegistered.add(cacheName);
     }
@@ -706,15 +708,14 @@ class Core {
   }
 
   async reloadTenantLimits(
-    systemId: string,
-    companyId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const cacheName = `limits:${systemId}:${companyId}`;
+    const cacheName = `tenantLimits:${tenant.systemId}:${tenant.companyId}`;
     if (!this.tenantLimitsRegistered.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => this.loadTenantLimits(systemId, companyId),
+        () => this.loadTenantLimits(tenant),
       );
       this.tenantLimitsRegistered.add(cacheName);
     }
@@ -722,10 +723,12 @@ class Core {
   }
 
   private async loadTenantLimits(
-    systemId: string,
-    companyId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const row = await fetchCompanySystemTenantRow(companyId, systemId);
+    const row = await fetchCompanySystemTenantRow(
+      tenant.companyId!,
+      tenant.systemId!,
+    );
     if (!row) return { ...ZERO_LIMITS };
 
     const sub = await this.ensureSubscription(row.id);
@@ -754,17 +757,16 @@ class Core {
    * 0 in the CS limit means unlimited → no clamp on that field.
    */
   async ensureActorLimits(
-    systemId: string,
-    companyId: string,
-    actorId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const cacheName = `actorLimits:${systemId}:${companyId}:${actorId}`;
+    const cacheName =
+      `actorLimits:${tenant.systemId}:${tenant.companyId}:${tenant.actorId}`;
 
     if (!this.actorLimitsRegistered.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => this.loadActorLimits(systemId, companyId, actorId),
+        () => this.loadActorLimits(tenant),
       );
       this.actorLimitsRegistered.add(cacheName);
     }
@@ -773,16 +775,15 @@ class Core {
   }
 
   async reloadActorLimits(
-    systemId: string,
-    companyId: string,
-    actorId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const cacheName = `actorLimits:${systemId}:${companyId}:${actorId}`;
+    const cacheName =
+      `actorLimits:${tenant.systemId}:${tenant.companyId}:${tenant.actorId}`;
     if (!this.actorLimitsRegistered.has(cacheName)) {
       registerCache(
         CORE_SLUG,
         cacheName,
-        () => this.loadActorLimits(systemId, companyId, actorId),
+        () => this.loadActorLimits(tenant),
       );
       this.actorLimitsRegistered.add(cacheName);
     }
@@ -790,12 +791,10 @@ class Core {
   }
 
   private async loadActorLimits(
-    systemId: string,
-    companyId: string,
-    actorId: string,
+    tenant: Tenant,
   ): Promise<TenantResourceLimits> {
-    const csLimits = await this.ensureTenantLimits(systemId, companyId);
-    const actorRlRaw = await fetchActorResourceLimit(actorId);
+    const csLimits = await this.ensureTenantLimits(tenant);
+    const actorRlRaw = await fetchActorResourceLimit(tenant.actorId!);
 
     if (!actorRlRaw) {
       return { ...csLimits };
@@ -830,14 +829,14 @@ class Core {
    * Resolves role names for an actor from resource_limit.roleIds →
    * role record IDs → role names. Cached per actorId.
    */
-  async getTenantRoles(actorId: string): Promise<string[]> {
-    if (!actorId) return [];
+  async getTenantRoles(tenant: Tenant): Promise<string[]> {
+    if (!tenant.actorId) return [];
 
-    const cacheName = `roles:${actorId}`;
+    const cacheName = `roles:${tenant.actorId}`;
 
     if (!this.rolesRegistered.has(cacheName)) {
       registerCache(CORE_SLUG, cacheName, async () => {
-        const rl = await fetchActorResourceLimit(actorId);
+        const rl = await fetchActorResourceLimit(tenant.actorId!);
         const roleIds = toRlStrArr(rl ?? undefined, "roleIds");
         if (!roleIds.length) return [] as string[];
         return resolveRoleNames(roleIds);
@@ -848,12 +847,13 @@ class Core {
     return getCache<string[]>(CORE_SLUG, cacheName);
   }
 
-  async reloadTenantRoles(actorId: string): Promise<string[]> {
-    const cacheName = `roles:${actorId}`;
+  async reloadTenantRoles(tenant: Tenant): Promise<string[]> {
+    const cacheName = `roles:${tenant.actorId}`;
+    if (!tenant.actorId) return [];
     // Re-register if needed
     if (!this.rolesRegistered.has(cacheName)) {
       registerCache(CORE_SLUG, cacheName, async () => {
-        const rl = await fetchActorResourceLimit(actorId);
+        const rl = await fetchActorResourceLimit(tenant.actorId!);
         const roleIds = toRlStrArr(rl ?? undefined, "roleIds");
         if (!roleIds.length) return [] as string[];
         return resolveRoleNames(roleIds);
@@ -865,18 +865,14 @@ class Core {
 
   // ── Frontend domains ───────────────────────────────────────────────────
 
-  async getFrontendDomains(
-    systemId: string,
-    companyId: string,
-    actorId?: string,
-  ): Promise<string[]> {
-    if (actorId) {
-      const limits = await this.ensureActorLimits(systemId, companyId, actorId);
+  async getFrontendDomains(tenant: Tenant): Promise<string[]> {
+    if (tenant.actorId) {
+      const limits = await this.ensureActorLimits(tenant);
       if (limits.frontendDomains.length > 0) {
         return limits.frontendDomains;
       }
     }
-    const csLimits = await this.ensureTenantLimits(systemId, companyId);
+    const csLimits = await this.ensureTenantLimits(tenant);
     return csLimits.frontendDomains;
   }
 

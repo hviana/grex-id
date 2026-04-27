@@ -133,7 +133,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   let storageLimitBytes = config.subscriptionStorageLimit ?? 1073741824;
   storageLimitBytes += config.voucherStorageModifier;
 
-  const cacheLimitResult = await resolveFileCacheLimit({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! });
+  const cacheLimitResult = await resolveFileCacheLimit(
+    ctx.tenantContext.tenant,
+  );
   const tenantKey = systemSlug && companyId
     ? `${companyId}:${systemSlug}`
     : null;

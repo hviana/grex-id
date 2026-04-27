@@ -25,10 +25,10 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
 
   try {
     const { tenant } = await verifyTenantToken(systemToken);
-    await ensureActorValidityLoaded(tenant.id!);
+    await ensureActorValidityLoaded(tenant);
 
     const actorId = tenant.actorId;
-    if (!actorId || !isActorValid(tenant.id!, actorId)) {
+    if (!actorId || !isActorValid(tenant)) {
       return Response.json(
         {
           success: false,
@@ -75,8 +75,8 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       );
     }
 
-    const roles = await core.getTenantRoles(actorId);
-    const frontendDomains = await core.getFrontendDomains(tenant.systemId!, tenant.companyId!, actorId);
+    const roles = await core.getTenantRoles(tenant);
+    const frontendDomains = await core.getFrontendDomains(tenant);
 
     const newToken = await createTenantToken(
       tenant,

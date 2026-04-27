@@ -37,7 +37,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
-  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+  if (
+    !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+  ) {
     return Response.json({
       success: true,
       items: [],
@@ -72,7 +74,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+  if (
+    !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+  ) {
     return Response.json(
       {
         success: false,
@@ -141,46 +145,41 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "location", tenant: ctx.tenantContext.tenant }, id);
+  await genericDelete(
+    { table: "location", tenant: ctx.tenantContext.tenant },
+    id,
+  );
   return Response.json({ success: true });
 }
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
     roles: ["grexid.list_locations"],
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
     roles: ["grexid.manage_locations"],
-
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
     roles: ["grexid.manage_locations"],
-
   }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
     roles: ["grexid.manage_locations"],
-
   }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

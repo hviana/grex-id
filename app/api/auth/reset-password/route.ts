@@ -9,7 +9,6 @@ import {
 } from "@/server/db/queries/auth";
 import { validateField } from "@/server/utils/field-validator";
 
-
 async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { token, password, confirmPassword } = body;
@@ -82,4 +81,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   });
 }
 
-export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), handler);
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  handler,
+);

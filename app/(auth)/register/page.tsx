@@ -16,8 +16,16 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const systemSlug = searchParams.get("systemSlug");
-  const { t, locale, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
-  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
+  const {
+    t,
+    locale,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
 
   const channelsRef = useRef<SubformRef>(null);
 

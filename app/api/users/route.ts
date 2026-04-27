@@ -51,7 +51,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const action = url.searchParams.get("action");
 
   if (action === "context") {
-    if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+    if (
+      !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+    ) {
       return Response.json(
         {
           success: false,
@@ -163,7 +165,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Roles changed for the invited user — evict from this tenant's
     // partition so their next request re-authenticates with fresh
     // roles (§8.11).
-    await forgetActor(ctx.tenantContext.tenant.id!, String(existingUserId));
+    await forgetActor({
+      id: ctx.tenantContext.tenant.id!,
+      actorId: String(existingUserId),
+    });
 
     const core = Core.getInstance();
     const baseUrl = (await core.getSetting("app.baseUrl", {
@@ -290,7 +295,9 @@ async function putHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
+    if (
+      !ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId
+    ) {
       return Response.json(
         {
           success: false,
@@ -408,7 +415,10 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     // Roles changed — evict from this tenant's partition so the user's
     // next request re-authenticates with fresh roles (§8.11).
-    await forgetActor(ctx.tenantContext.tenant.id!, String(id));
+    await forgetActor({
+      id: ctx.tenantContext.tenant.id!,
+      actorId: String(id),
+    });
   }
 
   return Response.json({ success: true });
@@ -448,7 +458,10 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Membership removed — evict the user from this tenant's partition so
   // the user's next request fails at withAuth (§8.11).
-  await forgetActor(ctx.tenantContext.tenant.id!, String(userId));
+  await forgetActor({
+    id: ctx.tenantContext.tenant.id!,
+    actorId: String(userId),
+  });
 
   // If the user no longer belongs to any tenant, hard-delete the user
   // and all their compositional data (profile, channels, recovery channels).
@@ -459,36 +472,28 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
 export const GET = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
   withAuthAndLimit({
-
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-
   }),
   async (req, ctx) => deleteHandler(req, ctx),
 );
