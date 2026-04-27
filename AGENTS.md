@@ -453,19 +453,16 @@ company.
 ### 4.1 Tenant contract
 
 ```ts
-type TenantActorType = "user" | "api_token" | "connected_app";
+type TenantActorType = "user" | "api_token";
 interface Tenant {
-  id: string; // tenant record ID — universal scope key and FK target
-  systemId: string;
-  companyId: string;
-  systemSlug: string;
-  roles: string[];
+  id?: string; // tenant record ID — universal scope key and FK target
+  systemId?: string;
+  companyId?: string;
+  systemSlug?: string;
   actorType?: TenantActorType;
   actorId?: string; // universal actor id — user id or api_token id; always a real SurrealDB record ID
   exchangeable?: boolean; // true only for actorType="user"
   exp?: number; // unix seconds — present on JWT-decoded tenants
-  frontendUse?: boolean;
-  frontendDomains?: string[];
 }
 ```
 

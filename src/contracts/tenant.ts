@@ -5,11 +5,8 @@ export interface Tenant {
   systemId?: string;
   companyId?: string;
   systemSlug?: string;
-  roles?: string[];
   actorType?: TenantActorType;
   actorId?: string;
   exchangeable?: boolean;
   exp?: number;
-  frontendUse?: boolean;
-  frontendDomains?: string[];
 }
