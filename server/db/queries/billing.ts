@@ -138,17 +138,17 @@ export async function subscribe(params: {
   }
 
   const userClauses = params.userId
-    ? `IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = NONE)) = 0 {
+    ? `IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND !systemId)) = 0 {
          CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
        };
        IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT VALUE id FROM tenant WHERE actorId = NONE AND companyId = NONE AND systemId = $systemId LIMIT 1)[0][0] LIMIT 1)[0];
+         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT VALUE id FROM tenant WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1)[0][0] LIMIT 1)[0];
          CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = $systemId, isOwner = false, roleIds = [$adminRoleId];
        };`
     : "";
 
   return db.query(
-    `IF array::len((SELECT id FROM tenant WHERE actorId = NONE AND companyId = $companyId AND systemId = $systemId)) = 0 {
+    `IF array::len((SELECT id FROM tenant WHERE !actorId AND companyId = $companyId AND systemId = $systemId)) = 0 {
        CREATE tenant SET actorId = NONE, companyId = $companyId, systemId = $systemId, isOwner = false;
      };
      UPDATE subscription SET status = "cancelled" WHERE tenantIds CONTAINS $tenantId AND status = "active";
@@ -578,7 +578,7 @@ export async function resolveExpiredPaymentContext(params: {
     [{ id: string; name: string }[], { name: string; slug: string }[]]
   >(
     `LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
@@ -666,7 +666,7 @@ export async function getPaymentSubscriptionContext(params: {
      };
      LET $tenantId = (SELECT VALUE tenantIds[0] FROM subscription WHERE id = $id LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
@@ -956,7 +956,7 @@ export async function getAsyncPaymentContext(
      };
      LET $tenantId = (SELECT VALUE tenantIds[0] FROM payment WHERE id = $id LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
@@ -1153,7 +1153,7 @@ export async function getAutoRechargeContext(
        AND isDefault = true LIMIT 1;
      LET $tenantId = (SELECT VALUE tenantIds[0] FROM subscription WHERE id = $subId LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
-     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND systemId = NONE AND isOwner = true LIMIT 1)[0];
+     LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;`,

@@ -112,7 +112,7 @@ export async function getCompanySystems(
   const result = await db.query<[Record<string, unknown>[]]>(
     `SELECT * FROM system WHERE id IN (
        SELECT VALUE systemId FROM tenant
-       WHERE companyId = $companyId AND actorId = NONE AND systemId != NONE
+       WHERE companyId = $companyId AND !actorId AND systemId
      )`,
     { companyId: rid(companyId) },
   );

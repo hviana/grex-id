@@ -545,7 +545,9 @@ export async function genericList<T = Record<string, unknown>>(
 
   // Limit + 1 lets us detect hasMore without a second query.
   const itemsSelect = `SELECT ${selectFields} FROM ${opts.table}${itemWhere}` +
-    ` ORDER BY ${orderField} ${direction} LIMIT ${limit + 1}${fetchClause}`;
+    ` ORDER BY ${orderField}${
+      /\b(ASC|DESC)\b/i.test(orderField) ? "" : " " + direction
+    } LIMIT ${limit + 1}${fetchClause}`;
 
   const countSelect =
     `SELECT count() AS c FROM ${opts.table}${baseWhere} GROUP ALL`;

@@ -310,10 +310,10 @@ export async function resolveUserMembership(userId: string): Promise<
 > {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $t = (SELECT id, companyId, systemId FROM tenant
+    `LET $t = (SELECT id, companyId, systemId, roleIds FROM tenant
        WHERE actorId = $userId
-         AND companyId IS NOT NONE
-         AND systemId IS NOT NONE
+         AND companyId
+         AND systemId
        LIMIT 1);
      LET $sys = IF array::len($t) > 0
        THEN (SELECT slug FROM system WHERE id = $t[0].systemId LIMIT 1)
@@ -351,7 +351,7 @@ export async function resolveSuperuserExchange(
     [{ id: string }[], { slug: string }[]]
   >(
     `SELECT id FROM tenant
-       WHERE actorId IS NONE
+       WHERE !actorId
          AND companyId = $companyId
          AND systemId = $systemId
        LIMIT 1;

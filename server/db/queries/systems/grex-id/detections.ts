@@ -155,9 +155,9 @@ export async function listDetections(
   const query =
     `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
 
-    LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId IS NOT NONE ORDER BY detectedAt DESC LIMIT $limit);
+    LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId ORDER BY detectedAt DESC LIMIT $limit);
 
-    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND actorId IS NONE LIMIT 1)[0];
+    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
 
     SELECT id AS leadId, ownerId FROM lead
       WHERE id IN $leadIds
@@ -368,10 +368,10 @@ export async function getDetectionStats(params: {
         AND locationId.systemId = $systemId
         AND detectedAt >= type::datetime($startDate)
         AND detectedAt <= type::datetime($endDate)${locationFilter}
-        AND leadId IS NOT NONE
+        AND leadId
       GROUP BY faceId);
 
-    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND actorId IS NONE LIMIT 1)[0];
+    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
 
     SELECT id AS leadId, ownerId FROM lead
       WHERE id IN $leadIds

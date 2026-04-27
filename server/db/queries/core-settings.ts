@@ -45,8 +45,7 @@ export async function resolveTenantForScope(
   if (scopeKey === "__core__") {
     const result = await db.query<[{ id: string }[]]>(
       `SELECT id FROM tenant
-       WHERE actorId IS NONE AND companyId IS NONE
-       AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id
+       WHERE !actorId AND !companyId AND systemId.slug = "core"
        LIMIT 1`,
     );
     return result[0]?.[0]?.id ? String(result[0][0].id) : null;
@@ -64,14 +63,14 @@ export async function resolveTenantForScope(
     query += ` AND companyId = $companyId`;
     bindings.companyId = rid(companyId);
   } else {
-    query += ` AND companyId IS NONE`;
+    query += ` AND !companyId`;
   }
 
   if (actorId) {
     query += ` AND actorId = $actorId`;
     bindings.actorId = rid(actorId);
   } else {
-    query += ` AND actorId IS NONE`;
+    query += ` AND !actorId`;
   }
 
   query += ` LIMIT 1`;
@@ -137,8 +136,7 @@ export async function listSettings(
     const result = await db.query<[CoreSetting[]]>(
       `SELECT * FROM setting WHERE tenantIds CONTAINS (
         SELECT VALUE id FROM tenant
-        WHERE actorId IS NONE AND companyId IS NONE
-        AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id
+        WHERE !actorId AND !companyId AND systemId.slug = "core"
         LIMIT 1
       )[0] ORDER BY key ASC`,
     );

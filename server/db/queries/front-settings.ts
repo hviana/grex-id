@@ -43,8 +43,7 @@ export async function listFrontSettings(
     const result = await db.query<[FrontCoreSetting[]]>(
       `SELECT * FROM front_setting WHERE tenantIds CONTAINS (
         SELECT VALUE id FROM tenant
-        WHERE actorId IS NONE AND companyId IS NONE
-        AND systemId = (SELECT id FROM system WHERE slug = "core" LIMIT 1).id
+        WHERE !actorId AND !companyId AND systemId.slug = "core"
         LIMIT 1
       )[0] ORDER BY key ASC`,
     );

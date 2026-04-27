@@ -57,7 +57,7 @@ export async function listCoreCompanies(
 
   if (params.systemIds?.length) {
     conditions.push(
-      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE !actorId AND systemId IN $systemIds AND systemId)",
     );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }
@@ -69,11 +69,11 @@ export async function listCoreCompanies(
       bindings.planIds = params.planIds.map((id) => rid(id));
     }
     conditions.push(
-      `id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE status IN $statuses${planClause}))`,
+      `id IN (SELECT VALUE companyId FROM tenant WHERE !actorId AND systemId AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE status IN $statuses${planClause}))`,
     );
   } else if (params.planIds?.length) {
     conditions.push(
-      "id IN (SELECT VALUE companyId FROM tenant WHERE actorId = NONE AND systemId != NONE AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE planId IN $planIds))",
+      "id IN (SELECT VALUE companyId FROM tenant WHERE !actorId AND systemId AND id IN (SELECT VALUE tenantIds[0] FROM subscription WHERE planId IN $planIds))",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
@@ -115,7 +115,7 @@ export async function listCoreCompanies(
        (SELECT VALUE name FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemName,
        (SELECT VALUE slug FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemSlug
      FROM tenant
-     WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE
+     WHERE companyId IN $companyIds AND !actorId AND systemId
      ORDER BY systemId;
      SELECT
        id,
@@ -126,7 +126,7 @@ export async function listCoreCompanies(
        (SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planName,
        (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
      FROM subscription
-     WHERE tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND actorId = NONE AND systemId != NONE);`,
+     WHERE tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND !actorId AND systemId);`,
     bindings,
   );
 
@@ -209,7 +209,7 @@ export async function getRevenueChart(params: {
   }
   if (params.systemIds?.length) {
     extraFilters.push(
-      "tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE actorId = NONE AND systemId IN $systemIds AND systemId != NONE)",
+      "tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE !actorId AND systemId IN $systemIds AND systemId)",
     );
     bindings.systemIds = params.systemIds.map((id) => rid(id));
   }

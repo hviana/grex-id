@@ -20,8 +20,8 @@ export async function fetchSystemTenantRow(
   const db = await getDb();
   const [rows] = await db.query<[TenantRow[]]>(
     `SELECT id, companyId, systemId FROM tenant
-     WHERE actorId IS NONE
-       AND companyId IS NOT NONE
+     WHERE !actorId
+       AND companyId
        AND systemId = $systemId
      LIMIT 1`,
     { systemId: rid(systemId) },
@@ -40,7 +40,7 @@ export async function fetchCompanySystemTenantRow(
   const db = await getDb();
   const [rows] = await db.query<[TenantRow[]]>(
     `SELECT id, companyId, systemId FROM tenant
-     WHERE actorId IS NONE
+     WHERE !actorId
        AND companyId = $companyId
        AND systemId = $systemId
      LIMIT 1`,

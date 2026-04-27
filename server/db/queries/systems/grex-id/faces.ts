@@ -136,7 +136,7 @@ export async function searchOrphanFaceByEmbedding(
   >(
     `SELECT id, vector::distance::knn() AS score
      FROM face
-     WHERE leadId IS NONE
+     WHERE !leadId
        AND embedding_type1 <|${safeLimit},${safeCandidates}|> $embedding
      ORDER BY score`,
     { embedding },

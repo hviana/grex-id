@@ -76,13 +76,9 @@ export async function seed(db: Surreal): Promise<void> {
        systemId = $coreSystem[0].id,
        roleIds = [$superuserRole[0].id];
 
-     // 9. Anonymous API token with its own tenant row
-     LET $anonTenant = CREATE tenant SET
-       actorId = NONE,
-       companyId = $coreCompany[0].id,
-       systemId = $coreSystem[0].id;
+     // 9. Anonymous API token — reuses the company-system tenant
      CREATE api_token:anonymous SET
-       tenantIds = [$anonTenant[0].id],
+       tenantIds = [$coreCompanySystemTenant[0].id],
        name = "Anonymous Token",
        roles = ["anonymous"],
        neverExpires = true,

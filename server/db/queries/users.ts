@@ -209,7 +209,7 @@ export async function createTenantAssociations(params: {
   const db = await getDb();
   await db.query(
     `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $systemTenantId);
-     LET $companyTenant = (SELECT id FROM tenant WHERE actorId = NONE AND companyId = $companyId AND systemId = NONE LIMIT 1);
+     LET $companyTenant = (SELECT id FROM tenant WHERE !actorId AND companyId = $companyId AND !systemId LIMIT 1);
      IF array::len($companyTenant) = 0 {
        CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
      };
