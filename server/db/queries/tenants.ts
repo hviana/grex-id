@@ -50,35 +50,33 @@ export async function fetchCompanySystemTenantRow(
 }
 
 /**
- * Resolves role names from a tenant's roleIds array.
- * Used by Core.getTenantRoles() for user-type actors.
+ * Resolves the FULL resource_limit for an actor (user or api_token).
+ * Returns null if the actor or its resource_limit is not found.
+ * Used by Core to cache actor-scoped limits and roles.
  */
-export async function resolveTenantRoleNames(
-  tenantId: string,
-): Promise<string[]> {
-  const db = await getDb();
-  const result = await db.query<[string[]]>(
-    `LET $t = (SELECT roleIds FROM $tenantId LIMIT 1)[0];
-     SELECT VALUE name FROM role WHERE id IN $t.roleIds;`,
-    { tenantId: rid(tenantId) },
-  );
-  return result[0] ?? [];
-}
-
-/**
- * Fetches the full resource_limit for an api_token actor.
- * Used by Core to resolve actor-scoped limits.
- */
-export async function fetchApiTokenResourceLimit(
+export async function fetchActorResourceLimit(
   actorId: string,
 ): Promise<Record<string, unknown> | null> {
   const db = await getDb();
+  const actorTable = actorId.startsWith("api_token:") ? "api_token" : "user";
   const result = await db.query<[Record<string, unknown>[]]>(
-    `SELECT * FROM ONLY $actorId FETCH resourceLimitId;`,
+    `SELECT VALUE resourceLimitId FROM ${actorTable} WHERE id = $actorId LIMIT 1;`,
     { actorId: rid(actorId) },
   );
-  const row = result[0]?.[0];
-  if (!row) return null;
-  const rl = row.resourceLimitId as Record<string, unknown> | undefined;
-  return rl ?? null;
+  return (result[0]?.[0] as Record<string, unknown>) ?? null;
+}
+
+/**
+ * Resolves role names from a set of role record IDs.
+ */
+export async function resolveRoleNames(
+  roleIds: string[],
+): Promise<string[]> {
+  if (!roleIds.length) return [];
+  const db = await getDb();
+  const result = await db.query<[string[]]>(
+    `SELECT VALUE name FROM role WHERE id IN $roleIds;`,
+    { roleIds: roleIds.map((id) => rid(id)) },
+  );
+  return result[0] ?? [];
 }

@@ -257,6 +257,9 @@ class Core {
   private static instance: Core | null = null;
   private missingSettings: Map<string, MissingSetting> = new Map();
   private fileAccessLoaded = false;
+  private limitsRegistered: Set<string> = new Set();
+  private rolesRegistered: Set<string> = new Set();
+  private actorLimitsRegistered: Set<string> = new Set();
 
   private constructor() {}
 
