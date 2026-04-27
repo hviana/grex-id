@@ -1,6 +1,6 @@
 DEFINE TABLE resource_limit SCHEMAFULL;
 DEFINE FIELD benefits         ON resource_limit TYPE array<string>;
-DEFINE FIELD roles            ON resource_limit TYPE array<string>;
+DEFINE FIELD roles            ON resource_limit TYPE array<role>;
 DEFINE FIELD entityLimits     ON resource_limit TYPE option<object> FLEXIBLE;
 DEFINE FIELD apiRateLimit     ON resource_limit TYPE int DEFAULT 1000;
 DEFINE FIELD storageLimitBytes   ON resource_limit TYPE int DEFAULT 1073741824;
