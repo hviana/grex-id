@@ -41,7 +41,9 @@ async function tableHasField(table: string, field: string): Promise<boolean> {
     const result = await db.query<[{ fields: Record<string, unknown> }[]]>(
       `INFO FOR TABLE ${table};`,
     );
-    const fields = result[0]?.[0]?.fields;
+    const raw = result[0];
+    const info = Array.isArray(raw) ? raw[0] : raw;
+    const fields = info?.fields;
     tableFieldCache.set(table, new Set(fields ? Object.keys(fields) : []));
   }
   return tableFieldCache.get(table)!.has(field);

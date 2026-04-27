@@ -126,11 +126,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       { success: true, data: result.data },
       { status: 201 },
     );
-  } catch {
+  } catch (e) {
     return Response.json(
       {
         success: false,
-        error: { code: "ERROR", message: "common.error.generic" },
+        error: { code: "ERROR", message: String(e) },
       },
       { status: 500 },
     );

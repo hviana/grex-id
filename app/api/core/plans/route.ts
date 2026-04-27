@@ -6,8 +6,12 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
-import { genericDelete, genericList } from "@/server/db/queries/generics";
-import { createPlan, updatePlan } from "@/server/db/queries/plans";
+import {
+  genericCreate,
+  genericDelete,
+  genericList,
+  genericUpdate,
+} from "@/server/db/queries/generics";
 import type { Plan } from "@/src/contracts/plan";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -79,29 +83,43 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const plan = await createPlan({
+    const result = await genericCreate<Plan>({
+      table: "plan",
+      tenant: { id: tenantId },
+    }, {
       name: await standardizeField("name", sanitizeString(name)),
       description: sanitizeString(description ?? ""),
-      tenantId,
       price: Number(price),
-      currency,
+      currency: currency ?? "USD",
       recurrenceDays: Number(recurrenceDays),
       benefits: benefits ?? [],
       roles: roles ?? [],
       entityLimits: entityLimits && Object.keys(entityLimits).length > 0
         ? entityLimits
         : undefined,
-      apiRateLimit,
-      storageLimitBytes,
-      fileCacheLimitBytes,
-      planCredits,
-      maxConcurrentDownloads,
-      maxConcurrentUploads,
-      maxDownloadBandwidthMB,
-      maxUploadBandwidthMB,
+      apiRateLimit: apiRateLimit ?? 1000,
+      storageLimitBytes: storageLimitBytes ?? 1073741824,
+      fileCacheLimitBytes: fileCacheLimitBytes ?? 20971520,
+      planCredits: planCredits ?? 0,
+      maxConcurrentDownloads: maxConcurrentDownloads ?? 0,
+      maxConcurrentUploads: maxConcurrentUploads ?? 0,
+      maxDownloadBandwidthMB: maxDownloadBandwidthMB ?? 0,
+      maxUploadBandwidthMB: maxUploadBandwidthMB ?? 0,
       maxOperationCount: maxOperationCount || undefined,
-      isActive,
+      isActive: isActive ?? true,
     });
+
+    if (!result.success) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: result.errors },
+        },
+        { status: 400 },
+      );
+    }
+
+    const plan = result.data!;
 
     await Core.getInstance().reload();
 
@@ -180,7 +198,19 @@ async function putHandler(req: Request, _ctx: RequestContext) {
       return Response.json({ success: true, data: null });
     }
 
-    const updated = await updatePlan(id, updates);
+    const result = await genericUpdate<Plan>({ table: "plan" }, id, updates);
+
+    if (!result.success) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: result.errors },
+        },
+        { status: 400 },
+      );
+    }
+
+    const updated = result.data!;
 
     await Core.getInstance().reload();
 

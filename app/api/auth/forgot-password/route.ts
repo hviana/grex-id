@@ -9,7 +9,7 @@ import {
   findVerifiedOwnerByChannelValue,
   listVerifiedChannelTypes,
 } from "@/server/db/queries/entity-channels";
-import { getUserProfile } from "@/server/db/queries/auth";
+import { genericGetById } from "@/server/db/queries/generics";
 
 function withAuthRateLimit() {
   return async (
@@ -95,9 +95,11 @@ async function handler(
     ...allTypes.filter((t) => t !== matchedType),
   ];
 
-  const profileData = await getUserProfile(match.ownerId);
-  const name = profileData?.name ?? "";
-  const locale = profileData?.locale;
+  const user = await genericGetById<{
+    profileId: { name: string; locale?: string };
+  }>({ table: "user", fetch: "profileId" }, match.ownerId);
+  const name = user?.profileId?.name ?? "";
+  const locale = user?.profileId?.locale;
 
   await dispatchCommunication({
     channels: channelOrder,

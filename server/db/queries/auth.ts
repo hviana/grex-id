@@ -467,28 +467,6 @@ export async function storePendingTwoFactorSecret(
     { userId: rid(userId), secret: encrypted },
   );
 }
-
-// ---------------------------------------------------------------------------
-// User profile
-// ---------------------------------------------------------------------------
-
-export async function getUserProfile(userId: string): Promise<
-  {
-    name: string;
-    locale?: string;
-  } | null
-> {
-  const db = await getDb();
-  const result = await db.query<
-    [{ profileId: { name: string; locale?: string } }[]]
-  >(
-    `SELECT profileId FROM $userId FETCH profileId`,
-    { userId: rid(userId) },
-  );
-  const profile = result[0]?.[0]?.profileId;
-  return profile ?? null;
-}
-
 // ---------------------------------------------------------------------------
 // System lookup
 // ---------------------------------------------------------------------------

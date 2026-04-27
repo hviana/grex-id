@@ -6,13 +6,16 @@ import {
   associateLeadWithTenant,
   createLead,
   findLeadByChannelValues,
-  getLeadById,
-  listLeads,
   removeLeadFromTenant,
   searchUsersInCompanySystem,
   updateLead,
 } from "@/server/db/queries/leads";
-import { genericCount } from "@/server/db/queries/generics";
+import {
+  genericCount,
+  genericGetById,
+  genericList,
+} from "@/server/db/queries/generics";
+import type { Lead } from "@/src/contracts/lead";
 import { rid } from "@/server/db/connection";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
@@ -39,7 +42,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
-    const lead = await getLeadById(id);
+    const lead = await genericGetById<Lead>(
+      { table: "lead", fetch: "profileId, channelIds" },
+      id,
+    );
     return Response.json({ success: true, data: lead });
   }
 
@@ -52,11 +58,16 @@ async function getHandler(req: Request, ctx: RequestContext) {
     });
   }
 
-  const result = await listLeads({
-    limit,
-    cursor,
+  const result = await genericList<Lead>({
+    table: "lead",
+    fetch: "profileId, channelIds, tagIds",
+    tenant: { id: ctx.tenant.id },
     search,
-    tenantId: ctx.tenant.id,
+    searchFields: search ? ["profileId.name"] : undefined,
+    cursor,
+    limit,
+    orderBy: "createdAt",
+    orderByDirection: "DESC",
   });
 
   return Response.json({ success: true, ...result });
@@ -151,7 +162,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
       leadId: existing.id,
       tenantId,
     });
-    const refreshedLead = await getLeadById(existing.id);
+    const refreshedLead = await genericGetById<Lead>(
+      { table: "lead", fetch: "profileId, channelIds" },
+      existing.id,
+    );
     return Response.json({
       success: true,
       data: refreshedLead ?? existing,
@@ -209,7 +223,10 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const tags = body.tags !== undefined ? body.tags : undefined;
   const lead = await updateLead(id, { name, profile, tags });
 
-  const refreshedLead = await getLeadById(id);
+  const refreshedLead = await genericGetById<Lead>(
+    { table: "lead", fetch: "profileId, channelIds" },
+    id,
+  );
 
   return Response.json({
     success: true,

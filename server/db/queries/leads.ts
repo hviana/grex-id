@@ -1,9 +1,6 @@
 import { getDb, rid } from "../connection.ts";
 import type { Lead } from "@/src/contracts/lead";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { clampPageLimit } from "@/src/lib/validators";
 import { runLifecycleHooks } from "@/server/module-registry";
-import { genericGetById, genericList } from "./generics.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("leads");
@@ -85,48 +82,6 @@ async function getLeadTenantIds(id: string): Promise<string[]> {
 
   const tenantIds = result[0]?.[0]?.tenantIds;
   return normalizeRecordIds(Array.isArray(tenantIds) ? tenantIds : []);
-}
-
-export async function listLeads(
-  params: CursorParams & {
-    search?: string;
-    tenantId: string;
-  },
-): Promise<PaginatedResult<Lead & { ownerId?: string }>> {
-  const limit = clampPageLimit(params.limit);
-
-  const result = await genericList<Lead>({
-    table: "lead",
-    fetch: "profileId, channelIds, tagIds",
-    tenant: { id: params.tenantId },
-    search: params.search,
-    searchFields: params.search ? ["profileId.name"] : undefined,
-    cursor: params.cursor,
-    limit,
-    orderBy: "createdAt",
-    orderByDirection: "DESC",
-  });
-
-  const data = result.items.map((lead) => {
-    const normalizedLead = normalizeLead(lead)!;
-    return { ...normalizedLead };
-  });
-
-  return {
-    items: data,
-    total: result.total,
-    hasMore: result.hasMore,
-    nextCursor: result.nextCursor,
-  };
-}
-
-export async function getLeadById(id: string): Promise<Lead | null> {
-  const leadId = requireRecordId(id, "leadId");
-  const result = await genericGetById<Lead>(
-    { table: "lead", fetch: "profileId, channelIds" },
-    leadId,
-  );
-  return normalizeLead(result);
 }
 
 export async function findLeadByChannelValues(

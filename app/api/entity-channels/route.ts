@@ -11,7 +11,6 @@ import {
   deleteChannel,
   findChannelByOwnerTypeAndValue,
   findVerifiedOwnerByTypedChannel,
-  getUserProfileName,
   listChannelsByOwner,
   listVerifiedChannelTypes,
 } from "@/server/db/queries/entity-channels";
@@ -146,7 +145,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    const name = await getUserProfileName(userId);
+    const fetchedUser = await genericGetById<{
+      profileId: { name: string };
+    }>({ table: "user", fetch: "profileId" }, userId);
+    const name = fetchedUser?.profileId?.name ?? "";
 
     // Pending confirmation: unverified channel still needs an initial
     // verified channel on the account to distinguish register from add.

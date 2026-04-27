@@ -55,47 +55,6 @@ export async function getUsersForTenant(params: {
 }
 
 /**
- * Lists users without tenant scoping (global list). Cursor-paginated.
- */
-export async function getUsersNoTenant(params: {
-  search?: string;
-  cursor?: string;
-  limit: number;
-}): Promise<{
-  data: Record<string, unknown>[];
-  nextCursor: string | null;
-}> {
-  const db = await getDb();
-  const bindings: Record<string, unknown> = { limit: params.limit + 1 };
-  const conditions: string[] = [];
-
-  if (params.search) {
-    conditions.push("profileId.name @@ $search");
-    bindings.search = params.search;
-  }
-  if (params.cursor) {
-    conditions.push("id > $cursor");
-    bindings.cursor = params.cursor;
-  }
-
-  let query = "SELECT id, profileId, channelIds, createdAt FROM user";
-  if (conditions.length) query += " WHERE " + conditions.join(" AND ");
-  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds";
-
-  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
-  const items = result[0] ?? [];
-  const hasMore = items.length > params.limit;
-  const data = hasMore ? items.slice(0, params.limit) : items;
-
-  return {
-    data,
-    nextCursor: hasMore && data.length > 0
-      ? String((data[data.length - 1] as Record<string, unknown>).id)
-      : null,
-  };
-}
-
-/**
  * Returns the context roles for a user in a specific tenant.
  */
 export async function getUserContext(

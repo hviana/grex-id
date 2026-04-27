@@ -9,7 +9,6 @@ import {
   getUserContext,
   getUserInviteMeta,
   getUsersForTenant,
-  getUsersNoTenant,
   hardDeleteUserIfOrphaned,
   inviteExistingUser,
   updateCurrentUserProfile,
@@ -17,6 +16,7 @@ import {
   updateUserProfileName,
   updateUserRolesWithAdminCheck,
 } from "@/server/db/queries/users";
+import { genericList } from "@/server/db/queries/generics";
 import { createUserWithChannels } from "@/server/db/queries/auth";
 import { findChannelOwners } from "@/server/db/queries/entity-channels";
 import { standardizeField } from "@/server/utils/field-standardizer";
@@ -84,10 +84,16 @@ async function getHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true, ...result });
   }
 
-  const result = await getUsersNoTenant({
+  const result = await genericList({
+    table: "user",
+    select: "id, profileId, channelIds, createdAt",
+    fetch: "profileId, channelIds",
     search: search ?? undefined,
+    searchFields: search ? ["profileId.name"] : undefined,
     cursor: cursor ?? undefined,
     limit,
+    orderBy: "createdAt",
+    orderByDirection: "DESC",
   });
   return Response.json({ success: true, ...result });
 }

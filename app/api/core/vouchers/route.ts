@@ -7,11 +7,11 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
 import {
-  createVoucher,
   deleteVoucher,
   updateVoucherWithCascade,
 } from "@/server/db/queries/vouchers";
-import { genericList } from "@/server/db/queries/generics";
+import { genericCreate, genericList } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import type { Voucher } from "@/src/contracts/voucher";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -68,10 +68,16 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const voucher = await createVoucher({
+    const voucher = await genericCreate<Voucher>({
+      table: "voucher",
+    }, {
       code: await standardizeField("name", sanitizeString(code)),
-      applicableTenantIds: applicableTenantIds ?? [],
-      applicablePlanIds: applicablePlanIds ?? [],
+      applicableTenantIds: (applicableTenantIds ?? []).map(
+        (id: string) => rid(id),
+      ),
+      applicablePlanIds: (applicablePlanIds ?? []).map(
+        (id: string) => rid(id),
+      ),
       priceModifier: Number(priceModifier ?? 0),
       entityLimitModifiers: entityLimitModifiers &&
           Object.keys(entityLimitModifiers).length > 0
@@ -88,22 +94,32 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
       maxOperationCountModifier: maxOperationCountModifier || undefined,
       creditModifier: Number(creditModifier ?? 0),
-      expiresAt: expiresAt ? expiresAt : undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
     });
+
+    if (!voucher.success) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: voucher.errors },
+        },
+        { status: 400 },
+      );
+    }
 
     const core = Core.getInstance();
     await core.reload();
     core.evictAllSubscriptions();
 
     return Response.json(
-      { success: true, data: voucher },
+      { success: true, data: voucher.data },
       { status: 201 },
     );
-  } catch {
+  } catch (e) {
     return Response.json(
       {
         success: false,
-        error: { code: "ERROR", message: "common.error.generic" },
+        error: { code: "ERROR", message: String(e) },
       },
       { status: 500 },
     );

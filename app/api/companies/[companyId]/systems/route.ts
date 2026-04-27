@@ -2,7 +2,8 @@ import { compose } from "@/server/middleware/compose";
 import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
-import { getCompanySystems } from "@/server/db/queries/companies";
+import { genericList } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   // Extract companyId from URL path for Next.js dynamic route compatibility
@@ -21,9 +22,16 @@ async function getHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const systems = await getCompanySystems(companyId);
+  const result = await genericList({
+    table: "system",
+    extraConditions: [
+      "id IN (SELECT VALUE systemId FROM tenant WHERE companyId = $companyId AND !actorId AND systemId)",
+    ],
+    extraBindings: { companyId: rid(companyId) },
+    limit: 200,
+  });
 
-  return Response.json({ success: true, data: systems });
+  return Response.json({ success: true, data: result.items });
 }
 
 export const GET = compose(

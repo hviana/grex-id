@@ -100,21 +100,3 @@ export async function createCompany(data: {
   );
   return result[4][0];
 }
-
-/**
- * Get all systems subscribed by a company in a single batched query.
- * Resolved from the tenant table where actorId=NONE (company-system link).
- */
-export async function getCompanySystems(
-  companyId: string,
-): Promise<Record<string, unknown>[]> {
-  const db = await getDb();
-  const result = await db.query<[Record<string, unknown>[]]>(
-    `SELECT * FROM system WHERE id IN (
-       SELECT VALUE systemId FROM tenant
-       WHERE companyId = $companyId AND !actorId AND systemId
-     )`,
-    { companyId: rid(companyId) },
-  );
-  return result[0] ?? [];
-}

@@ -424,18 +424,6 @@ export async function countVerifiedChannelsOfType(
   return last?.[0]?.c ?? 0;
 }
 
-/** Fetches the user's profile name. Returns empty string if not found. */
-export async function getUserProfileName(
-  userId: string,
-): Promise<string> {
-  const db = await getDb();
-  const result = await db.query<[{ profileId: { name: string } }[]]>(
-    "SELECT profileId FROM $uid FETCH profileId",
-    { uid: rid(userId) },
-  );
-  return result[0]?.[0]?.profileId?.name ?? "";
-}
-
 /**
  * Find a user's channel by (type, value) along with the owning user's id.
  * Used by the resend-verification flow to locate the unverified channel

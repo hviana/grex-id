@@ -108,7 +108,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       { success: true, data: result.data },
       { status: 201 },
     );
-  } catch {
+  } catch (e) {
+    console.error("[POST /api/core/menus]", e);
     return Response.json(
       {
         success: false,

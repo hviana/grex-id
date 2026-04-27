@@ -3,8 +3,8 @@ import { withAuth } from "@/server/middleware/withAuth";
 import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import Core from "@/server/utils/Core";
-import { getUserProfile, hashPassword } from "@/server/db/queries/auth";
-import { genericVerify } from "@/server/db/queries/generics";
+import { hashPassword } from "@/server/db/queries/auth";
+import { genericGetById, genericVerify } from "@/server/db/queries/generics";
 import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -151,9 +151,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     ...verifiedTypes.filter((c) => !defaultChannels.includes(c)),
   ];
 
-  const profileData = await getUserProfile(userId);
-  const name = profileData?.name ?? "";
-  const locale = profileData?.locale;
+  const user = await genericGetById<{
+    profileId: { name: string; locale?: string };
+  }>({ table: "user", fetch: "profileId" }, userId);
+  const name = user?.profileId?.name ?? "";
+  const locale = user?.profileId?.locale;
 
   await dispatchCommunication({
     channels: channelOrder,
