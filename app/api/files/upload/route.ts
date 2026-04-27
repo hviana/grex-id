@@ -18,7 +18,18 @@ const activeUploads = new Map<string, number>();
 export const POST = compose(
   withAuthAndLimit({ requireAuthenticated: true }),
   async (req: Request, ctx: RequestContext): Promise<Response> => {
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", errors: ["files.upload.fileRequired"] },
+        },
+        { status: 400 },
+      );
+    }
     const file = formData.get("file");
     const systemSlug = formData.get("systemSlug") as string | null;
     const categoryRaw = formData.get("category") as string | null;

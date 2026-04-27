@@ -59,11 +59,13 @@ export async function fetchActorResourceLimit(
 ): Promise<Record<string, unknown> | null> {
   const db = await getDb();
   const actorTable = actorId.startsWith("api_token:") ? "api_token" : "user";
-  const result = await db.query<[Record<string, unknown>[]]>(
-    `SELECT VALUE resourceLimitId FROM ${actorTable} WHERE id = $actorId LIMIT 1;`,
+  const result = await db.query<unknown[]>(
+    `LET $rlId = (SELECT VALUE resourceLimitId FROM ${actorTable}
+       WHERE id = $actorId LIMIT 1);
+     SELECT * FROM ONLY resource_limit WHERE id = $rlId[0];`,
     { actorId: rid(actorId) },
   );
-  return (result[0]?.[0] as Record<string, unknown>) ?? null;
+  return (result[result.length - 1] as Record<string, unknown>) ?? null;
 }
 
 /**

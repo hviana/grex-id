@@ -191,9 +191,9 @@ a `Tenant` object (§4.2):
 - [ ] `consumeCredits` before side effects — handles
       plan→purchased→op-cap→auto-recharge→alert atomically via `tenant.id`
       (§7.3).
-- [ ] Entity limits via `withAuthAndLimit({ entities: [...] })`; op-count caps
-      via `maxOperationCountByResourceKey`; rate limits via `rateLimit` option
-      (§4.9).
+- [ ] Entity limits via `withAuthAndLimit({ entities: [...] })` (string array of
+      table names); op-count caps via `maxOperationCountByResourceKey`; rate
+      limits via `rateLimit` option (§4.9).
 - [ ] `trackUsage` after chargeable ops; `trackCreditExpense` upserts daily
       container (§4.10).
 - [ ] Voucher: single per subscription; modifiers signed; auto-removal on edit
@@ -260,8 +260,8 @@ Before calling done, answer:
 - [ ] **Chargeable?** `resourceKey` + `consumeCredits` + plan
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
-- [ ] **Entity cap?** Added to plan's `resource_limit.entityLimits` +
-      `withAuthAndLimit({ entities })` (§4.9).
+- [ ] **Entity cap?** Added to plan's `resource_limit.entityLimits` (keyed by
+      table name) + `withAuthAndLimit({ entities: [...] })` (§4.9).
 - [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id` with
       covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).

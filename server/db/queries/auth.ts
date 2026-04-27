@@ -310,7 +310,7 @@ export async function resolveUserMembership(userId: string): Promise<
 > {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $t = (SELECT id, companyId, systemId, roleIds FROM tenant
+    `LET $t = (SELECT id, companyId, systemId FROM tenant
        WHERE actorId = $userId
          AND companyId
          AND systemId
@@ -318,8 +318,11 @@ export async function resolveUserMembership(userId: string): Promise<
      LET $sys = IF array::len($t) > 0
        THEN (SELECT slug FROM system WHERE id = $t[0].systemId LIMIT 1)
        ELSE [] END;
-     LET $roleNames = IF array::len($t) > 0
-       THEN (SELECT VALUE name FROM role WHERE id IN $t[0].roleIds)
+     LET $roleIds = IF array::len($t) > 0
+       THEN (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $userId LIMIT 1)[0]
+       ELSE [] END;
+     LET $roleNames = IF array::len($roleIds) > 0
+       THEN (SELECT VALUE name FROM role WHERE id IN $roleIds)
        ELSE [] END;
      [{ tenantId: $t[0].id, companyId: $t[0].companyId, systemId: $t[0].systemId,
         systemSlug: $sys[0].slug, roles: $roleNames }];`,

@@ -569,7 +569,7 @@ cheapest-first order inside one function
 | 5    | CORS                  | No I/O               | Enforces frontendDomains for non-user tokens.                                                          |
 | 6    | Role check            | In-memory            | Superuser bypass. Otherwise checks `options.roles` against resolved roles.                             |
 | 7    | Plan access           | Core cache read      | Verifies subscription active + within `currentPeriodEnd` + plan roles include ≥1 caller role.          |
-| 8    | Entity limit          | DB count             | Only when `options.entities` non-empty. Plan+voucher limits merged in Core cache.                      |
+| 8    | Entity limit          | DB count             | Only when `options.entities` (table names) non-empty. Plan+voucher limits merged in Core cache.        |
 
 Auth routes (`/api/auth/*`) use `withAuthAndLimit({ rateLimit })` — without
 `requireAuthenticated`, the JWT step is skipped for missing bearers. All other

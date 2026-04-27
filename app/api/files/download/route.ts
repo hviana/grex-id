@@ -75,7 +75,7 @@ export const GET = compose(
     const fileCategory = path.slice(3, path.length - 2);
 
     const tokenParam = url.searchParams.get("token");
-    let effectiveTenant = ctx.tenantContext.tenant;
+    let effectiveTenant = ctx.tenantContext?.tenant ?? {};
 
     if (tokenParam) {
       const resolved = await resolveTokenParam(tokenParam);

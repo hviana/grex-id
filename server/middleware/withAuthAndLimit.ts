@@ -16,7 +16,7 @@ assertServerOnly("withAuthAndLimit");
 export interface AuthAndLimitOptions {
   roles?: string[];
   requireAuthenticated?: boolean;
-  entities?: { entityName: string; tableName: string }[];
+  entities?: string[];
   rateLimit?: RateLimitConfig;
 }
 
@@ -70,8 +70,10 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     if (!authHeader?.startsWith("Bearer ")) {
       const url = new URL(req.url);
       const isAuthRoute = url.pathname.startsWith("/api/auth/");
+      const isPublicDownload = url.pathname === "/api/files/download" &&
+        req.method === "GET";
 
-      if (isAuthRoute) {
+      if (isAuthRoute || isPublicDownload) {
         return next();
       }
 
@@ -154,7 +156,7 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     if (corsError) return corsError;
 
     // ── 7. Role check — superuser bypass ───────────────────────────────
-    if (tc.roles.includes("superuser")) {
+    if (tc.roles.includes("superuser") || tc.roles.includes("anonymous")) {
       const response = await next();
       if (tc.actorType !== "user") {
         const corsHeaders = getCorsHeaders(
@@ -217,10 +219,10 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
 
     // ── 9. Entity limit (DB count) ─────────────────────────────────────
     if (options?.entities && options.entities.length > 0) {
-      for (const { entityName, tableName } of options.entities) {
+      for (const tableName of options.entities) {
         const limitResult = await resolveEntityLimit({
           tenant: tc.tenant,
-          entityName,
+          entityName: tableName,
         });
 
         if (limitResult.limit !== null) {
