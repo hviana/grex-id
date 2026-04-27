@@ -67,6 +67,19 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
+  if (
+    !applicableTenantIds || !Array.isArray(applicableTenantIds) ||
+    applicableTenantIds.length === 0
+  ) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "VALIDATION", errors: ["validation.tenant.required"] },
+      },
+      { status: 400 },
+    );
+  }
+
   try {
     const voucher = await genericCreate<Voucher>({
       table: "voucher",

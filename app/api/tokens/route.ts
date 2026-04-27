@@ -83,7 +83,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       tenant: ctx.tenant,
     },
     {
-      tenantId: ctx.tenant.id,
       name,
       description: description ?? undefined,
       roles: roles ?? [],

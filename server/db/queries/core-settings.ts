@@ -29,7 +29,7 @@ export function buildScopeKey(scope?: SettingScope): string {
   if (scope.systemId) parts.push(scope.systemId);
   if (scope.companyId) parts.push(scope.companyId);
   if (scope.actorId) parts.push(scope.actorId);
-  return parts.length > 0 ? parts.join(":") : "__core__";
+  return parts.length > 0 ? parts.join("|") : "__core__";
 }
 
 /**
@@ -51,7 +51,7 @@ export async function resolveTenantForScope(
     return result[0]?.[0]?.id ? String(result[0][0].id) : null;
   }
 
-  const parts = scopeKey.split(":");
+  const parts = scopeKey.split("|");
   const systemId = parts[0];
   const companyId = parts.length > 1 ? parts[1] : undefined;
   const actorId = parts.length > 2 ? parts[2] : undefined;
