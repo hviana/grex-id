@@ -6,6 +6,7 @@ DEFINE FIELD twoFactorEnabled        ON user TYPE bool DEFAULT false;
 DEFINE FIELD twoFactorSecret         ON user TYPE option<string>;
 DEFINE FIELD pendingTwoFactorSecret  ON user TYPE option<string>;
 DEFINE FIELD stayLoggedIn     ON user TYPE bool DEFAULT false;
+DEFINE FIELD resourceLimitId         ON user TYPE record<resource_limit>;
 DEFINE FIELD createdAt    ON user TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt    ON user TYPE datetime DEFAULT time::now();
 DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>> DEFAULT [];
@@ -22,3 +23,4 @@ DEFINE FIELD linkedAt       ON oauth_identity TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_oauth_identity_provider_user ON oauth_identity FIELDS provider, providerUserId UNIQUE;
 DEFINE INDEX idx_oauth_identity_user          ON oauth_identity FIELDS userId;
+DEFINE INDEX idx_at_resource_limit        ON user FIELDS resourceLimitId;
