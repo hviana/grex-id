@@ -83,7 +83,7 @@ export async function seed(db: Surreal): Promise<void> {
       currency = $currency,
       recurrenceDays = $recurrenceDays,
       isActive = true,
-      resourceLimitId = $rl.id`,
+      resourceLimitId = $rl[0].id`,
     {
       name: "plans.grexId.standard.name",
       description: "plans.grexId.standard.description",
