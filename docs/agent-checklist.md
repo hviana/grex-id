@@ -118,17 +118,19 @@ file crosses a boundary (§2.7).
 - [ ] **Token–Tenant boundary:** frontend uses tokens only; backend uses tenant
       contracts. No loose `companyId`/`systemId`/`roles` in forms, hooks, or
       fetch wrappers (§2.10).
-- [ ] Backend reads tenant from `ctx.tenant` only — never query strings,
-      cookies, bodies (§2.5). Tenant includes `tenant.id` (the record ID used as
-      universal scope key).
+- [ ] Backend reads tenant from `ctx.tenantContext.tenant` only — never query
+      strings, cookies, bodies (§2.5). Tenant includes `tenant.id` (the record
+      ID used as universal scope key). Auth claims (roles, actorType,
+      frontendDomains, systemSlug) are resolved from `ctx.tenantContext` (§4.1).
 - [ ] All functions accept `tenant: Tenant`, not loose ids (§2.5).
 - [ ] Scoped tables use `tenantIds: array<record<tenant>>` instead of separate
       `companyId`/`systemId` fields or a single `tenantId` column (§3.4).
       Queries filter with `tenantIds CONTAINS $tenantId`.
 - [ ] Context change only via `/api/auth/exchange`; API/connected-app tokens
       non-exchangeable (§8.6).
-- [ ] Frontend stores opaque token only; derives context from `useAuth().tenant`
-      (§10.2).
+- [ ] Frontend stores opaque token only; derives identity from
+      `useTenantContext().tenant` and claims from `useTenantContext().roles` /
+      `actorType` / `exchangeable` (§10.2).
 - [ ] Every tenant corresponds to a real `tenant` table row. Anonymous
       operations use the seeded anonymous API token carrying the `"anonymous"`
       role (§2.5, §3.5).
@@ -137,10 +139,12 @@ file crosses a boundary (§2.7).
 
 ## 8. Middleware & Caching (§4.3, §4.4)
 
-- [ ] Order: `withRateLimit` → `withAuth` → `withPlanAccess` → `withEntityLimit`
-      — cheapest first (§4.3).
-- [ ] `withAuth` uses `isActorValid` — no DB query (§4.2). Auth routes use only
-      `withRateLimit` (§4.3).
+- [ ] Single unified middleware `withAuthAndLimit` (§4.3). Checks execute
+      cheapest-first inside one function: rate limit → JWT verify → resolve
+      TenantContext → actor validity → CORS → role → plan access → entity limit.
+- [ ] `withAuthAndLimit` resolves auth claims (roles, actorType,
+      frontendDomains, systemSlug) from Core cache at request time (§4.2). Auth
+      routes use `withAuthAndLimit({ rateLimit })` only.
 - [ ] All caches via `registerCache(slug, name, loader)` — no ad-hoc Maps
       (§4.4).
 - [ ] Mutations call `updateCache`/`reload()` in same request (§2.8).
@@ -155,14 +159,15 @@ file crosses a boundary (§2.7).
 
 ## 9. Actor-Validity Cache (§4.2)
 
-Every durable change mutates the cache in the same request:
+Every durable change mutates the cache in the same request. All functions accept
+a `Tenant` object (§4.2):
 
-- [ ] Login → `rememberActor`. Logout → `forgetActor`.
-- [ ] Exchange → `forgetActor(old)` + `rememberActor(new)`.
-- [ ] Token create/OAuth authorize → `rememberActor`. Revoke → `revokedAt` +
-      `forgetActor`.
-- [ ] Role/membership change in `tenant` (`roleIds`) → `forgetActor`.
-      Data-deletion → `reloadTenant`.
+- [ ] Login → `rememberActor(tenant)`. Logout → `forgetActor(tenant)`.
+- [ ] Exchange → `forgetActor(oldTenant)` + `rememberActor(newTenant)`.
+- [ ] Token create/OAuth authorize → `rememberActor(tenant)`. Revoke →
+      `revokedAt` + `forgetActor(tenant)`.
+- [ ] Role/membership change (via `resource_limit.roleIds`) →
+      `forgetActor(tenant)`. Data-deletion → `reloadTenant(tenant)`.
 
 ---
 
@@ -186,8 +191,9 @@ Every durable change mutates the cache in the same request:
 - [ ] `consumeCredits` before side effects — handles
       plan→purchased→op-cap→auto-recharge→alert atomically via `tenant.id`
       (§7.3).
-- [ ] Entity limits via `withEntityLimit`; op-count caps via
-      `maxOperationCount`; rate limits via plan `apiRateLimit` (§4.9).
+- [ ] Entity limits via `withAuthAndLimit({ entities: [...] })`; op-count caps
+      via `maxOperationCountByResourceKey`; rate limits via `rateLimit` option
+      (§4.9).
 - [ ] `trackUsage` after chargeable ops; `trackCreditExpense` upserts daily
       container (§4.10).
 - [ ] Voucher: single per subscription; modifiers signed; auto-removal on edit
@@ -214,8 +220,8 @@ Every durable change mutates the cache in the same request:
 
 ## 13. Security (§8.12, §4.13, §4.12)
 
-- [ ] CORS for `frontendUse` tokens; bot protection on auth/lead forms (§4.13,
-      §8.12).
+- [ ] CORS for non-user tokens (via `frontendDomains` on `resource_limit`); bot
+      protection on auth/lead forms (§4.13, §8.12).
 - [ ] Enumeration-safe responses on forgot-password/recovery/2FA-fallback (§8.7,
       §8.8).
 - [ ] `checkDuplicates` before CREATE on every unique-indexed field (§4.8).
@@ -226,12 +232,16 @@ Every durable change mutates the cache in the same request:
 
 ## 14. Hooks & Frontend State (§10.1)
 
+- [ ] Single `TenantProvider` — unified auth, locale, and front-core context
+      (§10.1). Prefer `useTenantContext()` for access.
 - [ ] Shared state → Context + Provider. Component state → local hooks.
 - [ ] Exhaustive deps on `useEffect`/`useCallback`; inline objects stabilized
       with `useMemo`.
 - [ ] Async effects use `cancelled` guard; no fire-and-forget fetches outside
       `useEffect`/`useCallback`.
 - [ ] Authenticated callbacks early-return when token null.
+- [ ] `useBearerToken()` for the active bearer (system or anonymous) in fetch
+      wrappers — never duplicate token selection logic.
 
 ---
 
@@ -250,7 +260,8 @@ Before calling done, answer:
 - [ ] **Chargeable?** `resourceKey` + `consumeCredits` + plan
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
-- [ ] **Entity cap?** Added to `entityLimits` + `withEntityLimit` (§4.9).
+- [ ] **Entity cap?** Added to `entityLimits` + `withAuthAndLimit({ entities })`
+      (§4.9).
 - [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id` with
       covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).
