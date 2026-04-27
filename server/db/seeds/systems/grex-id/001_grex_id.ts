@@ -35,15 +35,20 @@ export async function seed(db: Surreal): Promise<void> {
   console.log("[seed] system-level tenant created for grex-id");
 
   // 3. Create the admin role for GrexID linked to system-level tenant
-  await db.query(
+  const adminRoleResult = await db.query<[{ id: string }[]]>(
     `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "admin",
          tenantIds = [$systemTenantId],
          isBuiltIn = true
-     }`,
+     };
+     SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId`,
     { systemTenantId },
   );
+  const adminRoleId = adminRoleResult[0]?.[0]?.id;
+  if (!adminRoleId) {
+    throw new Error("[seed] failed to create admin role for grex-id");
+  }
   console.log("[seed] role created: admin for grex-id");
 
   // 4. Create plan-specific roles for grex-id
@@ -63,7 +68,7 @@ export async function seed(db: Surreal): Promise<void> {
      SELECT id FROM role WHERE name IN ["grexid.detect", "grexid.list_locations"] AND tenantIds CONTAINS $systemTenantId`,
     { systemTenantId },
   );
-  const planRoleIds = planRolesResult[0].map((r) => r.id);
+  const planRoleIds = [...planRolesResult[0].map((r) => r.id), adminRoleId];
   console.log("[seed] plan roles created for grex-id");
 
   // 5. Create the STANDARD plan with linked resource_limit

@@ -107,13 +107,13 @@ export async function listCoreCompanies(
       }[],
     ]
   >(
-    `LET $paginated = (SELECT id, name, document, createdAt FROM company ${where} ORDER BY createdAt DESC LIMIT $limitPlusOne);
-     LET $companyIds = $paginated[*].id;
+    `SELECT id, name, document, createdAt FROM company ${where} ORDER BY createdAt DESC LIMIT $limitPlusOne;
+     LET $companyIds = (SELECT VALUE id FROM company ${where} LIMIT $limitPlusOne);
      SELECT
        companyId,
        systemId,
-       (SELECT VALUE name FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemName,
-       (SELECT VALUE slug FROM system WHERE id = $value.systemId LIMIT 1)[0] AS systemSlug
+       array::first(SELECT VALUE name FROM system WHERE id = $parent.systemId LIMIT 1) AS systemName,
+       array::first(SELECT VALUE slug FROM system WHERE id = $parent.systemId LIMIT 1) AS systemSlug
      FROM tenant
      WHERE companyId IN $companyIds AND !actorId AND systemId
      ORDER BY systemId;
@@ -123,8 +123,8 @@ export async function listCoreCompanies(
        companyId,
        systemId,
        status,
-       (SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planName,
-       (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
+       array::first(SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1) AS planName,
+       array::first(SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1) AS planPrice
      FROM subscription
      WHERE tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND !actorId AND systemId);`,
     bindings,

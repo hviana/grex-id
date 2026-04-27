@@ -246,15 +246,16 @@ function mergeCreditLimits(
   return result;
 }
 
-function mergeLimits(
+async function mergeLimits(
   planRl: RL,
   voucherRl: RL,
-): TenantResourceLimits {
+): Promise<TenantResourceLimits> {
+  const planRoleIds = toRlStrArr(planRl, "roleIds");
+  const voucherRoleIds = toRlStrArr(voucherRl, "roleIds");
+  const allRoleIds = [...planRoleIds, ...voucherRoleIds];
+  const roles = allRoleIds.length > 0 ? await resolveRoleNames(allRoleIds) : [];
   return {
-    roles: [
-      ...toRlStrArr(planRl, "roleIds"),
-      ...toRlStrArr(voucherRl, "roleIds"),
-    ],
+    roles,
     entityLimits: mergeEntityLimits(planRl, voucherRl),
     apiRateLimit: Math.max(
       0,
@@ -746,7 +747,7 @@ class Core {
 
     if (!planRl && !voucherRl) return { ...ZERO_LIMITS };
 
-    return mergeLimits(planRl, voucherRl);
+    return await mergeLimits(planRl, voucherRl);
   }
 
   // ── Actor resource limits (clamped by tenant limits) ──────────────────

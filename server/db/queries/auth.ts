@@ -166,9 +166,13 @@ export async function createUserWithChannels(params: {
       name = $name,
       locale = $locale,
       recoveryChannelIds = [];
+    LET $rl = CREATE resource_limit SET
+      roleIds = [],
+      benefits = [];
     LET $usr  = CREATE user SET
       passwordHash = crypto::argon2::generate($password),
       profileId = $prof[0].id,
+      resourceLimitId = $rl[0].id,
       channelIds = [${channelsArray}],
       twoFactorEnabled = false,
       stayLoggedIn = false;
