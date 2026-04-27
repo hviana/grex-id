@@ -524,8 +524,7 @@ forgetActor(tenant): Promise<void>
 reloadTenant(tenant): Promise<void>
 ```
 
-All functions take a `Tenant` object instead of separate `(tenantId, actorId)`
-strings.
+All functions take a `Tenant` object.
 
 **Mutation points (same request as the durable DB write):**
 
@@ -557,9 +556,9 @@ interface RequestContext {
 }
 ```
 
-A **single unified middleware** `withAuthAndLimit` replaces the previous
-4-middleware chain. It executes all checks in cheapest-first order inside one
-function (`server/middleware/withAuthAndLimit.ts`):
+A **single unified middleware** `withAuthAndLimit` executes all checks in
+cheapest-first order inside one function
+(`server/middleware/withAuthAndLimit.ts`):
 
 | Step | Check                 | Cost                 | Notes                                                                                                  |
 | ---- | --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -643,7 +642,7 @@ Both use the cache registry. Both are server-only.
   helpers (`deriveActorType`, `getSystemSlug`, `getFrontendDomains`). DB
   credentials from `database.json`.
 - **`FrontCore`**: same shape, reads exclusively from `front_setting`. Frontend
-  consumes via `TenantProvider.getSetting(key)` (calling
+  consumes via `useTenantContext().getSetting(key)` (calling
   `GET /api/public/front-core` internally) — never imports the class directly.
 
 **Settings resolution hierarchy.** Each setting row references `tenantIds`. The
@@ -786,7 +785,7 @@ Internal functions callable from middleware, queries, handlers, and jobs. All
 resolution delegates to `Core.ensureTenantLimits(tenant)` which provides
 pre-merged plan+voucher `TenantResourceLimits` — no separate DB lookups for plan
 or voucher inside guards. All return `{ <value>, planLimit, voucherModifier }`
-(though `voucherModifier` is now always `0` since merging happens in Core).
+(`voucherModifier` is always `0` — merging happens in Core).
 
 | Function                                    | Returns                                                  |
 | ------------------------------------------- | -------------------------------------------------------- |
@@ -1594,9 +1593,8 @@ here and add their own logic.
 ### 10.1 Hooks & providers
 
 **`TenantProvider`** (`src/providers/TenantProvider.tsx`) is the single unified
-context provider mounted in the root layout. It combines auth, locale, and
-front-core concerns that were previously split across `useAuth`,
-`LocaleProvider`, and `useFrontCore`.
+context provider mounted in the root layout. It provides auth, locale, and
+front-core in a single context.
 
 Exported hooks:
 
@@ -1622,8 +1620,9 @@ Exported hooks:
    null.
 6. **Derived values from context** use `useMemo` with the source as dependency.
 7. Provider files with JSX are `.tsx`; pure-logic hooks are `.ts`.
-8. **I18n done in provider**: `LocaleProvider` is merged into `TenantProvider`
-   for consistency — no separate locale context.
+8. **I18n done in provider**: `TenantProvider` handles locale through
+   `useTenantContext().t()` and `useTenantContext().setLocale()` — no separate
+   locale context.
 
 ### 10.2 Single-token rule
 

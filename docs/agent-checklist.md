@@ -260,8 +260,8 @@ Before calling done, answer:
 - [ ] **Chargeable?** `resourceKey` + `consumeCredits` + plan
       `maxOperationCount` (§7.3).
 - [ ] **Hot read?** Cached via `registerCache` with invalidation path (§4.4).
-- [ ] **Entity cap?** Added to `entityLimits` + `withAuthAndLimit({ entities })`
-      (§4.9).
+- [ ] **Entity cap?** Added to plan's `resource_limit.entityLimits` +
+      `withAuthAndLimit({ entities })` (§4.9).
 - [ ] **Multi-tenant?** Scoped by `tenantIds` array containing `tenant.id` with
       covering index (§3.1, §3.4).
 - [ ] **Mutates actor validity?** Cache updated same request (§4.2).
