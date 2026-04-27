@@ -9,7 +9,6 @@ assertServerOnly("data-deletion");
 const tenantCascadeTables = [
   "subscription",
   "usage_record",
-  "connected_app",
   "api_token",
   "credit_purchase",
   "credit_expense",

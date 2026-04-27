@@ -1,7 +1,7 @@
 export interface UsageRecord {
   id: string;
   tenantIds: string[]; // references actor + company + system tenant rows
-  resource: string;
+  resourceKey: string;
   value: number;
   period: string;
   createdAt: string;

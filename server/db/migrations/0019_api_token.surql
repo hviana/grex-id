@@ -12,4 +12,4 @@ DEFINE FIELD createdAt         ON api_token TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_at_tenant_revoked ON api_token FIELDS tenantIds, revokedAt;
 DEFINE INDEX idx_at_revoked        ON api_token FIELDS revokedAt;
-DEFINE INDEX idx_at_resource_limit        ON api_token FIELDS resourceLimitId;
+DEFINE INDEX idx_at_api_token_resource_limit        ON api_token FIELDS resourceLimitId;

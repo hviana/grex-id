@@ -38,12 +38,12 @@ export interface CreditDeductionResult {
  *
  * Deduction priority:
  * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
- * 2. Purchased credits (usage_record with resource="credits") — persistent
+ * 2. Purchased credits (usage_record with resourceKey="credits") — persistent
  *
  * Operation-count cap (§7.3 step 2, per-resourceKey):
  * If remainingOperationCount[resourceKey] is 0 and the cap is active,
  * the operation is rejected regardless of available credits.
- * Actor-level cap (step 3) enforced for api_token / connected_app actors.
+ * Actor-level cap (step 3) enforced for api_token actors.
  *
  * All DB lookups batched into single queries per logical step (§7.3).
  */
@@ -98,11 +98,10 @@ export async function consumeCredits(params: {
     return { success: false, source: "operationLimit" };
   }
 
-  // Actor-level cap check (§7.3 step 3) for api_token / connected_app
+  // Actor-level cap check (§7.3 step 3) for api_token actors
   if (
     params.actorId &&
-    (params.actorType === "api_token" ||
-      params.actorType === "connected_app")
+    params.actorType === "api_token"
   ) {
     const actorCapResult = await checkActorOperationCap({
       actorId: params.actorId,
@@ -233,7 +232,6 @@ async function checkActorOperationCap(params: {
     resourceKey,
     tenantId: rid(tenantId),
     periodStart: getCurrentDay().slice(0, 7) + "-01",
-    actorType,
   });
 
   const actorMaxOpCount = result[0]?.[0] as

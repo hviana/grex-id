@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import { useAuth } from "@/src/hooks/useAuth";
 import { useSystemContext } from "@/src/hooks/useSystemContext";
@@ -10,46 +10,20 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
-import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
+import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
+import ResourceLimitsView, {
+  type ResourceLimitsData,
+} from "@/src/components/shared/ResourceLimitsView";
+import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-
-interface OpCountEntry {
-  key: string;
-  value: string;
-  description: string;
-}
-
-function opCountToKV(
-  limits: Record<string, number> | null | undefined,
-): OpCountEntry[] {
-  if (!limits) return [];
-  return Object.entries(limits).map(([key, val]) => ({
-    key,
-    value: String(val),
-    description: "",
-  }));
-}
-
-function kvToOpCount(
-  kv: OpCountEntry[],
-): Record<string, number> | undefined {
-  const filtered = kv.filter((e) => e.key.trim() && e.value.trim());
-  if (filtered.length === 0) return undefined;
-  const result: Record<string, number> = {};
-  for (const entry of filtered) {
-    result[entry.key.trim()] = Number(entry.value);
-  }
-  return result;
-}
 
 interface ApiToken {
   id: string;
   name: string;
   description?: string;
-  roles: string[];
-  monthlySpendLimit?: number;
-  maxOperationCount?: Record<string, number>;
+  actorType: "app" | "token";
+  resourceLimitId?: ResourceLimitsData | null;
+  neverExpires?: boolean;
   expiresAt?: string;
   createdAt: string;
   [key: string]: unknown;
@@ -57,7 +31,7 @@ interface ApiToken {
 
 export default function TokensPage() {
   const { t } = useLocale();
-  const { systemToken, user } = useAuth();
+  const { systemToken } = useAuth();
   const { companyId, systemId, systemSlug } = useSystemContext();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,22 +45,19 @@ export default function TokensPage() {
 
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newPerms, setNewPerms] = useState<string[]>([]);
-  const [newSpendLimit, setNewSpendLimit] = useState("");
+  const [newActorType, setNewActorType] = useState<"app" | "token">("token");
   const [newExpiry, setNewExpiry] = useState("");
-  const [formMaxOperationCount, setFormMaxOperationCount] = useState<
-    OpCountEntry[]
-  >([]);
+
+  const limitsRef = useRef<SubformRef>(null);
 
   const fetchTokens = useCallback(
     async (
       params: CursorParams & { search?: string },
     ): Promise<PaginatedResult<ApiToken>> => {
-      if (!systemToken || !companyId || !user) {
+      if (!systemToken || !companyId) {
         return { items: [], total: 0, hasMore: false };
       }
       const p = new URLSearchParams({
-        userId: user.id,
         companyId,
       });
       if (params.search) p.set("search", params.search);
@@ -102,7 +73,7 @@ export default function TokensPage() {
         hasMore: false,
       };
     },
-    [systemToken, companyId, user],
+    [systemToken, companyId],
   );
 
   const triggerReload = () => setReloadKey((k) => k + 1);
@@ -110,10 +81,8 @@ export default function TokensPage() {
   const resetCreateForm = () => {
     setNewName("");
     setNewDesc("");
-    setNewPerms([]);
-    setNewSpendLimit("");
+    setNewActorType("token");
     setNewExpiry("");
-    setFormMaxOperationCount([]);
     setError(null);
   };
 
@@ -135,12 +104,14 @@ export default function TokensPage() {
   }, [systemId]);
 
   const handleCreate = async () => {
-    if (!systemToken || !user || !companyId || !systemId || !newName.trim()) {
+    if (!systemToken || !companyId || !systemId || !newName.trim()) {
       return;
     }
     setActionLoading(true);
     setError(null);
     try {
+      const limitsData = limitsRef.current?.getData() ?? {};
+
       const res = await fetch("/api/tokens", {
         method: "POST",
         headers: {
@@ -150,12 +121,10 @@ export default function TokensPage() {
         body: JSON.stringify({
           name: newName.trim(),
           description: newDesc || undefined,
-          userId: user.id,
+          actorType: newActorType,
           companyId,
           systemId,
-          roles: newPerms,
-          monthlySpendLimit: newSpendLimit ? Number(newSpendLimit) : undefined,
-          maxOperationCount: kvToOpCount(formMaxOperationCount),
+          resourceLimits: limitsData,
           expiresAt: newExpiry || undefined,
         }),
       });
@@ -209,6 +178,11 @@ export default function TokensPage() {
   const inputCls =
     "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
 
+  const actorTypeLabel = (at: string) =>
+    at === "app"
+      ? t("common.tokens.actorTypeApp")
+      : t("common.tokens.actorTypeToken");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -236,7 +210,12 @@ export default function TokensPage() {
         renderItem={(token) => (
           <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="font-semibold text-white">{token.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-white">{token.name}</h3>
+                <span className="text-xs bg-[var(--color-secondary-blue)]/20 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full">
+                  {actorTypeLabel(token.actorType)}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 {token.expiresAt && (
                   <span className="text-xs text-[var(--color-light-text)]">
@@ -257,22 +236,12 @@ export default function TokensPage() {
                 {token.description}
               </p>
             )}
-            <TranslatedBadgeList
-              kind="role"
-              tokens={token.roles}
-              systemSlug={systemSlug ?? undefined}
-            />
-            <TranslatedBadgeList
-              kind="resource"
-              entries={token.maxOperationCount}
-              systemSlug={systemSlug ?? undefined}
-              leading={
-                <span className="text-xs text-[var(--color-light-text)] mr-1">
-                  🔢
-                </span>
-              }
-              className="mt-2 items-center"
-            />
+            {token.resourceLimitId && (
+              <ResourceLimitsView
+                data={token.resourceLimitId}
+                systemSlug={systemSlug ?? undefined}
+              />
+            )}
           </div>
         )}
       />
@@ -302,42 +271,25 @@ export default function TokensPage() {
             placeholder={t("common.description")}
             className={inputCls}
           />
-          <MultiBadgeField
-            name={t("common.roles")}
-            mode="search"
-            value={newPerms}
-            onChange={(vals) => setNewPerms(vals as string[])}
-            fetchFn={fetchSystemRoles}
-            formatHint={t("common.tokens.rolesHint")}
-            renderBadge={(item, remove) => (
-              <TranslatedBadge
-                kind="role"
-                token={typeof item === "string" ? item : item.name}
-                systemSlug={systemSlug ?? undefined}
-                onRemove={remove}
-              />
-            )}
-          />
-          <input
-            type="number"
-            value={newSpendLimit}
-            onChange={(e) => setNewSpendLimit(e.target.value)}
-            placeholder={t("common.tokens.spendLimit")}
-            className={inputCls}
-          />
           <div>
             <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-              🔢 {t("common.tokens.maxOperationCount")}
+              {t("common.tokens.actorType")} *
             </label>
-            <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-              {t("common.tokens.maxOperationCountHint")}
-            </p>
-            <DynamicKeyValueField
-              fields={formMaxOperationCount}
-              onChange={setFormMaxOperationCount}
-              showDescription={false}
-            />
+            <select
+              value={newActorType}
+              onChange={(e) =>
+                setNewActorType(e.target.value as "app" | "token")}
+              className={inputCls}
+            >
+              <option value="token">{actorTypeLabel("token")}</option>
+              <option value="app">{actorTypeLabel("app")}</option>
+            </select>
           </div>
+          <ResourceLimitsSubform
+            ref={limitsRef}
+            valueMode="absolute"
+            systemSlug={systemSlug ?? undefined}
+          />
           <input
             type="date"
             value={newExpiry}

@@ -95,11 +95,11 @@ export interface TenantUsageConfig {
 
 /**
  * Upserts a usage record atomically (§2.4).
- * Creates or increments the value for the given tenant + resource + period.
+ * Creates or increments the value for the given tenant + resourceKey + period.
  */
 export async function upsertUsageRecord(params: {
   tenantId: string;
-  resource: string;
+  resourceKey: string;
   value: number;
   period: string;
 }): Promise<void> {
@@ -107,15 +107,15 @@ export async function upsertUsageRecord(params: {
   await db.query(
     `UPSERT usage_record SET
       tenantIds = [$tenantId],
-      resource = $resource,
+      resourceKey = $resourceKey,
       value += $value,
       period = $period
     WHERE tenantIds CONTAINS $tenantId
-      AND resource = $resource
+      AND resourceKey = $resourceKey
       AND period = $period`,
     {
       tenantId: rid(params.tenantId),
-      resource: params.resource,
+      resourceKey: params.resourceKey,
       value: params.value,
       period: params.period,
     },
@@ -140,19 +140,24 @@ export async function getTenantUsageConfig(params: {
         fileCacheLimitBytes: number;
         voucherId: string | null;
       }[],
-      { storageLimitModifier: number; fileCacheLimitModifier: number }[],
+      {
+        resourceLimitId?: {
+          storageLimitBytes?: number;
+          fileCacheLimitBytes?: number;
+        };
+      }[],
       { resourceKey: string; totalAmount: number; totalCount: number }[],
     ]
   >(
-    `LET $sub = (SELECT plan.storageLimitBytes AS storageLimitBytes,
-       plan.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
+    `LET $sub = (SELECT plan.resourceLimitId.storageLimitBytes AS storageLimitBytes,
+       plan.resourceLimitId.fileCacheLimitBytes AS fileCacheLimitBytes, voucherId
        FROM subscription
        WHERE tenantIds CONTAINS $tenantId AND status = "active"
        LIMIT 1
-       FETCH plan);
+       FETCH plan.resourceLimitId);
      LET $voucherId = $sub[0].voucherId;
      IF $voucherId != NONE {
-       SELECT storageLimitModifier, fileCacheLimitModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+       SELECT resourceLimitId FROM voucher WHERE id = $voucherId LIMIT 1 FETCH resourceLimitId;
      } ELSE {
        SELECT NONE FROM NONE;
      };
@@ -172,17 +177,19 @@ export async function getTenantUsageConfig(params: {
     storageLimitBytes?: number;
     fileCacheLimitBytes?: number;
   } | undefined;
-  const voucherRow = (result[1]?.[0] as unknown as {
-    storageLimitModifier?: number;
-    fileCacheLimitModifier?: number;
-  }) ?? {};
+  const voucherRl = (result[1]?.[0] as unknown as {
+    resourceLimitId?: {
+      storageLimitBytes?: number;
+      fileCacheLimitBytes?: number;
+    };
+  })?.resourceLimitId ?? {};
 
   return {
     systemSlug: null,
     subscriptionStorageLimit: subRow?.storageLimitBytes ?? null,
     subscriptionCacheLimit: subRow?.fileCacheLimitBytes ?? null,
-    voucherStorageModifier: voucherRow.storageLimitModifier ?? 0,
-    voucherCacheModifier: voucherRow.fileCacheLimitModifier ?? 0,
+    voucherStorageModifier: voucherRl.storageLimitBytes ?? 0,
+    voucherCacheModifier: voucherRl.fileCacheLimitBytes ?? 0,
     creditExpenses: result[2] ?? [],
   };
 }

@@ -302,7 +302,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
   const fetchConnectedApps = useCallback(
     async (search: string): Promise<BadgeValue[]> => {
       if (!systemToken) return [];
-      const res = await fetch("/api/connected-apps?limit=20", {
+      const res = await fetch("/api/tokens?actorType=app&limit=50", {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
@@ -832,7 +832,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
             {data.operationCount && data.operationCount.length > 0 && (
               <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-white mb-4">
-                  🔢 {t("billing.limits.maxOperationCount")}
+                  🔢 {t("billing.limits.maxOperationCountByResourceKey")}
                 </h2>
                 <div className="space-y-5">
                   {data.operationCount.map((entry) => {

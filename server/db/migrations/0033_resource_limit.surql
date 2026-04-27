@@ -10,6 +10,6 @@ DEFINE FIELD maxConcurrentDownloads ON resource_limit TYPE option<int>>;
 DEFINE FIELD maxConcurrentUploads   ON resource_limit TYPE option<int>>;
 DEFINE FIELD maxDownloadBandwidthMB ON resource_limit TYPE option<float>>;
 DEFINE FIELD maxUploadBandwidthMB   ON resource_limit TYPE option<float>>;
-DEFINE FIELD maxOperationCount     ON resource_limit TYPE option<object>> FLEXIBLE;
+DEFINE FIELD maxOperationCountByResourceKey     ON resource_limit TYPE option<object>> FLEXIBLE;
 DEFINE FIELD creditLimitByResourceKey     ON resource_limit TYPE option<object>> FLEXIBLE;
 DEFINE FIELD frontendDomains   ON resource_limit TYPE option<array<string>>;

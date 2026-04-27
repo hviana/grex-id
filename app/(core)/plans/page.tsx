@@ -22,18 +22,7 @@ interface PlanItem {
   price: number;
   currency: string;
   recurrenceDays: number;
-  benefits: string[];
-  roles: string[];
-  entityLimits: Record<string, number> | null;
-  apiRateLimit: number;
-  storageLimitBytes: number;
-  fileCacheLimitBytes: number;
-  planCredits: number;
-  maxConcurrentDownloads: number;
-  maxConcurrentUploads: number;
-  maxDownloadBandwidthMB: number;
-  maxUploadBandwidthMB: number;
-  maxOperationCount: Record<string, number> | null;
+  resourceLimitId?: Record<string, unknown> | null;
   isActive: boolean;
   createdAt: string;
   [key: string]: unknown;
@@ -118,19 +107,8 @@ export default function PlansPage() {
       price: item.price ?? 0,
       currency: item.currency ?? "USD",
       recurrenceDays: item.recurrenceDays ?? 30,
-      benefits: item.benefits ?? [],
       isActive: item.isActive ?? true,
-      roles: item.roles ?? [],
-      entityLimits: item.entityLimits,
-      apiRateLimit: item.apiRateLimit ?? 1000,
-      storageLimitBytes: item.storageLimitBytes ?? 1073741824,
-      fileCacheLimitBytes: item.fileCacheLimitBytes ?? 20971520,
-      planCredits: item.planCredits ?? 0,
-      maxConcurrentDownloads: item.maxConcurrentDownloads ?? 0,
-      maxConcurrentUploads: item.maxConcurrentUploads ?? 0,
-      maxDownloadBandwidthMB: item.maxDownloadBandwidthMB ?? 0,
-      maxUploadBandwidthMB: item.maxUploadBandwidthMB ?? 0,
-      maxOperationCount: item.maxOperationCount,
+      ...(item.resourceLimitId as Record<string, unknown> ?? {}),
     });
     setError(null);
     setValidationErrors([]);

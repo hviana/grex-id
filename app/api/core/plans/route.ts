@@ -6,12 +6,11 @@ import { clampPageLimit, sanitizeString } from "@/src/lib/validators";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
+import { genericDelete, genericList } from "@/server/db/queries/generics";
 import {
-  genericCreate,
-  genericDelete,
-  genericList,
-  genericUpdate,
-} from "@/server/db/queries/generics";
+  createPlanWithResourceLimit,
+  updatePlanWithResourceLimit,
+} from "@/server/db/queries/plans";
 import type { Plan } from "@/src/contracts/plan";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -31,6 +30,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
   const result = await genericList<Plan>({
     table: "plan",
+    select: "*, resourceLimitId.* AS resourceLimitId",
     searchFields: ["name"],
     extraConditions,
     extraBindings,
@@ -42,6 +42,23 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   return Response.json({ success: true, ...result });
 }
 
+const RL_FIELDS = [
+  "benefits",
+  "roles",
+  "entityLimits",
+  "apiRateLimit",
+  "storageLimitBytes",
+  "fileCacheLimitBytes",
+  "credits",
+  "maxConcurrentDownloads",
+  "maxConcurrentUploads",
+  "maxDownloadBandwidthMB",
+  "maxUploadBandwidthMB",
+  "maxOperationCountByResourceKey",
+  "creditLimitByResourceKey",
+  "frontendDomains",
+] as const;
+
 async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
@@ -51,19 +68,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     price,
     currency,
     recurrenceDays,
-    benefits,
-    roles,
-    entityLimits,
-    apiRateLimit,
-    storageLimitBytes,
-    fileCacheLimitBytes,
-    planCredits,
-    maxConcurrentDownloads,
-    maxConcurrentUploads,
-    maxDownloadBandwidthMB,
-    maxUploadBandwidthMB,
-    maxOperationCount,
     isActive,
+    resourceLimits,
   } = body;
 
   const errors: string[] = [];
@@ -83,43 +89,26 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const result = await genericCreate<Plan>({
-      table: "plan",
-      tenant: { id: tenantId },
-    }, {
+    const plan = await createPlanWithResourceLimit({
       name: await standardizeField("name", sanitizeString(name)),
       description: sanitizeString(description ?? ""),
+      tenantId,
       price: Number(price),
       currency: currency ?? "USD",
       recurrenceDays: Number(recurrenceDays),
-      benefits: benefits ?? [],
-      roles: roles ?? [],
-      entityLimits: entityLimits && Object.keys(entityLimits).length > 0
-        ? entityLimits
-        : undefined,
-      apiRateLimit: apiRateLimit ?? 1000,
-      storageLimitBytes: storageLimitBytes ?? 1073741824,
-      fileCacheLimitBytes: fileCacheLimitBytes ?? 20971520,
-      planCredits: planCredits ?? 0,
-      maxConcurrentDownloads: maxConcurrentDownloads ?? 0,
-      maxConcurrentUploads: maxConcurrentUploads ?? 0,
-      maxDownloadBandwidthMB: maxDownloadBandwidthMB ?? 0,
-      maxUploadBandwidthMB: maxUploadBandwidthMB ?? 0,
-      maxOperationCount: maxOperationCount || undefined,
       isActive: isActive ?? true,
+      resourceLimits: resourceLimits as Record<string, unknown> | undefined,
     });
 
-    if (!result.success) {
+    if (!plan) {
       return Response.json(
         {
           success: false,
-          error: { code: "VALIDATION", errors: result.errors },
+          error: { code: "ERROR", message: "common.error.generic" },
         },
-        { status: 400 },
+        { status: 500 },
       );
     }
-
-    const plan = result.data!;
 
     await Core.getInstance().reload();
 
@@ -140,7 +129,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
-  const { id, ...data } = body;
+  const { id, resourceLimits, ...data } = body;
 
   if (!id) {
     return Response.json(
@@ -153,64 +142,69 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const updates: Record<string, unknown> = {};
+    const planSets: string[] = [];
+    const rlSets: string[] = [];
+    const bindings: Record<string, unknown> = {};
 
-    const fields = [
+    const planFields = [
       "name",
       "description",
       "price",
       "currency",
       "recurrenceDays",
-      "benefits",
-      "roles",
-      "entityLimits",
-      "apiRateLimit",
-      "storageLimitBytes",
-      "fileCacheLimitBytes",
-      "planCredits",
-      "maxConcurrentDownloads",
-      "maxConcurrentUploads",
-      "maxDownloadBandwidthMB",
-      "maxUploadBandwidthMB",
-      "maxOperationCount",
       "isActive",
     ] as const;
 
-    for (const field of fields) {
+    for (const field of planFields) {
       if (data[field] !== undefined) {
         const value = data[field];
-        if (
-          field === "entityLimits" &&
-          (!value ||
-            (typeof value === "object" &&
-              Object.keys(value as object).length === 0))
-        ) {
-          updates[field] = null; // will be mapped to NONE in query
-        } else {
-          updates[field] = field === "name" || field === "description"
-            ? await standardizeField(field, sanitizeString(value))
-            : value;
+        bindings[field] = field === "name" || field === "description"
+          ? await standardizeField(field, sanitizeString(value))
+          : value;
+        planSets.push(`${field} = $${field}`);
+      }
+    }
+
+    if (resourceLimits && typeof resourceLimits === "object") {
+      const rl = resourceLimits as Record<string, unknown>;
+      for (const field of RL_FIELDS) {
+        if (rl[field] !== undefined) {
+          const value = rl[field];
+          if (
+            field === "entityLimits" &&
+            (!value ||
+              (typeof value === "object" &&
+                Object.keys(value as object).length === 0))
+          ) {
+            rlSets.push("entityLimits = NONE");
+          } else {
+            bindings[field] = value;
+            rlSets.push(`${field} = $${field}`);
+          }
         }
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    if (planSets.length === 0 && rlSets.length === 0) {
       return Response.json({ success: true, data: null });
     }
 
-    const result = await genericUpdate<Plan>({ table: "plan" }, id, updates);
+    const updated = await updatePlanWithResourceLimit(
+      id,
+      planSets,
+      rlSets,
+      bindings,
+    );
 
-    if (!result.success) {
+    if (!updated) {
       return Response.json(
         {
           success: false,
-          error: { code: "VALIDATION", errors: result.errors },
+          error: { code: "ERROR", message: "common.error.notFound" },
         },
-        { status: 400 },
+        { status: 404 },
       );
     }
-
-    const updated = result.data!;
 
     await Core.getInstance().reload();
 

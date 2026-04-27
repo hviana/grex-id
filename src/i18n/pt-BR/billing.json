@@ -106,7 +106,7 @@
   "limits.maxConcurrentUploads": "Máx. Uploads Simultâneos",
   "limits.maxDownloadBandwidthMB": "Banda Máx. de Download",
   "limits.maxUploadBandwidthMB": "Banda Máx. de Upload",
-  "limits.maxOperationCount": "Limite de Contagem de Operações",
+  "limits.maxOperationCountByResourceKey": "Limite de Contagem de Operações",
   "pendingPayments.title": "Pagamentos Pendentes",
   "pendingPayments.awaiting": "Aguardando seu pagamento",
   "pendingPayments.expiresAt": "Expira em",

@@ -10,21 +10,16 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
 import GenericList from "@/src/components/shared/GenericList";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
-import PlanCard, {
-  formatBytes,
-  limitEmoji,
-} from "@/src/components/shared/PlanCard";
+import PlanCard from "@/src/components/shared/PlanCard";
+import ResourceLimitsView, {
+  type ResourceLimitsData,
+} from "@/src/components/shared/ResourceLimitsView";
 
 interface VoucherInfo {
   id: string;
   code: string;
-  priceModifier: number; // positive = surcharge (in cents), negative = discount
-  creditModifier: number;
-  maxConcurrentDownloadsModifier?: number;
-  maxConcurrentUploadsModifier?: number;
-  maxDownloadBandwidthModifier?: number;
-  maxUploadBandwidthModifier?: number;
-  maxOperationCountModifier?: Record<string, number> | null;
+  priceModifier: number;
+  resourceLimitId?: ResourceLimitsData | null;
   expiresAt?: string;
 }
 
@@ -48,18 +43,7 @@ interface PlanInfo {
   price: number;
   currency: string;
   recurrenceDays: number;
-  benefits: string[];
-  roles: string[];
-  entityLimits?: Record<string, number>;
-  apiRateLimit: number;
-  storageLimitBytes: number;
-  fileCacheLimitBytes?: number;
-  planCredits?: number;
-  maxConcurrentDownloads?: number;
-  maxConcurrentUploads?: number;
-  maxDownloadBandwidthMB?: number;
-  maxUploadBandwidthMB?: number;
-  maxOperationCount?: Record<string, number> | null;
+  resourceLimitId?: ResourceLimitsData | null;
   isActive: boolean;
 }
 
@@ -700,10 +684,12 @@ export default function BillingPage() {
                       })`
                       : ""}
                   </span>
-                  {activeVoucher.creditModifier !== 0 && (
+                  {(activeVoucher.resourceLimitId?.credits ?? 0) !== 0 && (
                     <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full">
-                      💰 {activeVoucher.creditModifier > 0 ? "+" : ""}
-                      {activeVoucher.creditModifier}
+                      💰 {(activeVoucher.resourceLimitId?.credits ?? 0) > 0
+                        ? "+"
+                        : ""}
+                      {activeVoucher.resourceLimitId?.credits}
                     </span>
                   )}
                 </div>
@@ -721,115 +707,15 @@ export default function BillingPage() {
                 {formatDate(displaySub.currentPeriodEnd)}
               </p>
 
-              {/* Benefits */}
-              {activePlan.benefits?.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
-                    {t("billing.plans.benefits")}
-                  </p>
-                  <ul className="space-y-1">
-                    {activePlan.benefits.map((b, i) => (
-                      <li
-                        key={i}
-                        className="text-sm text-[var(--color-light-text)] flex items-center gap-2"
-                      >
-                        <span className="text-[var(--color-primary-green)]">
-                          ✓
-                        </span>
-                        {t(b) !== b ? t(b) : b}
-                      </li>
-                    ))}
-                  </ul>
+              {activePlan.resourceLimitId && (
+                <div className="mb-4">
+                  <ResourceLimitsView
+                    data={activePlan.resourceLimitId}
+                    systemSlug={systemSlug ?? undefined}
+                    title={t("billing.plans.limits")}
+                  />
                 </div>
               )}
-
-              {/* Limits */}
-              <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-2">
-                  {t("billing.plans.limits")}
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-sm text-[var(--color-light-text)]">
-                  <span>
-                    📊 {t("billing.plans.apiRate")}:{" "}
-                    {activePlan.apiRateLimit.toLocaleString()}{" "}
-                    {t("billing.plans.reqPerMin")}
-                  </span>
-                  <span>
-                    💾 {t("billing.plans.storage")}:{" "}
-                    {formatBytes(activePlan.storageLimitBytes)}
-                  </span>
-                  {activePlan.fileCacheLimitBytes
-                    ? (
-                      <span>
-                        🗂️ {t("billing.plans.fileCache")}:{" "}
-                        {formatBytes(activePlan.fileCacheLimitBytes)}
-                      </span>
-                    )
-                    : null}
-                  {activePlan.planCredits
-                    ? (
-                      <span>
-                        🪙 {t("billing.plans.planCredits")}:{" "}
-                        {activePlan.planCredits.toLocaleString()}{" "}
-                        {t("billing.plans.creditsPerPeriod")}
-                      </span>
-                    )
-                    : null}
-                  {activePlan.entityLimits &&
-                    Object.entries(activePlan.entityLimits).map((
-                      [key, val],
-                    ) => (
-                      <span key={key}>
-                        {limitEmoji(key)}{" "}
-                        {t(`billing.limits.${key}`) !== `billing.limits.${key}`
-                          ? t(`billing.limits.${key}`)
-                          : key}: {val.toLocaleString()}
-                      </span>
-                    ))}
-                  <span>
-                    ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-                    {activePlan.maxConcurrentDownloads
-                      ? activePlan.maxConcurrentDownloads
-                      : t("billing.limits.unlimited")}
-                  </span>
-                  <span>
-                    ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-                    {activePlan.maxConcurrentUploads
-                      ? activePlan.maxConcurrentUploads
-                      : t("billing.limits.unlimited")}
-                  </span>
-                  <span>
-                    📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-                    {activePlan.maxDownloadBandwidthMB
-                      ? `${activePlan.maxDownloadBandwidthMB} MB/s`
-                      : t("billing.limits.unlimited")}
-                  </span>
-                  <span>
-                    📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-                    {activePlan.maxUploadBandwidthMB
-                      ? `${activePlan.maxUploadBandwidthMB} MB/s`
-                      : t("billing.limits.unlimited")}
-                  </span>
-                  {activePlan.maxOperationCount &&
-                      Object.keys(activePlan.maxOperationCount).length > 0
-                    ? Object.entries(activePlan.maxOperationCount).map(
-                      ([key, val]) => (
-                        <span key={key}>
-                          🔢 {t("billing.limits." + key) !==
-                              `billing.limits.${key}`
-                            ? t("billing.limits." + key)
-                            : key}: {val.toLocaleString()}
-                        </span>
-                      ),
-                    )
-                    : (
-                      <span>
-                        🔢 {t("billing.limits.maxOperationCount")}:{" "}
-                        {t("billing.limits.unlimited")}
-                      </span>
-                    )}
-                </div>
-              </div>
 
               <button
                 onClick={() => setCancelModalOpen(true)}
@@ -983,9 +869,10 @@ export default function BillingPage() {
             </p>
           </div>
           {displaySub && (() => {
-            const opCounts = activePlan?.maxOperationCount;
-            const voucherMods = activeVoucher?.maxOperationCountModifier ??
-              null;
+            const opCounts = activePlan?.resourceLimitId
+              ?.maxOperationCountByResourceKey;
+            const voucherMods = activeVoucher?.resourceLimitId
+              ?.maxOperationCountByResourceKey ?? null;
             if (
               opCounts && typeof opCounts === "object" &&
               Object.keys(opCounts).length > 0
@@ -993,8 +880,10 @@ export default function BillingPage() {
               return (
                 <div className="ml-6 border-l border-[var(--color-dark-gray)] pl-6 space-y-2">
                   {Object.entries(opCounts).map(([key, planVal]) => {
-                    const mod = voucherMods?.[key] ?? 0;
-                    const cap = Math.max(0, planVal + mod);
+                    const mod = typeof voucherMods === "object" && voucherMods
+                      ? (voucherMods as Record<string, number>)[key] ?? 0
+                      : 0;
+                    const cap = Math.max(0, (planVal as number) + mod);
                     const remaining =
                       displaySub.remainingOperationCount?.[key] ?? 0;
                     return (
@@ -1237,64 +1126,16 @@ export default function BillingPage() {
                   </span>
                 )}
               </span>
-              {activeVoucher.creditModifier !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  💰 {activeVoucher.creditModifier > 0 ? "+" : ""}
-                  {activeVoucher.creditModifier} {t("billing.credits.title")}
-                </span>
-              )}
-              {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  ⬇️ {(activeVoucher.maxConcurrentDownloadsModifier ?? 0) > 0
-                    ? "+"
-                    : ""}
-                  {activeVoucher.maxConcurrentDownloadsModifier}{" "}
-                  {t("billing.limits.maxConcurrentDownloads")}
-                </span>
-              )}
-              {(activeVoucher.maxConcurrentUploadsModifier ?? 0) !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  ⬆️ {(activeVoucher.maxConcurrentUploadsModifier ?? 0) > 0
-                    ? "+"
-                    : ""}
-                  {activeVoucher.maxConcurrentUploadsModifier}{" "}
-                  {t("billing.limits.maxConcurrentUploads")}
-                </span>
-              )}
-              {(activeVoucher.maxDownloadBandwidthModifier ?? 0) !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  📶 {(activeVoucher.maxDownloadBandwidthModifier ?? 0) > 0
-                    ? "+"
-                    : ""}
-                  {activeVoucher.maxDownloadBandwidthModifier} MB/s
-                </span>
-              )}
-              {(activeVoucher.maxUploadBandwidthModifier ?? 0) !== 0 && (
-                <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full">
-                  📶{" "}
-                  {(activeVoucher.maxUploadBandwidthModifier ?? 0) > 0
-                    ? "+"
-                    : ""}
-                  {activeVoucher.maxUploadBandwidthModifier} MB/s
-                </span>
-              )}
-              {activeVoucher.maxOperationCountModifier &&
-                typeof activeVoucher.maxOperationCountModifier === "object" &&
-                Object.entries(activeVoucher.maxOperationCountModifier).map(
-                  ([key, mod]) => (
-                    <span
-                      key={key}
-                      className="inline-flex items-center gap-1 text-xs bg-[var(--color-secondary-blue)]/10 border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] px-3 py-1 rounded-full"
-                    >
-                      🔢 {mod > 0 ? "+" : ""}
-                      {mod} {t("billing.limits." + key) !==
-                          `billing.limits.${key}`
-                        ? t("billing.limits." + key)
-                        : key}
-                    </span>
-                  ),
-                )}
             </div>
+            {activeVoucher.resourceLimitId && (
+              <div className="mt-3">
+                <ResourceLimitsView
+                  data={activeVoucher.resourceLimitId}
+                  systemSlug={systemSlug ?? undefined}
+                  modifier
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

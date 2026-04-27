@@ -4,7 +4,6 @@ export type VerificationActorType =
   | "user"
   | "lead"
   | "api_token"
-  | "connected_app"
   | "system";
 
 export interface VerificationRequestTenantContext {

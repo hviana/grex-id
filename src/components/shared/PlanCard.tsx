@@ -1,7 +1,9 @@
 "use client";
 
 import { useLocale } from "@/src/hooks/useLocale";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import ResourceLimitsView, {
+  type ResourceLimitsData,
+} from "@/src/components/shared/ResourceLimitsView";
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -34,19 +36,9 @@ interface PlanData {
   price: number;
   currency: string;
   recurrenceDays: number;
-  benefits: string[];
-  roles?: string[];
-  entityLimits?: Record<string, number> | null;
-  apiRateLimit: number;
-  storageLimitBytes: number;
-  fileCacheLimitBytes?: number;
-  planCredits?: number;
-  maxConcurrentDownloads?: number;
-  maxConcurrentUploads?: number;
-  maxDownloadBandwidthMB?: number;
-  maxUploadBandwidthMB?: number;
-  maxOperationCount?: Record<string, number> | null;
+  resourceLimitId?: ResourceLimitsData | null;
   isActive?: boolean;
+  [key: string]: unknown;
 }
 
 export interface PlanCardProps {
@@ -58,188 +50,7 @@ export interface PlanCardProps {
   voucherPrice?: { original: number; effective: number; currency: string };
   onClick?: () => void;
   systemName?: string;
-  /**
-   * System slug used to scope entity/resource token translations (§5.6.1).
-   * Under `variant === "core"` (operator surface) both the raw token and its
-   * translation render. Under `variant === "billing" | "onboarding"`
-   * (end-user surface) only the translation renders — see §2.3.1 rules.
-   */
   systemSlug?: string;
-}
-
-function LimitsFull(
-  { plan, systemSlug }: { plan: PlanData; systemSlug?: string },
-) {
-  const { t } = useLocale();
-  return (
-    <div className="mb-4">
-      <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-        {t("billing.plans.limits")}
-      </p>
-      <div className="space-y-1 text-sm text-[var(--color-light-text)]">
-        <p>
-          📊 {t("billing.plans.apiRate")}: {plan.apiRateLimit.toLocaleString()}
-          {" "}
-          {t("billing.plans.reqPerMin")}
-        </p>
-        <p>
-          💾 {t("billing.plans.storage")}: {formatBytes(plan.storageLimitBytes)}
-        </p>
-        {plan.fileCacheLimitBytes
-          ? (
-            <p>
-              🗂️ {t("billing.plans.fileCache")}:{" "}
-              {formatBytes(plan.fileCacheLimitBytes)}
-            </p>
-          )
-          : null}
-        {plan.planCredits
-          ? (
-            <p>
-              🪙 {t("billing.plans.planCredits")}:{" "}
-              {plan.planCredits.toLocaleString()}{" "}
-              {t("billing.plans.creditsPerPeriod")}
-            </p>
-          )
-          : null}
-        {!!plan.entityLimits && (
-          <TranslatedBadgeList
-            kind="entity"
-            entries={plan.entityLimits}
-            systemSlug={systemSlug}
-            compact
-            mode="column"
-            prefix={(key) => limitEmoji(key)}
-          />
-        )}
-        <p>
-          ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-          {plan.maxConcurrentDownloads
-            ? plan.maxConcurrentDownloads
-            : t("billing.limits.unlimited")}
-        </p>
-        <p>
-          ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-          {plan.maxConcurrentUploads
-            ? plan.maxConcurrentUploads
-            : t("billing.limits.unlimited")}
-        </p>
-        <p>
-          📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-          {plan.maxDownloadBandwidthMB
-            ? `${plan.maxDownloadBandwidthMB} MB/s`
-            : t("billing.limits.unlimited")}
-        </p>
-        <p>
-          📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-          {plan.maxUploadBandwidthMB
-            ? `${plan.maxUploadBandwidthMB} MB/s`
-            : t("billing.limits.unlimited")}
-        </p>
-        {plan.maxOperationCount &&
-            Object.keys(plan.maxOperationCount).length > 0
-          ? (
-            <TranslatedBadgeList
-              kind="resource"
-              entries={plan.maxOperationCount}
-              systemSlug={systemSlug}
-              compact
-              mode="column"
-              prefix="🔢"
-            />
-          )
-          : (
-            <p>
-              🔢 {t("billing.limits.maxOperationCount")}:{" "}
-              {t("billing.limits.unlimited")}
-            </p>
-          )}
-      </div>
-    </div>
-  );
-}
-
-function LimitsCompact(
-  { plan, systemSlug }: { plan: PlanData; systemSlug?: string },
-) {
-  const { t } = useLocale();
-  return (
-    <div className="mt-auto pt-3 border-t border-[var(--color-dark-gray)]/50 space-y-1 text-xs text-[var(--color-light-text)]">
-      <div className="flex justify-between">
-        <span>{t("core.plans.apiRateLimit")}</span>
-        <span className="text-white">
-          {plan.apiRateLimit.toLocaleString()}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>{t("core.plans.storage")}</span>
-        <span className="text-white">
-          {formatBytes(plan.storageLimitBytes)}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>🗂️ {t("core.plans.fileCache")}</span>
-        <span className="text-white">
-          {formatBytes(plan.fileCacheLimitBytes ?? 20971520)}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>{t("core.plans.planCredits")}</span>
-        <span className="text-white">{plan.planCredits ?? 0}</span>
-      </div>
-      <div className="flex justify-between">
-        <span>⬇️ {t("core.plans.maxConcurrentDownloads")}</span>
-        <span className="text-white">
-          {plan.maxConcurrentDownloads || t("billing.limits.unlimited")}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>⬆️ {t("core.plans.maxConcurrentUploads")}</span>
-        <span className="text-white">
-          {plan.maxConcurrentUploads || t("billing.limits.unlimited")}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>📶 {t("core.plans.maxDownloadBandwidthMB")}</span>
-        <span className="text-white">
-          {plan.maxDownloadBandwidthMB || t("billing.limits.unlimited")}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span>📶 {t("core.plans.maxUploadBandwidthMB")}</span>
-        <span className="text-white">
-          {plan.maxUploadBandwidthMB || t("billing.limits.unlimited")}
-        </span>
-      </div>
-      {plan.maxOperationCount && Object.keys(plan.maxOperationCount).length > 0
-        ? (
-          <TranslatedBadgeList
-            kind="resource"
-            entries={plan.maxOperationCount}
-            systemSlug={systemSlug}
-            mode="column"
-            prefix="🔢"
-            justifyValues
-          />
-        )
-        : (
-          <div className="flex justify-between">
-            <span>🔢 {t("core.plans.maxOperationCount")}</span>
-            <span className="text-white">
-              {t("billing.limits.unlimited")}
-            </span>
-          </div>
-        )}
-      <TranslatedBadgeList
-        kind="entity"
-        entries={plan.entityLimits}
-        systemSlug={systemSlug}
-        mode="column"
-        prefix="📦"
-        justifyValues
-      />
-    </div>
-  );
 }
 
 export default function PlanCard({
@@ -261,6 +72,8 @@ export default function PlanCard({
       ? t(plan.description)
       : plan.description)
     : null;
+
+  const limits = plan.resourceLimitId ?? null;
 
   const cardClass =
     `backdrop-blur-md bg-white/5 border rounded-2xl p-6 transition-all duration-200 ${
@@ -325,38 +138,13 @@ export default function PlanCard({
         </p>
       )}
 
-      {/* Benefits */}
-      {plan.benefits?.length > 0 && (
-        <div className="mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent mb-1">
-            {t("billing.plans.benefits")}
-          </p>
-          <ul className="space-y-1">
-            {plan.benefits.map((b, i) => (
-              <li
-                key={i}
-                className="text-sm text-[var(--color-light-text)] flex items-center gap-2"
-              >
-                <span className="text-[var(--color-primary-green)]">✓</span>
-                {t(b) !== b ? t(b) : b}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Limits */}
-      {variant === "core"
-        ? <LimitsCompact plan={plan} systemSlug={systemSlug} />
-        : <LimitsFull plan={plan} systemSlug={systemSlug} />}
-
-      {/* Roles (core only — operator surface, shows both lines) */}
-      {variant === "core" && (
-        <TranslatedBadgeList
-          kind="role"
-          tokens={plan.roles}
+      {/* Benefits & Limits via ResourceLimitsView */}
+      {limits && (
+        <ResourceLimitsView
+          data={limits}
           systemSlug={systemSlug}
-          className="mt-3"
+          className={variant === "core" ? "mt-3" : "mb-4"}
+          title={variant !== "core" ? t("billing.plans.limits") : undefined}
         />
       )}
 

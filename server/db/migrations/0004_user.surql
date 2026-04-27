@@ -14,6 +14,7 @@ DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>> DEFAULT [];
 DEFINE INDEX idx_user_profile  ON user FIELDS profileId UNIQUE;
 DEFINE INDEX idx_user_channels ON user FIELDS channelIds;
 DEFINE INDEX idx_user_tenants  ON user FIELDS tenantIds;
+DEFINE INDEX idx_at_user_resource_limit        ON user FIELDS resourceLimitId;
 
 DEFINE TABLE oauth_identity SCHEMAFULL;
 DEFINE FIELD userId         ON oauth_identity TYPE record<user>;
@@ -23,4 +24,4 @@ DEFINE FIELD linkedAt       ON oauth_identity TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_oauth_identity_provider_user ON oauth_identity FIELDS provider, providerUserId UNIQUE;
 DEFINE INDEX idx_oauth_identity_user          ON oauth_identity FIELDS userId;
-DEFINE INDEX idx_at_resource_limit        ON user FIELDS resourceLimitId;
+

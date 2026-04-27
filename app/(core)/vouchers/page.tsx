@@ -11,23 +11,14 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import VoucherCard from "@/src/components/core/VoucherCard";
 import VoucherSubform from "@/src/components/subforms/VoucherSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { ResourceLimitsData } from "@/src/components/shared/ResourceLimitsView";
 
 interface VoucherItem {
   id: string;
   code: string;
-  applicableCompanyIds: string[];
+  applicableTenantIds: string[];
   applicablePlanIds: string[];
-  priceModifier: number;
-  entityLimitModifiers: Record<string, number> | null;
-  apiRateLimitModifier: number;
-  storageLimitModifier: number;
-  fileCacheLimitModifier: number;
-  maxConcurrentDownloadsModifier: number;
-  maxConcurrentUploadsModifier: number;
-  maxDownloadBandwidthModifier: number;
-  maxUploadBandwidthModifier: number;
-  maxOperationCountModifier: Record<string, number> | null;
-  creditModifier: number;
+  resourceLimitId?: ResourceLimitsData | null;
   expiresAt: string | null;
   createdAt: string;
   [key: string]: unknown;
@@ -85,20 +76,10 @@ export default function VouchersPage() {
   const openEdit = (item: VoucherItem) => {
     setFormInitial({
       code: item.code,
-      priceModifier: item.priceModifier,
+      applicableTenantIds: item.applicableTenantIds ?? [],
       applicablePlanIds: item.applicablePlanIds ?? [],
       expiresAt: item.expiresAt,
-      roles: item.roles ?? [],
-      entityLimitModifiers: item.entityLimitModifiers,
-      apiRateLimitModifier: item.apiRateLimitModifier ?? 0,
-      storageLimitModifier: item.storageLimitModifier ?? 0,
-      fileCacheLimitModifier: item.fileCacheLimitModifier ?? 0,
-      creditModifier: item.creditModifier ?? 0,
-      maxConcurrentDownloadsModifier: item.maxConcurrentDownloadsModifier ?? 0,
-      maxConcurrentUploadsModifier: item.maxConcurrentUploadsModifier ?? 0,
-      maxDownloadBandwidthModifier: item.maxDownloadBandwidthModifier ?? 0,
-      maxUploadBandwidthModifier: item.maxUploadBandwidthModifier ?? 0,
-      maxOperationCountModifier: item.maxOperationCountModifier,
+      ...(item.resourceLimitId as Record<string, unknown> ?? {}),
     });
     setError(null);
     setEditItem(item);

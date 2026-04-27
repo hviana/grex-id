@@ -8,4 +8,4 @@ DEFINE FIELD createdAt             ON voucher TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_voucher_code_fts ON TABLE voucher FIELDS code FULLTEXT ANALYZER general_analyzer_fts BM25;
 DEFINE INDEX idx_voucher_code     ON voucher FIELDS code UNIQUE;
-DEFINE INDEX idx_at_resource_limit        ON voucher FIELDS resourceLimitId;
+DEFINE INDEX idx_at_voucher_resource_limit        ON voucher FIELDS resourceLimitId;

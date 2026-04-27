@@ -47,7 +47,7 @@ export async function fetchSubscriptionAndCreditBalance(params: {
      WHERE tenantIds CONTAINS $tenantId AND status = "active"
      LIMIT 1;
      SELECT math::sum(value) AS balance FROM usage_record
-     WHERE tenantIds CONTAINS $tenantId AND resource = "credits"
+     WHERE tenantIds CONTAINS $tenantId AND resourceKey = "credits"
      GROUP ALL;`,
     {
       tenantId: rid(params.tenantId),
@@ -150,9 +150,9 @@ export async function deductFromPurchasedCredits(params: {
     };
      UPSERT usage_record SET
        tenantIds = [$tenantId],
-       resource = "credits", value -= $fromPurchased, period = $period
+       resourceKey = "credits", value -= $fromPurchased, period = $period
      WHERE tenantIds CONTAINS $tenantId
-       AND resource = "credits";
+       AND resourceKey = "credits";
      UPSERT credit_expense SET
        tenantIds = [$tenantId],
        resourceKey = $resourceKey, amount += $totalAmount, count += 1, day = $day,
@@ -175,7 +175,7 @@ export async function deductFromPurchasedCredits(params: {
 
 /**
  * Checks the actor-level per-resourceKey operation count cap.
- * Returns the actor's maxOperationCount map and their current expense count.
+ * Returns the actor's maxOperationCountByResourceKey map and their current expense count.
  */
 export async function fetchActorOperationCap(params: {
   actorRid: ReturnType<typeof rid>;
@@ -183,7 +183,6 @@ export async function fetchActorOperationCap(params: {
   resourceKey: string;
   tenantId: ReturnType<typeof rid>;
   periodStart: string;
-  actorType: string;
 }): Promise<
   [
     (Record<string, number> | null)[],
@@ -191,12 +190,9 @@ export async function fetchActorOperationCap(params: {
   ]
 > {
   const db = await getDb();
-  const actorQuery = params.actorType === "api_token"
-    ? `SELECT VALUE maxOperationCount FROM api_token WHERE id = $actorRid LIMIT 1;`
-    : `SELECT VALUE maxOperationCount FROM connected_app WHERE id = $actorRid LIMIT 1;`;
-
+  // All api_token actors (including actorType="app") live in api_token table.
   return db.query(
-    `${actorQuery}
+    `SELECT VALUE maxOperationCountByResourceKey FROM api_token WHERE id = $actorRid LIMIT 1;
      SELECT math::sum(count) AS count FROM credit_expense
      WHERE actorId = $actorStr
        AND resourceKey = $resourceKey

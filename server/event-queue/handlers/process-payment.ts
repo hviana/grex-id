@@ -151,8 +151,12 @@ export const processPayment: HandlerFn = async (payload) => {
       const newEnd = new Date(
         newStart.getTime() + plan.recurrenceDays * 86400000,
       );
-      const creditModifier = voucher?.creditModifier ?? 0;
-      const remainingPlanCredits = (plan.planCredits ?? 0) + creditModifier;
+      const creditModifier =
+        (voucher?.resourceLimitId as Record<string, unknown>)
+          ?.credits as number ?? 0;
+      const remainingPlanCredits =
+        ((plan.resourceLimitId as Record<string, unknown>)?.credits as number ??
+          0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
         tenant: {

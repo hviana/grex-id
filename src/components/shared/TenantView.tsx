@@ -49,7 +49,6 @@ interface TenantViewProps {
 const ACTOR_TYPE_EMOJI: Record<string, string> = {
   user: "👤",
   api_token: "🔑",
-  connected_app: "🔌",
 };
 
 function ActorTypeBadge({ type }: { type?: TenantActorType }) {

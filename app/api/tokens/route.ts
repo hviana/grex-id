@@ -4,18 +4,29 @@ import { withRateLimit } from "@/server/middleware/withRateLimit";
 import type { RequestContext } from "@/src/contracts/auth";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
-import { revokeToken } from "@/server/db/queries/tokens";
-import { genericCreate, genericList } from "@/server/db/queries/generics";
+import {
+  createTokenWithResourceLimit,
+  revokeToken,
+} from "@/server/db/queries/tokens";
+import { genericList } from "@/server/db/queries/generics";
 import type { ApiToken } from "@/src/contracts/token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
+  const url = new URL(req.url);
+  const actorType = url.searchParams.get("actorType") ?? undefined;
+
+  const extraConditions: string[] = ["revokedAt IS NONE"];
+  if (actorType) {
+    extraConditions.push(`actorType = "${actorType}"`);
+  }
+
   const result = await genericList<ApiToken>({
     table: "api_token",
     select:
-      "id, name, description, roles, monthlySpendLimit, maxOperationCount, neverExpires, expiresAt, frontendUse, frontendDomains, createdAt",
+      "id, name, description, actorType, neverExpires, expiresAt, createdAt, resourceLimitId.* AS resourceLimitId",
     orderBy: "createdAt",
     orderByDirection: "DESC",
-    extraConditions: ["revokedAt IS NONE"],
+    extraConditions,
     limit: 50,
     tenant: ctx.tenant,
   });
@@ -27,9 +38,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const {
     name,
     description,
-    roles,
-    monthlySpendLimit,
-    maxOperationCount,
+    actorType,
+    resourceLimits,
     neverExpires,
     expiresAt,
     frontendUse,
@@ -49,6 +59,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
+  const at = actorType === "app" ? "app" : "token";
+
   if (neverExpires && expiresAt) {
     return Response.json(
       {
@@ -62,9 +74,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const useFrontend = frontendUse === true;
-  const domains: string[] = frontendDomains ?? [];
-  if (useFrontend && domains.length === 0) {
+  // Resolve frontendUse/frontendDomains from resourceLimits or direct body
+  const rlDomains: string[] = (resourceLimits?.frontendDomains as string[]) ??
+    frontendDomains ??
+    [];
+  const useFrontend = frontendUse === true || rlDomains.length > 0;
+
+  if (useFrontend && rlDomains.length === 0) {
     return Response.json(
       {
         success: false,
@@ -77,25 +93,24 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const result = await genericCreate<ApiToken>(
-    {
-      table: "api_token",
-      tenant: ctx.tenant,
+  const createdToken = await createTokenWithResourceLimit({
+    name,
+    description: description ?? undefined,
+    actorType: at,
+    tenantId: ctx.tenant.id,
+    tenant: {
+      id: ctx.tenant.id,
+      systemId: ctx.tenant.systemId,
+      companyId: ctx.tenant.companyId,
+      systemSlug: ctx.tenant.systemSlug,
+      roles: (resourceLimits?.roles as string[]) ?? [],
     },
-    {
-      name,
-      description: description ?? undefined,
-      roles: roles ?? [],
-      monthlySpendLimit: monthlySpendLimit ?? undefined,
-      maxOperationCount: maxOperationCount ?? undefined,
-      neverExpires: neverExpires === true,
-      expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
-      frontendUse: useFrontend,
-      frontendDomains: domains,
-    },
-  );
+    resourceLimits: resourceLimits ?? undefined,
+    neverExpires: neverExpires === true,
+    expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
+  });
 
-  if (!result.success || !result.data) {
+  if (!createdToken) {
     return Response.json(
       {
         success: false,
@@ -104,8 +119,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
       { status: 500 },
     );
   }
-
-  const createdToken = result.data;
 
   // Issue the JWT bearer for this api_token. The actor id is the row id
   // (§8.11); exp comes from expiresAt or a far-future date for
@@ -117,18 +130,22 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ? new Date(createdToken.expiresAt)
     : far;
 
+  const resLimits = createdToken.resourceLimitId;
+  const roles = resLimits?.roles ?? [];
+  const rlFrontendDomains = resLimits?.frontendDomains ?? [];
+
   const jwt = await createTenantToken(
     {
       id: ctx.tenant.id,
       systemId: ctx.tenant.systemId,
       companyId: ctx.tenant.companyId,
       systemSlug: ctx.tenant.systemSlug,
-      roles: roles ?? [],
+      roles,
       actorType: "api_token",
       actorId: String(createdToken.id),
       exchangeable: false,
-      frontendUse: createdToken.frontendUse,
-      frontendDomains: createdToken.frontendDomains ?? [],
+      frontendUse: useFrontend,
+      frontendDomains: rlFrontendDomains,
     },
     false,
     exp,
@@ -156,7 +173,6 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
     );
   }
 
-  // Resolve tenant + revoke in a single batched query (§7.2).
   const row = await revokeToken(id);
   if (row) {
     await forgetActor(row.tenantId, id);

@@ -58,7 +58,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
           ),
           applicablePlanIds: applicablePlanIds.map((p) => p.id),
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-          ...limitsData,
+          resourceLimits: limitsData,
         };
       },
       isValid: () => !!code.trim(),

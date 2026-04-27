@@ -12,13 +12,13 @@ function getCurrentPeriod(): string {
 
 export async function trackUsage(params: {
   tenantId: string;
-  resource: string;
+  resourceKey: string;
   value: number;
 }): Promise<void> {
   const period = getCurrentPeriod();
   await upsertUsageRecord({
     tenantId: params.tenantId,
-    resource: params.resource,
+    resourceKey: params.resourceKey,
     value: params.value,
     period,
   });

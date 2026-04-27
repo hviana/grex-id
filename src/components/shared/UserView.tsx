@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import TenantView from "@/src/components/shared/TenantView";
+import ResourceLimitsView, {
+  type ResourceLimitsData,
+} from "@/src/components/shared/ResourceLimitsView";
 
 export interface UserViewData {
   id: string;
@@ -17,6 +20,7 @@ export interface UserViewData {
     verified: boolean;
   }[];
   contextRoles?: string[];
+  resourceLimitId?: ResourceLimitsData | null;
   createdAt: string;
   [key: string]: unknown;
 }
@@ -100,6 +104,14 @@ export default function UserView(
 
         {controls && <div className="flex gap-1 shrink-0">{controls}</div>}
       </div>
+
+      {user.resourceLimitId && (
+        <ResourceLimitsView
+          data={user.resourceLimitId}
+          systemSlug={systemSlug}
+          className="mt-3"
+        />
+      )}
     </div>
   );
 }

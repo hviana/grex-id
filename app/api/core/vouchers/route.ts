@@ -7,10 +7,11 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
 import {
+  createVoucherWithResourceLimit,
   deleteVoucher,
   updateVoucherWithCascade,
 } from "@/server/db/queries/vouchers";
-import { genericCreate, genericList } from "@/server/db/queries/generics";
+import { genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import type { Voucher } from "@/src/contracts/voucher";
 
@@ -22,6 +23,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
   const result = await genericList<Voucher>({
     table: "voucher",
+    select: "*, resourceLimitId.* AS resourceLimitId",
     searchFields: ["code"],
     limit,
     cursor,
@@ -37,17 +39,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     code,
     applicableTenantIds,
     applicablePlanIds,
-    priceModifier,
-    entityLimitModifiers,
-    apiRateLimitModifier,
-    storageLimitModifier,
-    fileCacheLimitModifier,
-    maxConcurrentDownloadsModifier,
-    maxConcurrentUploadsModifier,
-    maxDownloadBandwidthModifier,
-    maxUploadBandwidthModifier,
-    maxOperationCountModifier,
-    creditModifier,
+    resourceLimits,
     expiresAt,
   } = body;
 
@@ -68,42 +60,21 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const voucher = await genericCreate<Voucher>({
-      table: "voucher",
-    }, {
+    const voucher = await createVoucherWithResourceLimit({
       code: await standardizeField("name", sanitizeString(code)),
-      applicableTenantIds: (applicableTenantIds ?? []).map(
-        (id: string) => rid(id),
-      ),
-      applicablePlanIds: (applicablePlanIds ?? []).map(
-        (id: string) => rid(id),
-      ),
-      priceModifier: Number(priceModifier ?? 0),
-      entityLimitModifiers: entityLimitModifiers &&
-          Object.keys(entityLimitModifiers).length > 0
-        ? entityLimitModifiers
-        : undefined,
-      apiRateLimitModifier: Number(apiRateLimitModifier ?? 0),
-      storageLimitModifier: Number(storageLimitModifier ?? 0),
-      fileCacheLimitModifier: Number(fileCacheLimitModifier ?? 0),
-      maxConcurrentDownloadsModifier: Number(
-        maxConcurrentDownloadsModifier ?? 0,
-      ),
-      maxConcurrentUploadsModifier: Number(maxConcurrentUploadsModifier ?? 0),
-      maxDownloadBandwidthModifier: Number(maxDownloadBandwidthModifier ?? 0),
-      maxUploadBandwidthModifier: Number(maxUploadBandwidthModifier ?? 0),
-      maxOperationCountModifier: maxOperationCountModifier || undefined,
-      creditModifier: Number(creditModifier ?? 0),
+      applicableTenantIds: applicableTenantIds ?? [],
+      applicablePlanIds: applicablePlanIds ?? [],
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      resourceLimits: resourceLimits ?? undefined,
     });
 
-    if (!voucher.success) {
+    if (!voucher) {
       return Response.json(
         {
           success: false,
-          error: { code: "VALIDATION", errors: voucher.errors },
+          error: { code: "ERROR", message: "common.error.generic" },
         },
-        { status: 400 },
+        { status: 500 },
       );
     }
 
@@ -112,7 +83,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     core.evictAllSubscriptions();
 
     return Response.json(
-      { success: true, data: voucher.data },
+      { success: true, data: voucher },
       { status: 201 },
     );
   } catch (e) {
@@ -127,10 +98,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 /**
- * PUT — updates a voucher with auto-removal cascade:
- * If applicablePlanIds is non-empty after the update, clears voucherId
- * on any subscription whose planId is NOT in the new list.
- * This runs in the same batched query as the voucher update (§7.7).
+ * PUT — updates a voucher and its resource_limit with auto-removal cascade.
  */
 async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
@@ -139,17 +107,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     code,
     applicableTenantIds,
     applicablePlanIds,
-    priceModifier,
-    entityLimitModifiers,
-    apiRateLimitModifier,
-    storageLimitModifier,
-    fileCacheLimitModifier,
-    maxConcurrentDownloadsModifier,
-    maxConcurrentUploadsModifier,
-    maxDownloadBandwidthModifier,
-    maxUploadBandwidthModifier,
-    maxOperationCountModifier,
-    creditModifier,
+    resourceLimits,
     expiresAt,
   } = body;
 
@@ -164,106 +122,98 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   }
 
   try {
-    const sets: string[] = [];
+    const voucherSets: string[] = [];
+    const rlSets: string[] = [];
     const bindings: Record<string, unknown> = {};
 
     if (code !== undefined) {
-      sets.push("code = $code");
+      voucherSets.push("code = $code");
       bindings.code = await standardizeField("name", sanitizeString(code));
     }
     if (applicableTenantIds !== undefined) {
-      sets.push("applicableTenantIds = $applicableTenantIds");
+      voucherSets.push("applicableTenantIds = $applicableTenantIds");
       bindings.applicableTenantIds = applicableTenantIds;
     }
     if (applicablePlanIds !== undefined) {
-      sets.push("applicablePlanIds = $applicablePlanIds");
+      voucherSets.push("applicablePlanIds = $applicablePlanIds");
       bindings.applicablePlanIds = applicablePlanIds ?? [];
     }
-    if (priceModifier !== undefined) {
-      sets.push("priceModifier = $priceModifier");
-      bindings.priceModifier = Number(priceModifier);
-    }
-    if (entityLimitModifiers !== undefined) {
-      if (
-        entityLimitModifiers && Object.keys(entityLimitModifiers).length > 0
-      ) {
-        sets.push("entityLimitModifiers = $entityLimitModifiers");
-        bindings.entityLimitModifiers = entityLimitModifiers;
-      } else {
-        sets.push("entityLimitModifiers = NONE");
-      }
-    }
-    if (apiRateLimitModifier !== undefined) {
-      sets.push("apiRateLimitModifier = $apiRateLimitModifier");
-      bindings.apiRateLimitModifier = Number(apiRateLimitModifier);
-    }
-    if (storageLimitModifier !== undefined) {
-      sets.push("storageLimitModifier = $storageLimitModifier");
-      bindings.storageLimitModifier = Number(storageLimitModifier);
-    }
-    if (fileCacheLimitModifier !== undefined) {
-      sets.push("fileCacheLimitModifier = $fileCacheLimitModifier");
-      bindings.fileCacheLimitModifier = Number(fileCacheLimitModifier);
-    }
-    if (creditModifier !== undefined) {
-      sets.push("creditModifier = $creditModifier");
-      bindings.creditModifier = Number(creditModifier);
-    }
-    if (maxConcurrentDownloadsModifier !== undefined) {
-      sets.push(
-        "maxConcurrentDownloadsModifier = $maxConcurrentDownloadsModifier",
-      );
-      bindings.maxConcurrentDownloadsModifier = Number(
-        maxConcurrentDownloadsModifier,
-      );
-    }
-    if (maxConcurrentUploadsModifier !== undefined) {
-      sets.push("maxConcurrentUploadsModifier = $maxConcurrentUploadsModifier");
-      bindings.maxConcurrentUploadsModifier = Number(
-        maxConcurrentUploadsModifier,
-      );
-    }
-    if (maxDownloadBandwidthModifier !== undefined) {
-      sets.push("maxDownloadBandwidthModifier = $maxDownloadBandwidthModifier");
-      bindings.maxDownloadBandwidthModifier = Number(
-        maxDownloadBandwidthModifier,
-      );
-    }
-    if (maxUploadBandwidthModifier !== undefined) {
-      sets.push("maxUploadBandwidthModifier = $maxUploadBandwidthModifier");
-      bindings.maxUploadBandwidthModifier = Number(maxUploadBandwidthModifier);
-    }
-    if (maxOperationCountModifier !== undefined) {
-      sets.push("maxOperationCountModifier = $maxOperationCountModifier");
-      bindings.maxOperationCountModifier = maxOperationCountModifier;
-    }
     if (expiresAt !== undefined) {
-      sets.push("expiresAt = $expiresAt");
+      voucherSets.push("expiresAt = $expiresAt");
       bindings.expiresAt = expiresAt ? new Date(expiresAt) : null;
     }
 
-    if (sets.length === 0) {
+    // Resource limit fields (modifier values)
+    if (resourceLimits !== undefined) {
+      const rl = resourceLimits as Record<string, unknown>;
+      if (rl.entityLimits !== undefined) {
+        rlSets.push("entityLimits = $entityLimits");
+        bindings.entityLimits = rl.entityLimits || undefined;
+      }
+      if (rl.apiRateLimit !== undefined) {
+        rlSets.push("apiRateLimit = $apiRateLimit");
+        bindings.apiRateLimit = Number(rl.apiRateLimit);
+      }
+      if (rl.storageLimitBytes !== undefined) {
+        rlSets.push("storageLimitBytes = $storageLimitBytes");
+        bindings.storageLimitBytes = Number(rl.storageLimitBytes);
+      }
+      if (rl.fileCacheLimitBytes !== undefined) {
+        rlSets.push("fileCacheLimitBytes = $fileCacheLimitBytes");
+        bindings.fileCacheLimitBytes = Number(rl.fileCacheLimitBytes);
+      }
+      if (rl.credits !== undefined) {
+        rlSets.push("credits = $credits");
+        bindings.credits = Number(rl.credits);
+      }
+      if (rl.maxConcurrentDownloads !== undefined) {
+        rlSets.push("maxConcurrentDownloads = $maxConcurrentDownloads");
+        bindings.maxConcurrentDownloads = Number(rl.maxConcurrentDownloads);
+      }
+      if (rl.maxConcurrentUploads !== undefined) {
+        rlSets.push("maxConcurrentUploads = $maxConcurrentUploads");
+        bindings.maxConcurrentUploads = Number(rl.maxConcurrentUploads);
+      }
+      if (rl.maxDownloadBandwidthMB !== undefined) {
+        rlSets.push("maxDownloadBandwidthMB = $maxDownloadBandwidthMB");
+        bindings.maxDownloadBandwidthMB = Number(rl.maxDownloadBandwidthMB);
+      }
+      if (rl.maxUploadBandwidthMB !== undefined) {
+        rlSets.push("maxUploadBandwidthMB = $maxUploadBandwidthMB");
+        bindings.maxUploadBandwidthMB = Number(rl.maxUploadBandwidthMB);
+      }
+      if (rl.maxOperationCountByResourceKey !== undefined) {
+        rlSets.push(
+          "maxOperationCountByResourceKey = $maxOperationCountByResourceKey",
+        );
+        bindings.maxOperationCountByResourceKey =
+          rl.maxOperationCountByResourceKey;
+      }
+      if (rl.creditLimitByResourceKey !== undefined) {
+        rlSets.push("creditLimitByResourceKey = $creditLimitByResourceKey");
+        bindings.creditLimitByResourceKey = rl.creditLimitByResourceKey;
+      }
+    }
+
+    if (voucherSets.length === 0 && rlSets.length === 0) {
       return Response.json({ success: true, data: null });
     }
 
-    // Auto-removal cascade (§7.7): if applicablePlanIds was updated and is non-empty,
-    // strip voucherId from subscriptions whose planId is no longer in the list.
-    // Same for applicableTenantIds — strip from subscriptions whose companyId
-    // is no longer in the list.
     const shouldCascadePlans = applicablePlanIds !== undefined &&
       Array.isArray(applicablePlanIds) &&
       applicablePlanIds.length > 0;
 
-    const shouldCascadeCompanies = applicableTenantIds !== undefined &&
+    const shouldCascadeTenants = applicableTenantIds !== undefined &&
       Array.isArray(applicableTenantIds) &&
       applicableTenantIds.length > 0;
 
     const updated = await updateVoucherWithCascade(
       id,
-      sets,
+      voucherSets,
+      rlSets,
       bindings,
       shouldCascadePlans,
-      shouldCascadeCompanies,
+      shouldCascadeTenants,
     );
 
     const core = Core.getInstance();

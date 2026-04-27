@@ -86,8 +86,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const result = await genericList({
     table: "user",
-    select: "id, profileId, channelIds, createdAt",
-    fetch: "profileId, channelIds",
+    select: "id, profileId, channelIds, resourceLimitId, createdAt",
+    fetch: "profileId, channelIds, resourceLimitId",
     search: search ?? undefined,
     searchFields: search ? ["profileId.name"] : undefined,
     cursor: cursor ?? undefined,

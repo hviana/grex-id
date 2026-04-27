@@ -23,7 +23,7 @@ export async function getUsersForTenant(params: {
     limit: params.limit + 1,
   };
 
-  let query = `SELECT id, profileId, channelIds, createdAt,
+  let query = `SELECT id, profileId, channelIds, resourceLimitId, createdAt,
        (SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleIds FROM tenant
          WHERE id = $tenantId AND actorId = $parent.id LIMIT 1)) AS contextRoles
      FROM user
@@ -39,7 +39,8 @@ export async function getUsersForTenant(params: {
     bindings.cursor = params.cursor;
   }
 
-  query += " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds";
+  query +=
+    " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, channelIds, resourceLimitId";
 
   const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
   const items = result[0] ?? [];

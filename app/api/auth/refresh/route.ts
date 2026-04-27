@@ -57,8 +57,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Only user sessions can refresh here — API-token / connected-app JWTs
-    // are issued with their final expiry and do not use this endpoint.
+    // Only user sessions can refresh here — API-token JWTs are issued with
+    // their final expiry and do not use this endpoint.
     if (tenant.actorType !== "user") {
       return Response.json(
         {

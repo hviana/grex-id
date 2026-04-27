@@ -19,22 +19,12 @@ interface PlanOption {
   id: string;
   name: string;
   description: string;
-  planCredits: number;
   price: number;
   currency: string;
   recurrenceDays: number;
-  benefits: string[];
-  roles: string[];
-  entityLimits?: Record<string, number>;
-  apiRateLimit: number;
-  storageLimitBytes: number;
-  fileCacheLimitBytes: number;
-  maxConcurrentDownloads: number;
-  maxConcurrentUploads: number;
-  maxDownloadBandwidthMB: number;
-  maxUploadBandwidthMB: number;
-  maxOperationCount?: Record<string, number>;
+  resourceLimitId?: Record<string, unknown> | null;
   isActive: boolean;
+  [key: string]: unknown;
 }
 
 export default function OnboardingSystemPage() {

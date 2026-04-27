@@ -44,7 +44,7 @@ export type ResourceLimitField =
   | "maxConcurrentUploads"
   | "maxDownloadBandwidthMB"
   | "maxUploadBandwidthMB"
-  | "maxOperationCount"
+  | "maxOperationCountByResourceKey"
   | "creditLimitByResourceKey"
   | "frontendDomains";
 
@@ -60,7 +60,7 @@ const FIELD_LABELS: Record<ResourceLimitField, string> = {
   maxConcurrentUploads: "⬆️",
   maxDownloadBandwidthMB: "📶⬇",
   maxUploadBandwidthMB: "📶⬆",
-  maxOperationCount: "🔢",
+  maxOperationCountByResourceKey: "🔢",
   creditLimitByResourceKey: "🪙🔑",
   frontendDomains: "🌐",
 };
@@ -77,7 +77,7 @@ const FIELD_ORDER: ResourceLimitField[] = [
   "maxConcurrentUploads",
   "maxDownloadBandwidthMB",
   "maxUploadBandwidthMB",
-  "maxOperationCount",
+  "maxOperationCountByResourceKey",
   "creditLimitByResourceKey",
   "frontendDomains",
 ];
@@ -196,13 +196,16 @@ const ResourceLimitsSubform = forwardRef<
     String((initialData?.maxUploadBandwidthMB ?? 0) as number),
   );
 
-  const [maxOperationCount, setMaxOperationCount] = useState<
-    EntityLimitEntry[]
-  >(
-    mapToKV(
-      (initialData?.maxOperationCount ?? null) as Record<string, number> | null,
-    ),
-  );
+  const [maxOperationCountByResourceKey, setMaxOperationCountByResourceKey] =
+    useState<
+      EntityLimitEntry[]
+    >(
+      mapToKV(
+        (initialData?.maxOperationCountByResourceKey ?? null) as
+          | Record<string, number>
+          | null,
+      ),
+    );
 
   const [creditLimitByResourceKey, setCreditLimitByResourceKey] = useState<
     EntityLimitEntry[]
@@ -250,8 +253,10 @@ const ResourceLimitsSubform = forwardRef<
       if (show("maxUploadBandwidthMB")) {
         result.maxUploadBandwidthMB = Number(maxUploadBandwidth);
       }
-      if (show("maxOperationCount")) {
-        result.maxOperationCount = kvToMap(maxOperationCount);
+      if (show("maxOperationCountByResourceKey")) {
+        result.maxOperationCountByResourceKey = kvToMap(
+          maxOperationCountByResourceKey,
+        );
       }
       if (show("creditLimitByResourceKey")) {
         result.creditLimitByResourceKey = kvToMap(creditLimitByResourceKey);
@@ -446,7 +451,7 @@ const ResourceLimitsSubform = forwardRef<
       )}
 
       {(show("maxDownloadBandwidthMB") || show("maxUploadBandwidthMB") ||
-        show("maxOperationCount")) && (
+        show("maxOperationCountByResourceKey")) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {show("maxDownloadBandwidthMB") && (
             <div>
@@ -480,17 +485,17 @@ const ResourceLimitsSubform = forwardRef<
               />
             </div>
           )}
-          {show("maxOperationCount") && (
+          {show("maxOperationCountByResourceKey") && (
             <div className="col-span-1 sm:col-span-3">
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                🔢 {label("maxOperationCount")}
+                🔢 {label("maxOperationCountByResourceKey")}
               </label>
               <p className="text-xs text-[var(--color-light-text)]/60 mb-2">
-                {hint("maxOperationCount")}
+                {hint("maxOperationCountByResourceKey")}
               </p>
               <DynamicKeyValueField
-                fields={maxOperationCount}
-                onChange={setMaxOperationCount}
+                fields={maxOperationCountByResourceKey}
+                onChange={setMaxOperationCountByResourceKey}
                 showDescription={false}
               />
             </div>

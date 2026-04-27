@@ -16,7 +16,7 @@ export interface ResourceLimitsData {
   maxConcurrentUploads?: number;
   maxDownloadBandwidthMB?: number;
   maxUploadBandwidthMB?: number;
-  maxOperationCount?: Record<string, number> | null;
+  maxOperationCountByResourceKey?: Record<string, number> | null;
   creditLimitByResourceKey?: Record<string, number> | null;
   frontendDomains?: string[] | null;
 }
@@ -26,9 +26,10 @@ interface ResourceLimitsViewProps {
   systemSlug?: string;
   title?: string;
   className?: string;
+  /** When true, numeric values are displayed as signed modifiers (+/-). */
+  modifier?: boolean;
 }
 
-/** A field is "shown" when its value is non-null and non-empty (for arrays/objects). */
 function has<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -36,6 +37,11 @@ function has<T>(value: T | null | undefined): value is T {
     return Object.keys(value as object).length > 0;
   }
   return true;
+}
+
+function fmtModifier(value: number): string {
+  if (value > 0) return `+${value}`;
+  return String(value);
 }
 
 function domainBadge(domain: string) {
@@ -54,10 +60,12 @@ export default function ResourceLimitsView({
   systemSlug,
   title,
   className = "",
+  modifier = false,
 }: ResourceLimitsViewProps) {
   const { t } = useLocale();
 
   const unlimited = t("billing.limits.unlimited");
+  const num = (v: number) => (modifier ? fmtModifier(v) : v.toLocaleString());
 
   return (
     <div
@@ -108,6 +116,7 @@ export default function ResourceLimitsView({
           compact
           mode="column"
           prefix={(key) => limitEmoji(key)}
+          formatValue={modifier ? (v) => fmtModifier(Number(v)) : undefined}
           title={t("core.plans.entityLimits")}
         />
       )}
@@ -117,28 +126,28 @@ export default function ResourceLimitsView({
         <div className="space-y-1">
           {has(data.apiRateLimit) && (
             <p>
-              📊 {t("billing.plans.apiRate")}:{" "}
-              {data.apiRateLimit!.toLocaleString()}{" "}
-              {t("billing.plans.reqPerMin")}
+              📊 {t("billing.plans.apiRate")}: {num(data.apiRateLimit!)}{" "}
+              {!modifier && t("billing.plans.reqPerMin")}
             </p>
           )}
           {has(data.storageLimitBytes) && (
             <p>
-              💾 {t("billing.plans.storage")}:{" "}
-              {formatBytes(data.storageLimitBytes!)}
+              💾 {t("billing.plans.storage")}: {modifier
+                ? `${fmtModifier(data.storageLimitBytes! / 1073741824)} GB`
+                : formatBytes(data.storageLimitBytes!)}
             </p>
           )}
           {has(data.fileCacheLimitBytes) && (
             <p>
-              🗂️ {t("billing.plans.fileCache")}:{" "}
-              {formatBytes(data.fileCacheLimitBytes!)}
+              🗂️ {t("billing.plans.fileCache")}: {modifier
+                ? `${fmtModifier(data.fileCacheLimitBytes! / 1048576)} MB`
+                : formatBytes(data.fileCacheLimitBytes!)}
             </p>
           )}
           {has(data.credits) && (
             <p>
-              🪙 {t("billing.plans.planCredits")}:{" "}
-              {data.credits!.toLocaleString()}{" "}
-              {t("billing.plans.creditsPerPeriod")}
+              🪙 {t("billing.plans.planCredits")}: {num(data.credits!)}{" "}
+              {!modifier && t("billing.plans.creditsPerPeriod")}
             </p>
           )}
         </div>
@@ -149,32 +158,36 @@ export default function ResourceLimitsView({
         <div className="space-y-1">
           {has(data.maxConcurrentDownloads) && (
             <p>
-              ⬇️ {t("billing.limits.maxConcurrentDownloads")}:{" "}
-              {data.maxConcurrentDownloads
+              ⬇️ {t("billing.limits.maxConcurrentDownloads")}: {modifier
+                ? fmtModifier(data.maxConcurrentDownloads!)
+                : data.maxConcurrentDownloads
                 ? data.maxConcurrentDownloads
                 : unlimited}
             </p>
           )}
           {has(data.maxConcurrentUploads) && (
             <p>
-              ⬆️ {t("billing.limits.maxConcurrentUploads")}:{" "}
-              {data.maxConcurrentUploads
+              ⬆️ {t("billing.limits.maxConcurrentUploads")}: {modifier
+                ? fmtModifier(data.maxConcurrentUploads!)
+                : data.maxConcurrentUploads
                 ? data.maxConcurrentUploads
                 : unlimited}
             </p>
           )}
           {has(data.maxDownloadBandwidthMB) && (
             <p>
-              📶 {t("billing.limits.maxDownloadBandwidthMB")}:{" "}
-              {data.maxDownloadBandwidthMB
+              📶 {t("billing.limits.maxDownloadBandwidthMB")}: {modifier
+                ? `${fmtModifier(data.maxDownloadBandwidthMB!)} MB/s`
+                : data.maxDownloadBandwidthMB
                 ? `${data.maxDownloadBandwidthMB} MB/s`
                 : unlimited}
             </p>
           )}
           {has(data.maxUploadBandwidthMB) && (
             <p>
-              📶 {t("billing.limits.maxUploadBandwidthMB")}:{" "}
-              {data.maxUploadBandwidthMB
+              📶 {t("billing.limits.maxUploadBandwidthMB")}: {modifier
+                ? `${fmtModifier(data.maxUploadBandwidthMB!)} MB/s`
+                : data.maxUploadBandwidthMB
                 ? `${data.maxUploadBandwidthMB} MB/s`
                 : unlimited}
             </p>
@@ -182,15 +195,16 @@ export default function ResourceLimitsView({
         </div>
       )}
 
-      {has(data.maxOperationCount) && (
+      {has(data.maxOperationCountByResourceKey) && (
         <TranslatedBadgeList
           kind="resource"
-          entries={data.maxOperationCount}
+          entries={data.maxOperationCountByResourceKey}
           systemSlug={systemSlug}
           compact
           mode="column"
           prefix="🔢"
-          title={t("billing.limits.maxOperationCount")}
+          formatValue={modifier ? (v) => fmtModifier(Number(v)) : undefined}
+          title={t("billing.limits.maxOperationCountByResourceKey")}
         />
       )}
 
@@ -202,6 +216,7 @@ export default function ResourceLimitsView({
           compact
           mode="column"
           prefix="🪙"
+          formatValue={modifier ? (v) => fmtModifier(Number(v)) : undefined}
           title={t("billing.limits.creditLimitByResourceKey")}
         />
       )}

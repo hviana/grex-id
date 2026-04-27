@@ -1,7 +1,86 @@
 import { getDb, rid } from "../connection.ts";
+import type { ApiToken } from "@/src/contracts/token";
+import type { Tenant } from "@/src/contracts/tenant";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tokens");
+
+/**
+ * Creates a resource_limit AND an api_token in one batched query (§2.4).
+ * Returns the created token so the route handler can issue a JWT whose
+ * actorId is the api_token id.
+ */
+export async function createTokenWithResourceLimit(data: {
+  name: string;
+  description?: string;
+  actorType: "app" | "token";
+  tenantId: string;
+  tenant: Tenant;
+  resourceLimits?: Record<string, unknown>;
+  neverExpires: boolean;
+  expiresAt?: Date;
+}): Promise<ApiToken | null> {
+  const db = await getDb();
+  const rl = data.resourceLimits ?? {};
+
+  const result = await db.query<[unknown, unknown, ApiToken[]]>(
+    `LET $rl = CREATE resource_limit SET
+      benefits = $benefits,
+      roles = $roles,
+      entityLimits = $entityLimits,
+      apiRateLimit = $apiRateLimit,
+      storageLimitBytes = $storageLimitBytes,
+      fileCacheLimitBytes = $fileCacheLimitBytes,
+      credits = $credits,
+      maxConcurrentDownloads = $maxConcurrentDownloads,
+      maxConcurrentUploads = $maxConcurrentUploads,
+      maxDownloadBandwidthMB = $maxDownloadBandwidthMB,
+      maxUploadBandwidthMB = $maxUploadBandwidthMB,
+      maxOperationCountByResourceKey = $maxOperationCountByResourceKey,
+      creditLimitByResourceKey = $creditLimitByResourceKey,
+      frontendDomains = $frontendDomains;
+    LET $tkn = CREATE api_token SET
+      tenantIds = [$tenantId],
+      tenant = $tenant,
+      name = $name,
+      description = $description,
+      actorType = $actorType,
+      resourceLimitId = $rl.id,
+      neverExpires = $neverExpires,
+      expiresAt = $expiresAt,
+      frontendUse = $frontendUse,
+      frontendDomains = $frontendDomains;
+    SELECT * FROM $tkn[0].id FETCH resourceLimitId;`,
+    {
+      name: data.name,
+      description: data.description ?? "",
+      actorType: data.actorType,
+      tenantId: rid(data.tenantId),
+      tenant: data.tenant,
+      benefits: (rl.benefits as string[]) ?? [],
+      roles: (rl.roles as string[]) ?? [],
+      entityLimits: rl.entityLimits ?? undefined,
+      apiRateLimit: Number(rl.apiRateLimit ?? 0),
+      storageLimitBytes: Number(rl.storageLimitBytes ?? 0),
+      fileCacheLimitBytes: Number(rl.fileCacheLimitBytes ?? 0),
+      credits: Number(rl.credits ?? 0),
+      maxConcurrentDownloads: Number(rl.maxConcurrentDownloads ?? 0),
+      maxConcurrentUploads: Number(rl.maxConcurrentUploads ?? 0),
+      maxDownloadBandwidthMB: Number(rl.maxDownloadBandwidthMB ?? 0),
+      maxUploadBandwidthMB: Number(rl.maxUploadBandwidthMB ?? 0),
+      maxOperationCountByResourceKey: rl.maxOperationCountByResourceKey ??
+        undefined,
+      creditLimitByResourceKey: rl.creditLimitByResourceKey ?? undefined,
+      frontendDomains: (rl.frontendDomains as string[]) ?? [],
+      frontendUse: Array.isArray(rl.frontendDomains) &&
+        rl.frontendDomains.length > 0,
+      neverExpires: data.neverExpires,
+      expiresAt: data.expiresAt ?? undefined,
+    },
+  );
+
+  return result[2]?.[0] ?? null;
+}
 
 /**
  * Revokes an api_token by setting revokedAt = time::now() in a single
@@ -35,21 +114,18 @@ export async function revokeToken(id: string): Promise<
 
 export interface TokenCleanupResult {
   tokensDeleted: number;
-  appsDeleted: number;
 }
 
 export async function cleanupRevokedTokens(): Promise<TokenCleanupResult> {
   const db = await getDb();
   const result = await db.query<
-    [unknown, { count: number }[], { count: number }[]]
+    [unknown, { count: number }[]]
   >(
     `LET $cutoff = time::now() - 90d;
-     DELETE FROM api_token WHERE revokedAt IS NOT NONE AND revokedAt < $cutoff RETURN count() AS count;
-     DELETE FROM connected_app WHERE apiTokenId NOT IN (SELECT VALUE id FROM api_token) RETURN count() AS count;`,
+     DELETE FROM api_token WHERE revokedAt IS NOT NONE AND revokedAt < $cutoff RETURN count() AS count;`,
   );
 
   const tokensDeleted = result[1]?.[0]?.count ?? 0;
-  const appsDeleted = result[2]?.[0]?.count ?? 0;
 
-  return { tokensDeleted, appsDeleted };
+  return { tokensDeleted };
 }

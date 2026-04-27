@@ -8,7 +8,6 @@ import React, {
 } from "react";
 import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 
@@ -38,11 +37,6 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
     const [recurrenceDays, setRecurrenceDays] = useState(
       String((initialData?.recurrenceDays as number) ?? 30),
     );
-    const [benefits, setBenefits] = useState<string[]>(
-      Array.isArray(initialData?.benefits)
-        ? [...(initialData.benefits as string[])]
-        : [],
-    );
     const [isActive, setIsActive] = useState(
       (initialData?.isActive as boolean) ?? true,
     );
@@ -61,9 +55,8 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
           price: Number(price),
           currency,
           recurrenceDays: Number(recurrenceDays),
-          benefits,
           isActive,
-          ...limitsData,
+          resourceLimits: limitsData,
         };
       },
       isValid: () => {
@@ -157,14 +150,6 @@ const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
             />
           </div>
         </div>
-
-        <MultiBadgeField
-          name={t("core.plans.benefits")}
-          mode="custom"
-          value={benefits}
-          onChange={(vals) => setBenefits(vals as string[])}
-          formatHint={t("core.plans.benefitsHint")}
-        />
 
         <ResourceLimitsSubform
           ref={limitsRef}

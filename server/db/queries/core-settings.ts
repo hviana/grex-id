@@ -255,9 +255,9 @@ export async function fetchAllCoreData(): Promise<
   >(
     `SELECT * FROM system;
     SELECT * FROM role;
-    SELECT * FROM plan;
+    SELECT * FROM plan FETCH resourceLimitId;
     SELECT * FROM menu_item ORDER BY sortOrder ASC;
-    SELECT * FROM voucher;`,
+    SELECT * FROM voucher FETCH resourceLimitId;`,
   );
 }
 

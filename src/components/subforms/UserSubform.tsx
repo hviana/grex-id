@@ -10,6 +10,7 @@ import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
+import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 
 interface UserSubformProps {
   initialData?: Record<string, unknown>;
@@ -30,6 +31,7 @@ const UserSubform = forwardRef<SubformRef, UserSubformProps>(
 
     const channelsRef = useRef<SubformRef>(null);
     const tenantRef = useRef<SubformRef>(null);
+    const limitsRef = useRef<SubformRef>(null);
 
     useImperativeHandle(ref, () => ({
       getData: () => {
@@ -41,6 +43,10 @@ const UserSubform = forwardRef<SubformRef, UserSubformProps>(
         }
         const tenantData = tenantRef.current?.getData();
         if (tenantData) Object.assign(data, tenantData);
+        const limitsData = limitsRef.current?.getData();
+        if (limitsData && Object.keys(limitsData).length > 0) {
+          data.resourceLimits = limitsData;
+        }
         return data;
       },
       isValid: () => {
@@ -56,6 +62,9 @@ const UserSubform = forwardRef<SubformRef, UserSubformProps>(
 
     const inputCls =
       "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";
+
+    const limitsInitial =
+      (initialData?.resourceLimitId as Record<string, unknown>) ?? undefined;
 
     return (
       <div className="space-y-4">
@@ -104,6 +113,13 @@ const UserSubform = forwardRef<SubformRef, UserSubformProps>(
           }}
           visibleFields={["roles"]}
           requiredFields={["roles"]}
+        />
+
+        <ResourceLimitsSubform
+          ref={limitsRef}
+          valueMode="absolute"
+          initialData={limitsInitial}
+          systemSlug={systemSlug}
         />
       </div>
     );

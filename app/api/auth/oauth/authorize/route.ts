@@ -10,7 +10,7 @@ import {
   findSystemIdBySlug,
   resolveUserExchange,
 } from "@/server/db/queries/auth";
-import { createConnectedAppWithToken } from "@/server/db/queries/connected-apps";
+import { createTokenWithResourceLimit } from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
 
 function withAuthRateLimit() {
@@ -34,8 +34,9 @@ function withAuthRateLimit() {
  * POST /api/auth/oauth/authorize
  *
  * Called by the OAuth authorize page after the user approves access.
- * Creates a connected_app + its backing api_token in a single batched
- * query, then returns the JWT (§8.1) the client will use as the bearer.
+ * Creates an api_token with actorType="app" (replacing the former
+ * connected_app table) in a single batched query, then returns the JWT
+ * (§8.1) the client will use as the bearer.
  */
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   if (!ctx.tenant.actorId) {
@@ -56,7 +57,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     companyId,
     redirectOrigin,
     monthlySpendLimit,
-    maxOperationCount,
+    maxOperationCountByResourceKey,
   } = body;
 
   if (!clientName || !systemSlug || !companyId) {
@@ -94,8 +95,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const userId = ctx.tenant.actorId;
 
   // Resolve the tenant row for this (user, company, system) combination.
-  // The user must already be a member of this tenant to authorize a
-  // connected app on its behalf.
   const resolved = await resolveUserExchange(userId, companyId, systemId);
   if (!resolved.tenantId) {
     return Response.json(
@@ -116,16 +115,25 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     roles: grantedRoles,
   };
 
-  const { app, token: createdToken } = await createConnectedAppWithToken({
+  const resourceLimits: Record<string, unknown> = { roles: grantedRoles };
+  if (monthlySpendLimit != null) {
+    resourceLimits.creditLimitByResourceKey = {
+      default: Number(monthlySpendLimit),
+    };
+  }
+  if (maxOperationCountByResourceKey != null) {
+    resourceLimits.maxOperationCountByResourceKey =
+      maxOperationCountByResourceKey;
+  }
+
+  const createdToken = await createTokenWithResourceLimit({
     name: clientName,
+    description: redirectOrigin ?? "",
+    actorType: "app",
     tenantId: resolved.tenantId,
     tenant: tokenTenant,
-    roles: grantedRoles,
-    monthlySpendLimit: monthlySpendLimit
-      ? Number(monthlySpendLimit)
-      : undefined,
-    maxOperationCount: maxOperationCount ?? undefined,
-    description: redirectOrigin ?? "",
+    resourceLimits,
+    neverExpires: true,
   });
 
   if (!createdToken) {
@@ -142,7 +150,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const jwt = await createTenantToken(
     {
       ...tokenTenant,
-      actorType: "connected_app",
+      actorType: "api_token",
       actorId: String(createdToken.id),
       exchangeable: false,
       frontendUse: false,
@@ -155,7 +163,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   await rememberActor(resolved.tenantId, String(createdToken.id));
 
   return Response.json(
-    { success: true, data: { token: jwt, app } },
+    { success: true, data: { token: jwt } },
     { status: 201 },
   );
 }

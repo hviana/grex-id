@@ -54,6 +54,15 @@ async function resolveVoucher(
   return Core.getInstance().getVoucherById(voucherId);
 }
 
+/** Extract a numeric value from a resource_limit sub-object. */
+function rlNum(
+  obj: Record<string, unknown> | undefined,
+  key: string,
+  fallback = 0,
+): number {
+  return Number(obj?.[key] ?? fallback);
+}
+
 export async function resolveEntityLimit(params: {
   tenant: Tenant;
   entityName: string;
@@ -64,17 +73,25 @@ export async function resolveEntityLimit(params: {
   }
 
   const plan = await resolvePlan(sub.planId);
-  if (!plan?.entityLimits?.[params.entityName]) {
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planEntityLimits = planRl?.entityLimits as
+    | Record<string, number>
+    | undefined;
+  if (!planEntityLimits?.[params.entityName]) {
     return { limit: null, planLimit: null, voucherModifier: 0 };
   }
 
-  const planLimit = plan.entityLimits[params.entityName];
+  const planLimit = planEntityLimits[params.entityName];
   let voucherModifier = 0;
 
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    if (voucher?.entityLimitModifiers?.[params.entityName]) {
-      voucherModifier = voucher.entityLimitModifiers[params.entityName];
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    const vEntityLimits = vRl?.entityLimits as
+      | Record<string, number>
+      | undefined;
+    if (vEntityLimits?.[params.entityName]) {
+      voucherModifier = vEntityLimits[params.entityName];
     }
   }
 
@@ -107,8 +124,10 @@ export async function checkPlanAccess(
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
 
-  // Check if the plan grants any of the required roles
-  const hasAccess = roleNames.some((r) => plan.roles.includes(r));
+  const planRl = plan.resourceLimitId as Record<string, unknown> | undefined;
+  const planRoles = (planRl?.roles as string[]) ?? [];
+
+  const hasAccess = roleNames.some((r) => planRoles.includes(r));
   if (!hasAccess) {
     return { granted: false, denyCode: "PLAN_LIMIT" };
   }
@@ -125,12 +144,14 @@ export async function resolveRateLimitConfig(params: {
   }
 
   const plan = await resolvePlan(sub.planId);
-  const planRateLimit = plan?.apiRateLimit ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planRateLimit = rlNum(planRl, "apiRateLimit");
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.apiRateLimitModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "apiRateLimit");
   }
 
   return {
@@ -149,12 +170,14 @@ export async function resolveFileCacheLimit(params: {
   }
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.fileCacheLimitBytes ?? 20971520;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planLimit = rlNum(planRl, "fileCacheLimitBytes", 20971520);
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.fileCacheLimitModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "fileCacheLimitBytes");
   }
 
   return {
@@ -171,12 +194,14 @@ export async function resolveMaxConcurrentDownloads(params: {
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxConcurrentDownloads ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planLimit = rlNum(planRl, "maxConcurrentDownloads");
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.maxConcurrentDownloadsModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "maxConcurrentDownloads");
   }
 
   return {
@@ -193,12 +218,14 @@ export async function resolveMaxConcurrentUploads(params: {
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxConcurrentUploads ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planLimit = rlNum(planRl, "maxConcurrentUploads");
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.maxConcurrentUploadsModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "maxConcurrentUploads");
   }
 
   return {
@@ -215,12 +242,14 @@ export async function resolveMaxDownloadBandwidth(params: {
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxDownloadBandwidthMB ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planLimit = rlNum(planRl, "maxDownloadBandwidthMB");
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.maxDownloadBandwidthModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "maxDownloadBandwidthMB");
   }
 
   return {
@@ -237,12 +266,14 @@ export async function resolveMaxUploadBandwidth(params: {
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxUploadBandwidthMB ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planLimit = rlNum(planRl, "maxUploadBandwidthMB");
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier = voucher?.maxUploadBandwidthModifier ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherModifier = rlNum(vRl, "maxUploadBandwidthMB");
   }
 
   return {
@@ -260,13 +291,20 @@ export async function resolveMaxOperationCount(params: {
   if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
 
   const plan = await resolvePlan(sub.planId);
-  const planLimit = plan?.maxOperationCount?.[params.resourceKey] ?? 0;
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planOpCount = planRl?.maxOperationCountByResourceKey as
+    | Record<string, number>
+    | undefined;
+  const planLimit = planOpCount?.[params.resourceKey] ?? 0;
 
   let voucherModifier = 0;
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherModifier =
-      voucher?.maxOperationCountModifier?.[params.resourceKey] ?? 0;
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    const vOpCount = vRl?.maxOperationCountByResourceKey as
+      | Record<string, number>
+      | undefined;
+    voucherModifier = vOpCount?.[params.resourceKey] ?? 0;
   }
 
   return {
@@ -287,12 +325,16 @@ export async function resolveAllOperationCounts(params: {
   if (!sub) return {};
 
   const plan = await resolvePlan(sub.planId);
-  const planMap = plan?.maxOperationCount ?? {};
+  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
+  const planMap =
+    (planRl?.maxOperationCountByResourceKey as Record<string, number>) ?? {};
 
   let voucherMap: Record<string, number> = {};
   if (sub.voucherId) {
     const voucher = await resolveVoucher(sub.voucherId);
-    voucherMap = voucher?.maxOperationCountModifier ?? {};
+    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
+    voucherMap =
+      (vRl?.maxOperationCountByResourceKey as Record<string, number>) ?? {};
   }
 
   const allKeys = new Set([

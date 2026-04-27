@@ -1,5 +1,6 @@
 import type { EntityChannel } from "./entity-channel.ts";
 import type { Profile } from "./profile.ts";
+import type { ResourceLimit } from "./resource-limit.ts";
 
 export interface User {
   id: string;
@@ -14,6 +15,7 @@ export interface User {
    */
   pendingTwoFactorSecret?: string;
   stayLoggedIn: boolean;
+  resourceLimitId?: ResourceLimit;
   tenantIds: string[];
   createdAt: string;
   updatedAt: string;

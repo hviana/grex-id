@@ -428,8 +428,8 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
               <option value="api_token">
                 {t("core.tenant.actorTypeApiToken")}
               </option>
-              <option value="connected_app">
-                {t("core.tenant.actorTypeConnectedApp")}
+              <option value="app">
+                {t("core.tenant.actorTypeApp")}
               </option>
             </select>
           </div>

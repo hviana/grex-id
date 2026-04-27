@@ -8,14 +8,16 @@ import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import ResourceLimitsView, {
+  type ResourceLimitsData,
+} from "@/src/components/shared/ResourceLimitsView";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 
 interface ConnectedApp {
   id: string;
   name: string;
-  roles: string[];
-  monthlySpendLimit?: number;
+  actorType: string;
+  resourceLimitId?: ResourceLimitsData | null;
   createdAt: string;
   [key: string]: unknown;
 }
@@ -37,16 +39,16 @@ export default function ConnectedAppsPage() {
       if (!systemToken || !companyId || !systemId) {
         return { items: [], total: 0, hasMore: false };
       }
-      const p = new URLSearchParams({ companyId, systemId });
+      const p = new URLSearchParams({ companyId, systemId, actorType: "app" });
       if (params.search) p.set("search", params.search);
       if (params.cursor) p.set("cursor", params.cursor);
       p.set("limit", String(params.limit));
-      const res = await fetch(`/api/connected-apps?${p}`, {
+      const res = await fetch(`/api/tokens?${p}`, {
         headers: { Authorization: `Bearer ${systemToken}` },
       });
       const json = await res.json();
       return {
-        items: (json.items ?? []) as ConnectedApp[],
+        items: (json.items ?? json.data ?? []) as ConnectedApp[],
         total: json.total ?? 0,
         hasMore: json.hasMore ?? false,
         nextCursor: json.nextCursor,
@@ -61,7 +63,7 @@ export default function ConnectedAppsPage() {
     if (!systemToken || !revokeApp) return;
     setActionLoading(true);
     try {
-      const res = await fetch("/api/connected-apps", {
+      const res = await fetch("/api/tokens", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -139,17 +141,12 @@ export default function ConnectedAppsPage() {
                     {t("common.connectedApps.authorized")}
                   </span>
                 </div>
-                <TranslatedBadgeList
-                  kind="role"
-                  tokens={app.roles}
-                  systemSlug={systemSlug ?? undefined}
-                  className="mt-2"
-                />
-                {app.monthlySpendLimit != null && (
-                  <p className="text-xs text-[var(--color-light-text)] mt-1">
-                    {t("common.connectedApps.spendLimit")}:{" "}
-                    {app.monthlySpendLimit.toLocaleString()}
-                  </p>
+                {app.resourceLimitId && (
+                  <ResourceLimitsView
+                    data={app.resourceLimitId}
+                    systemSlug={systemSlug ?? undefined}
+                    className="mt-2"
+                  />
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-3">

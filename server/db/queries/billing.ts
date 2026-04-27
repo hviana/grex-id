@@ -66,7 +66,7 @@ export async function getBillingData(params: {
     `SELECT * FROM subscription WHERE tenantIds CONTAINS $tenantId ORDER BY createdAt DESC FETCH voucherId;
      SELECT * FROM payment_method WHERE tenantIds CONTAINS $tenantId ORDER BY isDefault DESC, createdAt DESC FETCH billingAddressId;
      SELECT * FROM credit_purchase WHERE tenantIds CONTAINS $tenantId ORDER BY createdAt DESC LIMIT 20;
-     SELECT math::sum(value) AS balance FROM usage_record WHERE tenantIds CONTAINS $tenantId AND resource = "credits" GROUP ALL;
+     SELECT math::sum(value) AS balance FROM usage_record WHERE tenantIds CONTAINS $tenantId AND resourceKey = "credits" GROUP ALL;
      ${paymentQuery}
      SELECT id, amount, currency, kind, continuityData, expiresAt, createdAt
        FROM payment
@@ -337,8 +337,7 @@ export interface VoucherLookupResult {
     remainingOperationCount?: Record<string, number>;
   } | undefined;
   oldVoucher: {
-    creditModifier: number;
-    maxOperationCountModifier?: Record<string, number>;
+    resourceLimitId?: Record<string, unknown>;
   } | undefined;
 }
 
@@ -356,12 +355,11 @@ export async function lookupVoucherAndSubscription(params: {
         remainingOperationCount?: Record<string, number>;
       }[],
       {
-        creditModifier: number;
-        maxOperationCountModifier?: Record<string, number>;
+        resourceLimitId?: Record<string, unknown>;
       }[],
     ]
   >(
-    `SELECT * FROM voucher WHERE code = $code LIMIT 1;
+    `SELECT * FROM voucher WHERE code = $code LIMIT 1 FETCH resourceLimitId;
      SELECT planId, voucherId, remainingOperationCount FROM subscription
        WHERE tenantIds CONTAINS $tenantId AND status = "active"
        LIMIT 1;
@@ -369,7 +367,7 @@ export async function lookupVoucherAndSubscription(params: {
        WHERE tenantIds CONTAINS $tenantId AND status = "active"
        LIMIT 1)[0];
      IF $oldVoucherId != NONE {
-       SELECT creditModifier, maxOperationCountModifier FROM voucher WHERE id = $oldVoucherId LIMIT 1;
+       SELECT resourceLimitId FROM voucher WHERE id = $oldVoucherId LIMIT 1 FETCH resourceLimitId;
      } ELSE {
        SELECT NONE FROM NONE;
      };`,
@@ -614,10 +612,12 @@ export interface PaymentSubscriptionContext {
   plan: {
     price: number;
     recurrenceDays: number;
-    planCredits: number;
     currency: string;
+    resourceLimitId?: Record<string, unknown>;
   } | undefined;
-  voucher: { priceModifier: number; creditModifier: number } | undefined;
+  voucher:
+    | { priceModifier: number; resourceLimitId?: Record<string, unknown> }
+    | undefined;
   owner: { id: string; name: string } | undefined;
   systemInfo: { name: string; slug: string } | undefined;
   purchaseStatus: string | undefined;
@@ -646,10 +646,10 @@ export async function getPaymentSubscriptionContext(params: {
       {
         price: number;
         recurrenceDays: number;
-        planCredits: number;
         currency: string;
+        resourceLimitId?: Record<string, unknown>;
       }[],
-      { priceModifier: number; creditModifier: number }[],
+      { priceModifier: number; resourceLimitId?: Record<string, unknown> }[],
       { id: string; name: string }[],
       { name: string; slug: string }[],
       { status?: string }[],
@@ -657,10 +657,10 @@ export async function getPaymentSubscriptionContext(params: {
   >(
     `SELECT * FROM subscription WHERE id = $id LIMIT 1;
      LET $planId = (SELECT VALUE planId FROM subscription WHERE id = $id LIMIT 1)[0];
-     SELECT price, recurrenceDays, planCredits, currency FROM plan WHERE id = $planId LIMIT 1;
+     SELECT price, recurrenceDays, currency, resourceLimitId FROM plan WHERE id = $planId LIMIT 1 FETCH resourceLimitId;
      LET $voucherId = (SELECT VALUE voucherId FROM subscription WHERE id = $id LIMIT 1)[0];
      IF $voucherId != NONE {
-       SELECT priceModifier, creditModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+       SELECT priceModifier, resourceLimitId FROM voucher WHERE id = $voucherId LIMIT 1 FETCH resourceLimitId;
      } ELSE {
        SELECT NONE FROM NONE;
      };
@@ -800,9 +800,9 @@ export async function creditPurchaseOnSuccess(params: {
     `UPSERT usage_record SET
       ${actorIdClause}
       tenantIds = [$tenantId],
-      resource = "credits", value += $amount, period = $period
+      resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
-       AND resource = "credits";`,
+       AND resourceKey = "credits";`,
   ];
   const queryParams: Record<string, unknown> = {
     tenantId: rid(params.tenantId),
@@ -900,10 +900,12 @@ export interface AsyncPaymentContext {
   plan: {
     price: number;
     recurrenceDays: number;
-    planCredits: number;
     currency: string;
+    resourceLimitId?: Record<string, unknown>;
   } | undefined;
-  voucher: { priceModifier: number; creditModifier: number } | undefined;
+  voucher:
+    | { priceModifier: number; resourceLimitId?: Record<string, unknown> }
+    | undefined;
   owner: { id: string; name: string } | undefined;
   systemInfo: { name: string; slug: string } | undefined;
   creditPurchase: { status?: string } | undefined;
@@ -934,10 +936,10 @@ export async function getAsyncPaymentContext(
       {
         price: number;
         recurrenceDays: number;
-        planCredits: number;
         currency: string;
+        resourceLimitId?: Record<string, unknown>;
       }[],
-      { priceModifier: number; creditModifier: number }[],
+      { priceModifier: number; resourceLimitId?: Record<string, unknown> }[],
       { id: string; name: string }[],
       { name: string; slug: string }[],
       { status?: string }[],
@@ -947,10 +949,10 @@ export async function getAsyncPaymentContext(
      LET $subId = (SELECT VALUE subscriptionId FROM payment WHERE id = $id LIMIT 1)[0];
      SELECT id, planId, paymentMethodId, status, currentPeriodEnd FROM subscription WHERE id = $subId LIMIT 1;
      LET $planId = (SELECT VALUE planId FROM subscription WHERE id = $subId LIMIT 1)[0];
-     SELECT price, recurrenceDays, planCredits, currency FROM plan WHERE id = $planId LIMIT 1;
+     SELECT price, recurrenceDays, currency, resourceLimitId FROM plan WHERE id = $planId LIMIT 1 FETCH resourceLimitId;
      LET $voucherId = (SELECT VALUE voucherId FROM subscription WHERE id = $subId LIMIT 1)[0];
      IF $voucherId != NONE {
-       SELECT priceModifier, creditModifier FROM voucher WHERE id = $voucherId LIMIT 1;
+       SELECT priceModifier, resourceLimitId FROM voucher WHERE id = $voucherId LIMIT 1 FETCH resourceLimitId;
      } ELSE {
        SELECT NONE FROM NONE;
      };
@@ -1039,9 +1041,9 @@ export async function resolveAsyncCreditSuccess(params: {
     `UPSERT usage_record SET
       ${actorIdClause}
       tenantIds = [$tenantId],
-      resource = "credits", value += $amount, period = $period
+      resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
-       AND resource = "credits";`,
+       AND resourceKey = "credits";`,
   ];
   const queryParams: Record<string, unknown> = {
     tenantId: rid(params.tenantId),

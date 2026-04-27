@@ -135,7 +135,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    const planOpMap = plan.maxOperationCount ?? {};
+    const rl = plan.resourceLimitId ?? {};
+    const planOpMap =
+      (rl as Record<string, unknown>).maxOperationCountByResourceKey as Record<
+        string,
+        number
+      > ?? {};
     const operationCountMap = Object.keys(planOpMap).length > 0
       ? Object.fromEntries(
         Object.entries(planOpMap).filter(([, v]) => v > 0),
@@ -155,7 +160,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       planId,
       paymentMethodId: paymentMethodId ?? null,
       userId,
-      planCredits: plan.planCredits ?? 0,
+      planCredits: (rl as Record<string, unknown>).credits as number ?? 0,
       operationCountMap,
       start: now,
       end: periodEnd,
@@ -387,16 +392,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
     }
 
-    const oldCreditMod = Number(oldVoucher?.creditModifier ?? 0);
-    const newCreditMod = Number(voucher.creditModifier ?? 0);
+    const oldRl = (oldVoucher?.resourceLimitId ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const newRl = (voucher.resourceLimitId ?? {}) as Record<string, unknown>;
+    const oldCreditMod = Number(oldRl.credits ?? 0);
+    const newCreditMod = Number(newRl.credits ?? 0);
     const creditDelta = newCreditMod - oldCreditMod;
 
     // Per-resourceKey operation count delta
-    const oldOpCountMod = oldVoucher?.maxOperationCountModifier ?? {};
-    const newOpCountMod = (voucher.maxOperationCountModifier ?? {}) as Record<
-      string,
-      number
-    >;
+    const oldOpCountMod =
+      (oldRl.maxOperationCountByResourceKey ?? {}) as Record<string, number>;
+    const newOpCountMod =
+      (newRl.maxOperationCountByResourceKey ?? {}) as Record<string, number>;
     const allOpKeys = new Set([
       ...Object.keys(oldOpCountMod),
       ...Object.keys(newOpCountMod),
