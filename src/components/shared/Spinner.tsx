@@ -1,8 +1,8 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 interface SpinnerProps {
   size?: "sm" | "md" | "lg";
@@ -16,7 +16,7 @@ const sizeClasses = {
 };
 
 export default function Spinner({ size = "md", className }: SpinnerProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   return (
     <div
       className={`${sizeClasses[size]} animate-spin rounded-full ${

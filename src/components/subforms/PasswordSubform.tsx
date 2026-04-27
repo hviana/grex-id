@@ -1,9 +1,9 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import { isValidPassword } from "@/src/lib/validators";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PasswordSubformProps {
   initialData?: Record<string, unknown>;
@@ -12,7 +12,7 @@ interface PasswordSubformProps {
 
 const PasswordSubform = forwardRef<SubformRef, PasswordSubformProps>(
   ({ initialData, requiredFields }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const isEdit = !!initialData?.id;
 
     const [password, setPassword] = useState("");

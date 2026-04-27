@@ -1,24 +1,8 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
 
 async function getHandler(
   req: Request,
@@ -60,7 +44,7 @@ async function postHandler(
   );
 }
 
-export const GET = compose(withAuthRateLimit(), (req, ctx) => {
+export const GET = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), (req, ctx) => {
   // Extract params from URL for Next.js dynamic route compatibility
   const url = new URL(req.url);
   const segments = url.pathname.split("/");
@@ -68,7 +52,7 @@ export const GET = compose(withAuthRateLimit(), (req, ctx) => {
   return getHandler(req, ctx, { params: Promise.resolve({ provider }) });
 });
 
-export const POST = compose(withAuthRateLimit(), (req, ctx) => {
+export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), (req, ctx) => {
   const url = new URL(req.url);
   const segments = url.pathname.split("/");
   const provider = segments[segments.indexOf("oauth") + 1] ?? "";

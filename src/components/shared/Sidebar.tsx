@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { MenuItem } from "@/src/contracts/menu";
 import { useDebounce } from "@/src/hooks/useDebounce";
-import { useLocale } from "@/src/hooks/useLocale";
 import SidebarSearch from "./SidebarSearch.tsx";
 import SidebarMenuItem from "./SidebarMenuItem.tsx";
 import Spinner from "./Spinner.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SidebarProps {
   menus: MenuItem[];
@@ -61,7 +61,7 @@ export default function Sidebar(
   const debouncedSearch = useDebounce(search, 200);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const activeSection = findActiveSection(menus, activeComponent, t);
 

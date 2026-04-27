@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
-import { LocaleProvider } from "@/src/hooks/LocaleProvider";
-import { AuthProvider } from "@/src/hooks/useAuth";
-import { FrontCoreProvider } from "@/src/hooks/useFrontCore";
+import { TenantProvider } from "@/src/providers/TenantProvider";
 import CookieConsent from "@/src/components/shared/CookieConsent";
 import "./globals.css";
 
@@ -62,16 +60,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
     >
       <body className="min-h-full flex flex-col bg-[var(--color-black)] text-white">
-        <LocaleProvider>
-          <AuthProvider>
-            <FrontCoreProvider>
+        <TenantProvider>
               {children}
               <Suspense fallback={null}>
                 <CookieConsent />
               </Suspense>
-            </FrontCoreProvider>
-          </AuthProvider>
-        </LocaleProvider>
+        </TenantProvider>
       </body>
     </html>
   );

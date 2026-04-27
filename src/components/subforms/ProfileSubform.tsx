@@ -1,10 +1,10 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import { resizeImage } from "@/src/lib/resize-image";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ProfileSubformProps {
   initialData?: Record<string, unknown>;
@@ -15,7 +15,7 @@ interface ProfileSubformProps {
 
 const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
   ({ initialData, companyId, systemSlug, hideAvatar }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const profile = (initialData?.profileId as Record<string, unknown>) ?? {};
 
     const [name, setName] = useState((profile.name as string) ?? "");

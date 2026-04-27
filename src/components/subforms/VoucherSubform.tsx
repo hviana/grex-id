@@ -1,13 +1,12 @@
 "use client";
 
 import React, { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherSubformProps {
   initialData?: Record<string, unknown>;
@@ -18,8 +17,8 @@ const inputCls =
 
 const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
-    const { systemToken } = useAuth();
+    const { t } = useTenantContext();
+    const { systemToken } = useTenantContext();
 
     const [code, setCode] = useState(
       (initialData?.code as string) ?? "",

@@ -2,18 +2,17 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function OAuthAuthorizeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { systemToken, user, loading: authLoading } = useAuth();
-  const { t } = useLocale();
+  const { systemToken, user, loading: authLoading } = useTenantContext();
+  const { t } = useTenantContext();
 
   const clientName = searchParams.get("client_name") ?? "";
   const rolesParam = searchParams.get("roles") ?? "";

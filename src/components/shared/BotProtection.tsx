@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "./Spinner.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface BotProtectionProps {
   onVerified: (token: string) => void;
 }
 
 export default function BotProtection({ onVerified }: BotProtectionProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(false);
 

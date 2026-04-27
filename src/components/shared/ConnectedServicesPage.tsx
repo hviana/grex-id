@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ConnectedService {
   id: string;
@@ -19,9 +17,9 @@ interface ConnectedService {
 }
 
 export default function ConnectedServicesPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId, roles } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId, roles } = useTenantContext();
   const isAdmin = roles.includes("admin") || roles.includes("superuser");
 
   const [connectOpen, setConnectOpen] = useState(false);

@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   getRevenueChart,
   listCoreCompanies,
@@ -66,7 +66,11 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+
+  }),
   getHandler,
 );

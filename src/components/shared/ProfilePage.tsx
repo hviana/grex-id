@@ -1,20 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import PasswordChangeSubform from "@/src/components/subforms/PasswordChangeSubform";
 import TwoFactorSubform from "@/src/components/subforms/TwoFactorSubform";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function ProfilePage() {
-  const { user, systemToken, refresh } = useAuth();
-  const { t } = useLocale();
-  const { companyId, systemSlug } = useSystemContext();
+  const { user, systemToken, refresh } = useTenantContext();
+  const { t } = useTenantContext();
+  const { companyId, systemSlug } = useTenantContext();
 
   const [name, setName] = useState(user?.profileId?.name ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.profileId?.avatarUri ?? "");

@@ -7,14 +7,13 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { TenantActorType } from "@/src/contracts/tenant";
+import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export type TenantFieldName =
   | "systemId"
@@ -103,8 +102,8 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
     },
     ref,
   ) => {
-    const { t } = useLocale();
-    const { systemToken } = useAuth();
+    const { t } = useTenantContext();
+    const { systemToken } = useTenantContext();
 
     const show = useCallback(
       (field: TenantFieldName) => visibleFields.includes(field),

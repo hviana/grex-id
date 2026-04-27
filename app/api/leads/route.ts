@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   associateLeadWithTenant,
   createLead,
@@ -27,8 +27,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const action = url.searchParams.get("action");
 
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
 
   if (action === "search-owners") {
     const q = url.searchParams.get("q") ?? "";
@@ -61,7 +61,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const result = await genericList<Lead>({
     table: "lead",
     fetch: "profileId, channelIds, tagIds",
-    tenant: { id: ctx.tenant.id },
+    tenant: { id: ctx.tenantContext.tenant.id! },
     search,
     searchFields: search ? ["profileId.name"] : undefined,
     cursor,
@@ -95,9 +95,9 @@ async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
-  const tenantId = ctx.tenant.id;
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
+  const tenantId = ctx.tenantContext.tenant.id!;
   const inferredTenantIds = tenantId ? [tenantId] : [];
   const { profile, ownerId } = body;
   const channels = await parseChannels(body.channels);
@@ -190,8 +190,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
 async function putHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
   const { id, profile, ownerId } = body;
   const name = body.name
     ? await standardizeField("name", body.name, "lead")
@@ -248,32 +248,44 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
-  await removeLeadFromTenant(id, ctx.tenant.id);
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
+  await removeLeadFromTenant(id, ctx.tenantContext.tenant.id!);
   return Response.json({ success: true });
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -16,19 +15,6 @@ import {
   ScureBase32Plugin,
   TOTP,
 } from "otplib";
-
-/**
- * POST /api/auth/two-factor
- *
- * User-level 2FA management (§8.8). All actions require authentication as a
- * `user` actor; other actor types (api_token, connected_app) are rejected.
- *
- *   action: "setup-totp"    → generate a provisioning URI + secret
- *   action: "confirm-totp"  → verify the first code and fire the confirmation
- *                             email (payload.twoFactorSecret). The flag is
- *                             flipped in /verify.
- *   action: "disable"       → fire the confirmation email for disabling 2FA.
- */
 
 function channelOrder(
   verifiedTypes: string[],
@@ -52,7 +38,10 @@ function channelOrder(
 }
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
-  if (ctx.tenant.actorType !== "user") {
+  const { tenant } = ctx.tenantContext;
+  const actorType = ctx.tenantContext.actorType;
+
+  if (actorType !== "user") {
     return Response.json(
       {
         success: false,
@@ -68,15 +57,12 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const core = Core.getInstance();
   const body = await req.json().catch(() => ({}));
   const { action } = body as { action?: string };
-  const userId = ctx.tenant.actorId!;
-  const tenantId = ctx.tenant.id;
-  const systemSlug = ctx.tenant.systemSlug;
-  const settingScope = { systemId: ctx.tenant.systemId };
+  const userId = tenant.actorId!;
+  const tenantId = tenant.id!;
+  const systemSlug = ctx.tenantContext.systemSlug ?? "core";
+  const settingScope = { systemId: tenant.systemId };
 
   if (action === "setup-totp") {
-    // Generate a fresh TOTP secret and stash it on the user row as
-    // `pendingTwoFactorSecret`. The secret never travels through
-    // `verification_request.payload` (§5.1 rule 5 — no secrets in payload).
     const issuer = (await core.getSetting("auth.twoFactor.issuer")) ?? "Core";
     const userRow = await genericGetById<{
       profileId: { name: string; locale?: string };
@@ -97,13 +83,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       secret,
     });
 
-    // Store the AES-256-GCM envelope, never the raw base32 secret (§7.1.1).
     const secretEnvelope = await encryptField(secret);
     await storePendingTwoFactorSecret(userId, secretEnvelope);
 
-    // Return only the provisioning URI to the browser. The raw secret is
-    // embedded in that URI by design (otpauth:// format) so the authenticator
-    // app can consume it — but the browser does not need to echo it back.
     return Response.json({
       success: true,
       data: { provisioningUri: uri },
@@ -125,8 +107,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Decrypt the pending secret envelope stashed on `setup-totp` (§8.8).
-    // Plaintext stays in request scope.
     let secret: string;
     try {
       const decrypted = await genericDecrypt(
@@ -167,9 +147,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Fire the confirmation link. The pending secret stays on the user row;
-    // the verify handler promotes it to `twoFactorSecret` and clears the
-    // pending field when the link is clicked.
     const guard = await communicationGuard({
       ownerId: userId,
       ownerType: "user",
@@ -293,7 +270,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => handler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 10 },
+    requireAuthenticated: true,
+  }),
+  handler,
 );

@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import { isValidPassword } from "@/src/lib/validators";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 /**
  * Password-change subform (§8.7). Unlike the generic {@link PasswordSubform}
@@ -14,8 +13,8 @@ import { isValidPassword } from "@/src/lib/validators";
  * takes effect after the user clicks the confirmation link.
  */
 export default function PasswordChangeSubform() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");

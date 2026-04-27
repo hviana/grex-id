@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface RoleFormProps {
   initialData?: Record<string, unknown>;
@@ -10,7 +10,7 @@ interface RoleFormProps {
 
 const RoleForm = forwardRef<SubformRef, RoleFormProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [systemId, setSystemId] = useState(
       (initialData?.systemId as string) ?? "",

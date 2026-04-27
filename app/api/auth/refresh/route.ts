@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { createTenantToken, verifyTenantToken } from "@/server/utils/token";
 import {
@@ -9,24 +9,7 @@ import {
 } from "@/server/utils/actor-validity";
 import { genericGetById } from "@/server/db/queries/generics";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
-
-async function handler(req: Request, ctx: RequestContext): Promise<Response> {
+async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { systemToken } = body;
 
@@ -41,13 +24,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   try {
-    const tenant = await verifyTenantToken(systemToken);
-    await ensureActorValidityLoaded(tenant.id);
+    const { tenant } = await verifyTenantToken(systemToken);
+    await ensureActorValidityLoaded(tenant.id!);
 
-    // Cache-only validity check (§8.11). Refresh extends the lifetime of
-    // an already-valid bearer; it is not a recovery path. A user whose id
-    // was evicted (logout, role change, tenant removal) must log in again.
-    if (!tenant.actorId || !isActorValid(tenant.id, String(tenant.actorId))) {
+    const actorId = tenant.actorId;
+    if (!actorId || !isActorValid(tenant.id!, actorId)) {
       return Response.json(
         {
           success: false,
@@ -57,9 +38,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Only user sessions can refresh here — API-token JWTs are issued with
-    // their final expiry and do not use this endpoint.
-    if (tenant.actorType !== "user") {
+    const core = Core.getInstance();
+    const actorType = Core.deriveActorType(actorId);
+
+    // Only user sessions can refresh
+    if (actorType !== "user") {
       return Response.json(
         {
           success: false,
@@ -72,9 +55,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    // Fetch the fields the client needs to re-hydrate its UI state. Roles
-    // are preserved from the current tenant — role changes evict the user
-    // (§8.11) and would have rejected this refresh.
     const user = await genericGetById<{
       id: string;
       stayLoggedIn: boolean;
@@ -83,7 +63,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       channelIds?: unknown[];
     }>(
       { table: "user", fetch: "profileId, channelIds" },
-      String(tenant.actorId),
+      String(actorId),
     );
     if (!user) {
       return Response.json(
@@ -95,6 +75,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
+    const roles = await core.getTenantRoles(actorId);
+    const frontendDomains = await core.getFrontendDomains(tenant.systemId!, tenant.companyId!, actorId);
+
     const newToken = await createTenantToken(
       tenant,
       user.stayLoggedIn ?? false,
@@ -104,6 +87,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       success: true,
       data: {
         systemToken: newToken,
+        tenant,
+        roles,
+        actorType: "user" as const,
+        exchangeable: true,
+        frontendDomains,
         user: {
           id: user.id,
           profileId: user.profileId,
@@ -123,4 +111,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 }
 
-export const POST = compose(withAuthRateLimit(), handler);
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  handler,
+);

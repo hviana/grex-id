@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useDebounce } from "@/src/hooks/useDebounce";
-import { useLocale } from "@/src/hooks/useLocale";
 import { useEffect } from "react";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SearchFieldProps {
   onSearch: (query: string) => void;
@@ -14,7 +14,7 @@ interface SearchFieldProps {
 export default function SearchField(
   { onSearch, debounceMs = 300, placeholder }: SearchFieldProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, debounceMs);
 

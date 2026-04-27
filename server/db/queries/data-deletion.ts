@@ -32,7 +32,7 @@ export async function deleteTenantData(
       tenant,
       cascade: tenantCascadeTables.map((table) => ({ table })),
     },
-    tenant.id,
+    tenant.id!,
   );
 
   // Delete all uploaded files under {companyId}/{systemSlug}/
@@ -43,5 +43,5 @@ export async function deleteTenantData(
     // If directory doesn't exist or fs fails, continue — data may not have files
   }
 
-  FileCacheManager.getInstance().clearTenant(tenant.id);
+  FileCacheManager.getInstance().clearTenant(tenant.id!);
 }

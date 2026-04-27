@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemTerms {
   id: string;
@@ -23,8 +22,8 @@ interface TermsData {
 }
 
 export default function TermsEditor() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const [data, setData] = useState<TermsData | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { deleteTenantData } from "@/server/db/queries/data-deletion";
 import { genericGetById, genericVerify } from "@/server/db/queries/generics";
 import { fetchCompanySystemTenantRow } from "@/server/db/queries/tenants";
@@ -23,8 +23,6 @@ async function resolveCompanySystemTenant(
     id: row.id,
     systemId,
     companyId,
-    systemSlug,
-    roles: [],
   };
 }
 
@@ -48,7 +46,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   // Verify the superuser's password
   const passwordValid = await genericVerify(
     { table: "user", hashField: "passwordHash" },
-    ctx.tenant.actorId!,
+    ctx.tenantContext.tenant.actorId!,
     password,
   );
   if (!passwordValid) {
@@ -123,7 +121,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Rebuild this tenant's actor-validity partition — the batched deletion
   // removed api_tokens and tenant rows scoped to this tenantId (§8.11, §9.4).
-  await reloadTenant(tenant.id);
+  await reloadTenant(tenant.id!);
 
   return Response.json({
     success: true,
@@ -132,7 +130,11 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 }
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 5 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+    roles: ["superuser"],
+
+  }),
   deleteHandler,
 );

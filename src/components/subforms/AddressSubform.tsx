@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface AddressSubformProps {
   initialData?: Record<string, unknown>;
@@ -11,7 +11,7 @@ interface AddressSubformProps {
 
 const AddressSubform = forwardRef<SubformRef, AddressSubformProps>(
   ({ initialData, fieldPrefix = "billingAddressId" }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const addr = (initialData?.[fieldPrefix] as Record<string, string>) ?? {};
 
     const [street, setStreet] = useState(addr.street ?? "");

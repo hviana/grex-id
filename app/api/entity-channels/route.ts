@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -82,7 +82,7 @@ async function sendChannelConfirmation(
 }
 
 async function getHandler(_req: Request, ctx: RequestContext) {
-  const userId = ctx.tenant.actorId!;
+  const userId = ctx.tenantContext.tenant.actorId!;
   const channels = await listChannelsByOwner(userId, "user");
   return Response.json({ success: true, data: channels });
 }
@@ -90,7 +90,7 @@ async function getHandler(_req: Request, ctx: RequestContext) {
 async function postHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("action");
-  const userId = ctx.tenant.actorId!;
+  const userId = ctx.tenantContext.tenant.actorId!;
 
   if (action === "resend-verification") {
     const body = await req.json();
@@ -158,14 +158,17 @@ async function postHandler(req: Request, ctx: RequestContext) {
       ? "auth.action.entityChannelAdd"
       : "auth.action.register";
 
+    const core = Core.getInstance();
+    const systemSlug = ctx.tenantContext.systemSlug ?? "";
+
     const result = await sendChannelConfirmation(
       userId,
       String(channel.id),
       channel.type,
       name,
-      ctx.tenant.systemSlug,
-      ctx.tenant.systemId,
-      ctx.tenant.id,
+      systemSlug,
+      ctx.tenantContext.tenant.systemId!,
+      ctx.tenantContext.tenant.id!,
       actionKey,
     );
 
@@ -249,7 +252,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const maxPerOwner = Number(
     (await core.getSetting(
       "auth.entityChannel.maxPerOwner",
-      { systemId: ctx.tenant.systemId },
+      { systemId: ctx.tenantContext.tenant.systemId },
     )) || 10,
   );
 
@@ -274,16 +277,20 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  const name = await getUserProfileName(userId);
+  const fetchedUser = await genericGetById<{
+    profileId: { name: string };
+  }>({ table: "user", fetch: "profileId" }, userId);
+  const name = fetchedUser?.profileId?.name ?? "";
+  const systemSlug = ctx.tenantContext.systemSlug ?? "";
 
   await sendChannelConfirmation(
     userId,
     String(channel.id),
     type,
     name,
-    ctx.tenant.systemSlug,
-    ctx.tenant.systemId,
-    ctx.tenant.id,
+    systemSlug,
+    ctx.tenantContext.tenant.systemId!,
+    ctx.tenantContext.tenant.id!,
     "auth.action.entityChannelAdd",
   );
 
@@ -296,7 +303,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     channelId?: string;
     requiredTypes?: string[];
   };
-  const userId = ctx.tenant.actorId!;
+  const userId = ctx.tenantContext.tenant.actorId!;
 
   if (!channelId) {
     return Response.json(
@@ -358,19 +365,28 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

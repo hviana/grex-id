@@ -1,6 +1,5 @@
 import Core from "./Core.ts";
 import type { CompiledFileAccess } from "./Core.ts";
-import type { Tenant } from "@/src/contracts/tenant.ts";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
@@ -14,7 +13,9 @@ export interface FileAccessCheckParams {
   fileCompanyId: string;
   fileSystemSlug: string;
   fileUserId: string;
-  tenant: Tenant;
+  actorId?: string;
+  companyId?: string;
+  systemId?: string;
   operation: "download" | "upload";
 }
 
@@ -24,29 +25,39 @@ export interface FileAccessCheckResult {
   allowedExtensions?: string[];
 }
 
-function checkSection(
+async function resolveRoles(actorId?: string): Promise<string[]> {
+  if (!actorId) return [];
+  return Core.getInstance().getTenantRoles(actorId);
+}
+
+async function checkSection(
   section: FileAccessSection,
   params: FileAccessCheckParams,
-): boolean {
-  // Superuser role bypasses all checks (§6.4)
-  if (params.tenant.roles.includes("superuser")) return true;
+): Promise<boolean> {
+  const roles = await resolveRoles(params.actorId);
+  if (roles.includes("superuser")) return true;
 
-  const { isolateSystem, isolateCompany, isolateUser, roles } = section;
+  const { isolateSystem, isolateCompany, isolateUser, roles: sectionRoles } =
+    section;
 
   const needsAuth = isolateSystem || isolateCompany || isolateUser;
-  if (needsAuth && !params.tenant.actorId) return false;
+  if (needsAuth && !params.actorId) return false;
 
-  if (isolateUser && params.tenant.actorId !== params.fileUserId) return false;
-  if (isolateCompany && params.tenant.companyId !== params.fileCompanyId) {
+  if (isolateUser && params.actorId !== params.fileUserId) return false;
+  if (isolateCompany && params.companyId !== params.fileCompanyId) {
     return false;
   }
-  if (isolateSystem && params.tenant.systemSlug !== params.fileSystemSlug) {
-    return false;
+  if (isolateSystem) {
+    const core = Core.getInstance();
+    const tenantSystemSlug = params.systemId
+      ? await core.getSystemSlug(params.systemId)
+      : undefined;
+    if (tenantSystemSlug !== params.fileSystemSlug) return false;
   }
 
-  if (roles.length > 0) {
-    if (!params.tenant.actorId) return false;
-    const hasRole = roles.some((r) => params.tenant.roles.includes(r));
+  if (sectionRoles.length > 0) {
+    if (!params.actorId) return false;
+    const hasRole = sectionRoles.some((r) => roles.includes(r));
     if (!hasRole) return false;
   }
 
@@ -72,7 +83,8 @@ export async function checkFileAccess(
     const section = params.operation === "download"
       ? rule.download
       : rule.upload;
-    if (checkSection(section, params)) {
+    const allowed = await checkSection(section, params);
+    if (allowed) {
       matchingAllowed.push(rule);
     }
   }

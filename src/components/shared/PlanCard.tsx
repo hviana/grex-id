@@ -1,9 +1,9 @@
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -64,7 +64,7 @@ export default function PlanCard({
   systemName,
   systemSlug,
 }: PlanCardProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const translatedName = t(plan.name) !== plan.name ? t(plan.name) : plan.name;
   const translatedDesc = plan.description

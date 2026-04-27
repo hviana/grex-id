@@ -4,6 +4,6 @@ export interface Tenant {
   companyId?: string;
   actorId?: string;
   isOwner?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

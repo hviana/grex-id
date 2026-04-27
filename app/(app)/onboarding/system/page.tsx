@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import PlanCard from "@/src/components/shared/PlanCard";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemOption {
   id: string;
@@ -31,8 +30,8 @@ export default function OnboardingSystemPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedSlug = searchParams.get("systemSlug");
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const [step, setStep] = useState<"system" | "plan">("system");
   const [systems, setSystems] = useState<SystemOption[]>([]);

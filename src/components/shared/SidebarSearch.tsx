@@ -1,6 +1,6 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 interface SidebarSearchProps {
   value: string;
@@ -8,7 +8,7 @@ interface SidebarSearchProps {
 }
 
 export default function SidebarSearch({ value, onChange }: SidebarSearchProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   return (
     <div className="relative group">

@@ -1,9 +1,9 @@
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
-import type { TenantActorType } from "@/src/contracts/tenant";
+import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
 import type { TenantFieldName } from "@/src/components/subforms/TenantSubform";
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export interface TenantViewData {
   id: string;
@@ -52,7 +52,7 @@ const ACTOR_TYPE_EMOJI: Record<string, string> = {
 };
 
 function ActorTypeBadge({ type }: { type?: TenantActorType }) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   if (!type) return null;
   const emoji = ACTOR_TYPE_EMOJI[type] ?? "❓";
   const key = `core.tenant.actorType.${type}`;
@@ -64,7 +64,7 @@ function ActorTypeBadge({ type }: { type?: TenantActorType }) {
 }
 
 function AnonymousBadge() {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2.5 py-0.5 text-xs text-[var(--color-light-text)]">
       👻 {t("core.tenant.anonymous")}
@@ -117,7 +117,7 @@ export default function TenantView({
   visibleFields = ALL_VIEW_FIELDS,
   compact = false,
 }: TenantViewProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const show = (field: TenantFieldName) => visibleFields.includes(field);
 

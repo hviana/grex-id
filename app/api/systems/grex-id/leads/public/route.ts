@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { publicLeadPostHandler } from "@/app/api/leads/public/route";
 import {
   linkOrphanFaceToLead,
@@ -39,7 +39,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       leadId && faceDescriptor && Array.isArray(faceDescriptor) &&
       typeof companyId === "string" && typeof systemId === "string"
     ) {
-      const tenantId = ctx.tenant.id;
+      const tenantId = ctx.tenantContext.tenant.id;
       const sensitivity = parseFloat(
         (await Core.getInstance().getSetting(
           "detection.sensitivity",
@@ -87,7 +87,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 export const POST = compose(
-  withAuth(),
-  withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 10 },
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );

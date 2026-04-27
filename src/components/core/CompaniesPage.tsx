@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
@@ -10,6 +8,7 @@ import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -61,7 +60,7 @@ function formatCurrency(cents: number): string {
 }
 
 function StatusBadge({ status }: { status: CompanySystem["status"] }) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const cls = status === "active"
     ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
     : status === "past_due"
@@ -86,8 +85,8 @@ function StatusBadge({ status }: { status: CompanySystem["status"] }) {
 }
 
 function AccessButton({ item }: { item: Company }) {
-  const { t } = useLocale();
-  const { exchangeTenant } = useAuth();
+  const { t } = useTenantContext();
+  const { exchangeTenant } = useTenantContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
@@ -131,7 +130,7 @@ function CompanyCard({ item, controls }: {
   item: Company;
   controls: React.ReactNode;
 }) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   return (
     <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
@@ -182,8 +181,8 @@ function CompanyCard({ item, controls }: {
 }
 
 export default function CompaniesPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const statusLabels: Record<string, string> = {
     active: t("core.companies.active"),

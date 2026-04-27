@@ -1,6 +1,5 @@
 import { getDb, rid } from "../connection.ts";
 import type { ApiToken } from "@/src/contracts/token";
-import type { Tenant } from "@/src/contracts/tenant";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tokens");
@@ -15,7 +14,6 @@ export async function createTokenWithResourceLimit(data: {
   description?: string;
   actorType: "app" | "token";
   tenantId: string;
-  tenant: Tenant;
   resourceLimits?: Record<string, unknown>;
   neverExpires: boolean;
   expiresAt?: Date;
@@ -26,7 +24,7 @@ export async function createTokenWithResourceLimit(data: {
   const result = await db.query<[unknown, unknown, ApiToken[]]>(
     `LET $rl = CREATE resource_limit SET
       benefits = $benefits,
-      roles = $roles,
+      roleIds = $roleIds,
       entityLimits = $entityLimits,
       apiRateLimit = $apiRateLimit,
       storageLimitBytes = $storageLimitBytes,
@@ -41,24 +39,20 @@ export async function createTokenWithResourceLimit(data: {
       frontendDomains = $frontendDomains;
     LET $tkn = CREATE api_token SET
       tenantIds = [$tenantId],
-      tenant = $tenant,
       name = $name,
       description = $description,
       actorType = $actorType,
       resourceLimitId = $rl.id,
       neverExpires = $neverExpires,
-      expiresAt = $expiresAt,
-      frontendUse = $frontendUse,
-      frontendDomains = $frontendDomains;
+      expiresAt = $expiresAt;
     SELECT * FROM $tkn[0].id FETCH resourceLimitId;`,
     {
       name: data.name,
       description: data.description ?? "",
       actorType: data.actorType,
       tenantId: rid(data.tenantId),
-      tenant: data.tenant,
       benefits: (rl.benefits as string[]) ?? [],
-      roles: (rl.roles as string[]) ?? [],
+      roleIds: (rl.roleIds as string[]) ?? [],
       entityLimits: rl.entityLimits ?? undefined,
       apiRateLimit: Number(rl.apiRateLimit ?? 0),
       storageLimitBytes: Number(rl.storageLimitBytes ?? 0),
@@ -72,8 +66,6 @@ export async function createTokenWithResourceLimit(data: {
         undefined,
       creditLimitByResourceKey: rl.creditLimitByResourceKey ?? undefined,
       frontendDomains: (rl.frontendDomains as string[]) ?? [],
-      frontendUse: Array.isArray(rl.frontendDomains) &&
-        rl.frontendDomains.length > 0,
       neverExpires: data.neverExpires,
       expiresAt: data.expiresAt ?? undefined,
     },

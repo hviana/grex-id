@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import Spinner from "@/src/components/shared/Spinner";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SearchableSelectFieldProps {
   fetchFn: (search: string) => Promise<{ id: string; label: string }[]>;
@@ -24,7 +24,7 @@ export default function SearchableSelectField({
   showAllOnEmpty = false,
   placeholder,
 }: SearchableSelectFieldProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [search, setSearch] = useState("");
   const [options, setOptions] = useState<{ id: string; label: string }[]>([]);
   const [selected, setSelected] = useState<{ id: string; label: string }[]>(

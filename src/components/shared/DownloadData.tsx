@@ -2,8 +2,8 @@
 
 import { useCallback, useState } from "react";
 import * as XLSX from "xlsx";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "./Spinner.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface DownloadDataProps {
   data:
@@ -20,7 +20,7 @@ export default function DownloadData({
   sheetName = "sheet1",
   label = "common.download",
 }: DownloadDataProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [loading, setLoading] = useState(false);
 
   const handleDownload = useCallback(async () => {

@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import MenuTreeEditor from "@/src/components/core/MenuTreeEditor";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemOption {
   id: string;
@@ -14,8 +13,8 @@ interface SystemOption {
 }
 
 export default function MenusPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [systems, setSystems] = useState<SystemOption[]>([]);
   const [selectedSystemId, setSelectedSystemId] = useState("");
   const [loadingSystems, setLoadingSystems] = useState(true);

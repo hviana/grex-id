@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
@@ -14,6 +11,7 @@ import PlanCard from "@/src/components/shared/PlanCard";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherInfo {
   id: string;
@@ -45,6 +43,7 @@ interface PlanInfo {
   recurrenceDays: number;
   resourceLimitId?: ResourceLimitsData | null;
   isActive: boolean;
+  [key: string]: unknown;
 }
 
 interface PaymentMethodInfo {
@@ -76,9 +75,9 @@ interface PaymentRecord {
 }
 
 export default function BillingPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId, systemSlug } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId, systemSlug } = useTenantContext();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

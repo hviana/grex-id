@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { resolveFileCacheLimit } from "@/server/utils/guards";
@@ -15,9 +14,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const action = url.searchParams.get("mode");
 
+  const roles = ctx.tenantContext.roles;
+
   // ── Core mode: superuser cross-tenant aggregation ──
   if (action === "core") {
-    if (!ctx.tenant.roles.includes("superuser")) {
+    if (!roles.includes("superuser")) {
       return Response.json(
         {
           success: false,
@@ -66,9 +67,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   // ── Tenant mode ──
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
-  const tenantId = ctx.tenant.id;
+  const companyId = ctx.tenantContext.tenant.companyId;
+  const systemId = ctx.tenantContext.tenant.systemId;
+  const tenantId = ctx.tenantContext.tenant.id!;
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
@@ -104,18 +105,20 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   const config = await getTenantUsageConfig({
-    tenantId: ctx.tenant.id,
+    tenantId,
     startDate: start,
     endDate: end,
   });
 
+  const systemSlug = ctx.tenantContext.systemSlug ?? undefined;
+
   let usedBytes = 0;
-  if (config.systemSlug) {
+  if (systemSlug && companyId) {
     const fs = await getFS();
     let cursor: unknown = undefined;
     do {
       const listing = await fs.readDir({
-        path: [companyId, config.systemSlug],
+        path: [companyId, systemSlug],
         control: () => ({
           accessAllowed: true,
           maxPageSize: 1000,
@@ -130,9 +133,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   let storageLimitBytes = config.subscriptionStorageLimit ?? 1073741824;
   storageLimitBytes += config.voucherStorageModifier;
 
-  const cacheLimitResult = await resolveFileCacheLimit({ tenant: ctx.tenant });
-  const tenantKey = config.systemSlug
-    ? `${companyId}:${config.systemSlug}`
+  const cacheLimitResult = await resolveFileCacheLimit({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! });
+  const tenantKey = systemSlug && companyId
+    ? `${companyId}:${systemSlug}`
     : null;
   const cacheStats = tenantKey
     ? FileCacheManager.getInstance().getStats(
@@ -143,7 +146,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const creditExpenses = config.creditExpenses;
 
-  const operationCount = await getOperationCount(ctx.tenant.id);
+  const operationCount = await getOperationCount(ctx.tenantContext.tenant.id!);
 
   return Response.json({
     success: true,
@@ -160,7 +163,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => getHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  getHandler,
 );

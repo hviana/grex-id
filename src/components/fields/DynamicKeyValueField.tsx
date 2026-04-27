@@ -1,6 +1,6 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 interface KeyValueEntry {
   key: string;
@@ -29,7 +29,7 @@ export default function DynamicKeyValueField(
     showDescription = true,
   }: DynamicKeyValueFieldProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const update = (idx: number, patch: Partial<KeyValueEntry>) => {
     const next = fields.map((f, i) => (i === idx ? { ...f, ...patch } : f));

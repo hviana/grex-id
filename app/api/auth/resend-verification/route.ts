@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -12,22 +12,6 @@ import {
 import { userHasVerifiedChannel } from "@/server/db/queries/auth";
 import { genericGetById } from "@/server/db/queries/generics";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
 
 function guessChannelType(raw: string): string | undefined {
   const trimmed = raw.trim();
@@ -137,4 +121,4 @@ async function handler(
   return successResponse;
 }
 
-export const POST = compose(withAuthRateLimit(), handler);
+export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), handler);

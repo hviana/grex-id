@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   getDetectionStats,
   listDetections,
@@ -44,8 +44,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
   const action = url.searchParams.get("action");
   const locationId = url.searchParams.get("locationId") ?? undefined;
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
 
   if (action === "stats") {
     const stats = await getDetectionStats({
@@ -75,7 +75,11 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.view_detections"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.view_detections"],
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );

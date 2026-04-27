@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface CompanyData {
   id: string;
@@ -25,9 +23,9 @@ interface CompanyData {
 }
 
 export default function CompanyEditPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId } = useTenantContext();
 
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [loading, setLoading] = useState(true);

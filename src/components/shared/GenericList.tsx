@@ -7,7 +7,6 @@ import type {
   PaginatedResult,
 } from "@/src/contracts/common";
 import type { FilterConfig, FilterValues } from "./FilterDropdown.tsx";
-import { useLocale } from "@/src/hooks/useLocale";
 import SearchField from "./SearchField.tsx";
 import CreateButton from "./CreateButton.tsx";
 import EditButton from "./EditButton.tsx";
@@ -17,6 +16,7 @@ import FilterBadge from "./FilterBadge.tsx";
 import GenericListItem from "./GenericListItem.tsx";
 import Spinner from "./Spinner.tsx";
 import FormModal from "./FormModal.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export interface SubformConfig {
   component: React.ComponentType<{
@@ -81,7 +81,7 @@ export default function GenericList<T extends Record<string, unknown>>({
   onCreateClick,
   reloadKey,
 }: GenericListProps<T>) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);

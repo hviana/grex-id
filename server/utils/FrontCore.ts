@@ -7,6 +7,7 @@ import {
   resolveScopeChain,
   type SettingScope,
 } from "../db/queries/core-settings.ts";
+import Core from "./Core.ts";
 
 assertServerOnly("FrontCore");
 
@@ -19,12 +20,17 @@ export interface FrontCoreData {
   settings: Map<string, FrontCoreSetting>;
 }
 
+export interface PublicSystemData {
+  name: string;
+  slug: string;
+  logoUri?: string;
+  defaultLocale?: string;
+  termsOfService?: string;
+}
+
 const SETTINGS_SLUG = "front-settings";
 const trackedScopes: Set<string> = new Set();
 
-/**
- * Loads core-level front settings for the initial cache hydration.
- */
 export async function loadFrontCoreData(): Promise<FrontCoreData> {
   const settings = await loadFrontSettingsForScope("__core__");
 
@@ -38,6 +44,7 @@ export async function loadFrontCoreData(): Promise<FrontCoreData> {
 class FrontCore {
   private static instance: FrontCore | null = null;
   private missingSettings: Map<string, MissingFrontSetting> = new Map();
+  private publicSystemRegistered: Set<string> = new Set();
 
   private constructor() {}
 
@@ -48,11 +55,6 @@ class FrontCore {
     return FrontCore.instance;
   }
 
-  /**
-   * Retrieves a front setting value by walking the scope hierarchy:
-   * actor-scoped → company-system-scoped → system-scoped → core-level.
-   * Settings are loaded lazily per scope and cached.
-   */
   async getSetting(
     key: string,
     scope?: SettingScope,
@@ -93,9 +95,6 @@ class FrontCore {
     return getCache<Map<string, FrontCoreSetting>>(SETTINGS_SLUG, cacheName);
   }
 
-  /**
-   * Refreshes a specific scope's front settings cache after a mutation.
-   */
   async refreshSettingsScope(scopeKey: string): Promise<void> {
     const cacheName = `settings:${scopeKey}`;
     if (trackedScopes.has(scopeKey)) {
@@ -107,8 +106,46 @@ class FrontCore {
     return Array.from(this.missingSettings.values());
   }
 
+  /**
+   * Returns public system data (name, slug, logoUri, defaultLocale,
+   * termsOfService) from the Core cache. Systems are cached via
+   * Core.getInstance().getSystemBySlug().
+   */
+  async getPublicSystemData(
+    systemSlug: string,
+  ): Promise<PublicSystemData | undefined> {
+    const cacheName = `publicSystem:${systemSlug}`;
+
+    if (!this.publicSystemRegistered.has(cacheName)) {
+      registerCache(SETTINGS_SLUG, cacheName, async () => {
+        const core = Core.getInstance();
+        const system = await core.getSystemBySlug(systemSlug);
+        if (!system) return undefined;
+
+        const genericTerms =
+          (await core.getSetting("terms.generic")) || "";
+        const termsOfService =
+          system.termsOfService || genericTerms || undefined;
+
+        const data: PublicSystemData = {
+          name: system.name,
+          slug: system.slug,
+          logoUri: system.logoUri,
+          defaultLocale: system.defaultLocale,
+          termsOfService,
+        };
+        return data;
+      });
+      this.publicSystemRegistered.add(cacheName);
+    }
+
+    return getCache<PublicSystemData | undefined>(
+      SETTINGS_SLUG,
+      cacheName,
+    );
+  }
+
   async reload(): Promise<void> {
-    // Refresh all loaded front-settings scopes
     for (const scopeKey of trackedScopes) {
       const cacheName = `settings:${scopeKey}`;
       try {
@@ -118,6 +155,12 @@ class FrontCore {
       }
     }
     this.missingSettings.clear();
+
+    // Clear public system data caches
+    for (const cacheName of this.publicSystemRegistered) {
+      clearCache(SETTINGS_SLUG, cacheName);
+    }
+    this.publicSystemRegistered.clear();
   }
 }
 

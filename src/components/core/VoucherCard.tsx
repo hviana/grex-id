@@ -1,11 +1,11 @@
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherCardProps {
   voucher: {
@@ -22,7 +22,7 @@ interface VoucherCardProps {
 export default function VoucherCard(
   { voucher, onEdit, onDelete }: VoucherCardProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const isExpired = voucher.expiresAt
     ? new Date(voucher.expiresAt) < new Date()

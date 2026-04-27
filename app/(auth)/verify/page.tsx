@@ -2,25 +2,22 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import GenericFormButton from "@/src/components/shared/GenericFormButton";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
 import Link from "next/link";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function VerifyContent() {
-  const { t } = useLocale();
+  const { t, refresh, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
   const router = useRouter();
-  const { refresh } = useAuth();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("systemSlug");
   const identifierParam = searchParams.get("identifier") ?? "";
-  const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
+  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
 
   const [identifier, setIdentifier] = useState(identifierParam);
   const [verifying, setVerifying] = useState(!!token);

@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type {
   FileAccessSection,
@@ -9,6 +8,7 @@ import type {
 } from "@/src/contracts/file-access";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
@@ -60,7 +60,7 @@ const FileAccessSubform = forwardRef<
   SubformRef,
   { initialData?: Record<string, unknown> }
 >(({ initialData }, ref) => {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const [name, setName] = useState((initialData?.name as string) ?? "");
   const [categoryPattern, setCategoryPattern] = useState(

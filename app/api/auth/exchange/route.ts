@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
@@ -10,25 +9,9 @@ import {
   resolveUserExchange,
 } from "@/server/db/queries/auth";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
-
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
-  if (!ctx.tenant.actorType) {
+  const { tenant } = ctx.tenantContext;
+  if (!tenant?.actorId) {
     return Response.json(
       {
         success: false,
@@ -38,8 +21,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
+  const core = Core.getInstance();
+  const actorType = ctx.tenantContext.actorType;
+
   // Only user tokens can be exchanged (§8.6)
-  if (ctx.tenant.actorType !== "user" || !ctx.tenant.exchangeable) {
+  if (actorType !== "user") {
     return Response.json(
       {
         success: false,
@@ -48,9 +34,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       { status: 403 },
     );
   }
-
-  // Note: withAuth has already validated the current token against the
-  // actor-validity cache (§8.11). No additional revocation check here.
 
   const body = await req.json();
   const { companyId, systemId } = body;
@@ -68,10 +51,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const oldTenantId = ctx.tenant.id;
-
-  // Superuser company-access bypass (§8.6.1)
-  const isSuperuser = ctx.tenant.roles.includes("superuser");
+  const oldTenantId = tenant.id!;
+  const isSuperuser = ctx.tenantContext.roles.includes("superuser");
 
   if (isSuperuser) {
     const suResult = await resolveSuperuserExchange(companyId, systemId);
@@ -86,48 +67,39 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       );
     }
 
-    const systemSlug = suResult.slug;
-    const newTenantId = suResult.tenantId;
-    const oldExp = ctx.tenant.exp ? new Date(ctx.tenant.exp * 1000) : undefined;
+    const newTenant: typeof tenant = {
+      id: suResult.tenantId,
+      systemId,
+      companyId,
+      actorId: tenant.actorId,
+    };
 
-    const newToken = await createTenantToken(
-      {
-        id: newTenantId,
-        systemId,
-        companyId,
-        systemSlug,
-        roles: ["admin"],
-        actorType: "user",
-        actorId: ctx.tenant.actorId,
-        exchangeable: true,
-      },
-      false,
-      oldExp,
-    );
+    const oldExp = undefined;
 
-    // Move the user id from the old tenant's partition to the new one
-    // (§8.11, §8.6 step 6).
-    await forgetActor(oldTenantId, String(ctx.tenant.actorId));
-    await rememberActor(newTenantId, String(ctx.tenant.actorId));
+    const newToken = await createTenantToken(newTenant, false, oldExp);
+
+    await forgetActor(oldTenantId, String(tenant.actorId));
+    await rememberActor(suResult.tenantId, String(tenant.actorId));
+
+    const newRoles = await core.getTenantRoles(tenant.actorId!);
+    const frontendDomains = await core.getFrontendDomains(systemId, companyId, tenant.actorId);
 
     return Response.json({
       success: true,
       data: {
         systemToken: newToken,
-        tenant: {
-          id: newTenantId,
-          systemId,
-          companyId,
-          systemSlug,
-          roles: ["admin"],
-        },
+        tenant: newTenant,
+        roles: newRoles,
+        actorType: "user" as const,
+        exchangeable: true,
+        frontendDomains,
       },
     });
   }
 
   // Verify membership + resolve slug/roles (§7.2, §8.6)
   const result = await resolveUserExchange(
-    ctx.tenant.actorId!,
+    tenant.actorId!,
     companyId,
     systemId,
   );
@@ -142,50 +114,40 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const userRoles = result.roles;
-  const systemSlug = result.slug;
-  const newTenantId = result.tenantId;
+  const newTenant: typeof tenant = {
+    id: result.tenantId,
+    systemId,
+    companyId,
+    actorId: tenant.actorId,
+  };
 
-  // Carry over remaining lifetime from the old token (§8.6 step 6)
-  const oldExp = ctx.tenant.exp ? new Date(ctx.tenant.exp * 1000) : undefined;
+  const oldExp = undefined;
 
-  const newToken = await createTenantToken(
-    {
-      id: newTenantId,
-      systemId,
-      companyId,
-      systemSlug,
-      roles: userRoles,
-      actorType: "user",
-      actorId: ctx.tenant.actorId,
-      exchangeable: true,
-    },
-    false,
-    oldExp,
-  );
+  const newToken = await createTenantToken(newTenant, false, oldExp);
 
-  // Move the user id from the old tenant's partition to the new one
-  // (§8.11, §8.6 step 6).
-  await forgetActor(oldTenantId, String(ctx.tenant.actorId));
-  await rememberActor(newTenantId, String(ctx.tenant.actorId));
+  await forgetActor(oldTenantId, String(tenant.actorId));
+  await rememberActor(result.tenantId, String(tenant.actorId));
+
+  const newRoles = await core.getTenantRoles(tenant.actorId!);
+  const frontendDomains = await core.getFrontendDomains(systemId, companyId, tenant.actorId);
 
   return Response.json({
     success: true,
     data: {
       systemToken: newToken,
-      tenant: {
-        id: newTenantId,
-        systemId,
-        companyId,
-        systemSlug,
-        roles: userRoles,
-      },
+      tenant: newTenant,
+      roles: newRoles,
+      actorType: "user" as const,
+      exchangeable: true,
+      frontendDomains,
     },
   });
 }
 
 export const POST = compose(
-  withAuthRateLimit(),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+    requireAuthenticated: true,
+  }),
   handler,
 );

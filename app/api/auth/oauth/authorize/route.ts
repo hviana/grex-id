@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { createTenantToken } from "@/server/utils/token";
@@ -13,33 +12,8 @@ import {
 import { createTokenWithResourceLimit } from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
-
-/**
- * POST /api/auth/oauth/authorize
- *
- * Called by the OAuth authorize page after the user approves access.
- * Creates an api_token with actorType="app" (replacing the former
- * connected_app table) in a single batched query, then returns the JWT
- * (§8.1) the client will use as the bearer.
- */
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
-  if (!ctx.tenant.actorId) {
+  if (!ctx.tenantContext.tenant.actorId) {
     return Response.json(
       {
         success: false,
@@ -92,9 +66,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     ? requestedRoles
     : [];
 
-  const userId = ctx.tenant.actorId;
+  const userId = ctx.tenantContext.tenant.actorId;
 
-  // Resolve the tenant row for this (user, company, system) combination.
   const resolved = await resolveUserExchange(userId, companyId, systemId);
   if (!resolved.tenantId) {
     return Response.json(
@@ -106,16 +79,13 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const resolvedSlug = await standardizeField("slug", systemSlug);
   const tokenTenant: Tenant = {
     id: resolved.tenantId,
     systemId: String(systemId),
     companyId: String(companyId),
-    systemSlug: resolvedSlug,
-    roles: grantedRoles,
   };
 
-  const resourceLimits: Record<string, unknown> = { roles: grantedRoles };
+  const resourceLimits: Record<string, unknown> = { roleIds: grantedRoles };
   if (monthlySpendLimit != null) {
     resourceLimits.creditLimitByResourceKey = {
       default: Number(monthlySpendLimit),
@@ -131,7 +101,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     description: redirectOrigin ?? "",
     actorType: "app",
     tenantId: resolved.tenantId,
-    tenant: tokenTenant,
     resourceLimits,
     neverExpires: true,
   });
@@ -150,11 +119,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const jwt = await createTenantToken(
     {
       ...tokenTenant,
-      actorType: "api_token",
       actorId: String(createdToken.id),
-      exchangeable: false,
-      frontendUse: false,
-      frontendDomains: [],
     },
     false,
     farFuture,
@@ -169,7 +134,9 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 }
 
 export const POST = compose(
-  withAuthRateLimit(),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+    requireAuthenticated: true,
+  }),
   handler,
 );

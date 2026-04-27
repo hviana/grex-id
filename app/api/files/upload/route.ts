@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { getFS } from "@/server/utils/fs";
 import type { SaveControlResult } from "@hviana/surreal-fs";
 import Core from "@/server/utils/Core";
@@ -16,7 +16,7 @@ const MB = 1048576;
 const activeUploads = new Map<string, number>();
 
 export const POST = compose(
-  withAuth(),
+  withAuthAndLimit({ requireAuthenticated: true }),
   async (req: Request, ctx: RequestContext): Promise<Response> => {
     const formData = await req.formData();
     const file = formData.get("file");
@@ -61,8 +61,8 @@ export const POST = compose(
       );
     }
 
-    const companyId = ctx.tenant.companyId;
-    const userId = ctx.tenant.actorId!;
+    const companyId = ctx.tenantContext.tenant.companyId!;
+    const userId = ctx.tenantContext.tenant.actorId!;
     const fileName = file.name || "unnamed";
     const mimeType = file.type || "application/octet-stream";
     const path = [
@@ -89,7 +89,9 @@ export const POST = compose(
       fileCompanyId: companyId,
       fileSystemSlug: systemSlug,
       fileUserId: userId,
-      tenant: ctx.tenant,
+      actorId: ctx.tenantContext.tenant.actorId,
+      companyId: ctx.tenantContext.tenant.companyId,
+      systemId: ctx.tenantContext.tenant.systemId,
       operation: "upload",
     });
     if (!accessCheck.allowed) {
@@ -141,8 +143,8 @@ export const POST = compose(
     const [uploadLimits, bwLimits, defaultConcurrent, defaultBW] =
       hasSubscription
         ? await Promise.all([
-          resolveMaxConcurrentUploads({ tenant: ctx.tenant }),
-          resolveMaxUploadBandwidth({ tenant: ctx.tenant }),
+          resolveMaxConcurrentUploads({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! }),
+          resolveMaxUploadBandwidth({ systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! }),
           core.getSetting("transfer.default.maxConcurrentUploads"),
           core.getSetting("transfer.default.maxUploadBandwidthMB"),
         ])
@@ -205,7 +207,8 @@ export const POST = compose(
       let cacheTenantKey = "core";
       if (system && companyId) {
         const limit = await resolveFileCacheLimit({
-          tenant: ctx.tenant,
+          systemId: ctx.tenantContext.tenant.systemId!,
+          companyId: ctx.tenantContext.tenant.companyId!,
         });
         if (limit.maxBytes > 0) cacheTenantKey = `${companyId}:${systemSlug}`;
       }

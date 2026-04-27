@@ -1,9 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useLocale } from "@/src/hooks/useLocale";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
@@ -12,10 +10,11 @@ import SearchableSelectField from "@/src/components/fields/SearchableSelectField
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function GrexIdHomePage() {
-  const { t } = useLocale();
-  const { systemInfo } = usePublicSystem("grex-id");
+  const { t, publicSystem: systemInfo, loadPublicSystem } = useTenantContext();
+  useEffect(() => { loadPublicSystem("grex-id"); }, [loadPublicSystem]);
   const systemName = systemInfo?.name ?? "Grex ID";
   const [showForm, setShowForm] = useState(false);
   const [botToken, setBotToken] = useState<string | null>(null);

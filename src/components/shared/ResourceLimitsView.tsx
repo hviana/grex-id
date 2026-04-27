@@ -1,12 +1,12 @@
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { formatBytes, limitEmoji } from "@/src/components/shared/PlanCard";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export interface ResourceLimitsData {
   benefits?: string[] | null;
-  roles?: string[] | null;
+  roleIds?: string[] | null;
   entityLimits?: Record<string, number> | null;
   apiRateLimit?: number;
   storageLimitBytes?: number;
@@ -62,7 +62,7 @@ export default function ResourceLimitsView({
   className = "",
   modifier = false,
 }: ResourceLimitsViewProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const unlimited = t("billing.limits.unlimited");
   const num = (v: number) => (modifier ? fmtModifier(v) : v.toLocaleString());
@@ -98,10 +98,10 @@ export default function ResourceLimitsView({
         </div>
       )}
 
-      {has(data.roles) && (
+      {has(data.roleIds) && (
         <TranslatedBadgeList
           kind="role"
-          tokens={data.roles}
+          tokens={data.roleIds}
           systemSlug={systemSlug}
           compact
           title={t("core.plans.roles")}

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 import TenantView from "@/src/components/shared/TenantView";
 import ResourceLimitsView, {
   type ResourceLimitsData,
@@ -55,7 +55,7 @@ interface UserViewProps {
 export default function UserView(
   { user, systemSlug, controls }: UserViewProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const isVerified = userHasVerifiedChannel(user);
   const primary = userPrimaryChannel(user);
   const displayName = user.profileId?.name ?? primary;

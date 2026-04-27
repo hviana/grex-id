@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 
@@ -35,7 +35,10 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );

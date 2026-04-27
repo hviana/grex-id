@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import {
@@ -15,17 +14,16 @@ import type { ConnectedService } from "@/src/contracts/connected-service";
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search") || undefined;
-  const isAdmin = ctx.tenant.roles.includes("admin") ||
-    ctx.tenant.roles.includes("superuser");
 
-  // Admin sees all services in the tenant; regular users are filtered
-  // by their own userId via extraConditions.
+  const roles = ctx.tenantContext.roles;
+  const isAdmin = roles.includes("admin") || roles.includes("superuser");
+
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
 
   if (!isAdmin) {
     extraConditions.push("userId = $userId");
-    extraBindings.userId = rid(ctx.tenant.actorId!);
+    extraBindings.userId = rid(ctx.tenantContext.tenant.actorId!);
   }
 
   const result = await genericList<ConnectedService>({
@@ -36,7 +34,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     limit: 50,
     extraConditions,
     extraBindings,
-    tenant: ctx.tenant,
+    tenant: ctx.tenantContext.tenant,
     search,
   });
   return Response.json({ success: true, ...result });
@@ -62,7 +60,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!ctx.tenant.actorId) {
+  if (!ctx.tenantContext.tenant.actorId) {
     return Response.json(
       {
         success: false,
@@ -75,10 +73,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<ConnectedService>(
     {
       table: "connected_service",
-      tenant: ctx.tenant,
+      tenant: ctx.tenantContext.tenant,
     },
     {
-      userId: rid(ctx.tenant.actorId!),
+      userId: rid(ctx.tenantContext.tenant.actorId!),
       name: stdName,
       data: serviceData ?? undefined,
     },
@@ -112,26 +110,32 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   }
 
   await genericDelete(
-    { table: "connected_service", tenant: ctx.tenant },
+    { table: "connected_service", tenant: ctx.tenantContext.tenant },
     id,
   );
   return Response.json({ success: true });
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => getHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  getHandler,
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => postHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  postHandler,
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => deleteHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  deleteHandler,
 );

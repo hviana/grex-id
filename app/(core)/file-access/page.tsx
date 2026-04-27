@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import TenantView from "@/src/components/shared/TenantView";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
@@ -12,6 +10,7 @@ import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface FileAccessItem {
   id: string;
@@ -68,8 +67,8 @@ function createFetchFileAccess(token: string) {
 }
 
 export default function FileAccessPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const ISOLATION_FIELDS = [
     "isolateSystem",

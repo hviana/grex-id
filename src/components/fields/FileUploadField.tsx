@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/webp": ".webp",
@@ -49,7 +49,7 @@ export default function FileUploadField({
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

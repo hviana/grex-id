@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/src/components/shared/Sidebar";
 import Spinner from "@/src/components/shared/Spinner";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type { MenuItem } from "@/src/contracts/menu";
 
 function useCoreMenus(t: (key: string) => string): MenuItem[] {
@@ -147,8 +146,8 @@ function useCoreMenus(t: (key: string) => string): MenuItem[] {
 }
 
 function CoreProfileMenu() {
-  const { user, logout } = useAuth();
-  const { t } = useLocale();
+  const { user, logout } = useTenantContext();
+  const { t } = useTenantContext();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -210,23 +209,23 @@ export default function CoreLayout(
   { children }: { children: React.ReactNode },
 ) {
   const router = useRouter();
-  const { t } = useLocale();
-  const { tenant, loading: authLoading } = useAuth();
+  const { t } = useTenantContext();
+  const { tenant, roles, loading: authLoading } = useTenantContext();
   const coreMenus = useCoreMenus(t);
 
   // Superuser guard (§20)
   useEffect(() => {
     if (authLoading) return;
-    if (!tenant.roles.includes("superuser")) {
+    if (!roles.includes("superuser")) {
       router.push("/entry");
     }
-  }, [authLoading, tenant.roles, router]);
+  }, [authLoading, roles, router]);
 
   const handleNavigate = (componentName: string) => {
     router.push(`/${componentName}`);
   };
 
-  if (authLoading || !tenant.roles.includes("superuser")) {
+  if (authLoading || !roles.includes("superuser")) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--color-black)]">
         <Spinner size="lg" />

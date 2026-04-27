@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { hashPassword } from "@/server/db/queries/auth";
 import { genericGetById, genericVerify } from "@/server/db/queries/generics";
@@ -23,10 +23,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     confirmPassword?: string;
   };
 
-  const userId = ctx.tenant.actorId!;
-  const tenantId = ctx.tenant.id;
-  const systemSlug = ctx.tenant.systemSlug;
-  const settingScope = { systemId: ctx.tenant.systemId };
+  const userId = ctx.tenantContext.tenant.actorId!;
+  const tenantId = ctx.tenantContext.tenant.id!;
+  const systemSlug = ctx.tenantContext.systemSlug ?? "";
+  const settingScope = { systemId: ctx.tenantContext.tenant.systemId };
 
   if (!currentPassword || !newPassword) {
     return Response.json(
@@ -179,7 +179,10 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 10 },
+
+  }),
   async (req, ctx) => handler(req, ctx),
 );

@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { createTenantToken } from "@/server/utils/token";
 import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
 import {
@@ -28,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     orderByDirection: "DESC",
     extraConditions,
     limit: 50,
-    tenant: ctx.tenant,
+    tenant: ctx.tenantContext.tenant,
   });
   return Response.json({ success: true, data: result.items });
 }
@@ -74,7 +73,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Resolve frontendUse/frontendDomains from resourceLimits or direct body
   const rlDomains: string[] = (resourceLimits?.frontendDomains as string[]) ??
     frontendDomains ??
     [];
@@ -97,14 +95,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     name,
     description: description ?? undefined,
     actorType: at,
-    tenantId: ctx.tenant.id,
-    tenant: {
-      id: ctx.tenant.id,
-      systemId: ctx.tenant.systemId,
-      companyId: ctx.tenant.companyId,
-      systemSlug: ctx.tenant.systemSlug,
-      roles: (resourceLimits?.roles as string[]) ?? [],
-    },
+    tenantId: ctx.tenantContext.tenant.id!,
     resourceLimits: resourceLimits ?? undefined,
     neverExpires: neverExpires === true,
     expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59.999Z") : undefined,
@@ -120,9 +111,6 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  // Issue the JWT bearer for this api_token. The actor id is the row id
-  // (§8.11); exp comes from expiresAt or a far-future date for
-  // never-expires tokens.
   const far = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
   const exp = createdToken.neverExpires
     ? far
@@ -130,28 +118,18 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ? new Date(createdToken.expiresAt)
     : far;
 
-  const resLimits = createdToken.resourceLimitId;
-  const roles = resLimits?.roles ?? [];
-  const rlFrontendDomains = resLimits?.frontendDomains ?? [];
-
   const jwt = await createTenantToken(
     {
-      id: ctx.tenant.id,
-      systemId: ctx.tenant.systemId,
-      companyId: ctx.tenant.companyId,
-      systemSlug: ctx.tenant.systemSlug,
-      roles,
-      actorType: "api_token",
+      id: ctx.tenantContext.tenant.id,
+      systemId: ctx.tenantContext.tenant.systemId,
+      companyId: ctx.tenantContext.tenant.companyId,
       actorId: String(createdToken.id),
-      exchangeable: false,
-      frontendUse: useFrontend,
-      frontendDomains: rlFrontendDomains,
     },
     false,
     exp,
   );
 
-  await rememberActor(ctx.tenant.id, String(createdToken.id));
+  await rememberActor(ctx.tenantContext.tenant.id!, String(createdToken.id));
 
   return Response.json(
     { success: true, data: { token: jwt } },
@@ -182,19 +160,25 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => getHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  getHandler,
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => postHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  postHandler,
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
-  async (req, ctx) => deleteHandler(req, ctx),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    requireAuthenticated: true,
+  }),
+  deleteHandler,
 );

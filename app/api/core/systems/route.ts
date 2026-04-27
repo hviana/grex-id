@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   genericCreate,
   genericDelete,
@@ -18,15 +17,16 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const companyId = url.searchParams.get("companyId") ?? undefined;
-  const isSuperuser = ctx.tenant.roles.includes("superuser");
+
+  const roles = ctx.tenantContext.roles;
+  const isSuperuser = roles.includes("superuser");
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
 
-  // Non-superusers only see their own system.
-  if (!isSuperuser && ctx.tenant.systemId) {
+  if (!isSuperuser && ctx.tenantContext.tenant.systemId) {
     extraConditions.push("id = $autoSystemId");
-    extraBindings.autoSystemId = rid(ctx.tenant.systemId);
+    extraBindings.autoSystemId = rid(ctx.tenantContext.tenant.systemId);
   }
 
   if (companyId) {
@@ -200,25 +200,33 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    requireAuthenticated: true,
+  }),
   getHandler,
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   postHandler,
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   putHandler,
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   deleteHandler,
 );

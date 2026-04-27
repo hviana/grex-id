@@ -1,10 +1,16 @@
 import * as jose from "@panva/jose";
 import Core from "./Core.ts";
 import { getCache } from "./cache.ts";
-import type { Tenant } from "@/src/contracts/tenant.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/token.ts");
+
+interface JwtTenant {
+  id?: string;
+  systemId?: string;
+  companyId?: string;
+  actorId?: string;
+}
 
 export async function loadJwtSecret(): Promise<Uint8Array> {
   const core = Core.getInstance();
@@ -22,14 +28,14 @@ async function getJwtSecret(): Promise<Uint8Array> {
 }
 
 /**
- * Creates the universal tenant-bearing JWT used by every authenticating
- * actor (§8.1). Includes the full Tenant with `id`, the `actorId`
- * used by the actor-validity cache (§8.11), and — for non-user actors — the
- * CORS policy (`frontendUse`, `frontendDomains`) so `withAuth` does not
- * need a DB read.
+ * Creates an identity-only tenant-bearing JWT.
+ *
+ * Payload carries only identity fields (tenantId + tenant with id, systemId,
+ * companyId, actorId). All auth claims are resolved server-side from Core
+ * cache at request time.
  */
 export async function createTenantToken(
-  tenant: Tenant,
+  tenant: JwtTenant,
   stayLoggedIn: boolean = false,
   expiresAt?: Date,
 ): Promise<string> {
@@ -40,14 +46,8 @@ export async function createTenantToken(
       id: tenant.id,
       systemId: tenant.systemId,
       companyId: tenant.companyId,
-      systemSlug: tenant.systemSlug,
-      roles: tenant.roles,
+      actorId: tenant.actorId,
     },
-    actorType: tenant.actorType,
-    actorId: tenant.actorId,
-    exchangeable: tenant.exchangeable,
-    frontendUse: tenant.frontendUse,
-    frontendDomains: tenant.frontendDomains,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -68,41 +68,31 @@ export async function createTenantToken(
 }
 
 /**
- * Verifies a tenant-bearing JWT and returns the full tenant.
+ * Verifies a JWT and returns the identity-only tenant.
+ * All auth claims are resolved from Core cache by the caller.
  */
 export async function verifyTenantToken(
   token: string,
-): Promise<Tenant> {
+): Promise<{ tenant: JwtTenant }> {
   const { payload } = await jose.jwtVerify(token, await getJwtSecret(), {
     issuer: "core",
   });
 
-  const tenant = payload.tenant as {
-    id: string;
-    systemId: string;
-    companyId: string;
-    systemSlug: string;
-    roles: string[];
+  const t = payload.tenant as JwtTenant;
+
+  const tenant: JwtTenant = {
+    id: t.id ?? (payload.tenantId as string) ?? "",
+    systemId: t.systemId,
+    companyId: t.companyId,
+    actorId: t.actorId,
   };
 
-  return {
-    id: tenant.id ?? (payload.tenantId as string) ?? "",
-    systemId: tenant.systemId,
-    companyId: tenant.companyId,
-    systemSlug: tenant.systemSlug ?? "core",
-    roles: tenant.roles ?? [],
-    actorType: payload.actorType as Tenant["actorType"],
-    actorId: payload.actorId as string,
-    exchangeable: (payload.exchangeable as boolean) ?? false,
-    exp: payload.exp,
-    frontendUse: payload.frontendUse as boolean | undefined,
-    frontendDomains: payload.frontendDomains as string[] | undefined,
-  };
+  return { tenant };
 }
 
 /**
  * Cryptographically random 32-byte hex string. Used for non-JWT flows —
- * e.g. verification-request confirmation URLs (§5.2).
+ * e.g. verification-request confirmation URLs.
  */
 export function generateSecureToken(): string {
   const bytes = new Uint8Array(32);

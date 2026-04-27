@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   genericCreate,
   genericDelete,
@@ -14,7 +14,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const search = url.searchParams.get("search");
 
-  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
     return Response.json({
       success: true,
       items: [],
@@ -29,7 +29,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     ...(search ? {} : { orderBy: "name ASC" }),
     search: search ?? undefined,
     limit: search ? 20 : 200,
-    tenant: ctx.tenant,
+    tenant: ctx.tenantContext.tenant,
   });
 
   return Response.json({ success: true, ...result });
@@ -69,7 +69,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Tag>(
     {
       table: "tag",
-      tenant: ctx.tenant,
+      tenant: ctx.tenantContext.tenant,
       fields: [{ field: "name", unique: true, entity: "tag" }],
     },
     { name, color },
@@ -141,7 +141,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const result = await genericUpdate<Tag>(
     {
       table: "tag",
-      tenant: ctx.tenant,
+      tenant: ctx.tenantContext.tenant,
       fields: name ? [{ field: "name", unique: true, entity: "tag" }] : [],
     },
     id,
@@ -184,30 +184,42 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "tag", tenant: ctx.tenant }, id);
+  await genericDelete({ table: "tag", tenant: ctx.tenantContext.tenant }, id);
   return Response.json({ success: true });
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

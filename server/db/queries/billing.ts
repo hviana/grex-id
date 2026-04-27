@@ -194,10 +194,7 @@ export async function cancelSubscription(
 
 export async function addPaymentMethod(data: {
   tenantId: string;
-  cardToken: string;
-  cardMask: string;
-  holderName: string;
-  holderDocument: string;
+  cardData: Record<string, unknown>;
   billingAddress: Record<string, string>;
 }): Promise<Record<string, unknown> | undefined> {
   const db = await getDb();
@@ -219,10 +216,7 @@ export async function addPaymentMethod(data: {
     LET $pm = CREATE payment_method SET
       tenantIds = [$tenantId],
       type = "credit_card",
-      cardMask = $cardMask,
-      cardToken = $cardToken,
-      holderName = $holderName,
-      holderDocument = $holderDocument,
+      data = $cardData,
       billingAddressId = $addr[0].id,
       isDefault = IF $existingCount = 0 THEN true ELSE false END;
     SELECT * FROM $pm[0].id FETCH billingAddressId;`,
@@ -236,10 +230,7 @@ export async function addPaymentMethod(data: {
       country: addr.country ?? "",
       postalCode: addr.postalCode ?? "",
       tenantId: rid(data.tenantId),
-      cardMask: data.cardMask,
-      cardToken: data.cardToken,
-      holderName: data.holderName,
-      holderDocument: data.holderDocument ?? "",
+      cardData: data.cardData,
     },
   );
 
@@ -621,6 +612,8 @@ export interface PaymentSubscriptionContext {
   owner: { id: string; name: string } | undefined;
   systemInfo: { name: string; slug: string } | undefined;
   purchaseStatus: string | undefined;
+  systemId: string | undefined;
+  companyId: string | undefined;
 }
 
 export async function getPaymentSubscriptionContext(params: {
@@ -652,6 +645,7 @@ export async function getPaymentSubscriptionContext(params: {
       { priceModifier: number; resourceLimitId?: Record<string, unknown> }[],
       { id: string; name: string }[],
       { name: string; slug: string }[],
+      { companyId: string; systemId: string }[],
       { status?: string }[],
     ]
   >(
@@ -670,6 +664,7 @@ export async function getPaymentSubscriptionContext(params: {
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
+     SELECT $companyId AS companyId, $systemId AS systemId;
      ${creditPurchaseQuery}`,
     {
       id: rid(params.subscriptionId),
@@ -685,7 +680,9 @@ export async function getPaymentSubscriptionContext(params: {
     voucher: result[2]?.[0],
     owner: result[3]?.[0],
     systemInfo: result[4]?.[0],
-    purchaseStatus: result[5]?.[0]?.status,
+    purchaseStatus: result[6]?.[0]?.status,
+    companyId: result[5]?.[0]?.companyId,
+    systemId: result[5]?.[0]?.systemId,
   };
 }
 
@@ -909,6 +906,8 @@ export interface AsyncPaymentContext {
   owner: { id: string; name: string } | undefined;
   systemInfo: { name: string; slug: string } | undefined;
   creditPurchase: { status?: string } | undefined;
+  systemId: string | undefined;
+  companyId: string | undefined;
 }
 
 export async function getAsyncPaymentContext(
@@ -942,6 +941,7 @@ export async function getAsyncPaymentContext(
       { priceModifier: number; resourceLimitId?: Record<string, unknown> }[],
       { id: string; name: string }[],
       { name: string; slug: string }[],
+      { companyId: string; systemId: string }[],
       { status?: string }[],
     ]
   >(
@@ -962,6 +962,7 @@ export async function getAsyncPaymentContext(
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
      LET $systemId = (SELECT VALUE systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      SELECT name, slug FROM system WHERE id = $systemId LIMIT 1;
+     SELECT $companyId AS companyId, $systemId AS systemId;
      SELECT status FROM credit_purchase WHERE subscriptionId = $subId AND status = "pending" LIMIT 1;`,
     { id: rid(paymentId) },
   );
@@ -973,7 +974,9 @@ export async function getAsyncPaymentContext(
     voucher: result[3]?.[0],
     owner: result[4]?.[0],
     systemInfo: result[5]?.[0],
-    creditPurchase: result[6]?.[0],
+    creditPurchase: result[7]?.[0],
+    companyId: result[6]?.[0]?.companyId,
+    systemId: result[6]?.[0]?.systemId,
   };
 }
 

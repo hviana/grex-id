@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface CreditCardSubformProps {
   initialData?: Record<string, unknown>;
@@ -10,7 +10,7 @@ interface CreditCardSubformProps {
 
 const CreditCardSubform = forwardRef<SubformRef, CreditCardSubformProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     const [number, setNumber] = useState("");
     const [cvv, setCvv] = useState("");

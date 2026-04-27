@@ -1,6 +1,6 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 export type TranslatedBadgeKind =
   | "role"
@@ -67,7 +67,7 @@ export default function TranslatedBadge({
   onRemove,
   compact = false,
 }: TranslatedBadgeProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const segment = KIND_SEGMENT[kind];
   const palette = KIND_CLASSES[kind];
 

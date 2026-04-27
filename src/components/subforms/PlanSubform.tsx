@@ -6,10 +6,10 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PlanSubformProps {
   initialData?: Record<string, unknown>;
@@ -20,7 +20,7 @@ const inputCls =
 
 const PlanSubform = forwardRef<SubformRef, PlanSubformProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     const [name, setName] = useState(
       (initialData?.name as string) ?? "",

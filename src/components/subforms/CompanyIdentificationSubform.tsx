@@ -2,7 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface CompanyIdentificationSubformProps {
   initialData?: Record<string, unknown>;
@@ -13,7 +13,7 @@ const CompanyIdentificationSubform = forwardRef<
   CompanyIdentificationSubformProps
 >(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [document, setDocument] = useState(
       (initialData?.document as string) ?? "",

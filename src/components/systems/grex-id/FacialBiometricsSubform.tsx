@@ -8,10 +8,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import { resizeImage } from "@/src/lib/resize-image";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 /* ------------------------------------------------------------------ */
 /*  Human.js types                                                     */
@@ -162,7 +162,7 @@ const FacialBiometricsSubform = forwardRef<
   FacialBiometricsSubformProps
 >(
   ({ initialData, companyId, systemSlug, systemToken }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     // DOM refs
     const videoRef = useRef<HTMLVideoElement>(null);

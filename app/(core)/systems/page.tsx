@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
@@ -11,6 +9,7 @@ import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemItem {
   id: string;
@@ -22,8 +21,8 @@ interface SystemItem {
 }
 
 export default function SystemsPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<SystemItem | null>(null);
   const [formName, setFormName] = useState("");

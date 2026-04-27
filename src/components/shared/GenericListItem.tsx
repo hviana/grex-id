@@ -8,7 +8,7 @@ import {
   formatDateTime,
   formatPhone,
 } from "@/src/lib/formatters";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface GenericListItemProps {
   data: Record<string, unknown>;
@@ -19,7 +19,7 @@ interface GenericListItemProps {
 export default function GenericListItem(
   { data, fieldMap, controls }: GenericListItemProps,
 ) {
-  const { locale } = useLocale();
+  const { locale } = useTenantContext();
 
   const formatValue = (value: unknown, type: FieldType): string => {
     if (value == null) return "—";

@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { clampPageLimit } from "@/src/lib/validators";
 import {
   genericCreate,
@@ -20,17 +19,18 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
   const tenantId = url.searchParams.get("tenantId") ?? undefined;
   const systemId = url.searchParams.get("systemId") ?? undefined;
-  const isSuperuser = ctx.tenant.roles.includes("superuser");
+
+  const roles = ctx.tenantContext.roles;
+  const isSuperuser = roles.includes("superuser");
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
 
-  // Non-superusers only see roles from their own system.
-  if (!isSuperuser && ctx.tenant.systemId) {
+  if (!isSuperuser && ctx.tenantContext.tenant.systemId) {
     extraConditions.push(
       "tenantIds CONTAINS (SELECT id FROM tenant WHERE actorId = NONE AND companyId = NONE AND systemId = $autoSystemId LIMIT 1)",
     );
-    extraBindings.autoSystemId = rid(ctx.tenant.systemId);
+    extraBindings.autoSystemId = rid(ctx.tenantContext.tenant.systemId);
   }
 
   if (systemId) {
@@ -83,8 +83,6 @@ async function postHandler(req: Request, _ctx: RequestContext) {
           id: tenantId,
           systemId: "",
           companyId: "",
-          systemSlug: "",
-          roles: [],
         },
       },
       {
@@ -265,25 +263,33 @@ async function deleteHandler(req: Request, _ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    requireAuthenticated: true,
+  }),
   getHandler,
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   postHandler,
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   putHandler,
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true, roles: ["superuser"] }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    roles: ["superuser"],
+  }),
   deleteHandler,
 );

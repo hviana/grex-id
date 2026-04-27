@@ -1,8 +1,7 @@
 import { publish } from "../event-queue/publisher.ts";
 import { dispatchCommunication } from "../event-queue/handlers/send-communication.ts";
-import type { Tenant } from "@/src/contracts/tenant.ts";
-import type { TenantActorType } from "@/src/contracts/tenant.ts";
-import { resolveMaxOperationCount } from "./guards.ts";
+import Core from "./Core.ts";
+import type { Tenant } from "@/src/contracts/tenant";
 import { assertServerOnly } from "./server-only.ts";
 import { rid } from "../db/connection.ts";
 import {
@@ -16,7 +15,7 @@ import {
   upsertCreditExpense,
 } from "../db/queries/credits.ts";
 
-assertServerOnly("credit-tracker.ts");
+assertServerOnly("resource-tracker.ts");
 
 function getCurrentDay(): string {
   const now = new Date();
@@ -24,6 +23,13 @@ function getCurrentDay(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getCurrentPeriod(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
 }
 
 export interface CreditDeductionResult {
@@ -35,17 +41,7 @@ export interface CreditDeductionResult {
 
 /**
  * Attempts to consume credits for an operation (§7.3).
- *
- * Deduction priority:
- * 1. Plan credits (subscription.remainingPlanCredits) — temporary, per-period
- * 2. Purchased credits (usage_record with resourceKey="credits") — persistent
- *
- * Operation-count cap (§7.3 step 2, per-resourceKey):
- * If remainingOperationCount[resourceKey] is 0 and the cap is active,
- * the operation is rejected regardless of available credits.
- * Actor-level cap (step 3) enforced for api_token actors.
- *
- * All DB lookups batched into single queries per logical step (§7.3).
+ * Uses Core.getInstance().ensureTenantLimits() for limit resolution.
  */
 export async function consumeCredits(params: {
   resourceKey: string;
@@ -53,12 +49,10 @@ export async function consumeCredits(params: {
   tenantId: string;
   tenant: Tenant;
   actorId?: string;
-  actorType?: TenantActorType;
+  actorType?: "user" | "api_token";
 }): Promise<CreditDeductionResult> {
   const day = getCurrentDay();
 
-  // Single batched query: fetch subscription + credit balance + conditionally set
-  // auto-recharge re-entrancy guard (§7.3)
   const result = await fetchSubscriptionAndCreditBalance({
     tenantId: params.tenantId,
   });
@@ -72,17 +66,16 @@ export async function consumeCredits(params: {
   const purchasedCredits = result[1]?.[0]?.balance ?? 0;
   const totalAvailable = planCredits + purchasedCredits;
 
-  // Per-resourceKey operation-count cap check (§7.3 step 2)
+  // Per-resourceKey operation-count cap check
   const operationCounts: Record<string, number> =
     (sub.remainingOperationCount as Record<string, number>) ?? {};
   const remainingForThisKey = operationCounts[params.resourceKey] ?? 0;
 
-  const opCap = await resolveMaxOperationCount({
-    tenant: params.tenant,
-    resourceKey: params.resourceKey,
-  });
+  const core = Core.getInstance();
+  const limits = await core.ensureTenantLimits(params.tenant.systemId!, params.tenant.companyId!);
+  const opCap = limits.maxOperationCountByResourceKey[params.resourceKey] ?? 0;
 
-  if (opCap.max > 0 && remainingForThisKey === 0) {
+  if (opCap > 0 && remainingForThisKey === 0) {
     const rawAlertMap = sub.operationCountAlertSent;
     const alertMap: Record<string, boolean> =
       (typeof rawAlertMap === "object" && rawAlertMap !== null)
@@ -92,20 +85,15 @@ export async function consumeCredits(params: {
       await sendOperationCountAlert(
         sub,
         { resourceKey: params.resourceKey, tenantId: params.tenantId },
-        opCap.max,
       );
     }
     return { success: false, source: "operationLimit" };
   }
 
-  // Actor-level cap check (§7.3 step 3) for api_token actors
-  if (
-    params.actorId &&
-    params.actorType === "api_token"
-  ) {
+  // Actor-level cap check for api_token actors
+  if (params.actorId && params.actorType === "api_token") {
     const actorCapResult = await checkActorOperationCap({
       actorId: params.actorId,
-      actorType: params.actorType ?? "user",
       resourceKey: params.resourceKey,
       tenantId: params.tenantId,
     });
@@ -117,7 +105,6 @@ export async function consumeCredits(params: {
 
   // Insufficient credits
   if (totalAvailable < params.amount) {
-    // Auto-recharge guard was set atomically in the batched query above
     if (sub.autoRechargeGuardSet) {
       await publish("auto_recharge", {
         subscriptionId: String(sub.id),
@@ -128,7 +115,6 @@ export async function consumeCredits(params: {
       return { success: false, source: "insufficient" };
     }
 
-    // No auto-recharge or already in progress — send alert (once per cycle)
     if (!sub.creditAlertSent) {
       const alertResult = await setCreditAlertAndFetchOwner({
         subId: String(sub.id),
@@ -165,7 +151,7 @@ export async function consumeCredits(params: {
   }
 
   // Decrement per-resourceKey operation count on successful deduction
-  const opCountMerge = opCap.max > 0
+  const opCountMerge = opCap > 0
     ? { [params.resourceKey]: Math.max(0, remainingForThisKey - 1) }
     : null;
 
@@ -189,7 +175,6 @@ export async function consumeCredits(params: {
     };
   }
 
-  // Split: use all plan credits + remainder from purchased
   const fromPurchased = params.amount - planCredits;
 
   await deductFromPurchasedCredits({
@@ -214,17 +199,12 @@ export async function consumeCredits(params: {
   };
 }
 
-/**
- * Checks the actor-level per-resourceKey operation count cap.
- * Returns "limited" if the actor has hit their cap, "ok" otherwise.
- */
 async function checkActorOperationCap(params: {
   actorId: string;
-  actorType: string;
   resourceKey: string;
   tenantId: string;
 }): Promise<"ok" | "limited"> {
-  const { actorId, actorType, resourceKey, tenantId } = params;
+  const { actorId, resourceKey, tenantId } = params;
 
   const result = await fetchActorOperationCap({
     actorRid: rid(actorId),
@@ -246,15 +226,9 @@ async function checkActorOperationCap(params: {
   return currentCount >= actorCap ? "limited" : "ok";
 }
 
-/**
- * Sends the one-shot per-resourceKey operation-count exhaustion alert email.
- */
 async function sendOperationCountAlert(
-  sub: {
-    id: string;
-  },
+  sub: { id: string },
   params: { resourceKey: string; tenantId: string },
-  _maxCount: number,
 ): Promise<void> {
   const alertResult = await setOperationCountAlertAndFetchOwner({
     subId: String(sub.id),
@@ -288,9 +262,7 @@ async function sendOperationCountAlert(
   }
 }
 
-/**
- * Records a credit expense for reporting purposes only (no deduction).
- */
+/** Records a credit expense for reporting purposes only (no deduction). */
 export async function trackCreditExpense(params: {
   resourceKey: string;
   amount: number;
@@ -308,9 +280,23 @@ export async function trackCreditExpense(params: {
   });
 }
 
-/**
- * Queries aggregated credit expenses for a tenant within a date range.
- */
+/** Tracks usage for the YYYY-MM period. */
+export async function trackUsage(params: {
+  tenantId: string;
+  resourceKey: string;
+  value: number;
+}): Promise<void> {
+  const { upsertUsageRecord } = await import("../db/queries/usage.ts");
+  const period = getCurrentPeriod();
+  await upsertUsageRecord({
+    tenantId: params.tenantId,
+    resourceKey: params.resourceKey,
+    value: params.value,
+    period,
+  });
+}
+
+/** Queries aggregated credit expenses for a tenant within a date range. */
 export async function getCreditExpenses(params: {
   tenantId: string;
   startDate: string;

@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { getFS } from "@/server/utils/fs";
 import {
   type File as SFSFile,
@@ -30,11 +30,11 @@ async function resolveTokenParam(
   tokenStr: string,
 ): Promise<{ tenant: Tenant } | null> {
   try {
-    const tenant = await verifyTenantToken(tokenStr);
+    const { tenant } = await verifyTenantToken(tokenStr);
     if (!tenant.actorId) return null;
 
-    await ensureActorValidityLoaded(tenant.id);
-    if (!isActorValid(tenant.id, tenant.actorId)) return null;
+    await ensureActorValidityLoaded(tenant.id!);
+    if (!isActorValid(tenant.id!, tenant.actorId)) return null;
 
     return { tenant };
   } catch {
@@ -43,7 +43,7 @@ async function resolveTokenParam(
 }
 
 export const GET = compose(
-  withAuth(),
+  withAuthAndLimit({ requireAuthenticated: true }),
   async (req: Request, ctx: RequestContext): Promise<Response> => {
     const url = new URL(req.url);
     const uri = url.searchParams.get("uri");
@@ -75,7 +75,7 @@ export const GET = compose(
     const fileCategory = path.slice(3, path.length - 2);
 
     const tokenParam = url.searchParams.get("token");
-    let effectiveTenant = ctx.tenant;
+    let effectiveTenant = ctx.tenantContext.tenant;
 
     if (tokenParam) {
       const resolved = await resolveTokenParam(tokenParam);
@@ -89,7 +89,9 @@ export const GET = compose(
       fileCompanyId,
       fileSystemSlug,
       fileUserId,
-      tenant: effectiveTenant,
+      actorId: effectiveTenant.actorId,
+      companyId: effectiveTenant.companyId,
+      systemId: effectiveTenant.systemId,
       operation: "download",
     });
     if (!accessCheck.allowed) {
@@ -113,7 +115,8 @@ export const GET = compose(
     const system = await core.getSystemBySlug(fileSystemSlug);
     if (system && fileCompanyId) {
       const limit = await resolveFileCacheLimit({
-        tenant: effectiveTenant,
+        systemId: effectiveTenant.systemId!,
+        companyId: effectiveTenant.companyId!,
       });
       if (limit.maxBytes > 0) {
         cacheTenantKey = `${fileCompanyId}:${fileSystemSlug}`;
@@ -145,8 +148,8 @@ export const GET = compose(
 
     const [dlLimits, bwLimits, defaultConcurrent, defaultBW] = await Promise
       .all([
-        resolveMaxConcurrentDownloads({ tenant: effectiveTenant }),
-        resolveMaxDownloadBandwidth({ tenant: effectiveTenant }),
+        resolveMaxConcurrentDownloads({ systemId: effectiveTenant.systemId!, companyId: effectiveTenant.companyId! }),
+        resolveMaxDownloadBandwidth({ systemId: effectiveTenant.systemId!, companyId: effectiveTenant.companyId! }),
         core.getSetting("transfer.default.maxConcurrentDownloads"),
         core.getSetting("transfer.default.maxDownloadBandwidthMB"),
       ]);

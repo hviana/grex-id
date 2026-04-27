@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import {
   applyPasswordHash,
@@ -91,23 +91,6 @@ function parseLeadUpdatePayload(
   };
 }
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
-
 async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
   const { token } = body;
@@ -157,8 +140,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const payload = request.payload as Record<string, unknown> | null;
 
   // ── Registration / entity-channel confirmation flows ──────
-  // Both register and entityChannelAdd actions simply flip the referenced
-  // entity_channel ids to verified.
   if (
     actionKey === "auth.action.register" ||
     actionKey === "auth.action.entityChannelAdd"
@@ -170,7 +151,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await verifyChannels(ids);
     }
   } else if (actionKey === "auth.action.leadRegister") {
-    // Verify all channels the lead submitted at registration.
     const ids = Array.isArray(payload?.channelIds)
       ? (payload!.channelIds as string[]).filter((id) => typeof id === "string")
       : [];
@@ -178,7 +158,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await verifyChannels(ids);
     }
   } else if (actionKey === "auth.action.passwordChange") {
-    // Apply the precomputed argon2 hash stored on the request payload (§8.7).
     const hash = typeof payload?.newPasswordHash === "string"
       ? payload!.newPasswordHash
       : "";
@@ -186,16 +165,10 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       await applyPasswordHash(request.ownerId, hash);
     }
   } else if (actionKey === "auth.action.twoFactorEnable") {
-    // Promote the user's pendingTwoFactorSecret (set by `setup-totp` and
-    // validated by `confirm-totp`) to twoFactorSecret. The secret never
-    // travels through the verification_request payload (§5.1 rule 5).
     await promoteTwoFactorSecret(request.ownerId);
   } else if (actionKey === "auth.action.twoFactorDisable") {
     await disableTwoFactor(request.ownerId);
   } else if (actionKey === "auth.action.loginFallback") {
-    // Issue a System API Token for the user, bypassing TOTP since the click
-    // on a time-bound single-use confirmation link already proved control of
-    // a verified channel (§8.8.3).
     const identifier = typeof payload?.identifier === "string"
       ? (payload!.identifier as string)
       : "";
@@ -224,19 +197,14 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         );
       }
 
-      const systemToken = await createTenantToken(
-        {
-          id: mem.tenantId,
-          systemId: mem.systemId,
-          companyId: mem.companyId,
-          systemSlug: mem.systemSlug,
-          roles: mem.roles,
-          actorType: "user",
-          actorId: String(user.id),
-          exchangeable: true,
-        },
-        stayLoggedIn,
-      );
+      const tenant = {
+        id: mem.tenantId,
+        systemId: mem.systemId,
+        companyId: mem.companyId,
+        actorId: String(user.id),
+      };
+
+      const systemToken = await createTenantToken(tenant, stayLoggedIn);
 
       await rememberActor(mem.tenantId, String(user.id));
 
@@ -246,6 +214,11 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
           message: "auth.verify.success",
           actionKey,
           systemToken,
+          tenant,
+          roles: mem.roles,
+          actorType: "user" as const,
+          exchangeable: true,
+          frontendDomains: [] as string[],
           user: {
             id: user.id,
             profileId: user.profileId,
@@ -255,9 +228,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         },
       });
     }
-    // If we fall through, markVerificationUsed still runs at the end, but the
-    // user object will be missing — the frontend falls back to showing a
-    // failure state.
   } else if (actionKey === "auth.action.leadUpdate") {
     const leadPayload = parseLeadUpdatePayload(payload);
     const leadId = request.ownerId;
@@ -268,8 +238,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       tags: leadPayload.tags,
     });
 
-    // Apply any verified channel updates included in the payload. Channels
-    // live on `lead.channels` (composable rows — no back-pointer).
     if (leadPayload.channels && leadPayload.channels.length > 0) {
       await syncLeadChannels(leadId, leadPayload.channels);
     }
@@ -297,8 +265,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
       });
     }
   }
-  // auth.action.passwordReset is handled by /api/auth/reset-password,
-  // not here.
 
   await markVerificationUsed(request.id);
 
@@ -308,4 +274,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   });
 }
 
-export const POST = compose(withAuthRateLimit(), handler);
+export const POST = compose(
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  handler,
+);

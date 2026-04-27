@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
@@ -13,6 +11,7 @@ import PlanCard from "@/src/components/shared/PlanCard";
 import PlanSubform from "@/src/components/subforms/PlanSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PlanItem {
   id: string;
@@ -35,8 +34,8 @@ interface SystemOption {
 }
 
 export default function PlansPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [systems, setSystems] = useState<SystemOption[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<PlanItem | null>(null);

@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import Modal from "./Modal.tsx";
 import Spinner from "./Spinner.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface DeleteButtonProps {
   onConfirm: () => Promise<void>;
 }
 
 export default function DeleteButton({ onConfirm }: DeleteButtonProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 

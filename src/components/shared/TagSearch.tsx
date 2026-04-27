@@ -3,8 +3,7 @@
 import { useCallback, useRef } from "react";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface TagItem {
   id: string;
@@ -25,8 +24,8 @@ export default function TagSearch({
   label,
   debounceMs = 300,
 }: TagSearchProps) {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const tagMapRef = useRef<Map<string, TagItem>>(new Map());
 
   const fetchTags = useCallback(

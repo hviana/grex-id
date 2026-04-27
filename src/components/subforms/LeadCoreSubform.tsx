@@ -7,14 +7,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import EntityChannelsSubform from "./EntityChannelsSubform.tsx";
 import ProfileSubform from "./ProfileSubform.tsx";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface LeadCoreSubformProps {
   initialData?: Record<string, unknown>;
@@ -26,8 +25,8 @@ interface LeadCoreSubformProps {
 
 const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
   ({ initialData, hideTags, companyId, systemId, systemSlug }, ref) => {
-    const { t } = useLocale();
-    const { systemToken } = useAuth();
+    const { t } = useTenantContext();
+    const { systemToken } = useTenantContext();
     const channelsRef = useRef<SubformRef>(null);
     const profileRef = useRef<SubformRef>(null);
 

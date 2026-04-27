@@ -1,9 +1,7 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import BotProtection from "@/src/components/shared/BotProtection";
@@ -12,13 +10,14 @@ import SystemBranding from "@/src/components/shared/SystemBranding";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import Link from "next/link";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const systemSlug = searchParams.get("systemSlug");
-  const { t, locale } = useLocale();
-  const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
+  const { t, locale, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
+  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
 
   const channelsRef = useRef<SubformRef>(null);
 

@@ -1,6 +1,6 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 interface CreateButtonProps {
   onClick: () => void;
@@ -8,7 +8,7 @@ interface CreateButtonProps {
 }
 
 export default function CreateButton({ onClick, label }: CreateButtonProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   return (
     <button

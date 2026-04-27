@@ -10,11 +10,7 @@ registerCache<string>("core", "anonymous-jwt", async () => {
     id: systemTenant.id,
     systemId: systemTenant.systemId,
     companyId: systemTenant.companyId,
-    systemSlug: "core",
-    roles: ["anonymous"],
-    actorType: "api_token",
     actorId: "api_token:anonymous",
-    exchangeable: false,
   };
 
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);

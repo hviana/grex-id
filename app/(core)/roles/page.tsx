@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
@@ -13,6 +11,7 @@ import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface RoleItem {
   id: string;
@@ -30,8 +29,8 @@ interface SystemOption {
 }
 
 export default function RolesPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [systems, setSystems] = useState<SystemOption[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<RoleItem | null>(null);

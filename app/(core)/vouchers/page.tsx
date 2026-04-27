@@ -2,8 +2,6 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import GenericList from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
@@ -12,6 +10,7 @@ import VoucherCard from "@/src/components/core/VoucherCard";
 import VoucherSubform from "@/src/components/subforms/VoucherSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { ResourceLimitsData } from "@/src/components/shared/ResourceLimitsView";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherItem {
   id: string;
@@ -25,8 +24,8 @@ interface VoucherItem {
 }
 
 export default function VouchersPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [reloadKey, setReloadKey] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<VoucherItem | null>(null);

@@ -1,10 +1,10 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import { resizeImage } from "@/src/lib/resize-image";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemFormProps {
   initialData?: Record<string, unknown>;
@@ -12,7 +12,7 @@ interface SystemFormProps {
 
 const SystemForm = forwardRef<SubformRef, SystemFormProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [slug, setSlug] = useState((initialData?.slug as string) ?? "");
     const [logoUri, setLogoUri] = useState(

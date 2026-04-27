@@ -1,7 +1,7 @@
 "use client";
 
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "./Spinner.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface EditButtonProps {
   onClick: () => void;
@@ -9,7 +9,7 @@ interface EditButtonProps {
 }
 
 export default function EditButton({ onClick, loading }: EditButtonProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   return (
     <button
       onClick={onClick}

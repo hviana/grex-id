@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
 import { getCookie, setCookie } from "@/src/lib/cookies";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const CONSENT_COOKIE = "core_data_tracking_consent";
 const SIX_MONTHS_DAYS = 180;
@@ -14,7 +14,7 @@ const SIX_MONTHS_DAYS = 180;
  * persists for 6 months in the `core_data_tracking_consent` cookie.
  */
 export default function CookieConsent() {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const searchParams = useSearchParams();
 
   // Server and first client render must match → start hidden. After mount,

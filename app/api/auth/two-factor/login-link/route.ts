@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import {
   findUserByVerifiedChannel,
@@ -138,6 +138,10 @@ async function handler(
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 5 }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+
+  }),
   async (req, ctx) => handler(req, ctx),
 );

@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { clampPageLimit } from "@/src/lib/validators";
 import {
   createTenantAssociations,
@@ -51,7 +51,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const action = url.searchParams.get("action");
 
   if (action === "context") {
-    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+    if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
       return Response.json(
         {
           success: false,
@@ -64,8 +64,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
       );
     }
     const roles = await getUserContext(
-      ctx.tenant.actorId!,
-      ctx.tenant.id,
+      ctx.tenantContext.tenant.actorId!,
+      ctx.tenantContext.tenant.id!,
     );
     return Response.json({ success: true, data: { roles } });
   }
@@ -74,9 +74,9 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor");
   const limit = clampPageLimit(Number(url.searchParams.get("limit") ?? "20"));
 
-  if (ctx.tenant.companyId && ctx.tenant.systemId) {
+  if (ctx.tenantContext.tenant.companyId && ctx.tenantContext.tenant.systemId) {
     const result = await getUsersForTenant({
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       search: search ?? undefined,
       cursor: cursor ?? undefined,
       limit,
@@ -102,8 +102,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
   const { password, name, roles } = body;
   const channels = await parseChannels(body.channels);
-  const companyId = ctx.tenant.companyId;
-  const systemId = ctx.tenant.systemId;
+  const companyId = ctx.tenantContext.tenant.companyId!;
+  const systemId = ctx.tenantContext.tenant.systemId!;
+  const systemSlug = ctx.tenantContext.systemSlug ?? "";
 
   const stdName = await standardizeField("name", name ?? "", "user");
 
@@ -152,9 +153,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Invite flow: associate existing user with the tenant + notify.
     const inviteResult = await inviteExistingUser({
       userId: existingUserId,
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       roles: roles ?? [],
-      inviterId: ctx.tenant.actorId!,
+      inviterId: ctx.tenantContext.tenant.actorId!,
       companyId,
       systemId,
     });
@@ -162,11 +163,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
     // Roles changed for the invited user — evict from this tenant's
     // partition so their next request re-authenticates with fresh
     // roles (§8.11).
-    await forgetActor(ctx.tenant.id, String(existingUserId));
+    await forgetActor(ctx.tenantContext.tenant.id!, String(existingUserId));
 
     const core = Core.getInstance();
     const baseUrl = (await core.getSetting("app.baseUrl", {
-      systemId: ctx.tenant.systemId,
+      systemId: ctx.tenantContext.tenant.systemId,
     })) ??
       "http://localhost:3000";
 
@@ -181,8 +182,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
         systemName: inviteResult.systemName,
         resources: (roles ?? []).map((r: string) => `roles.${r}.name`),
         ctaKey: "templates.notification.cta.goToDashboard",
-        ctaUrl: `${baseUrl}/login?systemSlug=${ctx.tenant.systemSlug}`,
-        systemSlug: ctx.tenant.systemSlug,
+        ctaUrl: `${baseUrl}/login?systemSlug=${systemSlug}`,
+        systemSlug: systemSlug,
         inviterName: inviteResult.inviterName,
       },
     });
@@ -213,8 +214,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     actionKey: "auth.action.register",
     payload: { channelIds },
     tenant: {
-      tenantIds: [ctx.tenant.id],
-      systemSlug: ctx.tenant.systemSlug,
+      tenantIds: [ctx.tenantContext.tenant.id!],
+      systemSlug: systemSlug,
     },
   });
 
@@ -223,11 +224,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const expiryMinutes = Number(
       (await core.getSetting(
         "auth.communication.expiry.minutes",
-        { systemId: ctx.tenant.systemId },
+        { systemId: ctx.tenantContext.tenant.systemId },
       )) || 15,
     );
     const baseUrl = (await core.getSetting("app.baseUrl", {
-      systemId: ctx.tenant.systemId,
+      systemId: ctx.tenantContext.tenant.systemId,
     })) ??
       "http://localhost:3000";
     const confirmationLink = `${baseUrl}/verify?token=${guardResult.token}`;
@@ -243,7 +244,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
         occurredAt: new Date().toISOString(),
         actorName: stdName,
         expiryMinutes: String(expiryMinutes),
-        systemSlug: ctx.tenant.systemSlug,
+        systemSlug: systemSlug,
       },
     });
   }
@@ -271,7 +272,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await updateUserLocale(ctx.tenant.actorId!, locale);
+    await updateUserLocale(ctx.tenantContext.tenant.actorId!, locale);
     return Response.json({ success: true });
   }
 
@@ -289,7 +290,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+    if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
       return Response.json(
         {
           success: false,
@@ -306,14 +307,15 @@ async function putHandler(req: Request, ctx: RequestContext) {
     // touching tenant rows.
     const inviteResult = await getUserInviteMeta({
       userId: String(userId),
-      inviterId: ctx.tenant.actorId!,
-      companyId: ctx.tenant.companyId,
-      systemId: ctx.tenant.systemId,
+      inviterId: ctx.tenantContext.tenant.actorId!,
+      companyId: ctx.tenantContext.tenant.companyId,
+      systemId: ctx.tenantContext.tenant.systemId,
     });
 
     const core = Core.getInstance();
+    const systemSlug = ctx.tenantContext.systemSlug ?? "";
     const baseUrl = (await core.getSetting("app.baseUrl", {
-      systemId: ctx.tenant.systemId,
+      systemId: ctx.tenantContext.tenant.systemId,
     })) ?? "http://localhost:3000";
 
     await dispatchCommunication({
@@ -326,8 +328,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
         companyName: inviteResult.companyName,
         systemName: inviteResult.systemName,
         ctaKey: "templates.notification.cta.goToDashboard",
-        ctaUrl: `${baseUrl}/login?systemSlug=${ctx.tenant.systemSlug}`,
-        systemSlug: ctx.tenant.systemSlug,
+        ctaUrl: `${baseUrl}/login?systemSlug=${systemSlug}`,
+        systemSlug,
         inviterName: inviteResult.inviterName,
       },
     });
@@ -338,7 +340,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   if (action === "profile") {
     const body = await req.json();
     const { name, avatarUri, dateOfBirth } = body;
-    const userId = ctx.tenant.actorId!;
+    const userId = ctx.tenantContext.tenant.actorId!;
 
     let stdName: string | undefined;
     if (name !== undefined) {
@@ -387,7 +389,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
     // The admin updates roles in the context of their own tenant
     const errorKey = await updateUserRolesWithAdminCheck({
       userId: String(id),
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       roles,
     });
 
@@ -406,7 +408,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
     // Roles changed — evict from this tenant's partition so the user's
     // next request re-authenticates with fresh roles (§8.11).
-    await forgetActor(ctx.tenant.id, String(id));
+    await forgetActor(ctx.tenantContext.tenant.id!, String(id));
   }
 
   return Response.json({ success: true });
@@ -428,7 +430,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   const errorKey = await deleteUserWithAdminCheck({
     userId: String(userId),
-    tenantId: ctx.tenant.id,
+    tenantId: ctx.tenantContext.tenant.id!,
   });
 
   if (errorKey) {
@@ -446,7 +448,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 
   // Membership removed — evict the user from this tenant's partition so
   // the user's next request fails at withAuth (§8.11).
-  await forgetActor(ctx.tenant.id, String(userId));
+  await forgetActor(ctx.tenantContext.tenant.id!, String(userId));
 
   // If the user no longer belongs to any tenant, hard-delete the user
   // and all their compositional data (profile, channels, recovery channels).
@@ -456,25 +458,37 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

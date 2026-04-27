@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import { withAuth } from "@/server/middleware/withAuth";
-import type { RequestContext } from "@/src/contracts/auth";
+
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
 import {
@@ -20,7 +20,7 @@ import {
 } from "@/server/db/queries/billing";
 
 function tenantGuard(ctx: RequestContext): Response | null {
-  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
     return Response.json(
       {
         success: false,
@@ -62,7 +62,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   }
 
   const data = await getBillingData({
-    tenantId: ctx.tenant.id,
+    tenantId: ctx.tenantContext.tenant.id!,
     startDate: startDate ?? undefined,
     endDate: endDate ?? undefined,
     paymentCursor: paymentCursor ?? undefined,
@@ -84,10 +84,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
   // accepts them from body for the onboarding flow (user hasn't exchanged yet)
   const companyId = action === "subscribe" && body.companyId
     ? body.companyId
-    : ctx.tenant.companyId;
+    : ctx.tenantContext.tenant.companyId;
   const systemId = action === "subscribe" && body.systemId
     ? body.systemId
-    : ctx.tenant.systemId;
+    : ctx.tenantContext.tenant.systemId;
 
   if (action === "subscribe") {
     const { planId, paymentMethodId } = body;
@@ -147,14 +147,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
       )
       : null;
 
-    const userId = ctx.tenant.actorId ?? null;
+    const userId = ctx.tenantContext.tenant.actorId ?? null;
     const now = new Date();
     const periodEnd = new Date(
       now.getTime() + (plan.recurrenceDays ?? 30) * 86400000,
     );
 
     const result = await subscribe({
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       companyId,
       systemId,
       planId,
@@ -166,7 +166,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       end: periodEnd,
     });
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json({ success: true, data: result }, { status: 201 });
   }
@@ -175,9 +175,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    await cancelSubscription(ctx.tenant.id);
+    await cancelSubscription(ctx.tenantContext.tenant.id!);
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json({ success: true });
   }
@@ -207,11 +207,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const pm = await addPaymentMethod({
-      tenantId: ctx.tenant.id,
-      cardToken,
-      cardMask,
-      holderName,
-      holderDocument,
+      tenantId: ctx.tenantContext.tenant.id!,
+      cardData: { cardToken, cardMask, holderName, holderDocument },
       billingAddress,
     });
 
@@ -237,7 +234,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       );
     }
 
-    await setDefaultPaymentMethod(ctx.tenant.id, paymentMethodId);
+    await setDefaultPaymentMethod(ctx.tenantContext.tenant.id!, paymentMethodId);
 
     return Response.json({ success: true });
   }
@@ -283,7 +280,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     if (guard) return guard;
 
     const { purchase, activeSubscriptionId } = await purchaseCredits({
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       amount: Number(amount),
       paymentMethodId,
     });
@@ -291,12 +288,12 @@ async function postHandler(req: Request, ctx: RequestContext) {
     await publish("process_payment", {
       creditPurchaseId: String(purchase?.id ?? ""),
       subscriptionId: activeSubscriptionId,
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       amount: String(amount),
       purpose: "credits",
     });
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json(
       { success: true, data: purchase },
@@ -326,7 +323,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const { voucher, subscription: activeSub, oldVoucher } =
       await lookupVoucherAndSubscription({
         voucherCode,
-        tenantId: ctx.tenant.id,
+        tenantId: ctx.tenantContext.tenant.id!,
       });
 
     if (!voucher) {
@@ -430,14 +427,14 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     await applyVoucherToSubscription({
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       voucherId: voucher.id as string,
       creditDelta,
       opCountNewValues,
       alertResets,
     });
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json({
       success: true,
@@ -456,13 +453,13 @@ async function postHandler(req: Request, ctx: RequestContext) {
       const minAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.minAmount",
-          { systemId: ctx.tenant.systemId, companyId: ctx.tenant.companyId },
+          { systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! },
         )) ?? "500",
       );
       const maxAmount = Number(
         (await core.getSetting(
           "billing.autoRecharge.maxAmount",
-          { systemId: ctx.tenant.systemId, companyId: ctx.tenant.companyId },
+          { systemId: ctx.tenantContext.tenant.systemId!, companyId: ctx.tenantContext.tenant.companyId! },
         )) ?? "50000",
       );
 
@@ -493,7 +490,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       }
 
       const { hasDefaultPaymentMethod } = await enableAutoRecharge({
-        tenantId: ctx.tenant.id,
+        tenantId: ctx.tenantContext.tenant.id!,
         amount: Number(amount),
       });
 
@@ -510,10 +507,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
         );
       }
     } else {
-      await disableAutoRecharge(ctx.tenant.id);
+      await disableAutoRecharge(ctx.tenantContext.tenant.id!);
     }
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json({ success: true });
   }
@@ -522,7 +519,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     const guard = tenantGuard(ctx);
     if (guard) return guard;
 
-    const result = await retryPayment(ctx.tenant.id);
+    const result = await retryPayment(ctx.tenantContext.tenant.id!);
 
     if (result.status === "not_found") {
       return Response.json(
@@ -546,11 +543,11 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     await publish("process_payment", {
       subscriptionId: result.subscriptionId!,
-      tenantId: ctx.tenant.id,
+      tenantId: ctx.tenantContext.tenant.id!,
       purpose: "retry",
     });
 
-    await Core.getInstance().reloadSubscription(ctx.tenant.id);
+    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
 
     return Response.json({ success: true });
   }
@@ -565,13 +562,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );

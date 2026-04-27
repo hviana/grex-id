@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
@@ -12,6 +9,7 @@ import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ConnectedApp {
   id: string;
@@ -23,9 +21,9 @@ interface ConnectedApp {
 }
 
 export default function ConnectedAppsPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId, systemSlug } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId, systemSlug } = useTenantContext();
 
   const [revokeApp, setRevokeApp] = useState<ConnectedApp | null>(null);
   const [actionLoading, setActionLoading] = useState(false);

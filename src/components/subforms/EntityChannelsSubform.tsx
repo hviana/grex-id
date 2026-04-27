@@ -7,11 +7,11 @@ import {
   useImperativeHandle,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const DEFAULT_MAX = 10;
 
@@ -102,7 +102,7 @@ const EntityChannelsSubform = forwardRef<
     },
     ref,
   ) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     const initialType = channelTypes[0] ?? "email";
     const [channels, setChannels] = useState<EntityChannel[]>(() => {

@@ -4,5 +4,4 @@ export interface ConnectedService {
   name: string;
   data?: Record<string, unknown>;
   createdAt: string;
-  userName?: string;
 }

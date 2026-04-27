@@ -1,16 +1,14 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import BotProtection from "@/src/components/shared/BotProtection";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
 import Link from "next/link";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function LoginContent() {
   const router = useRouter();
@@ -21,9 +19,8 @@ function LoginContent() {
   const oauthRoles = searchParams.get("roles") ?? "";
   const oauthSystemSlug = searchParams.get("systemSlug") ?? systemSlug ?? "";
   const oauthRedirectOrigin = searchParams.get("redirect_origin") ?? "";
-  const { login } = useAuth();
-  const { t } = useLocale();
-  const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
+  const { login, t, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
+  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -103,7 +100,7 @@ function LoginContent() {
             ),
           ),
         );
-        if (payload.tenant?.roles?.includes("superuser")) {
+        if ((payload.roles as string[])?.includes("superuser")) {
           router.push("/systems");
         } else {
           router.push("/entry");

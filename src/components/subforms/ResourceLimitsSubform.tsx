@@ -1,11 +1,11 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface EntityLimitEntry {
   key: string;
@@ -34,7 +34,7 @@ function kvToMap(kv: EntityLimitEntry[]): Record<string, number> | null {
 
 export type ResourceLimitField =
   | "benefits"
-  | "roles"
+  | "roleIds"
   | "entityLimits"
   | "apiRateLimit"
   | "storageLimitBytes"
@@ -50,7 +50,7 @@ export type ResourceLimitField =
 
 const FIELD_LABELS: Record<ResourceLimitField, string> = {
   benefits: "⭐",
-  roles: "🔑",
+  roleIds: "🔑",
   entityLimits: "📦",
   apiRateLimit: "📊",
   storageLimitBytes: "💾",
@@ -67,7 +67,7 @@ const FIELD_LABELS: Record<ResourceLimitField, string> = {
 
 const FIELD_ORDER: ResourceLimitField[] = [
   "benefits",
-  "roles",
+  "roleIds",
   "entityLimits",
   "apiRateLimit",
   "storageLimitBytes",
@@ -113,7 +113,7 @@ const ResourceLimitsSubform = forwardRef<
   SubformRef,
   ResourceLimitsSubformProps
 >(({ valueMode, initialData, systemSlug }, ref) => {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   const isAbsolute = valueMode === "absolute";
 
@@ -148,9 +148,9 @@ const ResourceLimitsSubform = forwardRef<
       : [],
   );
 
-  const [roles, setRoles] = useState<string[]>(
-    Array.isArray(initialData?.roles)
-      ? [...(initialData.roles as string[])]
+  const [roleIds, setRoleIds] = useState<string[]>(
+    Array.isArray(initialData?.roleIds)
+      ? [...(initialData.roleIds as string[])]
       : [],
   );
 
@@ -231,7 +231,7 @@ const ResourceLimitsSubform = forwardRef<
       const result: Record<string, unknown> = {};
 
       if (show("benefits")) result.benefits = benefits;
-      if (show("roles")) result.roles = roles;
+      if (show("roleIds")) result.roleIds = roleIds;
       if (show("entityLimits")) result.entityLimits = kvToMap(entityLimits);
       if (show("apiRateLimit")) result.apiRateLimit = Number(apiRateLimit);
       if (show("storageLimitBytes")) {
@@ -309,12 +309,12 @@ const ResourceLimitsSubform = forwardRef<
         />
       )}
 
-      {show("roles") && (
+      {show("roleIds") && (
         <MultiBadgeField
-          name={t("core.resourceLimits.roles")}
+          name={t("core.resourceLimits.roleIds")}
           mode="custom"
-          value={roles}
-          onChange={(vals) => setRoles(vals as string[])}
+          value={roleIds}
+          onChange={(vals) => setRoleIds(vals as string[])}
           renderBadge={(item, remove) => (
             <TranslatedBadge
               kind="role"

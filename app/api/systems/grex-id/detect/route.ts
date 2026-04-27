@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { publish } from "@/server/event-queue/publisher";
 
 async function postHandler(req: Request, _ctx: RequestContext) {
@@ -65,7 +65,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true, roles: ["grexid.detect"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.detect"],
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );

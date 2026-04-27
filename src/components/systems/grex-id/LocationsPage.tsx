@@ -5,11 +5,9 @@ import GenericList from "@/src/components/shared/GenericList";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
 import NameDescSubform from "@/src/components/subforms/NameDescSubform";
 import AddressSubform from "@/src/components/subforms/AddressSubform";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const subforms: SubformConfig[] = [
   { component: NameDescSubform as SubformConfig["component"], key: "nameDesc" },
@@ -23,9 +21,9 @@ const subforms: SubformConfig[] = [
 ];
 
 export default function LocationsPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId } = useTenantContext();
 
   const fetchLocations = useCallback(
     async (

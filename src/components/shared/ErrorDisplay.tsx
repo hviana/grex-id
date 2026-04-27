@@ -1,6 +1,6 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 interface ErrorDisplayProps {
   message: string | null;
@@ -8,7 +8,7 @@ interface ErrorDisplayProps {
 }
 
 export default function ErrorDisplay({ message, errors }: ErrorDisplayProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
 
   if (!message && (!errors || errors.length === 0)) return null;
 

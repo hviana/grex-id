@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import SearchField from "@/src/components/shared/SearchField";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useDebounce } from "@/src/hooks/useDebounce";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SettingItem {
   id: string;
@@ -24,8 +23,8 @@ interface SettingsEditorProps {
 export default function SettingsEditor(
   { mode = "core" }: SettingsEditorProps,
 ) {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const isFront = mode === "front";
   const apiPath = isFront ? "/api/core/front-settings" : "/api/core/settings";
   const titleKey = isFront ? "core.frontSettings.title" : "core.settings.title";

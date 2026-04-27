@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import Spinner from "@/src/components/shared/Spinner";
 import DownloadData from "@/src/components/shared/DownloadData";
@@ -20,6 +17,7 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 ChartJS.register(
   ArcElement,
@@ -114,9 +112,9 @@ function ClassificationBadge(
 }
 
 export default function DetectionReportPage() {
-  const { t, locale } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { t, locale } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId } = useTenantContext();
   const [stats, setStats] = useState<DetectionStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<

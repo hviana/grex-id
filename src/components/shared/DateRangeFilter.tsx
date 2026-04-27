@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface DateRangeFilterProps {
   maxRangeDays: number;
@@ -11,7 +11,7 @@ interface DateRangeFilterProps {
 export default function DateRangeFilter(
   { maxRangeDays, onChange }: DateRangeFilterProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [error, setError] = useState<string | null>(null);

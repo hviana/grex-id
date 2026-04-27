@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface TwoFactorSubformProps {
   twoFactorEnabled: boolean;
@@ -20,8 +19,8 @@ export default function TwoFactorSubform({
   twoFactorEnabled,
   onRequested,
 }: TwoFactorSubformProps) {
-  const { systemToken } = useAuth();
-  const { t } = useLocale();
+  const { systemToken } = useTenantContext();
+  const { t } = useTenantContext();
 
   const [setupOpen, setSetupOpen] = useState(false);
   const [provisioningUri, setProvisioningUri] = useState<string | null>(null);

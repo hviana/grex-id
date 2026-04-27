@@ -4,5 +4,5 @@ export interface Role {
   tenantIds: string[]; // references system-only tenant rows
   isBuiltIn: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }

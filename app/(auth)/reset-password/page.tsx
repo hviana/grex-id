@@ -1,21 +1,20 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function ResetPasswordContent() {
-  const { t } = useLocale();
+  const { t, publicSystem: systemInfo, publicSystemLoading: brandingLoading, loadPublicSystem } = useTenantContext();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const systemSlug = searchParams.get("systemSlug");
-  const { systemInfo, loading: brandingLoading } = usePublicSystem(systemSlug);
+  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

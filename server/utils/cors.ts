@@ -1,29 +1,29 @@
-import type { Tenant } from "@/src/contracts/tenant.ts";
+import Core from "./Core.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("cors.ts");
 
 /**
- * Enforces CORS for frontend-use API tokens only. Reads `frontendUse` and
- * `frontendDomains` from the tenant — no DB touch.
+ * Enforces CORS for non-user actors.
  *
  * Rules:
- * - user-session tenant: no CORS enforcement (user sessions always ride on
- *   the same-origin frontend).
- * - Tokens with `frontendUse = false`: reject if browser Origin is present
- *   (server-to-server only).
- * - Tokens with `frontendUse = true`: require Origin and validate against
- *   `frontendDomains`.
+ * - user sessions ride on the same-origin frontend → no enforcement.
+ * - Tokens without frontendDomains → reject browser Origin (server-to-server only).
+ * - Tokens with frontendDomains → require Origin and validate against the domain list.
+ *
+ * All auth data is resolved via Core cache, not from JWT claims.
  */
 export function enforceCors(
   req: Request,
-  tenant: Tenant,
+  actorType: "user" | "api_token",
+  frontendDomains: string[],
 ): Response | null {
-  if (tenant.actorType === "user") return null;
+  if (actorType === "user") return null;
 
   const origin = req.headers.get("Origin");
+  const frontendUse = frontendDomains.length > 0;
 
-  if (!tenant.frontendUse) {
+  if (!frontendUse) {
     if (origin) {
       return Response.json(
         {
@@ -46,8 +46,7 @@ export function enforceCors(
     );
   }
 
-  const allowed = tenant.frontendDomains ?? [];
-  if (allowed.length === 0 || !allowed.includes(origin)) {
+  if (!frontendDomains.includes(origin)) {
     return Response.json(
       {
         success: false,
@@ -61,19 +60,17 @@ export function enforceCors(
 }
 
 /**
- * Builds CORS response headers for successful responses from frontend-use
- * tokens.
+ * Builds CORS response headers for successful responses from non-user actors.
  */
 export function getCorsHeaders(
   req: Request,
-  tenant: Tenant,
+  actorType: "user" | "api_token",
+  frontendDomains: string[],
 ): Record<string, string> {
   const origin = req.headers.get("Origin");
-  if (!origin || tenant.actorType === "user") return {};
+  if (!origin || actorType === "user") return {};
 
-  if (
-    tenant.frontendUse && (tenant.frontendDomains ?? []).includes(origin)
-  ) {
+  if (frontendDomains.length > 0 && frontendDomains.includes(origin)) {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Credentials": "true",

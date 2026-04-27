@@ -1,15 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function SettingsPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId } = useTenantContext();
   const [sensitivity, setSensitivity] = useState(0.5);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

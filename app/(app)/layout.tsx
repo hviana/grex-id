@@ -7,12 +7,7 @@ import ProfileMenu from "@/src/components/shared/ProfileMenu";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import Spinner from "@/src/components/shared/Spinner";
 import type { MenuItem } from "@/src/contracts/menu";
-import {
-  SystemContext,
-  useSystemContextProvider,
-} from "@/src/hooks/useSystemContext";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 import { getCookie, setCookie } from "@/src/lib/cookies";
 
@@ -170,10 +165,9 @@ function findFirstComponent(items: MenuItem[]): string | null {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { systemToken, tenant, exchangeTenant, loading: authLoading } =
-    useAuth();
-  const ctx = useSystemContextProvider();
-  const { t, setLocale } = useLocale();
+
+  const ctx = useTenantContext();
+  const { systemToken, exchangeTenant, roles, loading: authLoading, t, setLocale } = ctx;
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [initializing, setInitializing] = useState(true);
 
@@ -359,7 +353,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         // Load menus (roles now come from tenant)
         const tree = await loadMenus(
           activeSys.id,
-          tenant.roles,
+          roles ?? [],
           plan?.id ?? null,
           systemToken!,
         );
@@ -438,7 +432,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           const tree = await loadMenus(
             firstSys.id,
-            tenant.roles,
+            roles ?? [],
             plan?.id ?? null,
             systemToken!,
           );
@@ -486,7 +480,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         const tree = await loadMenus(
           ctx.systemId!,
-          tenant.roles,
+          roles ?? [],
           plan?.id ?? null,
           systemToken!,
         );
@@ -519,7 +513,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SystemContext.Provider value={ctx}>
+    
       <div className="flex h-screen bg-[var(--color-black)]">
         {!pathname.startsWith("/onboarding") && (
           <Sidebar
@@ -546,6 +540,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
-    </SystemContext.Provider>
+    
   );
 }

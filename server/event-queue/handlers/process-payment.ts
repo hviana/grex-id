@@ -159,9 +159,8 @@ export const processPayment: HandlerFn = async (payload) => {
           0) + creditModifier;
 
       const remainingOperationCount = await resolveAllOperationCounts({
-        tenant: {
-          id: effectiveTenantId,
-        } as import("../../../src/contracts/tenant.ts").Tenant,
+        systemId: ctx.systemId!,
+        companyId: ctx.companyId!,
       });
 
       await renewSubscriptionOnSuccess({

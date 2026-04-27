@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
@@ -19,6 +16,7 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 ChartJS.register(
   CategoryScale,
@@ -79,13 +77,13 @@ function extractIds(badges: BadgeValue[]): string[] {
 }
 
 export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
 
   const isCore = mode === "core";
 
   // Only use system context for tenant mode
-  const tenant = isCore ? null : useSystemContext();
+  const tenant = isCore ? null : useTenantContext();
   const companyId = isCore ? undefined : tenant?.companyId;
   const systemId = isCore ? undefined : tenant?.systemId;
   const tenantSystemSlug = isCore ? undefined : tenant?.systemSlug ?? undefined;

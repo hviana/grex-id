@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface NameDescSubformProps {
   initialData?: Record<string, unknown>;
@@ -23,7 +23,7 @@ const NameDescSubform = forwardRef<SubformRef, NameDescSubformProps>(
     },
     ref,
   ) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     const [name, setName] = useState((initialData?.name as string) ?? "");
     const [description, setDescription] = useState(

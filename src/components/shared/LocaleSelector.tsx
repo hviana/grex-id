@@ -1,9 +1,9 @@
 "use client";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
-import { useLocale } from "@/src/hooks/useLocale";
 
 export default function LocaleSelector() {
-  const { locale, setLocale, t, supportedLocales } = useLocale();
+  const { locale, setLocale, t, supportedLocales } = useTenantContext();
 
   return (
     <select

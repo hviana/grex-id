@@ -1,15 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import { useRouter } from "next/navigation";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function ProfileMenu() {
-  const { user, logout } = useAuth();
-  const { t } = useLocale();
+  const { user, logout } = useTenantContext();
+  const { t } = useTenantContext();
   const router = useRouter();
   const {
     companyId,
@@ -18,7 +16,7 @@ export default function ProfileMenu() {
     systems,
     switchCompany,
     switchSystem,
-  } = useSystemContext();
+  } = useTenantContext();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

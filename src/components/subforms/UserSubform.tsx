@@ -6,11 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface UserSubformProps {
   initialData?: Record<string, unknown>;
@@ -20,7 +20,7 @@ interface UserSubformProps {
 
 const UserSubform = forwardRef<SubformRef, UserSubformProps>(
   ({ initialData, isCreate = false, systemSlug }, ref) => {
-    const { t } = useLocale();
+    const { t } = useTenantContext();
 
     const [name, setName] = useState(
       (initialData?.profileId as { name?: string })?.name ??

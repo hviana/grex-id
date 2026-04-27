@@ -15,11 +15,9 @@ import type {
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface OwnerSubformProps {
   initialData?: Record<string, unknown>;
@@ -27,9 +25,9 @@ interface OwnerSubformProps {
 
 const OwnerSubform = forwardRef<SubformRef, OwnerSubformProps>(
   ({ initialData }, ref) => {
-    const { t } = useLocale();
-    const { systemToken } = useAuth();
-    const { companyId, systemId } = useSystemContext();
+    const { t } = useTenantContext();
+    const { systemToken } = useTenantContext();
+    const { companyId, systemId } = useTenantContext();
     const [selected, setSelected] = useState<{ id: string; label: string }[]>(
       () => {
         if (initialData?.ownerId && initialData?.ownerName) {
@@ -82,8 +80,8 @@ const OwnerSubform = forwardRef<SubformRef, OwnerSubformProps>(
 OwnerSubform.displayName = "OwnerSubform";
 
 function useLeadSubforms(): SubformConfig[] {
-  const { systemToken } = useAuth();
-  const { companyId, systemId, systemSlug } = useSystemContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId, systemSlug } = useTenantContext();
 
   const safeCompanyId = companyId ?? "";
   const safeSystemId = systemId ?? "";
@@ -116,9 +114,9 @@ function useLeadSubforms(): SubformConfig[] {
 }
 
 export default function LeadsPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId } = useTenantContext();
   const subforms = useLeadSubforms();
 
   const fetchLeads = useCallback(

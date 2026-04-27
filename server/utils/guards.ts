@@ -1,8 +1,4 @@
-import Core from "./Core.ts";
-import type { Tenant } from "@/src/contracts/tenant.ts";
-import type { Subscription } from "@/src/contracts/billing.ts";
-import type { Plan } from "@/src/contracts/plan.ts";
-import type { Voucher } from "@/src/contracts/voucher.ts";
+import Core, { type TenantResourceLimits } from "./Core.ts";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("guards.ts");
@@ -36,81 +32,68 @@ export interface TransferLimitResult {
   voucherModifier: number;
 }
 
-async function resolveSubscription(
-  tenantId: string,
-): Promise<Subscription | null> {
+/** Internal: fetch tenant (CS) limits without subscription checks. */
+async function getLimits(systemId: string, companyId: string): Promise<TenantResourceLimits> {
   const core = Core.getInstance();
-  return core.ensureSubscription(tenantId);
-}
-
-async function resolvePlan(planId: string): Promise<Plan | undefined> {
-  return Core.getInstance().getPlanById(planId);
-}
-
-async function resolveVoucher(
-  voucherId: string | undefined,
-): Promise<Voucher | undefined> {
-  if (!voucherId) return undefined;
-  return Core.getInstance().getVoucherById(voucherId);
-}
-
-/** Extract a numeric value from a resource_limit sub-object. */
-function rlNum(
-  obj: Record<string, unknown> | undefined,
-  key: string,
-  fallback = 0,
-): number {
-  return Number(obj?.[key] ?? fallback);
+  try {
+    return await core.ensureTenantLimits(systemId, companyId);
+  } catch {
+    return {
+      roles: [],
+      entityLimits: {},
+      apiRateLimit: 0,
+      storageLimitBytes: 0,
+      fileCacheLimitBytes: 0,
+      credits: 0,
+      maxConcurrentDownloads: 0,
+      maxConcurrentUploads: 0,
+      maxDownloadBandwidthMB: 0,
+      maxUploadBandwidthMB: 0,
+      maxOperationCountByResourceKey: {},
+      creditLimitByResourceKey: {},
+      frontendDomains: [],
+    };
+  }
 }
 
 export async function resolveEntityLimit(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
   entityName: string;
 }): Promise<EntityLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) {
+  const limits = await getLimits(params.systemId, params.companyId);
+  const planLimit = limits.entityLimits[params.entityName];
+
+  if (planLimit === undefined) {
     return { limit: null, planLimit: null, voucherModifier: 0 };
-  }
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planEntityLimits = planRl?.entityLimits as
-    | Record<string, number>
-    | undefined;
-  if (!planEntityLimits?.[params.entityName]) {
-    return { limit: null, planLimit: null, voucherModifier: 0 };
-  }
-
-  const planLimit = planEntityLimits[params.entityName];
-  let voucherModifier = 0;
-
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    const vEntityLimits = vRl?.entityLimits as
-      | Record<string, number>
-      | undefined;
-    if (vEntityLimits?.[params.entityName]) {
-      voucherModifier = vEntityLimits[params.entityName];
-    }
   }
 
   return {
-    limit: Math.max(0, planLimit + voucherModifier),
+    limit: Math.max(0, planLimit),
     planLimit,
-    voucherModifier,
+    voucherModifier: 0,
   };
 }
 
 export async function checkPlanAccess(
-  tenant: Tenant,
-  roleNames: string[],
+  systemId: string,
+  companyId: string,
+  roles: string[],
 ): Promise<PlanAccessResult> {
-  if (tenant.roles.includes("superuser")) {
+  if (roles.includes("superuser")) {
     return { granted: true };
   }
 
-  const sub = await resolveSubscription(tenant.id);
+  const core = Core.getInstance();
+
+  // Resolve the tenant row internally to get subscription
+  const { fetchCompanySystemTenantRow } = await import("../db/queries/tenants.ts");
+  const tenantRow = await fetchCompanySystemTenantRow(companyId, systemId);
+  if (!tenantRow) {
+    return { granted: false, denyCode: "NO_SUBSCRIPTION" };
+  }
+
+  const sub = await core.ensureSubscription(tenantRow.id);
   if (!sub) {
     return { granted: false, denyCode: "NO_SUBSCRIPTION" };
   }
@@ -119,15 +102,10 @@ export async function checkPlanAccess(
     return { granted: false, denyCode: "SUBSCRIPTION_EXPIRED" };
   }
 
-  const plan = await resolvePlan(sub.planId);
-  if (!plan) {
-    return { granted: false, denyCode: "NO_SUBSCRIPTION" };
-  }
+  const limits = await getLimits(systemId, companyId);
+  const planRoles = limits.roles;
 
-  const planRl = plan.resourceLimitId as Record<string, unknown> | undefined;
-  const planRoles = (planRl?.roles as string[]) ?? [];
-
-  const hasAccess = roleNames.some((r) => planRoles.includes(r));
+  const hasAccess = planRoles.length === 0 || planRoles.some((r) => roles.includes(r));
   if (!hasAccess) {
     return { granted: false, denyCode: "PLAN_LIMIT" };
   }
@@ -136,221 +114,101 @@ export async function checkPlanAccess(
 }
 
 export async function resolveRateLimitConfig(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<RateLimitConfigResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) {
-    return { globalLimit: 0, planRateLimit: 0, voucherModifier: 0 };
-  }
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planRateLimit = rlNum(planRl, "apiRateLimit");
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "apiRateLimit");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
   return {
-    globalLimit: Math.max(0, planRateLimit + voucherModifier),
-    planRateLimit,
-    voucherModifier,
+    globalLimit: limits.apiRateLimit,
+    planRateLimit: limits.apiRateLimit,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveFileCacheLimit(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<FileCacheLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) {
-    return { maxBytes: 0, planLimit: 0, voucherModifier: 0 };
-  }
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planLimit = rlNum(planRl, "fileCacheLimitBytes", 20971520);
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "fileCacheLimitBytes");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
+  const planLimit = limits.fileCacheLimitBytes || 20971520;
   return {
-    maxBytes: Math.max(0, planLimit + voucherModifier),
+    maxBytes: planLimit,
     planLimit,
-    voucherModifier,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveMaxConcurrentDownloads(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planLimit = rlNum(planRl, "maxConcurrentDownloads");
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "maxConcurrentDownloads");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
   return {
-    max: Math.max(0, planLimit + voucherModifier),
-    planLimit,
-    voucherModifier,
+    max: limits.maxConcurrentDownloads,
+    planLimit: limits.maxConcurrentDownloads,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveMaxConcurrentUploads(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planLimit = rlNum(planRl, "maxConcurrentUploads");
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "maxConcurrentUploads");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
   return {
-    max: Math.max(0, planLimit + voucherModifier),
-    planLimit,
-    voucherModifier,
+    max: limits.maxConcurrentUploads,
+    planLimit: limits.maxConcurrentUploads,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveMaxDownloadBandwidth(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planLimit = rlNum(planRl, "maxDownloadBandwidthMB");
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "maxDownloadBandwidthMB");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
   return {
-    max: Math.max(0, planLimit + voucherModifier),
-    planLimit,
-    voucherModifier,
+    max: limits.maxDownloadBandwidthMB,
+    planLimit: limits.maxDownloadBandwidthMB,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveMaxUploadBandwidth(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planLimit = rlNum(planRl, "maxUploadBandwidthMB");
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherModifier = rlNum(vRl, "maxUploadBandwidthMB");
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
   return {
-    max: Math.max(0, planLimit + voucherModifier),
-    planLimit,
-    voucherModifier,
+    max: limits.maxUploadBandwidthMB,
+    planLimit: limits.maxUploadBandwidthMB,
+    voucherModifier: 0,
   };
 }
 
 export async function resolveMaxOperationCount(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
   resourceKey: string;
 }): Promise<TransferLimitResult> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return { max: 0, planLimit: 0, voucherModifier: 0 };
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planOpCount = planRl?.maxOperationCountByResourceKey as
-    | Record<string, number>
-    | undefined;
-  const planLimit = planOpCount?.[params.resourceKey] ?? 0;
-
-  let voucherModifier = 0;
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    const vOpCount = vRl?.maxOperationCountByResourceKey as
-      | Record<string, number>
-      | undefined;
-    voucherModifier = vOpCount?.[params.resourceKey] ?? 0;
-  }
-
+  const limits = await getLimits(params.systemId, params.companyId);
+  const planLimit = limits.maxOperationCountByResourceKey[params.resourceKey] ??
+    0;
   return {
-    max: Math.max(0, planLimit + voucherModifier),
+    max: planLimit,
     planLimit,
-    voucherModifier,
+    voucherModifier: 0,
   };
 }
 
 /**
- * Resolve all operation counts as a merged map (plan + voucher) for
- * subscription initialization and renewal.
+ * Resolve all operation counts as a merged map for subscription
+ * initialization and renewal.
  */
 export async function resolveAllOperationCounts(params: {
-  tenant: Tenant;
+  systemId: string;
+  companyId: string;
 }): Promise<Record<string, number>> {
-  const sub = await resolveSubscription(params.tenant.id);
-  if (!sub) return {};
-
-  const plan = await resolvePlan(sub.planId);
-  const planRl = plan?.resourceLimitId as Record<string, unknown> | undefined;
-  const planMap =
-    (planRl?.maxOperationCountByResourceKey as Record<string, number>) ?? {};
-
-  let voucherMap: Record<string, number> = {};
-  if (sub.voucherId) {
-    const voucher = await resolveVoucher(sub.voucherId);
-    const vRl = voucher?.resourceLimitId as Record<string, unknown> | undefined;
-    voucherMap =
-      (vRl?.maxOperationCountByResourceKey as Record<string, number>) ?? {};
-  }
-
-  const allKeys = new Set([
-    ...Object.keys(planMap),
-    ...Object.keys(voucherMap),
-  ]);
-
-  const result: Record<string, number> = {};
-  for (const key of allKeys) {
-    const planVal = planMap[key] ?? 0;
-    const voucherVal = voucherMap[key] ?? 0;
-    const effective = Math.max(0, planVal + voucherVal);
-    if (effective > 0) {
-      result[key] = effective;
-    }
-  }
-
-  return result;
+  const limits = await getLimits(params.systemId, params.companyId);
+  return limits.maxOperationCountByResourceKey;
 }

@@ -1,9 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
-import { useSystemContext } from "@/src/hooks/useSystemContext";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
@@ -16,6 +13,7 @@ import ResourceLimitsView, {
 } from "@/src/components/shared/ResourceLimitsView";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ApiToken {
   id: string;
@@ -30,9 +28,9 @@ interface ApiToken {
 }
 
 export default function TokensPage() {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
-  const { companyId, systemId, systemSlug } = useSystemContext();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
+  const { companyId, systemId, systemSlug } = useTenantContext();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteToken, setDeleteToken] = useState<ApiToken | null>(null);

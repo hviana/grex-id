@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   associateLeadWithTenant,
   createLead,
@@ -25,9 +25,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyId = ctx.tenant.companyId;
-    const systemId = ctx.tenant.systemId;
-    const tenantId = ctx.tenant.id;
+    const companyId = ctx.tenantContext.tenant.companyId!;
+    const systemId = ctx.tenantContext.tenant.systemId!;
+    const tenantId = ctx.tenantContext.tenant.id!;
     const inferredTenantIds = tenantId ? [tenantId] : [];
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; dateOfBirth?: string }
@@ -158,8 +158,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   } catch (error) {
     console.error("Grex assisted lead route error:", {
       method: "POST",
-      companyId: body?.companyId ?? ctx.tenant.companyId,
-      systemId: body?.systemId ?? ctx.tenant.systemId,
+      companyId: body?.companyId ?? ctx.tenantContext.tenant.companyId,
+      systemId: body?.systemId ?? ctx.tenantContext.tenant.systemId,
       ownerId: body?.ownerId,
       error,
     });
@@ -212,9 +212,9 @@ async function putHandler(req: Request, ctx: RequestContext) {
   try {
     const parsedBody = await req.json() as Record<string, unknown>;
     body = parsedBody;
-    const companyId = ctx.tenant.companyId;
-    const systemId = ctx.tenant.systemId;
-    const tenantId = ctx.tenant.id;
+    const companyId = ctx.tenantContext.tenant.companyId!;
+    const systemId = ctx.tenantContext.tenant.systemId!;
+    const tenantId = ctx.tenantContext.tenant.id!;
     const id = parsedBody.id as string | undefined;
     const profile = parsedBody.profile as
       | { name?: string; avatarUri?: string; dateOfBirth?: string }
@@ -283,8 +283,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
     console.error("Grex assisted lead route error:", {
       method: "PUT",
       id: body?.id,
-      companyId: body?.companyId ?? ctx.tenant.companyId,
-      systemId: body?.systemId ?? ctx.tenant.systemId,
+      companyId: body?.companyId ?? ctx.tenantContext.tenant.companyId,
+      systemId: body?.systemId ?? ctx.tenantContext.tenant.systemId,
       ownerId: body?.ownerId,
       error,
     });
@@ -332,13 +332,21 @@ async function putHandler(req: Request, ctx: RequestContext) {
 }
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.manage_leads"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.manage_leads"],
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.manage_leads"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.manage_leads"],
+
+  }),
   async (req, ctx) => putHandler(req, ctx),
 );

@@ -1,4 +1,5 @@
 import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
+import { fetchCompanySystemTenantRow } from "../db/queries/tenants.ts";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
@@ -21,6 +22,10 @@ import {
   type SettingScope,
 } from "../db/queries/core-settings.ts";
 import { genericList } from "../db/queries/generics.ts";
+import {
+  fetchActorResourceLimit,
+  resolveRoleNames,
+} from "../db/queries/tenants.ts";
 
 assertServerOnly("Core");
 
@@ -76,6 +81,26 @@ export interface CompiledFileAccess {
 export interface FileAccessCacheData {
   rules: CompiledFileAccess[];
 }
+
+// ── Default resource limit (zero/empty) ────────────────────────────────────
+
+const ZERO_LIMITS: TenantResourceLimits = {
+  roles: [],
+  entityLimits: {},
+  apiRateLimit: 0,
+  storageLimitBytes: 0,
+  fileCacheLimitBytes: 0,
+  credits: 0,
+  maxConcurrentDownloads: 0,
+  maxConcurrentUploads: 0,
+  maxDownloadBandwidthMB: 0,
+  maxUploadBandwidthMB: 0,
+  maxOperationCountByResourceKey: {},
+  creditLimitByResourceKey: {},
+  frontendDomains: [],
+};
+
+// ── File access ────────────────────────────────────────────────────────────
 
 const defaultSection: FileAccessSection = {
   isolateSystem: false,
@@ -154,6 +179,202 @@ async function loadFileAccessData(): Promise<FileAccessCacheData> {
   console.log(`[Core] loaded ${rules.length} file access rules`);
   return { rules };
 }
+
+// ── Limit merging helpers ──────────────────────────────────────────────────
+
+type RL = Record<string, unknown> | undefined;
+
+function toRlNum(obj: RL, key: string, fallback = 0): number {
+  return Number((obj as Record<string, number> | undefined)?.[key] ?? fallback);
+}
+
+function toRlStrArr(obj: RL, key: string): string[] {
+  const v = (obj as Record<string, unknown> | undefined)?.[key];
+  return Array.isArray(v) ? (v as string[]) : [];
+}
+
+function toRlRec(obj: RL, key: string): Record<string, number> {
+  const v = (obj as Record<string, unknown> | undefined)?.[key];
+  return (typeof v === "object" && v !== null)
+    ? (v as Record<string, number>)
+    : {};
+}
+
+function mergeEntityLimits(
+  planRl: RL,
+  voucherRl: RL,
+): Record<string, number> {
+  const plan = toRlRec(planRl, "entityLimits");
+  const voucher = toRlRec(voucherRl, "entityLimits");
+  const keys = new Set([...Object.keys(plan), ...Object.keys(voucher)]);
+  const result: Record<string, number> = {};
+  for (const k of keys) {
+    const v = (plan[k] ?? 0) + (voucher[k] ?? 0);
+    if (v > 0) result[k] = Math.max(0, v);
+  }
+  return result;
+}
+
+function mergeOperationCounts(
+  planRl: RL,
+  voucherRl: RL,
+): Record<string, number> {
+  const plan = toRlRec(planRl, "maxOperationCountByResourceKey");
+  const voucher = toRlRec(voucherRl, "maxOperationCountByResourceKey");
+  const keys = new Set([...Object.keys(plan), ...Object.keys(voucher)]);
+  const result: Record<string, number> = {};
+  for (const k of keys) {
+    const v = (plan[k] ?? 0) + (voucher[k] ?? 0);
+    if (v > 0) result[k] = Math.max(0, v);
+  }
+  return result;
+}
+
+function mergeCreditLimits(
+  planRl: RL,
+  voucherRl: RL,
+): Record<string, number> {
+  const plan = toRlRec(planRl, "creditLimitByResourceKey");
+  const voucher = toRlRec(voucherRl, "creditLimitByResourceKey");
+  const keys = new Set([...Object.keys(plan), ...Object.keys(voucher)]);
+  const result: Record<string, number> = {};
+  for (const k of keys) {
+    const v = (plan[k] ?? 0) + (voucher[k] ?? 0);
+    if (v > 0) result[k] = Math.max(0, v);
+  }
+  return result;
+}
+
+function mergeLimits(
+  planRl: RL,
+  voucherRl: RL,
+): TenantResourceLimits {
+  return {
+    roles: [
+      ...toRlStrArr(planRl, "roleIds"),
+      ...toRlStrArr(voucherRl, "roleIds"),
+    ],
+    entityLimits: mergeEntityLimits(planRl, voucherRl),
+    apiRateLimit: Math.max(
+      0,
+      toRlNum(planRl, "apiRateLimit") + toRlNum(voucherRl, "apiRateLimit"),
+    ),
+    storageLimitBytes: Math.max(
+      0,
+      toRlNum(planRl, "storageLimitBytes") +
+        toRlNum(voucherRl, "storageLimitBytes"),
+    ),
+    fileCacheLimitBytes: Math.max(
+      0,
+      toRlNum(planRl, "fileCacheLimitBytes") +
+        toRlNum(voucherRl, "fileCacheLimitBytes"),
+    ),
+    credits: Math.max(
+      0,
+      toRlNum(planRl, "credits") + toRlNum(voucherRl, "credits"),
+    ),
+    maxConcurrentDownloads: Math.max(
+      0,
+      toRlNum(planRl, "maxConcurrentDownloads") +
+        toRlNum(voucherRl, "maxConcurrentDownloads"),
+    ),
+    maxConcurrentUploads: Math.max(
+      0,
+      toRlNum(planRl, "maxConcurrentUploads") +
+        toRlNum(voucherRl, "maxConcurrentUploads"),
+    ),
+    maxDownloadBandwidthMB: Math.max(
+      0,
+      toRlNum(planRl, "maxDownloadBandwidthMB") +
+        toRlNum(voucherRl, "maxDownloadBandwidthMB"),
+    ),
+    maxUploadBandwidthMB: Math.max(
+      0,
+      toRlNum(planRl, "maxUploadBandwidthMB") +
+        toRlNum(voucherRl, "maxUploadBandwidthMB"),
+    ),
+    maxOperationCountByResourceKey: mergeOperationCounts(planRl, voucherRl),
+    creditLimitByResourceKey: mergeCreditLimits(planRl, voucherRl),
+    frontendDomains: [
+      ...toRlStrArr(planRl, "frontendDomains"),
+      ...toRlStrArr(voucherRl, "frontendDomains"),
+    ],
+  };
+}
+
+/**
+ * Clamp actor-level limits by company+system merged limits.
+ * 0 means unlimited — a 0 in the company+system limit does not clamp.
+ */
+function clampLimits(
+  actor: TenantResourceLimits,
+  cs: TenantResourceLimits,
+): TenantResourceLimits {
+  const clamp = (actorVal: number, csVal: number): number => {
+    if (csVal === 0) return actorVal;
+    if (actorVal === 0) return csVal;
+    return Math.min(actorVal, csVal);
+  };
+
+  return {
+    roles: actor.roles,
+    entityLimits: clampRecord(actor.entityLimits, cs.entityLimits),
+    apiRateLimit: clamp(actor.apiRateLimit, cs.apiRateLimit),
+    storageLimitBytes: clamp(actor.storageLimitBytes, cs.storageLimitBytes),
+    fileCacheLimitBytes: clamp(
+      actor.fileCacheLimitBytes,
+      cs.fileCacheLimitBytes,
+    ),
+    credits: clamp(actor.credits, cs.credits),
+    maxConcurrentDownloads: clamp(
+      actor.maxConcurrentDownloads,
+      cs.maxConcurrentDownloads,
+    ),
+    maxConcurrentUploads: clamp(
+      actor.maxConcurrentUploads,
+      cs.maxConcurrentUploads,
+    ),
+    maxDownloadBandwidthMB: clamp(
+      actor.maxDownloadBandwidthMB,
+      cs.maxDownloadBandwidthMB,
+    ),
+    maxUploadBandwidthMB: clamp(
+      actor.maxUploadBandwidthMB,
+      cs.maxUploadBandwidthMB,
+    ),
+    maxOperationCountByResourceKey: clampRecord(
+      actor.maxOperationCountByResourceKey,
+      cs.maxOperationCountByResourceKey,
+    ),
+    creditLimitByResourceKey: clampRecord(
+      actor.creditLimitByResourceKey,
+      cs.creditLimitByResourceKey,
+    ),
+    frontendDomains: actor.frontendDomains,
+  };
+}
+
+function clampRecord(
+  actor: Record<string, number>,
+  cs: Record<string, number>,
+): Record<string, number> {
+  const keys = new Set([...Object.keys(actor), ...Object.keys(cs)]);
+  const result: Record<string, number> = {};
+  for (const k of keys) {
+    const actorVal = actor[k] ?? 0;
+    const csVal = cs[k] ?? 0;
+    if (csVal === 0) {
+      result[k] = actorVal;
+    } else if (actorVal === 0) {
+      result[k] = csVal;
+    } else {
+      result[k] = Math.min(actorVal, csVal);
+    }
+  }
+  return result;
+}
+
+// ── Core data loading ──────────────────────────────────────────────────────
 
 const CORE_SLUG = "core";
 const SETTINGS_SLUG = "core-settings";
@@ -257,9 +478,9 @@ class Core {
   private static instance: Core | null = null;
   private missingSettings: Map<string, MissingSetting> = new Map();
   private fileAccessLoaded = false;
-  private limitsRegistered: Set<string> = new Set();
-  private rolesRegistered: Set<string> = new Set();
+  private tenantLimitsRegistered: Set<string> = new Set();
   private actorLimitsRegistered: Set<string> = new Set();
+  private rolesRegistered: Set<string> = new Set();
 
   private constructor() {}
 
@@ -269,6 +490,8 @@ class Core {
     }
     return Core.instance;
   }
+
+  // ── File access ────────────────────────────────────────────────────────
 
   private ensureFileAccessRegistered(): void {
     if (this.fileAccessLoaded) return;
@@ -287,11 +510,8 @@ class Core {
     await updateCache(CORE_SLUG, "file-access");
   }
 
-  /**
-   * Retrieves a setting value by walking the scope hierarchy:
-   * actor-scoped → company-system-scoped → system-scoped → core-level.
-   * Settings are loaded lazily per scope and cached.
-   */
+  // ── Settings ───────────────────────────────────────────────────────────
+
   async getSetting(
     key: string,
     scope?: SettingScope,
@@ -315,10 +535,6 @@ class Core {
     return undefined;
   }
 
-  /**
-   * Loads settings for a specific scopeKey, using the cache registry.
-   * Registers the cache entry lazily on first access.
-   */
   private async getOrLoadScope(
     scopeKey: string,
   ): Promise<Map<string, CoreSetting>> {
@@ -336,9 +552,6 @@ class Core {
     return getCache<Map<string, CoreSetting>>(SETTINGS_SLUG, cacheName);
   }
 
-  /**
-   * Refreshes a specific scope's settings cache after a mutation.
-   */
   async refreshSettingsScope(scopeKey: string): Promise<void> {
     const cacheName = `settings:${scopeKey}`;
     if (trackedScopes.has(scopeKey)) {
@@ -349,6 +562,8 @@ class Core {
   async getMissingSettings(): Promise<MissingSetting[]> {
     return Array.from(this.missingSettings.values());
   }
+
+  // ── System / role / plan / menu accessors ──────────────────────────────
 
   async getSystemBySlug(slug: string): Promise<System | undefined> {
     const data = await getCache<CoreData>(CORE_SLUG, "data");
@@ -385,6 +600,26 @@ class Core {
     const data = await getCache<CoreData>(CORE_SLUG, "data");
     return data.vouchersById.get(String(voucherId));
   }
+
+  // ── Derived accessors (no DB — pure CoreData lookups) ──────────────────
+
+  /** Resolves systemSlug from the pre-loaded systemsById cache. */
+  async getSystemSlug(systemId: string): Promise<string | undefined> {
+    const data = await getCache<CoreData>(CORE_SLUG, "data");
+    return data.systemsById.get(systemId)?.slug;
+  }
+
+  /** Derives actorType from the actorId prefix — no DB needed. */
+  static deriveActorType(
+    actorId?: string,
+  ): "user" | "api_token" | undefined {
+    if (!actorId) return undefined;
+    if (actorId.startsWith("api_token:")) return "api_token";
+    if (actorId.startsWith("user:")) return "user";
+    return undefined;
+  }
+
+  // ── Subscription caching ───────────────────────────────────────────────
 
   async getActiveSubscriptionCached(
     tenantId: string,
@@ -445,12 +680,228 @@ class Core {
     return this.reloadSubscription(tenantRow.id);
   }
 
+  // ── Tenant resource limits (plan + voucher merged, per company+system) ──
+
+  /**
+   * Lazily loads and caches the merged plan+voucher resource_limit for a
+   * company+system. Cache key: limits:{systemId}:{companyId}.
+   * Internally resolves the tenant row → subscription → plan+voucher limits.
+   */
+  async ensureTenantLimits(
+    systemId: string,
+    companyId: string,
+  ): Promise<TenantResourceLimits> {
+    const cacheName = `limits:${systemId}:${companyId}`;
+
+    if (!this.tenantLimitsRegistered.has(cacheName)) {
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => this.loadTenantLimits(systemId, companyId),
+      );
+      this.tenantLimitsRegistered.add(cacheName);
+    }
+
+    return getCache<TenantResourceLimits>(CORE_SLUG, cacheName);
+  }
+
+  async reloadTenantLimits(
+    systemId: string,
+    companyId: string,
+  ): Promise<TenantResourceLimits> {
+    const cacheName = `limits:${systemId}:${companyId}`;
+    if (!this.tenantLimitsRegistered.has(cacheName)) {
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => this.loadTenantLimits(systemId, companyId),
+      );
+      this.tenantLimitsRegistered.add(cacheName);
+    }
+    return updateCache<TenantResourceLimits>(CORE_SLUG, cacheName);
+  }
+
+  private async loadTenantLimits(
+    systemId: string,
+    companyId: string,
+  ): Promise<TenantResourceLimits> {
+    const row = await fetchCompanySystemTenantRow(companyId, systemId);
+    if (!row) return { ...ZERO_LIMITS };
+
+    const sub = await this.ensureSubscription(row.id);
+    if (!sub) return { ...ZERO_LIMITS };
+
+    const plan = sub.planId
+      ? await this.getPlanById(String(sub.planId))
+      : undefined;
+    const voucher = sub.voucherId
+      ? await this.getVoucherById(String(sub.voucherId))
+      : undefined;
+
+    const planRl = plan?.resourceLimitId as RL;
+    const voucherRl = voucher?.resourceLimitId as RL;
+
+    if (!planRl && !voucherRl) return { ...ZERO_LIMITS };
+
+    return mergeLimits(planRl, voucherRl);
+  }
+
+  // ── Actor resource limits (clamped by tenant limits) ──────────────────
+
+  /**
+   * Lazily loads the actor's resource_limit, clamped by the company+system
+   * merged limits. Cache key: actorLimits:{systemId}:{companyId}:{actorId}.
+   * 0 in the CS limit means unlimited → no clamp on that field.
+   */
+  async ensureActorLimits(
+    systemId: string,
+    companyId: string,
+    actorId: string,
+  ): Promise<TenantResourceLimits> {
+    const cacheName = `actorLimits:${systemId}:${companyId}:${actorId}`;
+
+    if (!this.actorLimitsRegistered.has(cacheName)) {
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => this.loadActorLimits(systemId, companyId, actorId),
+      );
+      this.actorLimitsRegistered.add(cacheName);
+    }
+
+    return getCache<TenantResourceLimits>(CORE_SLUG, cacheName);
+  }
+
+  async reloadActorLimits(
+    systemId: string,
+    companyId: string,
+    actorId: string,
+  ): Promise<TenantResourceLimits> {
+    const cacheName = `actorLimits:${systemId}:${companyId}:${actorId}`;
+    if (!this.actorLimitsRegistered.has(cacheName)) {
+      registerCache(
+        CORE_SLUG,
+        cacheName,
+        () => this.loadActorLimits(systemId, companyId, actorId),
+      );
+      this.actorLimitsRegistered.add(cacheName);
+    }
+    return updateCache<TenantResourceLimits>(CORE_SLUG, cacheName);
+  }
+
+  private async loadActorLimits(
+    systemId: string,
+    companyId: string,
+    actorId: string,
+  ): Promise<TenantResourceLimits> {
+    const csLimits = await this.ensureTenantLimits(systemId, companyId);
+    const actorRlRaw = await fetchActorResourceLimit(actorId);
+
+    if (!actorRlRaw) {
+      return { ...csLimits };
+    }
+
+    const actorRl: RL = actorRlRaw;
+    const actorLimits = {
+      roles: toRlStrArr(actorRl, "roleIds"),
+      entityLimits: toRlRec(actorRl, "entityLimits"),
+      apiRateLimit: toRlNum(actorRl, "apiRateLimit"),
+      storageLimitBytes: toRlNum(actorRl, "storageLimitBytes"),
+      fileCacheLimitBytes: toRlNum(actorRl, "fileCacheLimitBytes"),
+      credits: toRlNum(actorRl, "credits"),
+      maxConcurrentDownloads: toRlNum(actorRl, "maxConcurrentDownloads"),
+      maxConcurrentUploads: toRlNum(actorRl, "maxConcurrentUploads"),
+      maxDownloadBandwidthMB: toRlNum(actorRl, "maxDownloadBandwidthMB"),
+      maxUploadBandwidthMB: toRlNum(actorRl, "maxUploadBandwidthMB"),
+      maxOperationCountByResourceKey: toRlRec(
+        actorRl,
+        "maxOperationCountByResourceKey",
+      ),
+      creditLimitByResourceKey: toRlRec(actorRl, "creditLimitByResourceKey"),
+      frontendDomains: toRlStrArr(actorRl, "frontendDomains"),
+    };
+
+    return clampLimits(actorLimits, csLimits);
+  }
+
+  // ── Role resolution ────────────────────────────────────────────────────
+
+  /**
+   * Resolves role names for an actor from resource_limit.roleIds →
+   * role record IDs → role names. Cached per actorId.
+   */
+  async getTenantRoles(actorId: string): Promise<string[]> {
+    if (!actorId) return [];
+
+    const cacheName = `roles:${actorId}`;
+
+    if (!this.rolesRegistered.has(cacheName)) {
+      registerCache(CORE_SLUG, cacheName, async () => {
+        const rl = await fetchActorResourceLimit(actorId);
+        const roleIds = toRlStrArr(rl ?? undefined, "roleIds");
+        if (!roleIds.length) return [] as string[];
+        return resolveRoleNames(roleIds);
+      });
+      this.rolesRegistered.add(cacheName);
+    }
+
+    return getCache<string[]>(CORE_SLUG, cacheName);
+  }
+
+  async reloadTenantRoles(actorId: string): Promise<string[]> {
+    const cacheName = `roles:${actorId}`;
+    // Re-register if needed
+    if (!this.rolesRegistered.has(cacheName)) {
+      registerCache(CORE_SLUG, cacheName, async () => {
+        const rl = await fetchActorResourceLimit(actorId);
+        const roleIds = toRlStrArr(rl ?? undefined, "roleIds");
+        if (!roleIds.length) return [] as string[];
+        return resolveRoleNames(roleIds);
+      });
+      this.rolesRegistered.add(cacheName);
+    }
+    return updateCache<string[]>(CORE_SLUG, cacheName);
+  }
+
+  // ── Frontend domains ───────────────────────────────────────────────────
+
+  async getFrontendDomains(
+    systemId: string,
+    companyId: string,
+    actorId?: string,
+  ): Promise<string[]> {
+    if (actorId) {
+      const limits = await this.ensureActorLimits(systemId, companyId, actorId);
+      if (limits.frontendDomains.length > 0) {
+        return limits.frontendDomains;
+      }
+    }
+    const csLimits = await this.ensureTenantLimits(systemId, companyId);
+    return csLimits.frontendDomains;
+  }
+
+  // ── Reload ─────────────────────────────────────────────────────────────
+
   async reload(): Promise<void> {
     await updateCache<CoreData>(CORE_SLUG, "data");
     this.missingSettings.clear();
     clearCache(CORE_SLUG, "jwt-secret");
     clearCache(CORE_SLUG, "anonymous-jwt");
     clearCache(CORE_SLUG, "file-access");
+
+    // Clear limit and role caches
+    for (const cacheName of this.tenantLimitsRegistered) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    this.tenantLimitsRegistered.clear();
+    for (const cacheName of this.actorLimitsRegistered) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    this.actorLimitsRegistered.clear();
+    for (const cacheName of this.rolesRegistered) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    this.rolesRegistered.clear();
 
     // Refresh all loaded settings scopes
     for (const scopeKey of trackedScopes) {
@@ -468,6 +919,16 @@ class Core {
       clearCache(CORE_SLUG, cacheName);
     }
     subscriptionKeys.clear();
+
+    // Also evict related limit caches
+    for (const cacheName of this.tenantLimitsRegistered) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    this.tenantLimitsRegistered.clear();
+    for (const cacheName of this.actorLimitsRegistered) {
+      clearCache(CORE_SLUG, cacheName);
+    }
+    this.actorLimitsRegistered.clear();
   }
 }
 

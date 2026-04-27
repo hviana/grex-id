@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   genericCreate,
   genericDelete,
@@ -27,7 +27,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   if (action === "get-one") {
     const id = url.searchParams.get("id") ?? "";
     const location = await genericGetById<Location>(
-      { table: "location", tenant: ctx.tenant },
+      { table: "location", tenant: ctx.tenantContext.tenant },
       id,
     );
     return Response.json({ success: true, data: location });
@@ -37,7 +37,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
 
-  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
     return Response.json({
       success: true,
       items: [],
@@ -52,7 +52,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
     limit,
     cursor,
     search,
-    tenant: ctx.tenant,
+    tenant: ctx.tenantContext.tenant,
   });
 
   return Response.json({ success: true, ...result });
@@ -72,7 +72,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  if (!ctx.tenant.companyId || !ctx.tenant.systemId) {
+  if (!ctx.tenantContext.tenant.companyId || !ctx.tenantContext.tenant.systemId) {
     return Response.json(
       {
         success: false,
@@ -88,7 +88,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const result = await genericCreate<Location>(
     {
       table: "location",
-      tenant: ctx.tenant,
+      tenant: ctx.tenantContext.tenant,
     },
     { name, description: description || null, address },
   );
@@ -119,7 +119,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   if (address !== undefined) data.address = address;
 
   const result = await genericUpdate<Location>(
-    { table: "location", tenant: ctx.tenant },
+    { table: "location", tenant: ctx.tenantContext.tenant },
     id,
     data,
   );
@@ -141,30 +141,46 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
     );
   }
 
-  await genericDelete({ table: "location", tenant: ctx.tenant }, id);
+  await genericDelete({ table: "location", tenant: ctx.tenantContext.tenant }, id);
   return Response.json({ success: true });
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.list_locations"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.list_locations"],
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.manage_locations"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.manage_locations"],
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.manage_locations"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.manage_locations"],
+
+  }),
   async (req, ctx) => putHandler(req, ctx),
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ roles: ["grexid.manage_locations"] }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+    roles: ["grexid.manage_locations"],
+
+  }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

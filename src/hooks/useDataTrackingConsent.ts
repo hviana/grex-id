@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useFrontCore } from "./useFrontCore";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { getCookie } from "@/src/lib/cookies";
 
 const CONSENT_COOKIE = "core_data_tracking_consent";
@@ -22,7 +22,7 @@ export interface DataTrackingConsentState {
  * `accepted` is false.
  */
 export function useDataTrackingConsent(): DataTrackingConsentState {
-  const frontCore = useFrontCore();
+  const { getSetting } = useTenantContext();
   // On the very first render (SSR or client hydration) `document` is either
   // absent or the cookie hasn't been read yet — treat that as "undecided"
   // and read the cookie on mount. Subsequent cross-tab changes are picked up
@@ -39,7 +39,7 @@ export function useDataTrackingConsent(): DataTrackingConsentState {
   }, []);
 
   const trackedCharacteristics = useMemo<string[]>(() => {
-    const raw = frontCore.getSetting(
+    const raw = getSetting(
       "front.dataTracking.trackedCharacteristics",
     );
     if (!raw) return [];
@@ -51,7 +51,7 @@ export function useDataTrackingConsent(): DataTrackingConsentState {
     } catch {
       return [];
     }
-  }, [frontCore]);
+  }, [getSetting]);
 
   return {
     accepted: cookieValue === "accepted",

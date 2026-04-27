@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocale } from "@/src/hooks/useLocale";
-import { useAuth } from "@/src/hooks/useAuth";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import DeleteButton from "@/src/components/shared/DeleteButton";
@@ -11,6 +9,7 @@ import MultiBadgeField, {
   type BadgeValue,
 } from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface MenuItemData {
   id: string;
@@ -68,8 +67,8 @@ function isIncomplete(node: TreeNode): boolean {
 export default function MenuTreeEditor(
   { systemId, systemSlug }: MenuTreeEditorProps,
 ) {
-  const { t } = useLocale();
-  const { systemToken } = useAuth();
+  const { t } = useTenantContext();
+  const { systemToken } = useTenantContext();
   const [items, setItems] = useState<MenuItemData[]>([]);
   const [loading, setLoading] = useState(true);
   const [editItem, setEditItem] = useState<MenuItemData | null>(null);

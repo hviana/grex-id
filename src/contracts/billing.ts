@@ -13,21 +13,19 @@ export interface Subscription {
   remainingOperationCount?: Record<string, number>; // per-resourceKey map; resets on renewal
   creditAlertSent: boolean; // one-shot credit exhaustion alert
   operationCountAlertSent?: Record<string, boolean>; // per-resourceKey one-shot alert map
-  autoRechargeEnabled: boolean;
-  autoRechargeAmount: number; // cents; 0 when disabled
-  autoRechargeInProgress: boolean; // re-entrancy guard
+  autoRechargeEnabled?: boolean;
+  autoRechargeAmount?: number; // cents; 0 when disabled
+  autoRechargeInProgress?: boolean; // re-entrancy guard
   retryPaymentInProgress: boolean; // re-entrancy guard for retry_payment
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PaymentMethod {
   id: string;
   tenantIds: string[]; // references company-only tenant rows
   type: "credit_card";
-  cardMask: string;
-  cardToken: string;
-  holderName: string;
-  holderDocument: string;
+  data: Record<string, unknown>; // flexible object — cardToken, cardMask, holderName, etc.
   billingAddressId: Address;
   isDefault: boolean;
   createdAt: string;

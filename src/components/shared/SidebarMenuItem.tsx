@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { MenuItem } from "@/src/contracts/menu";
-import { useLocale } from "@/src/hooks/useLocale";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SidebarMenuItemProps {
   item: MenuItem;
@@ -24,7 +24,7 @@ export default function SidebarMenuItem(
   { item, depth = 0, searchQuery, activeComponent, onNavigate }:
     SidebarMenuItemProps,
 ) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [expanded, setExpanded] = useState(false);
   const hasChildren = item.children && item.children.length > 0;
   const label = t(item.label) !== item.label ? t(item.label) : item.label;

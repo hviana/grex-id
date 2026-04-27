@@ -1,18 +1,17 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
-import { usePublicSystem } from "@/src/hooks/usePublicSystem";
 import Spinner from "@/src/components/shared/Spinner";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function TermsContent() {
   const searchParams = useSearchParams();
   const systemSlug = searchParams.get("systemSlug");
-  const { t } = useLocale();
-  const { systemInfo, loading } = usePublicSystem(systemSlug);
+  const { t, publicSystem: systemInfo, publicSystemLoading: loading, loadPublicSystem } = useTenantContext();
+  useEffect(() => { loadPublicSystem(systemSlug ?? undefined); }, [systemSlug, loadPublicSystem]);
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-[var(--color-black)] via-[#0a0a0a] to-[#111]">

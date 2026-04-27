@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { createCompany } from "@/server/db/queries/companies";
 import { genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
@@ -16,7 +16,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const cursor = url.searchParams.get("cursor") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "20");
   const systemSlug = url.searchParams.get("systemSlug") ?? undefined;
-  const userId = ctx.tenant.actorId!;
+  const userId = ctx.tenantContext.tenant.actorId!;
 
   const extraConditions: string[] = [];
   const extraBindings: Record<string, unknown> = {};
@@ -93,8 +93,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     document: stdDocument!,
     documentType: documentType ?? "cnpj",
     billingAddress: billingAddress ?? {},
-    ownerId: ctx.tenant.actorId!,
-    systemId: ctx.tenant.systemId,
+    ownerId: ctx.tenantContext.tenant.actorId!,
+    systemId: ctx.tenantContext.tenant.systemId!,
   });
 
   return Response.json(
@@ -104,13 +104,19 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => getHandler(req, ctx),
 );
 
 export const POST = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 60 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
+
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );

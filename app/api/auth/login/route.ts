@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   findUserByVerifiedChannel,
   resolveUserMembership,
@@ -12,23 +12,6 @@ import { genericDecrypt, genericVerify } from "@/server/db/queries/generics";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { rememberActor } from "@/server/utils/actor-validity";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
-
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
 
 function guessChannelType(raw: string): string | undefined {
   const trimmed = raw.trim();
@@ -114,11 +97,8 @@ async function handler(
     );
   }
 
-  // Second-factor gate — per-user only (§8.8). No global toggle.
   if (user.twoFactorEnabled) {
     if (!twoFactorCode) {
-      // Client should either collect a TOTP code or call
-      // POST /api/auth/two-factor/login-link to receive the channel fallback.
       return Response.json(
         {
           success: false,
@@ -132,8 +112,6 @@ async function handler(
     }
 
     if (user.twoFactorSecret) {
-      // `twoFactorSecret` is stored as an AES-256-GCM envelope (§7.1.1).
-      // Decrypt at the verify boundary; plaintext stays in request scope.
       let plainSecret: string;
       try {
         const decrypted = await genericDecrypt(
@@ -173,8 +151,6 @@ async function handler(
         );
       }
     } else {
-      // twoFactorEnabled without a stored secret is an inconsistent state.
-      // Reject instead of silently letting the user in.
       return Response.json(
         {
           success: false,
@@ -203,28 +179,32 @@ async function handler(
     );
   }
 
+  const tenant = {
+    id: mem.tenantId,
+    systemId: mem.systemId,
+    companyId: mem.companyId,
+    actorId: String(user.id),
+  };
+
   const systemToken = await createTenantToken(
-    {
-      id: mem.tenantId,
-      systemId: mem.systemId,
-      companyId: mem.companyId,
-      systemSlug: mem.systemSlug,
-      roles: mem.roles,
-      actorType: "user",
-      actorId: String(user.id),
-      exchangeable: true,
-    },
+    tenant,
     stayLoggedIn ?? false,
   );
 
-  // Register the user in the tenant's actor-validity partition (§8.11).
-  // This is the only signal withAuth consults on subsequent requests.
+  // Role names are pre-resolved by resolveUserMembership via tenant.roleIds
+  const roles = mem.roles;
+
   await rememberActor(mem.tenantId, String(user.id));
 
   return Response.json({
     success: true,
     data: {
       systemToken,
+      tenant,
+      roles,
+      actorType: "user" as const,
+      exchangeable: true,
+      frontendDomains: [] as string[],
       user: {
         id: user.id,
         profileId: user.profileId,
@@ -235,4 +215,9 @@ async function handler(
   });
 }
 
-export const POST = compose(withAuthRateLimit(), handler);
+export const POST = compose(
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+  }),
+  handler,
+);

@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   createUserWithChannels,
   purgeAbandonedUsers,
@@ -15,22 +15,6 @@ import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
 
-function withAuthRateLimit() {
-  return async (
-    req: Request,
-    ctx: RequestContext,
-    next: () => Promise<Response>,
-  ): Promise<Response> => {
-    const core = Core.getInstance();
-    const rateLimitPerMinute = Number(
-      (await core.getSetting("auth.rateLimit.perMinute")) || 5,
-    );
-    return withRateLimit({
-      windowMs: 60_000,
-      maxRequests: rateLimitPerMinute,
-    })(req, ctx, next);
-  };
-}
 
 interface SubmittedChannel {
   type: string;
@@ -228,4 +212,4 @@ async function handler(
   );
 }
 
-export const POST = compose(withAuthRateLimit(), handler);
+export const POST = compose(withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }), handler);

@@ -2,15 +2,15 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useLocale } from "@/src/hooks/useLocale";
 import Spinner from "@/src/components/shared/Spinner";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import { getHomePage } from "@/src/components/systems/registry";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const systemSlug = searchParams.get("systemSlug");
 
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(systemSlug);

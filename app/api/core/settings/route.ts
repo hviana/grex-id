@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   batchUpsertSettings,
   buildScopeKey,
@@ -14,11 +13,11 @@ import type { SettingScope } from "@/server/utils/Core";
 
 const MAX_SETTINGS_SIZE_BYTES = 64 * 1024; // 64 KB
 
-function checkScopePermission(
+async function checkScopePermission(
   ctx: RequestContext,
   scope: SettingScope,
-): Response | null {
-  const tenant = ctx.tenant;
+): Promise<Response | null> {
+  const { tenant } = ctx.tenantContext;
   if (!tenant) {
     return Response.json(
       {
@@ -29,15 +28,17 @@ function checkScopePermission(
     );
   }
 
+  const roles = ctx.tenantContext.roles;
+
   // Superuser has full access
-  if (tenant.roles.includes("superuser")) return null;
+  if (roles.includes("superuser")) return null;
 
   // Actor-scoped: the actor themselves or admin of the system+company
   if (scope.actorId && scope.companyId && scope.systemId) {
     const isActor = tenant.actorId === scope.actorId;
     const isAdmin = tenant.companyId === scope.companyId &&
       tenant.systemId === scope.systemId &&
-      tenant.roles.includes("admin");
+      roles.includes("admin");
     if (isActor || isAdmin) return null;
     return Response.json(
       {
@@ -53,7 +54,7 @@ function checkScopePermission(
     if (
       tenant.companyId === scope.companyId &&
       tenant.systemId === scope.systemId &&
-      tenant.roles.includes("admin")
+      roles.includes("admin")
     ) {
       return null;
     }
@@ -101,7 +102,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
   const scope = parseScopeFromParams(url.searchParams);
 
-  const denied = checkScopePermission(ctx, scope);
+  const denied = await checkScopePermission(ctx, scope);
   if (denied) return denied;
 
   const scopeKey = buildScopeKey(scope);
@@ -116,7 +117,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const { settings } = body;
   const scope = parseScopeFromBody(body);
 
-  const denied = checkScopePermission(ctx, scope);
+  const denied = await checkScopePermission(ctx, scope);
   if (denied) return denied;
 
   if (!Array.isArray(settings)) {
@@ -180,7 +181,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
   const { key } = body;
   const scope = parseScopeFromBody(body);
 
-  const denied = checkScopePermission(ctx, scope);
+  const denied = await checkScopePermission(ctx, scope);
   if (denied) return denied;
 
   if (!key) {
@@ -206,19 +207,25 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 }
 
 export const GET = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    requireAuthenticated: true,
+  }),
   getHandler,
 );
 
 export const PUT = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    requireAuthenticated: true,
+  }),
   putHandler,
 );
 
 export const DELETE = compose(
-  withRateLimit({ windowMs: 60_000, maxRequests: 100 }),
-  withAuth({ requireAuthenticated: true }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 100 },
+    requireAuthenticated: true,
+  }),
   deleteHandler,
 );

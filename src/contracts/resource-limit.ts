@@ -7,7 +7,7 @@
 export interface ResourceLimit {
   id: string;
   benefits?: string[];
-  roles?: string[];
+  roleIds?: string[];
   entityLimits?: Record<string, number>;
   apiRateLimit?: number;
   storageLimitBytes?: number;
@@ -20,5 +20,4 @@ export interface ResourceLimit {
   maxOperationCountByResourceKey?: Record<string, number>;
   creditLimitByResourceKey?: Record<string, number>;
   frontendDomains?: string[];
-  createdAt: string;
 }

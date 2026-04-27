@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 import Modal from "./Modal.tsx";
 import GenericFormButton from "./GenericFormButton.tsx";
 import ErrorDisplay from "./ErrorDisplay.tsx";
-import { useLocale } from "@/src/hooks/useLocale";
 import type { SubformConfig, SubformRef } from "./GenericList.tsx";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface FormModalProps {
   title: string;
@@ -30,7 +30,7 @@ export default function FormModal({
   authToken,
   extraData,
 }: FormModalProps) {
-  const { t } = useLocale();
+  const { t } = useTenantContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const refs = useRef<Map<string, SubformRef>>(new Map());

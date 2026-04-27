@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
-import { withAuth } from "@/server/middleware/withAuth";
-import { withRateLimit } from "@/server/middleware/withRateLimit";
-import type { RequestContext } from "@/src/contracts/auth";
+import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
+
+import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   associateLeadWithTenant,
   createLead,
@@ -190,7 +190,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             : undefined,
         },
         tenant: {
-          tenantIds: [ctx.tenant.id],
+          tenantIds: [ctx.tenantContext.tenant.id!],
           systemSlug,
         },
       });
@@ -294,7 +294,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       actionKey: "auth.action.leadRegister",
       payload: { channelIds },
       tenant: {
-        tenantIds: [ctx.tenant.id],
+        tenantIds: [ctx.tenantContext.tenant.id!],
         systemSlug,
       },
     });
@@ -336,8 +336,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
         success: true,
         data: {
           id: lead.id,
-          companyId: ctx.tenant?.companyId,
-          systemId: ctx.tenant?.systemId,
+          companyId: ctx.tenantContext?.tenant?.companyId,
+          systemId: ctx.tenantContext?.tenant?.systemId,
           requiresVerification: true,
         },
       },
@@ -385,7 +385,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 export { postHandler as publicLeadPostHandler };
 
 export const POST = compose(
-  withAuth(),
-  withRateLimit({ windowMs: 60_000, maxRequests: 10 }),
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 10 },
+  }),
   async (req, ctx) => postHandler(req, ctx),
 );
