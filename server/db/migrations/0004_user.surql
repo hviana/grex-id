@@ -9,7 +9,7 @@ DEFINE FIELD stayLoggedIn     ON user TYPE bool DEFAULT false;
 DEFINE FIELD resourceLimitId         ON user TYPE record<resource_limit>;
 DEFINE FIELD createdAt    ON user TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt    ON user TYPE datetime DEFAULT time::now();
-DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>, 1>;
+DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>> DEFAULT [];
 
 DEFINE INDEX idx_user_profile  ON user FIELDS profileId UNIQUE;
 DEFINE INDEX idx_user_channels ON user FIELDS channelIds;

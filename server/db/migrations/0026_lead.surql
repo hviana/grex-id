@@ -3,7 +3,7 @@ DEFINE FIELD name          ON lead TYPE string;
 DEFINE FIELD profileId     ON lead TYPE record<profile>;
 DEFINE FIELD channelIds    ON lead TYPE array<record<entity_channel>> DEFAULT [];
 DEFINE FIELD tagIds        ON lead TYPE array<record<tag>> DEFAULT [];
-DEFINE FIELD tenantIds    On lead TYPE array<record<tenant>, 1>;
+DEFINE FIELD tenantIds    On lead TYPE array<record<tenant>> DEFAULT [];
 DEFINE FIELD ownerId     On lead TYPE option<record<user>>;
 DEFINE INDEX idx_lead_owner  On lead FIELDS ownerId;
 DEFINE FIELD createdAt     ON lead TYPE datetime DEFAULT time::now();
