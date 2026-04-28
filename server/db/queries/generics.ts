@@ -12,6 +12,7 @@ import { decryptField, decryptFieldOptional } from "../../utils/crypto.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import type { Tenant } from "@/src/contracts/tenant";
+import type { EventChange } from "@/src/contracts/high_level/event-payload";
 
 /**
  * Minimal tenant scope used by generic query helpers. Only the fields that
@@ -1394,4 +1395,78 @@ export async function genericDeleteSharedRecords(
 
   const result = await db.query<[{ c: number }[]]>(query, bindings);
   return { success: true, deletedCount: result[0]?.[0]?.c ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
+// applyEventPayload — replay EventChange[] from a verification payload
+// ---------------------------------------------------------------------------
+//
+// Iterates over a list of EventChange entries.  "create" / "update" / "delete"
+// are dispatched to genericCreate / genericUpdate / genericDelete (with empty
+// fieldSpecs — fields are already DB-ready).  "custom" entries are dispatched
+// to the caller-provided handler for complex multi-table operations that
+// cannot be expressed as a single-row CRUD call.
+
+export async function applyEventPayload(
+  changes: EventChange[],
+  customHandler: (change: EventChange) => Promise<void>,
+): Promise<{ success: boolean; errors?: { changeIndex: number; message: string }[] }> {
+  const errors: { changeIndex: number; message: string }[] = [];
+
+  for (let i = 0; i < changes.length; i++) {
+    const c = changes[i];
+    try {
+      switch (c.action) {
+        case "create": {
+          const r = await genericCreate<Record<string, unknown>>(
+            { table: c.entity, fields: [] },
+            c.fields,
+          );
+          if (!r.success) {
+            errors.push({ changeIndex: i, message: `create ${c.entity} failed` });
+          }
+          break;
+        }
+        case "update": {
+          if (!c.id) {
+            errors.push({ changeIndex: i, message: "id required for update" });
+            continue;
+          }
+          const r = await genericUpdate<Record<string, unknown>>(
+            { table: c.entity, fields: [] },
+            c.id,
+            c.fields,
+          );
+          if (!r.success) {
+            errors.push({ changeIndex: i, message: `update ${c.entity} failed` });
+          }
+          break;
+        }
+        case "delete": {
+          if (!c.id) {
+            errors.push({ changeIndex: i, message: "id required for delete" });
+            continue;
+          }
+          const r = await genericDelete(
+            { table: c.entity, fields: [] },
+            c.id,
+          );
+          if (!r.success) {
+            errors.push({ changeIndex: i, message: `delete ${c.entity} failed` });
+          }
+          break;
+        }
+        case "custom":
+          await customHandler(c);
+          break;
+      }
+    } catch (err) {
+      errors.push({ changeIndex: i, message: String(err) });
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }

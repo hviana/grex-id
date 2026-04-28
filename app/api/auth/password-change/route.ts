@@ -99,7 +99,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     ownerId: userId,
     ownerType: "user",
     actionKey: "auth.action.passwordChange",
-    payload: { newPasswordHash },
+    payload: { changes: [{ action: "update", entity: "user", id: userId, fields: { passwordHash: newPasswordHash } }] },
     tenant: {
       tenantIds: [tenantId],
       systemSlug,

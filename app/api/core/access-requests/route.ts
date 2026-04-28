@@ -101,11 +101,29 @@ async function postHandler(
     ownerType: "user",
     actionKey: "access.request",
     payload: {
-      entityType,
-      entityId,
-      targetTenantId,
-      permission: permission ?? null,
-      requesterTenantId: ctx.tenantContext.tenant.id,
+      changes: restrictedEntities.includes(entityType)
+        ? [{
+          action: "create" as const,
+          entity: "shared_record",
+          fields: {
+            recordId: entityId,
+            ownerTenantIds: [ctx.tenantContext.tenant.id],
+            accessesTenantIds: [targetTenantId],
+            permissions: permission,
+          },
+        }]
+        : entityType === "user"
+        ? [{
+          action: "custom" as const,
+          entity: "tenant",
+          fields: { actorId: entityId, targetTenantId },
+        }]
+        : [{
+          action: "custom" as const,
+          entity: entityType,
+          id: entityId,
+          fields: { associateTenant: targetTenantId },
+        }],
     },
     tenant: {
       tenantIds: [ctx.tenantContext.tenant.id!],

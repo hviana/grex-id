@@ -36,7 +36,7 @@ async function sendChannelConfirmation(
     ownerId: userId,
     ownerType: "user",
     actionKey,
-    payload: { channelIds: [channelId] },
+    payload: { changes: [{ action: "update", entity: "entity_channel", id: channelId, fields: { verified: true } }] },
     tenant: { tenantIds: [tenantId], systemSlug },
   });
 

@@ -67,7 +67,7 @@ async function handler(
     ownerId: String(row.ownerId),
     ownerType: "user",
     actionKey,
-    payload: { channelIds: [String(row.id)] },
+    payload: { changes: [{ action: "update", entity: "entity_channel", id: String(row.id), fields: { verified: true } }] },
     tenant: { systemSlug },
   });
 

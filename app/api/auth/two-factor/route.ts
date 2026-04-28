@@ -151,7 +151,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       ownerId: userId,
       ownerType: "user",
       actionKey: "auth.action.twoFactorEnable",
-      payload: {},
+      payload: { changes: [{ action: "custom", entity: "user", id: userId, fields: { _promoteTwoFactor: true } }] },
       tenant: {
         tenantIds: [tenantId],
         systemSlug,
@@ -208,7 +208,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
       ownerId: userId,
       ownerType: "user",
       actionKey: "auth.action.twoFactorDisable",
-      payload: {},
+      payload: { changes: [{ action: "update", entity: "user", id: userId, fields: { twoFactorEnabled: false } }] },
       tenant: {
         tenantIds: [tenantId],
         systemSlug,
