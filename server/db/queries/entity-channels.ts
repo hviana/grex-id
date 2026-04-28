@@ -79,18 +79,18 @@ export async function createChannel(params: {
   const verified = params.verified ?? false;
   const table = ownerTable(params.ownerKind);
   const result = await db.query<unknown[]>(
-    `LET $owner = (SELECT id, channelIds FROM ${table} WHERE id = $ownerId)[0];
-     LET $count = IF $owner = NONE THEN NONE ELSE array::len($owner.channelIds) END;
+    `LET $owner = (SELECT id, channelIds FROM ${table} WHERE id = $ownerId), 0);
+     LET $count = IF $owner = NONE THEN NONE ELSE set::len($owner.channelIds) END;
      LET $ch = IF ($count != NONE AND $count < $maxPerOwner) THEN (
        CREATE entity_channel SET
          type = $type,
          value = $value,
          verified = $verified
-     ) ELSE [] END;
+     ) ELSE {} END;
      LET $appended = IF array::len($ch) > 0 THEN (
        UPDATE $ownerId SET channelIds += $ch[0].id, updatedAt = time::now()
-     ) ELSE [] END;
-     IF array::len($ch) > 0 THEN (SELECT * FROM $ch[0].id) ELSE [] END;`,
+     ) ELSE {} END;
+     IF array::len($ch) > 0 THEN (SELECT * FROM $ch[0].id) ELSE {} END;`,
     {
       ownerId: rid(params.ownerId),
       type: params.type,
@@ -130,7 +130,7 @@ export async function deleteChannel(params: {
   void ownerTable(params.ownerKind);
   await db.query(
     `UPDATE $ownerId SET
-        channelIds = array::complement(channelIds, [$channelId]),
+        channelIds = set::difference(channelIds, {$channelId}),
         updatedAt = time::now();
      DELETE $channelId;`,
     {
@@ -174,7 +174,7 @@ export async function findChannelOwners(
                   WHERE type IN $types AND value IN $values);
      LET $chIds = $chs.id;
      LET $owners = IF array::len($chIds) = 0
-                   THEN []
+                   THEN {}
                    ELSE (SELECT id, channelIds FROM ${table}
                           WHERE channelIds ANYINSIDE $chIds)
                    END;
@@ -277,11 +277,11 @@ export async function findVerifiedOwnerByChannelValue(
      LET $ch    = $chs[0];
      LET $chId  = IF $ch = NONE THEN NONE ELSE $ch.id END;
      LET $uHit  = IF $chId = NONE
-                  THEN []
+                  THEN {}
                   ELSE (SELECT id FROM user WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
      LET $lHit  = IF $chId = NONE OR array::len($uHit) > 0
-                  THEN []
+                  THEN {}
                   ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
      IF array::len($uHit) > 0
@@ -332,11 +332,11 @@ export async function findVerifiedOwnerByTypedChannel(
      LET $ch    = $chs[0];
      LET $chId  = IF $ch = NONE THEN NONE ELSE $ch.id END;
      LET $uHit  = IF $chId = NONE
-                  THEN []
+                  THEN {}
                   ELSE (SELECT id FROM user WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
      LET $lHit  = IF $chId = NONE OR array::len($uHit) > 0
-                  THEN []
+                  THEN {}
                   ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
      IF array::len($uHit) > 0
@@ -375,7 +375,7 @@ export async function findChannelByOwnerTypeAndValue(
   const table = ownerTable(ownerKind);
   const result = await db.query<unknown[]>(
     `LET $owner = (SELECT channelIds FROM ${table} WHERE id = $ownerId)[0];
-     LET $ids   = IF $owner = NONE THEN [] ELSE $owner.channelIds END;
+     LET $ids   = IF $owner = NONE THEN {} ELSE $owner.channelIds END;
      SELECT * FROM entity_channel
      WHERE id IN $ids AND type = $type AND value = $value
      LIMIT 1;`,
@@ -394,7 +394,7 @@ export async function listVerifiedChannelTypes(
   const table = ownerTable(ownerKind);
   const result = await db.query<unknown[]>(
     `LET $owner = (SELECT channelIds FROM ${table} WHERE id = $ownerId)[0];
-     LET $ids   = IF $owner = NONE THEN [] ELSE $owner.channelIds END;
+     LET $ids   = IF $owner = NONE THEN {} ELSE $owner.channelIds END;
      SELECT type FROM entity_channel
      WHERE id IN $ids AND verified = true
      GROUP BY type;`,
@@ -414,7 +414,7 @@ export async function countVerifiedChannelsOfType(
   const table = ownerTable(ownerKind);
   const result = await db.query<unknown[]>(
     `LET $owner = (SELECT channelIds FROM ${table} WHERE id = $ownerId)[0];
-     LET $ids   = IF $owner = NONE THEN [] ELSE $owner.channelIds END;
+     LET $ids   = IF $owner = NONE THEN {} ELSE $owner.channelIds END;
      SELECT count() AS c FROM entity_channel
      WHERE id IN $ids AND type = $type AND verified = true
      GROUP ALL;`,
@@ -438,7 +438,7 @@ export async function findUserChannelByTypeValue(
     `LET $chIds = (SELECT VALUE id FROM entity_channel
                     WHERE type = $type AND value = $value);
      LET $users = IF array::len($chIds) = 0
-                  THEN []
+                  THEN {}
                   ELSE (SELECT id, channelIds FROM user
                         WHERE channelIds ANYINSIDE $chIds)
                   END;
@@ -451,8 +451,8 @@ export async function findUserChannelByTypeValue(
                         LIMIT 1)[0]
                   END;
      IF $match = NONE
-       THEN []
-       ELSE [{ id: $match.id, ownerId: $u.id, verified: $match.verified }]
+       THEN {}
+       ELSE {{ id: $match.id, ownerId: $u.id, verified: $match.verified },}
      END;`,
     { type, value },
   );

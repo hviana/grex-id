@@ -59,13 +59,13 @@ export async function getCoreCreditExpenses(params: {
   };
 
   if (params.tenantIds?.length) {
-    conditions.push("array::intersects(tenantIds, $tenantIds)");
+    conditions.push("set::intersects(tenantIds, $tenantIds)");
     bindings.tenantIds = params.tenantIds.map((id) => rid(id));
   }
 
   if (params.planIds?.length) {
     conditions.push(
-      "array::intersects(tenantIds, array::flatten((SELECT VALUE tenantIds FROM subscription WHERE planId IN $planIds AND status = 'active')))",
+      "set::intersects(tenantIds, set::flatten((SELECT VALUE tenantIds FROM subscription WHERE planId IN $planIds AND status = 'active')))",
     );
     bindings.planIds = params.planIds.map((id) => rid(id));
   }
@@ -106,7 +106,7 @@ export async function upsertUsageRecord(params: {
   const db = await getDb();
   await db.query(
     `UPSERT usage_record SET
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       resourceKey = $resourceKey,
       value += $value,
       period = $period

@@ -39,7 +39,7 @@ export async function seed(db: Surreal): Promise<void> {
     `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "admin",
-         tenantIds = [$systemTenantId],
+         tenantIds = {$systemTenantId},
          isBuiltIn = true
      };
      SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId`,
@@ -56,13 +56,13 @@ export async function seed(db: Surreal): Promise<void> {
     `IF array::len((SELECT id FROM role WHERE name = "grexid.detect" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "grexid.detect",
-         tenantIds = [$systemTenantId],
+         tenantIds = {$systemTenantId},
          isBuiltIn = false
      };
      IF array::len((SELECT id FROM role WHERE name = "grexid.list_locations" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "grexid.list_locations",
-         tenantIds = [$systemTenantId],
+         tenantIds = {$systemTenantId},
          isBuiltIn = false
      };
      SELECT id FROM role WHERE name IN ["grexid.detect", "grexid.list_locations"] AND tenantIds CONTAINS $systemTenantId`,
@@ -83,7 +83,7 @@ export async function seed(db: Surreal): Promise<void> {
     CREATE plan SET
       name = $name,
       description = $description,
-      tenantIds = [$systemTenantId],
+      tenantIds = {$systemTenantId},
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,

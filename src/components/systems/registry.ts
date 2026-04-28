@@ -6,6 +6,7 @@ const componentRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
   billing: lazy(() => import("@/src/components/shared/BillingPage")),
   profile: lazy(() => import("@/src/components/shared/ProfilePage")),
   "users-list": lazy(() => import("@/src/components/shared/UsersPage")),
+  "groups": lazy(() => import("@/src/components/shared/GroupsPage")),
   "company-edit": lazy(() => import("@/src/components/shared/CompanyEditPage")),
   "connected-apps": lazy(
     () => import("@/src/components/shared/ConnectedAppsPage"),
@@ -26,7 +27,6 @@ const componentRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
   "grexid-settings": lazy(
     () => import("@/src/components/systems/grex-id/SettingsPage"),
   ),
-  groups: lazy(() => import("@/src/components/shared/GroupsPage")),
 };
 
 export function registerComponent(

@@ -149,7 +149,7 @@ export async function subscribe(params: {
        IF $adminRoleId != NONE {
          LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $userId LIMIT 1)[0];
          IF $userRlId != NONE {
-           UPDATE $userRlId SET roleIds = array::union(roleIds ?? [], [$adminRoleId]);
+           UPDATE $userRlId SET roleIds = set::union(roleIds ?? {}, {$adminRoleId});
          };
        };`
     : "";
@@ -160,7 +160,7 @@ export async function subscribe(params: {
      };
      UPDATE subscription SET status = "cancelled" WHERE tenantIds CONTAINS $tenantId AND status = "active";
      CREATE subscription SET
-       tenantIds = [$tenantId],
+       tenantIds = {$tenantId},
        planId = $planId,
        paymentMethodId = ${
       params.paymentMethodId ? "$paymentMethodId" : "NONE"
@@ -221,7 +221,7 @@ export async function addPaymentMethod(data: {
       postalCode = $postalCode;
     LET $existingCount = (SELECT count() FROM payment_method WHERE tenantIds CONTAINS $tenantId GROUP ALL).count ?? 0;
     LET $pm = CREATE payment_method SET
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       type = "credit_card",
       data = $cardData,
       billingAddressId = $addr[0].id,
@@ -271,7 +271,7 @@ export async function removePaymentMethod(
        DELETE $pm[0].billingAddressId;
      };
      IF $pm[0].isDefault = true {
-       LET $next = (SELECT id FROM payment_method WHERE tenantIds CONTAINS $pm[0].tenantIds[0] LIMIT 1);
+       LET $next = (SELECT id FROM payment_method WHERE tenantIds CONTAINS set::at($pm[0].tenantIds, 0) LIMIT 1);
        IF $next[0].id != NONE {
          UPDATE $next[0].id SET isDefault = true;
        };
@@ -299,7 +299,7 @@ export async function purchaseCredits(params: {
     `LET $subId = (SELECT id FROM subscription
       WHERE tenantIds CONTAINS $tenantId AND status = "active" LIMIT 1)[0].id;
      CREATE credit_purchase SET
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       amount = $amount,
       paymentMethodId = $paymentMethodId,
       subscriptionId = $subId,
@@ -665,7 +665,7 @@ export async function getPaymentSubscriptionContext(params: {
      } ELSE {
        SELECT NONE FROM NONE;
      };
-     LET $tenantId = (SELECT VALUE tenantIds[0] FROM subscription WHERE id = $id LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE set::at(tenantIds, 0) FROM subscription WHERE id = $id LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
@@ -704,7 +704,7 @@ export async function createPaymentRecord(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE payment SET
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       subscriptionId = $subId,
       amount = $amount,
       currency = $currency,
@@ -803,7 +803,7 @@ export async function creditPurchaseOnSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
        AND resourceKey = "credits";`,
@@ -963,7 +963,7 @@ export async function getAsyncPaymentContext(
      } ELSE {
        SELECT NONE FROM NONE;
      };
-     LET $tenantId = (SELECT VALUE tenantIds[0] FROM payment WHERE id = $id LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE set::at(tenantIds, 0) FROM payment WHERE id = $id LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
@@ -1050,7 +1050,7 @@ export async function resolveAsyncCreditSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
        AND resourceKey = "credits";`,
@@ -1161,9 +1161,9 @@ export async function getAutoRechargeContext(
             tenantIds
      FROM subscription WHERE id = $subId LIMIT 1;
      SELECT id FROM payment_method
-       WHERE tenantIds CONTAINS (SELECT VALUE tenantIds[0] FROM subscription WHERE id = $subId LIMIT 1)[0]
+       WHERE tenantIds CONTAINS (SELECT VALUE set::at(tenantIds, 0) FROM subscription WHERE id = $subId LIMIT 1)[0]
        AND isDefault = true LIMIT 1;
-     LET $tenantId = (SELECT VALUE tenantIds[0] FROM subscription WHERE id = $subId LIMIT 1)[0];
+     LET $tenantId = (SELECT VALUE set::at(tenantIds, 0) FROM subscription WHERE id = $subId LIMIT 1)[0];
      LET $companyId = (SELECT VALUE companyId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
      LET $ownerId = (SELECT VALUE actorId FROM tenant WHERE companyId = $companyId AND !systemId AND isOwner = true LIMIT 1)[0];
      SELECT id, profileId.name AS name FROM user WHERE id = $ownerId LIMIT 1 FETCH profileId;
@@ -1199,7 +1199,7 @@ export async function createAutoRechargePurchase(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
-       tenantIds = [$tenantId],
+       tenantIds = {$tenantId},
        amount = $amount,
        paymentMethodId = $paymentMethodId,
        subscriptionId = $subscriptionId,

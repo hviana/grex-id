@@ -38,7 +38,7 @@ export async function createTokenWithResourceLimit(data: {
       creditLimitByResourceKey = $creditLimitByResourceKey,
       frontendDomains = $frontendDomains;
     LET $tkn = CREATE api_token SET
-      tenantIds = [$tenantId],
+      tenantIds = {$tenantId},
       name = $name,
       description = $description,
       actorType = $actorType,

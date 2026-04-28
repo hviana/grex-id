@@ -114,7 +114,7 @@ export async function inviteExistingUser(params: {
     inviterId: rid(params.inviterId),
   };
   const groupIdsField = params.groupIds?.length
-    ? `groupIds = [${params.groupIds.map((g) => rid(g)).join(", ")}],`
+    ? `groupIds = {${params.groupIds.map((g) => rid(g)).join(", ")}},`
     : "";
 
   const batchResult = await db.query<
@@ -184,7 +184,7 @@ export async function createTenantAssociations(params: {
     roleNames: params.roles,
   };
   const groupIdsSet = params.groupIds?.length
-    ? `groupIds = [${params.groupIds.map((g) => rid(g)).join(", ")}],`
+    ? `groupIds = {${params.groupIds.map((g) => rid(g)).join(", ")}},`
     : "";
   await db.query(
     `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $systemTenantId);
@@ -364,12 +364,12 @@ export async function hardDeleteUserIfOrphaned(
        WHERE actorId = $id AND companyId != NONE)[0].c;
      IF $tenantCount = 0 {
        LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
-       LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
+       LET $chIds = IF $usr = NONE THEN {} ELSE $usr.channelIds END;
        LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
                     THEN NONE
                     ELSE (SELECT recoveryChannelIds FROM $usr.profileId)[0]
                     END;
-       LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
+       LET $recIds = IF $prof = NONE THEN {} ELSE $prof.recoveryChannelIds END;
        DELETE verification_request WHERE ownerId = $id;
        DELETE tenant WHERE actorId = $id;
        DELETE $id;

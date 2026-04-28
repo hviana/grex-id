@@ -66,8 +66,8 @@ export async function atomicCommunicationGuard(params: {
         token = $verificationToken,
         expiresAt = $expiresAt,
         payload = $payload,
-        tenantIds = IF $tenantId != NONE THEN [$tenantId] ELSE NONE END
-    ) ELSE [] END;
+        tenantIds = IF $tenantId != NONE THEN {$tenantId} ELSE NONE END
+    ) ELSE {} END;
 
     [{
       blockedByPrevious: array::len($lastActive) > 0,

@@ -12,21 +12,14 @@ DEFINE FIELD accessesTenantIds ON TABLE shared_record
   DEFAULT <set>[];
 
 DEFINE FIELD permissions ON TABLE shared_record
-  TYPE string
-  ASSERT $value IN ["r", "w", "rw", "share"];
-
-DEFINE FIELD shareKey ON TABLE shared_record
-  VALUE <string>[
-    recordId,
-    ownerTenantId,
-    accessesTenantIds,
-    permissions
-  ]
-  READONLY;
+  TYPE set<string>
+  DEFAULT <set>[]
+  ASSERT $value.len() > 0
+     AND $value.all(|$permission| $permission IN ["r", "w", "share"]);
 
 DEFINE INDEX idx_shared_record_unique_share
   ON TABLE shared_record
-  COLUMNS shareKey
+  COLUMNS recordId, ownerTenantId, accessesTenantIds, permissions
   UNIQUE;
 
 DEFINE INDEX idx_shared_record_record

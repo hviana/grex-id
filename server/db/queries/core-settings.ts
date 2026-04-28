@@ -229,12 +229,12 @@ export async function batchUpsertSettings(
     bindings[tKey] = item.tenantId ?? "__core__";
     if (item.tenantId) {
       stmts.push(
-        `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = [$${tKey}], updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
+        `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = {$${tKey}}, updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
       );
     } else {
       // Core-level setting — use the core system tenant
       stmts.push(
-        `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, updatedAt = time::now() WHERE key = $k${i} AND array::len(tenantIds) = 0`,
+        `UPSERT setting SET key = $k${i}, value = $v${i}, description = $d${i}, updatedAt = time::now() WHERE key = $k${i} AND set::len(tenantIds) = 0`,
       );
     }
   });

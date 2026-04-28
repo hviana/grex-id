@@ -98,26 +98,30 @@ informational surfaces show translation only.
 - **Compositional DB model.** Reusable structures (profile, address,
   entity_channel) are separate `SCHEMAFULL` tables linked via `record<>`.
   Composables carry **no back-pointer** to their parent — the parent holds the
-  link (scalar for one-to-one, `array<record<>>` for collections). To create:
+  link (scalar for one-to-one, `set<record<>>` for collections). To create:
   create composable first, then parent referencing it. To delete: follow the
   cascade rules in §2.4.2.
 - **Record-reference field naming.** Every field typed `record<T>` ends with
   `Id` (e.g. `profileId`, `ownerId`, `planId`). Every field typed
-  `array<record<T>>` ends with `Ids` (e.g. `channelIds`, `tagIds`,
-  `companyIds`). **Tenant references always use
-  `tenantIds:
-  array<record<tenant>>`** — never a single `tenantId`, and never
-  scattered `companyId`/`systemId`/`userId` columns. Table names are singular,
-  in lowercase with words separated by underscores. Fields are in camel case. No
-  exceptions. This applies to migrations, contracts, queries, and frontend code
-  uniformly. **Non-shared entities** (not cross-tenant) declare
-  `tenantIds DEFINE FIELD ... TYPE array<record<tenant>, 1>` to enforce
+  `set<record<T>>` ends with `Ids` (e.g. `channelIds`, `tagIds`, `companyIds`).
+  **Tenant references always use `tenantIds:
+  set<record<tenant>>`** — never a
+  single `tenantId`, and never scattered `companyId`/`systemId`/`userId`
+  columns. Table names are singular, in lowercase with words separated by
+  underscores. Fields are in camel case. No exceptions. This applies to
+  migrations, contracts, queries, and frontend code uniformly. **Non-shared
+  entities** (not cross-tenant) declare
+  `tenantIds DEFINE FIELD ... TYPE set<record<tenant>, 1>` to enforce
   single-tenant consistency at the schema level: `subscription`,
   `payment_method`, `credit_purchase`, `payment`, `connected_app`,
   `connected_service`, `api_token`, `usage_record`, `credit_expense`,
   `location`, `tag`, `role`, `plan`, `menu_item`.
 - **Optimization.** Any field used in queries to select/filter data or used as a
   cursor should be indexed.
+- **Correct data structures/avoid replication.** Use `set` instead of `array` in
+  schemas where possible to avoid replication, always with a limit if
+  applicable. Use a UNIQUE index whenever necessary, including multiple fields
+  within the same UNIQUE index, also to avoid replication.
 - **Single-batched-query rule.** Every query function batches all statements
   into one `db.query()` call. Never sequential `await db.query()`, never
   `Promise.all` of multiple `db.query()`. Pass values between statements with
@@ -200,7 +204,7 @@ Every entity delete follows the **dissociate → orphan-check → hard-delete**
 cycle, executed in one batched query:
 
 1. **Dissociate** — remove or clear the parent's reference(s) to the composable
-   (`field = NONE` or remove from `array<record<>>`).
+   (`field = NONE` or remove from `set<record<>>`).
 2. **Orphan-check** — query whether any other row still references the
    composable.
 3. **Hard-delete** — if no references remain, delete the composable row and
@@ -339,11 +343,11 @@ middleware that queries the DB without a cache comes last.
 
 Three reusable composables, each `SCHEMAFULL` and unaware of its parents:
 
-| Table            | Fields (rule-bearing)                                                                                           | Referenced by                                                                                 |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `profile`        | name (FULLTEXT), avatarUri, dateOfBirth (datetime), locale, `recoveryChannelIds: array<record<entity_channel>>` | `user.profileId`, `lead.profileId`                                                            |
-| `address`        | street, number, …, postalCode                                                                                   | `company.billingAddressId` (option), `payment_method.billingAddressId`, `location` (embedded) |
-| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)                           | `user.channelIds[]`, `lead.channelIds[]`, `profile.recoveryChannelIds[]`                      |
+| Table            | Fields (rule-bearing)                                                                                         | Referenced by                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `profile`        | name (FULLTEXT), avatarUri, dateOfBirth (datetime), locale, `recoveryChannelIds: set<record<entity_channel>>` | `user.profileId`, `lead.profileId`                                                            |
+| `address`        | street, number, …, postalCode                                                                                 | `company.billingAddressId` (option), `payment_method.billingAddressId`, `location` (embedded) |
+| `entity_channel` | type (open string; seeded `"email"`,`"phone"`), value, verified (bool, default false)                         | `user.channelIds[]`, `lead.channelIds[]`, `profile.recoveryChannelIds[]`                      |
 
 **`profile.recoveryChannelIds`** is reserved **exclusively** for
 account-recovery paths — never read by login, communication dispatch, or the
@@ -353,32 +357,32 @@ approval invariant. It is independent of `user.channelIds`.
 
 | Table                  | Key rules                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`; `resourceLimitId: record<resource_limit>` (roleIds resolved through this link). No identity fields (email/phone) on the row itself.                                                                           |
+| `user`                 | `profileId: record<profile>`; `channelIds: set<record<entity_channel>>`; `tenantIds: set<record<tenant>>`; `passwordHash`; `twoFactorEnabled`; `twoFactorSecret`, `pendingTwoFactorSecret` (AES-GCM envelopes); `stayLoggedIn`; `resourceLimitId: record<resource_limit>` (roleIds resolved through this link). No identity fields (email/phone) on the row itself.                                                                               |
 | `oauth_identity`       | One row per `(provider, providerUserId)` linked to `userId`. Unique composite index on that pair; secondary index on `userId`. Multiple providers per user allowed.                                                                                                                                                                                                                                                                               |
 | `company`              | Unique `document`; `billingAddressId: option<record<address>>`. No `ownerId` — owner resolved via `tenant.isOwner = true` for this company.                                                                                                                                                                                                                                                                                                       |
 | `system`               | Unique `slug`; `logoUri`, `defaultLocale`, `termsOfService`                                                                                                                                                                                                                                                                                                                                                                                       |
 | `tenant`               | Universal scope table. `actorId: option<record>` (user/api_token/connected_app), `companyId: option<record<company>>`, `systemId: option<record<system>>` (all optional; at least one must be set). `isOwner: bool` (marks company owner). Unique `(actorId, companyId, systemId)`. Roles are resolved via `resource_limit.roleIds` — there is no `roleIds` column on `tenant`. Replaces `company_user`, `user_company_system`, `company_system`. |
-| `role`                 | `tenantIds: array<record<tenant>>` (system-only tenants); unique `(name, tenantIds)`; `isBuiltIn`. Seeded built-in roles per system: core gets `superuser`; each subsystem gets `admin`. Additional roles created via admin panel.                                                                                                                                                                                                                |
-| `plan`                 | `tenantIds: array<record<tenant>>` (system-only tenants). See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                                                                                                                                                        |
-| `voucher`              | Unique `code`; `applicableTenantIds: array<record<tenant>>`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                                                                                                                                                                                                  |
-| `menu_item`            | `parentId` optional, unlimited depth; `tenantIds: array<record<tenant>>` (system-only tenants); index `(tenantIds, parentId, sortOrder)`                                                                                                                                                                                                                                                                                                          |
-| `subscription`         | `tenantIds: array<record<tenant>>` (company-system tenants). See §7.2                                                                                                                                                                                                                                                                                                                                                                             |
-| `payment_method`       | `tenantIds: array<record<tenant>>` (company-only tenants); `billingAddressId: record<address>`; `isDefault`                                                                                                                                                                                                                                                                                                                                       |
-| `credit_purchase`      | `tenantIds: array<record<tenant>>` (company-system tenants); status `pending`                                                                                                                                                                                                                                                                                                                                                                     |
-| `payment`              | `tenantIds: array<record<tenant>>` (company-system tenants). Unified payment ledger (§7.5)                                                                                                                                                                                                                                                                                                                                                        |
-| `connected_app`        | `tenantIds: array<record<tenant>>` (app actor + company + system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                                                                                                                                                                                     |
-| `connected_service`    | `tenantIds: array<record<tenant>>` (user actor + company + system). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                                                                                                                                                                                   |
-| `api_token`            | Row id = universal actor id. `tenantIds: array<record<tenant>>`. Bearer is a JWT carrying that id. Fields: `neverExpires` XOR `expiresAt`, `revokedAt`, `actorType` (`"token"` or `"app"`), `resourceLimitId: record<resource_limit>` (per-resource caps, roles, frontendDomains).                                                                                                                                                                |
-| `usage_record`         | `tenantIds: array<record<tenant>>` (actor + company + system); upserted for `YYYY-MM`                                                                                                                                                                                                                                                                                                                                                             |
-| `credit_expense`       | `tenantIds: array<record<tenant>>` (company-system tenants); daily container; unique `(tenantIds, resourceKey, day)`; fields `amount` (cents total), `count` (ops) — both increment via UPSERT                                                                                                                                                                                                                                                    |
+| `role`                 | `tenantIds: set<record<tenant>>` (system-only tenants); unique `(name, tenantIds)`; `isBuiltIn`. Seeded built-in roles per system: core gets `superuser`; each subsystem gets `admin`. Additional roles created via admin panel.                                                                                                                                                                                                                  |
+| `plan`                 | `tenantIds: set<record<tenant>>` (system-only tenants). See §7.1 for rule-bearing fields (entity limits, credits, transfer limits, per-resource op caps)                                                                                                                                                                                                                                                                                          |
+| `voucher`              | Unique `code`; `applicableTenantIds: set<record<tenant>>`, `applicablePlanIds` (empty = universal); per-limit modifiers (§7.7)                                                                                                                                                                                                                                                                                                                    |
+| `menu_item`            | `parentId` optional, unlimited depth; `tenantIds: set<record<tenant>>` (system-only tenants); index `(tenantIds, parentId, sortOrder)`                                                                                                                                                                                                                                                                                                            |
+| `subscription`         | `tenantIds: set<record<tenant>>` (company-system tenants). See §7.2                                                                                                                                                                                                                                                                                                                                                                               |
+| `payment_method`       | `tenantIds: set<record<tenant>>` (company-only tenants); `billingAddressId: record<address>`; `isDefault`                                                                                                                                                                                                                                                                                                                                         |
+| `credit_purchase`      | `tenantIds: set<record<tenant>>` (company-system tenants); status `pending`                                                                                                                                                                                                                                                                                                                                                                       |
+| `payment`              | `tenantIds: set<record<tenant>>` (company-system tenants). Unified payment ledger (§7.5)                                                                                                                                                                                                                                                                                                                                                          |
+| `connected_app`        | `tenantIds: set<record<tenant>>` (app actor + company + system); `apiTokenId` link for revocation cascade; per-resource `maxOperationCount`                                                                                                                                                                                                                                                                                                       |
+| `connected_service`    | `tenantIds: set<record<tenant>>` (user actor + company + system). Admin sees all users' services; regular users see only their own. FULLTEXT on `name` for search. `data` is FLEXIBLE for per-service config.                                                                                                                                                                                                                                     |
+| `api_token`            | Row id = universal actor id. `tenantIds: set<record<tenant>>`. Bearer is a JWT carrying that id. Fields: `neverExpires` XOR `expiresAt`, `revokedAt`, `actorType` (`"token"` or `"app"`), `resourceLimitId: record<resource_limit>` (per-resource caps, roles, frontendDomains).                                                                                                                                                                  |
+| `usage_record`         | `tenantIds: set<record<tenant>>` (actor + company + system); upserted for `YYYY-MM`                                                                                                                                                                                                                                                                                                                                                               |
+| `credit_expense`       | `tenantIds: set<record<tenant>>` (company-system tenants); daily container; unique `(tenantIds, resourceKey, day)`; fields `amount` (cents total), `count` (ops) — both increment via UPSERT                                                                                                                                                                                                                                                      |
 | `queue_event`          | `payload: object FLEXIBLE`                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `delivery`             | One row per handler per event; status `pending`                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `verification_request` | `actionKey` (i18n), `ownerId: record<user`                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `setting`              | `tenantIds: array<record<tenant>>`. Unique `(key, tenantIds)`. Applicable to any tenant — system-level, company-system, or actor-scoped. Server-only consumption.                                                                                                                                                                                                                                                                                 |
+| `setting`              | `tenantIds: set<record<tenant>>`. Unique `(key, tenantIds)`. Applicable to any tenant — system-level, company-system, or actor-scoped. Server-only consumption.                                                                                                                                                                                                                                                                                   |
 | `front_setting`        | Same shape as `setting`, keyed by `(key, tenantIds)`. Physically separate table so the frontend bundle cannot leak server secrets.                                                                                                                                                                                                                                                                                                                |
-| `lead`                 | `profileId: record<profile>`; `channelIds: array<record<entity_channel>>`; `tenantIds: array<record<tenant>>`; `tagIds: array<record<tag>>`                                                                                                                                                                                                                                                                                                       |
-| `location`             | `tenantIds: array<record<tenant>>` (company-system tenants); address embedded inline                                                                                                                                                                                                                                                                                                                                                              |
-| `tag`                  | `tenantIds: array<record<tenant>>` (company-system tenants); unique `(name, tenantIds)`                                                                                                                                                                                                                                                                                                                                                           |
+| `lead`                 | `profileId: record<profile>`; `channelIds: set<record<entity_channel>>`; `tenantIds: set<record<tenant>>`; `tagIds: set<record<tag>>`                                                                                                                                                                                                                                                                                                             |
+| `location`             | `tenantIds: set<record<tenant>>` (company-system tenants); address embedded inline                                                                                                                                                                                                                                                                                                                                                                |
+| `tag`                  | `tenantIds: set<record<tenant>>` (company-system tenants); unique `(name, tenantIds)`                                                                                                                                                                                                                                                                                                                                                             |
 | `file_access`          | Unique `name` (FULLTEXT); `categoryPattern`, `download` + `upload` sections (see §6)                                                                                                                                                                                                                                                                                                                                                              |
 
 **Tenant row types.** The `tenant` table serves multiple roles through optional
@@ -487,7 +491,7 @@ interface TenantContext {
 
 Every `Tenant` corresponds to a real row in the `tenant` table. `tenant.id` is
 the universal scope key — used as the actor-validity cache shard key. Scoped
-tables store `tenantIds: array<record<tenant>>` and are queried with
+tables store `tenantIds: set<record<tenant>>` and are queried with
 `tenantIds CONTAINS $tenantId`. Workers and jobs use `getSystemTenant()` to
 obtain the core tenant record ID with the `superuser` role. Anonymous operations
 authenticate via the seeded anonymous API token, which carries the core tenant
@@ -887,7 +891,7 @@ dispatchCommunication({
   channels: string[],                  // ordered; empty → auth.communication.defaultChannels
   senders?: string[],                  // per-channel override
   recipients: string[],                // raw values OR entity ids (user:…/lead:…) —
-                                       // resolved via parent's channelIds array, filtered
+                                       // resolved via parent's channelIds set, filtered
                                        // by entity_channel.type = <current channel>, verified=true
   template: string | TemplateBuilder,  // channel-less path; dispatcher prepends <channel>/
   templateData: Record<string, unknown> // includes tenant context + locale — no sensitive data
@@ -922,7 +926,7 @@ dispatchCommunication({
 
 1. Resolve locale (§2.3).
 2. Resolve recipients. For `user:…`/`lead:…` ids: FETCH parent's `channelIds`
-   array, filter `type=<channel> AND verified=true`, use `value`. If none →
+   set, filter `type=<channel> AND verified=true`, use `value`. If none →
    `{delivered:false, reason:"no-recipients"}`.
 3. Resolve senders (`payload.senders` → `communication.<channel>.senders`
    setting).
@@ -1275,7 +1279,7 @@ cache; cold-start, logout, role change, exchange → refresh fails with
 
 ### 8.2 Account-approval invariant
 
-An account (user/lead) is "approved" iff its `channelIds` array contains **≥1
+An account (user/lead) is "approved" iff its `channelIds` set contains **≥1
 verified `entity_channel`**. There are no identity fields on `user`/`lead`
 themselves. `profile.recoveryChannelIds` does **not** satisfy this invariant (it
 is recovery-only — §3.3).
@@ -1363,8 +1367,8 @@ via the Companies admin page "Access" button).
   any block/miss.
 - **Channel lifecycle** (user.channelIds / lead.channelIds):
   - **Add** `POST /api/entity-channels`: create
-    `entity_channel(verified=false)` + append id to parent's `channelIds` array
-    in one batch; open
+    `entity_channel(verified=false)` + append id to parent's `channelIds` set in
+    one batch; open
     `verification_request(actionKey="auth.action.entityChannelAdd")`.
   - **Verify**: confirmation link → `POST /api/auth/verify` flips channel(s) to
     verified.

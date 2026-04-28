@@ -68,7 +68,7 @@ export async function resolveChannelRecipients(
     const { table, id } = owners[i];
     vars[`owner_${i}`] = id;
     letStmts.push(
-      `LET $channels_${i} = (SELECT channelIds FROM ${table} WHERE id = $owner_${i})[0].channelIds ?? [];`,
+      `LET $channels_${i} = (SELECT channelIds FROM ${table} WHERE id = $owner_${i})[0].channelIds ?? {};`,
     );
   }
 
@@ -87,7 +87,7 @@ export async function resolveChannelRecipients(
 
   if (includeUnverified) {
     letStmts.push(
-      `LET $unverifiedValues = array::distinct(
+      `LET $unverifiedValues = (
          SELECT VALUE value FROM $ownerChannels WHERE verified = false
        );`,
     );

@@ -45,7 +45,7 @@ export async function createPlanWithResourceLimit(data: {
       recurrenceDays = $recurrenceDays,
       isActive = $isActive,
       resourceLimitId = $rl[0].id,
-      tenantIds = [$tenantId];
+      tenantIds = {$tenantId};
     SELECT * FROM $p[0].id FETCH resourceLimitId;`,
     {
       name: data.name,

@@ -155,7 +155,7 @@ export async function listDetections(
 
     SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
 
-    LET $leadIds = array::distinct(SELECT VALUE leadId FROM (SELECT leadId, detectedAt FROM grexid_detection ${whereClause} AND leadId ORDER BY detectedAt DESC LIMIT $limit));
+    LET $leadIds = (SELECT VALUE leadId FROM (SELECT leadId, detectedAt FROM grexid_detection ${whereClause} AND leadId ORDER BY detectedAt DESC LIMIT $limit));
 
     SELECT id AS leadId, ownerId FROM lead
       WHERE id IN $leadIds
@@ -344,8 +344,8 @@ export async function getDetectionStats(params: {
 
     SELECT
         faceId,
-        array::first(leadId) AS leadId,
-        array::first(locationId) AS locationId,
+        set::at(leadId, 0) AS leadId,
+        set::at(locationId, 0) AS locationId,
         count() AS detectionCount,
         math::max(score) AS bestScore,
         time::max(detectedAt) AS lastDetectedAt
@@ -364,7 +364,7 @@ export async function getDetectionStats(params: {
         AND detectedAt <= type::datetime($endDate)${locationFilter};
 
     // 3) Batch-check lead membership via tenantIds for classification
-    LET $leadIds = array::distinct(SELECT VALUE leadId
+    LET $leadIds = (SELECT VALUE leadId
       FROM grexid_detection
       WHERE locationId.tenantIds CONTAINS $sysTenantId
         AND detectedAt >= type::datetime($startDate)

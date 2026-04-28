@@ -112,19 +112,19 @@ export async function listCoreCompanies(
      SELECT
        companyId,
        systemId,
-       array::first(SELECT VALUE name FROM system WHERE id = $parent.systemId LIMIT 1) AS systemName,
-       array::first(SELECT VALUE slug FROM system WHERE id = $parent.systemId LIMIT 1) AS systemSlug
+       (SELECT VALUE name FROM system WHERE id = $parent.systemId LIMIT 1)[0] AS systemName,
+       (SELECT VALUE slug FROM system WHERE id = $parent.systemId LIMIT 1)[0] AS systemSlug
      FROM tenant
      WHERE companyId IN $companyIds AND !actorId AND systemId
      ORDER BY systemId;
      SELECT
        id,
-       tenantIds[0] AS tenantId,
+       set::at(tenantIds, 0) AS tenantId,
        companyId,
        systemId,
        status,
-       array::first(SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1) AS planName,
-       array::first(SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1) AS planPrice
+       (SELECT VALUE name FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planName,
+       (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
      FROM subscription
      WHERE tenantIds[0] IN (SELECT VALUE id FROM tenant WHERE companyId IN $companyIds AND !actorId AND systemId);`,
     bindings,

@@ -104,8 +104,8 @@ export async function findUserByVerifiedChannel(
 export async function userHasVerifiedChannel(userId: string): Promise<boolean> {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $u   = (SELECT channelIds FROM user WHERE id = $userId)[0];
-     LET $ids = IF $u = NONE THEN [] ELSE $u.channelIds END;
+    `LET $u   = (SELECT channelIds FROM user WHERE id = $userId), 0);
+     LET $ids = IF $u = NONE THEN {} ELSE $u.channelIds END;
      SELECT count() AS c FROM entity_channel
      WHERE id IN $ids AND verified = true
      GROUP ALL;`,
@@ -165,15 +165,15 @@ export async function createUserWithChannels(params: {
     LET $prof = CREATE profile SET
       name = $name,
       locale = $locale,
-      recoveryChannelIds = [];
+      recoveryChannelIds = {};
     LET $rl = CREATE resource_limit SET
-      roleIds = [],
-      benefits = [];
+      roleIds = {},
+      benefits = {};
     LET $usr  = CREATE user SET
       passwordHash = crypto::argon2::generate($password),
       profileId = $prof[0].id,
       resourceLimitId = $rl[0].id,
-      channelIds = [${channelsArray}],
+      channelIds = {${channelsArray}},
       twoFactorEnabled = false,
       stayLoggedIn = false;
     SELECT * FROM $usr[0].id FETCH profileId, channelIds;`;
@@ -280,8 +280,8 @@ export async function purgeAbandonedUsers(userIds: string[]): Promise<void> {
   await db.query(
     `LET $targets = $userIds;
      LET $users = (SELECT id, profileId, channelIds FROM user WHERE id IN $targets);
-     LET $profileIds = array::distinct($users.profileId);
-     LET $channelIds = array::distinct(array::flatten($users.channelIds));
+     LET $profileIds = $users.profileId;
+     LET $channelIds = set::flatten($users.channelIds);
      LET $tenantIds = (SELECT VALUE id FROM tenant WHERE actorId IN $targets);
      DELETE verification_request WHERE ownerId IN $targets;
      DELETE tenant WHERE actorId IN $targets;
@@ -321,13 +321,13 @@ export async function resolveUserMembership(userId: string): Promise<
        LIMIT 1);
      LET $sys = IF array::len($t) > 0
        THEN (SELECT slug FROM system WHERE id = $t[0].systemId LIMIT 1)
-       ELSE [] END;
+       ELSE {} END;
      LET $roleIds = IF array::len($t) > 0
        THEN (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $userId LIMIT 1)[0]
-       ELSE [] END;
+       ELSE {} END;
      LET $roleNames = IF array::len($roleIds) > 0
        THEN (SELECT VALUE name FROM role WHERE id IN $roleIds)
-       ELSE [] END;
+       ELSE {} END;
      [{ tenantId: $t[0].id, companyId: $t[0].companyId, systemId: $t[0].systemId,
         systemSlug: $sys[0].slug, roles: $roleNames }];`,
     { userId: rid(userId) },
@@ -402,10 +402,10 @@ export async function resolveUserExchange(
      LET $sys = (SELECT slug FROM system WHERE id = $systemId LIMIT 1);
      LET $roleIds = IF array::len($t) > 0
        THEN (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $userId LIMIT 1)[0]
-       ELSE [] END;
+       ELSE {} END;
      LET $roleNames = IF array::len($roleIds) > 0
        THEN (SELECT VALUE name FROM role WHERE id IN $roleIds)
-       ELSE [] END;
+       ELSE {} END;
      [{ tenantId: $t[0].id, slug: $sys[0].slug, roles: $roleNames }];`,
     {
       userId: rid(userId),

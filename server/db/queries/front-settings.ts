@@ -117,11 +117,11 @@ export async function batchUpsertFrontSettings(
     bindings[tKey] = item.tenantId ?? "__core__";
     if (item.tenantId) {
       stmts.push(
-        `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = [$${tKey}], updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
+        `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, tenantIds = {$${tKey}}, updatedAt = time::now() WHERE key = $k${i} AND tenantIds CONTAINS $${tKey}`,
       );
     } else {
       stmts.push(
-        `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, updatedAt = time::now() WHERE key = $k${i} AND array::len(tenantIds) = 0`,
+        `UPSERT front_setting SET key = $k${i}, value = $v${i}, description = $d${i}, updatedAt = time::now() WHERE key = $k${i} AND set::len(tenantIds) = 0`,
       );
     }
   });

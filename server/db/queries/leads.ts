@@ -145,11 +145,11 @@ export async function createLead(data: {
       name = $profileName,
       avatarUri = $avatarUri,
       dateOfBirth = $dateOfBirth,
-      recoveryChannelIds = [];
+      recoveryChannelIds = {};
     LET $ld = CREATE lead SET
       name = $name,
       profileId = $prof[0].id,
-      channelIds = [${channelsArray}],
+      channelIds = {${channelsArray}},
       tenantIds = $tenantIds,
       tagIds = $tags;
     SELECT * FROM $ld[0].id FETCH profileId, channelIds;`;
@@ -234,12 +234,12 @@ export async function deleteLead(id: string): Promise<void> {
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
     `LET $ld    = (SELECT profileId, channelIds FROM lead WHERE id = $id)[0];
-     LET $chIds = IF $ld = NONE THEN [] ELSE $ld.channelIds END;
+     LET $chIds = IF $ld = NONE THEN {} ELSE $ld.channelIds END;
      LET $prof  = IF $ld = NONE OR $ld.profileId = NONE
                   THEN NONE
                   ELSE (SELECT recoveryChannelIds FROM $ld.profileId)[0]
                   END;
-     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
+     LET $recIds = IF $prof = NONE THEN {} ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE FROM lead WHERE id = $id;
      FOR $cid IN $chIds { DELETE $cid; };
@@ -299,24 +299,24 @@ export async function syncLeadChannels(
   for (const ch of channels) {
     await db.query(
       `LET $lead = (SELECT channelIds FROM lead WHERE id = $owner)[0];
-         LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channelIds END;
+         LET $ids  = IF $lead = NONE THEN {} ELSE $lead.channelIds END;
          LET $existing = (SELECT id FROM entity_channel
            WHERE id IN $ids AND type = $type AND value = $value
            LIMIT 1);
          LET $new = IF $lead != NONE AND array::len($existing) = 0 THEN (
            CREATE entity_channel SET
              type = $type, value = $value, verified = true
-         ) ELSE [] END;
+         ) ELSE {} END;
          LET $appended = IF array::len($new) > 0 THEN (
            UPDATE $owner SET
              channelIds += $new[0].id,
              updatedAt = time::now()
-         ) ELSE [] END;
+         ) ELSE {} END;
          LET $flipped = IF array::len($existing) > 0 THEN (
            UPDATE $existing[0].id SET
              verified = true,
              updatedAt = time::now()
-         ) ELSE [] END;`,
+         ) ELSE {} END;`,
       {
         owner: rid(leadId),
         type: ch.type,

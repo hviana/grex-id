@@ -83,10 +83,10 @@ export interface CascadeChild {
    */
   sourceField?: string;
   /**
-   * For DELETE: whether the child's parentField is an array<record<>>.
-   * For READ:   whether the parent's sourceField is an array (e.g. tagIds vs
+   * For DELETE: whether the child's parentField is a set<record<>>.
+   * For READ:   whether the parent's sourceField is a set (e.g. tagIds vs
    * tagId). Drives the SurrealQL projection: scalar refs use `$parent.field`,
-   * array refs use `array::flatten($parent.field)`. JS-side distribution
+   * set refs use `set::flatten($parent.field)`. JS-side distribution
    * still detects via Array.isArray on each parent's value.
    */
   isArray?: boolean;
@@ -283,7 +283,7 @@ async function addTenantConditions(
 /**
  * Returns tenant-derived SET clause parts for CREATE/UPDATE statements.
  *
- * For `tenantIds` (array field), emits `tenantIds = [$tenantId]` on create.
+ * For `tenantIds` (set field), emits `tenantIds = {$tenantId}` on create.
  * For scalar fields, emits `field = $binding`.
  */
 async function addTenantSetClauses(
@@ -296,7 +296,7 @@ async function addTenantSetClauses(
   const tb = await buildTenantConditions(tenant, table);
   for (const cond of tb.conditions) {
     if (cond.startsWith("tenantIds CONTAINS")) {
-      setClauses.push("tenantIds = [$tenantId]");
+      setClauses.push("tenantIds = {$tenantId}");
     } else {
       setClauses.push(cond);
     }
@@ -315,7 +315,7 @@ async function addTenantSetClauses(
 //   LET $__items   = (SELECT * FROM task WHERE ...);
 //   LET $cascade0  = SELECT * FROM user WHERE id IN $__items.assigneeId AND ...;
 //   LET $cascade1  = SELECT * FROM company WHERE id IN $cascade0.companyId AND ...;
-//   LET $cascade2  = SELECT * FROM tag WHERE id IN array::flatten($__items.tagIds) AND ...;
+//   LET $cascade2  = SELECT * FROM tag WHERE id IN set::flatten($__items.tagIds) AND ...;
 //
 // Then a single `RETURN { items, total, cascade0, cascade1, ... }` packages
 // everything for one db.query() call. JS-side, `distributeCascade` walks the
@@ -356,7 +356,7 @@ async function planCascade(
     // Project the child id source from the parent LET. Array-ref fields need
     // flattening because $items.tagIds is array<array<>>.
     const idSource = isArray
-      ? `array::flatten(${parentVar}.${sourceField})`
+      ? `set::flatten(${parentVar}.${sourceField})`
       : `${parentVar}.${sourceField}`;
 
     // Tenant-scope this child the same way as everything else, but with a
@@ -576,7 +576,7 @@ export async function genericList<T = Record<string, unknown>>(
   const query = [
     `LET $__items = (${itemsSelect});`,
     `LET $__totalRow = (${countSelect});`,
-    `LET $__total = IF array::len($__totalRow) > 0 THEN $__totalRow[0].c ELSE 0 END;`,
+    `LET $__total = IF array::len($__totalRow) > 0 THEN $$__totalRow[0].c ELSE 0 END;`,
     ...builder.letStatements,
     `RETURN { items: $__items, total: $__total${cascadeReturn} };`,
   ].join("\n");
@@ -669,7 +669,7 @@ export async function genericGetById<T = Record<string, unknown>>(
   const query = [
     `LET $__entity = (${entitySelect});`,
     ...builder.letStatements,
-    `RETURN { entity: $__entity[0]${cascadeReturn} };`,
+    `RETURN { entity: $$__entity[0]${cascadeReturn} };`,
   ].join("\n");
 
   const result = await db.query<unknown[]>(query, bindings);
@@ -1009,7 +1009,7 @@ export async function genericDelete(
     Object.assign(dissociateBindings, tenantBind.bindings);
 
     const queries: string[] = [
-      `UPDATE ${opts.table} SET tenantIds = tenantIds[WHERE $this != $tenantId] WHERE id = $id AND array::len(tenantIds) > 1${tenantWhereClause};`,
+      `UPDATE ${opts.table} SET tenantIds = tenantIds[WHERE $this != $tenantId] WHERE id = $id AND set::len(tenantIds) > 1${tenantWhereClause};`,
     ];
 
     const orphanChecks = await buildOrphanChecks(opts.table, id, opts.cascade);
@@ -1091,7 +1091,7 @@ async function buildOrphanChecks(
   }
 
   checks.push(
-    `array::len(SELECT id FROM ${table} WHERE id = $eid AND array::len(tenantIds) > 1) = 0`,
+    `array::len(SELECT id FROM ${table} WHERE id = $eid AND set::len(tenantIds) > 1) = 0`,
   );
 
   const queries = [

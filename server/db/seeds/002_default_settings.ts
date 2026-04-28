@@ -236,7 +236,7 @@ export async function seed(db: Surreal): Promise<void> {
         key = $key,
         value = $value,
         description = $description,
-        tenantIds = [$tenantId]`,
+        tenantIds = {$tenantId}`,
       {
         key: setting.key,
         value: setting.value,
