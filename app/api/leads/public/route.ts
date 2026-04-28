@@ -181,6 +181,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
           changes: [
             {
               action: "update",
+              actionKey: "auth.action.leadUpdate",
               entity: "lead",
               id: existing.id,
               fields: {
@@ -192,6 +193,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             ...(channels?.length
               ? [{
                 action: "custom" as const,
+                actionKey: "auth.action.leadUpdate",
                 entity: "lead" as const,
                 id: existing.id,
                 fields: { syncChannels: channels },
@@ -200,6 +202,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
             ...(tenantIds?.length
               ? [{
                 action: "custom" as const,
+                actionKey: "auth.action.leadUpdate",
                 entity: "lead" as const,
                 id: existing.id,
                 fields: { associateTenants: tenantIds },
@@ -315,7 +318,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       ownerId: lead.id,
       ownerType: "lead",
       actionKey: "auth.action.leadRegister",
-      payload: { changes: channelIds.map((id: string) => ({ action: "update" as const, entity: "entity_channel", id, fields: { verified: true } })) },
+      payload: { changes: channelIds.map((id: string) => ({ action: "update" as const, actionKey: "auth.action.leadRegister", entity: "entity_channel", id, fields: { verified: true } })) },
       tenant: {
         tenantIds: [ctx.tenantContext.tenant.id!],
         systemSlug,

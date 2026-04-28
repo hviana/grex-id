@@ -104,6 +104,7 @@ async function postHandler(
       changes: restrictedEntities.includes(entityType)
         ? [{
           action: "create" as const,
+          actionKey: "access.request",
           entity: "shared_record",
           fields: {
             recordId: entityId,
@@ -115,11 +116,13 @@ async function postHandler(
         : entityType === "user"
         ? [{
           action: "custom" as const,
+          actionKey: "access.request",
           entity: "tenant",
           fields: { actorId: entityId, targetTenantId },
         }]
         : [{
           action: "custom" as const,
+          actionKey: "access.request",
           entity: entityType,
           id: entityId,
           fields: { associateTenant: targetTenantId },

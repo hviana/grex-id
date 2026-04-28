@@ -15,6 +15,10 @@ export interface EventChange {
    *  operations that cannot be expressed as a single-row CRUD call. */
   action: "create" | "update" | "delete" | "custom";
 
+  /** The actionKey from the verification_request — used by custom
+   *  handlers to dispatch complex multi-table operations. */
+  actionKey: string;
+
   /** Target table name (e.g. "entity_channel", "user", "tenant"). */
   entity: string;
 
@@ -28,6 +32,5 @@ export interface EventChange {
 /** Payload shape stored in `verification_request.payload` for any
  *  action that mutates the database. */
 export interface EventPayload {
-    actionKey: string
   changes: EventChange[];
 }
