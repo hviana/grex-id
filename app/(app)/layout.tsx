@@ -104,6 +104,18 @@ function getDefaultMenus(): MenuItem[] {
       hiddenInPlanIds: [],
       createdAt: "",
     },
+    {
+      id: "_default_groups",
+      tenantIds: [],
+      parentId: undefined,
+      label: "common.menu.groups",
+      emoji: "👥",
+      componentName: "groups",
+      sortOrder: 7,
+      requiredRoles: ["admin"],
+      hiddenInPlanIds: [],
+      createdAt: "",
+    },
   ];
 }
 

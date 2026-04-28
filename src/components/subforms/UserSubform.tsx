@@ -109,9 +109,13 @@ const UserSubform = forwardRef<SubformRef, UserSubformProps>(
           initialData={{
             roles: (initialData?.contextRoles as string[]) ??
               (initialData?.roles as string[]) ?? [],
+            groupIds: (initialData?.groupIds ?? undefined) as {
+              id: string;
+              name: string;
+            }[] | undefined,
             systemSlug,
           }}
-          visibleFields={["roles"]}
+          visibleFields={["roles", "groupIds"]}
           requiredFields={["roles"]}
         />
 

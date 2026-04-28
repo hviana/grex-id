@@ -200,6 +200,18 @@ const defaults: DefaultSetting[] = [
     value: "0",
     description: "Default max upload bandwidth in MB/s (0 = unlimited)",
   },
+  {
+    key: "core.shareableEntities",
+    value: '["user"]',
+    description:
+      "JSON array of entity types that can be shared between tenants via direct tenant association (genericAssociate/genericDisassociate)",
+  },
+  {
+    key: "core.restrictedEntities",
+    value: "[]",
+    description:
+      "JSON array of entity types that use shared_record with permissions (r/w/rw). These do not require human approval for sharing.",
+  },
 ];
 
 export async function seed(db: Surreal): Promise<void> {

@@ -32,6 +32,7 @@ function VerifyContent() {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [successAction, setSuccessAction] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
   const systemParam = systemSlug
@@ -51,7 +52,7 @@ function VerifyContent() {
 
     (async () => {
       try {
-        const res = await fetch("/api/auth/verify", {
+        const res = await fetch("/api/core/approvals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
@@ -60,9 +61,7 @@ function VerifyContent() {
 
         if (json.success) {
           setSuccess(true);
-          // Login-link fallback (§8.8.3) — a fresh System API Token arrives
-          // in the response. Store it via useAuth so the user is seamlessly
-          // signed in, then route to the normal post-login landing.
+          setSuccessAction(json.data?.actionKey ?? null);
           if (
             json.data?.actionKey === "auth.action.loginFallback" &&
             typeof json.data?.systemToken === "string"
@@ -141,7 +140,9 @@ function VerifyContent() {
           {!verifying && success && (
             <div className="space-y-4">
               <p className="text-[var(--color-primary-green)] text-lg">
-                {t("auth.verify.success")}
+                {successAction === "access.request"
+                  ? t("access.approved")
+                  : t("auth.verify.success")}
               </p>
               <Link
                 href={loginHref}

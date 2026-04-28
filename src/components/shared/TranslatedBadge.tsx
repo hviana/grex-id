@@ -4,12 +4,14 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 export type TranslatedBadgeKind =
   | "role"
   | "entity"
-  | "resource";
+  | "resource"
+  | "group";
 
 const KIND_SEGMENT: Record<TranslatedBadgeKind, string> = {
   role: "roles",
   entity: "entities",
   resource: "resources",
+  group: "groups",
 };
 
 // Tailwind-only palette per kind, using the project's CSS variables (§4) as
@@ -33,6 +35,10 @@ const KIND_CLASSES: Record<
     container:
       "border-[var(--color-secondary-blue)]/40 bg-[var(--color-secondary-blue)]/10 text-[var(--color-secondary-blue)]",
     translation: "text-[var(--color-secondary-blue)]",
+  },
+  group: {
+    container: "border-purple-400/40 bg-purple-400/10 text-purple-400",
+    translation: "text-purple-400",
   },
 };
 

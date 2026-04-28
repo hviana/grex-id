@@ -908,6 +908,59 @@ export async function genericAssociate(
 }
 
 // ---------------------------------------------------------------------------
+// DISASSOCIATE — remove tenant-derived fields from an existing entity
+// ---------------------------------------------------------------------------
+
+/**
+ * Reverses {@link genericAssociate}: removes tenant-derived columns from an
+ * entity. For `tenantIds` (array field), removes the tenant id from the array.
+ * For scalar fields (`systemId`, `companyId`, `actorId`), sets to NONE.
+ *
+ * Columns that don't exist on the table are silently skipped.
+ */
+export async function genericDisassociate(
+  table: string,
+  id: string,
+  tenant: Tenant,
+): Promise<GenericResult<Record<string, unknown>>> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = { id: rid(id) };
+  const setClauses: string[] = [];
+
+  const tenantBind = await buildTenantConditions(tenant, table);
+  for (const cond of tenantBind.conditions) {
+    if (cond.startsWith("tenantIds CONTAINS")) {
+      setClauses.push(
+        "tenantIds = tenantIds[WHERE $this != $tenantId]",
+      );
+    } else {
+      setClauses.push(cond.replace("= $", "= NONE"));
+    }
+  }
+  Object.assign(bindings, tenantBind.bindings);
+
+  if (setClauses.length === 0) {
+    return {
+      success: false,
+      errors: [{ field: "tenant", errors: ["common.error.noTenantFields"] }],
+    };
+  }
+
+  const setClause = setClauses.join(", ");
+  const query = `UPDATE ${table} SET ${setClause} WHERE id = $id RETURN AFTER;`;
+
+  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
+  const updated = result[0]?.[0];
+  if (!updated) {
+    return {
+      success: false,
+      errors: [{ field: "id", errors: ["common.error.notFound"] }],
+    };
+  }
+  return { success: true, data: updated };
+}
+
+// ---------------------------------------------------------------------------
 // DELETE (dissociate → orphan-check → hard-delete)
 // ---------------------------------------------------------------------------
 
@@ -1214,4 +1267,131 @@ export async function genericVerify(
     { hash, plain: plaintext },
   );
   return verified[0] === true;
+}
+
+// ---------------------------------------------------------------------------
+// SHARED RECORD — cross-tenant record-level permissions
+// ---------------------------------------------------------------------------
+
+export interface SharedRecord {
+  id: string;
+  recordId: string;
+  ownerTenantIds: string[];
+  accessesTenantIds: string[];
+  permissions: "r" | "w" | "rw" | "share";
+  shareKey: string;
+}
+
+export interface ListSharedRecordsOptions {
+  table?: string;
+  recordId?: string;
+  tenant?: Tenant;
+  limit?: number;
+  cursor?: string;
+}
+
+/**
+ * Lists `shared_record` rows, optionally filtered by recordId and tenant.
+ */
+export async function genericListSharedRecords(
+  opts: ListSharedRecordsOptions,
+): Promise<PaginatedResult<SharedRecord>> {
+  const db = await getDb();
+  const conditions: string[] = [];
+  const bindings: Record<string, unknown> = {};
+
+  if (opts.recordId) {
+    conditions.push("recordId = $recordId");
+    bindings.recordId = rid(opts.recordId);
+  }
+
+  if (opts.tenant?.id) {
+    conditions.push(
+      "(ownerTenantIds CONTAINS $tenantId OR accessesTenantIds CONTAINS $tenantId)",
+    );
+    bindings.tenantId = rid(opts.tenant.id);
+  }
+
+  const limit = Math.max(1, opts.limit ?? 50);
+  bindings.limit = limit + 1;
+
+  const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
+
+  let pagination = "";
+  if (opts.cursor) {
+    pagination = " AND id > $cursor";
+    bindings.cursor = opts.cursor;
+  }
+
+  const query = `SELECT * FROM shared_record${where}${pagination}` +
+    ` ORDER BY id ASC LIMIT $limit`;
+
+  const result = await db.query<[SharedRecord[]]>(query, bindings);
+  const items = result[0] ?? [];
+  const hasMore = items.length > limit;
+  const data = hasMore ? items.slice(0, limit) : items;
+
+  return {
+    items: data,
+    total: data.length,
+    hasMore,
+    nextCursor: hasMore && data.length > 0
+      ? String(data[data.length - 1].id)
+      : undefined,
+  };
+}
+
+/**
+ * Creates a `shared_record` row linking a record from an owner tenant to one
+ * or more access tenants with a specific permission level.
+ */
+export async function genericCreateSharedRecord(data: {
+  recordId: string;
+  ownerTenantIds: string[];
+  accessesTenantIds: string[];
+  permissions: "r" | "w" | "rw" | "share";
+}): Promise<GenericResult<SharedRecord>> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    recordId: rid(data.recordId),
+    ownerTenantIds: data.ownerTenantIds.map((id) => rid(id)),
+    accessesTenantIds: data.accessesTenantIds.map((id) => rid(id)),
+    permissions: data.permissions,
+  };
+
+  const query = `CREATE shared_record SET
+    recordId = $recordId,
+    ownerTenantIds = $ownerTenantIds,
+    accessesTenantIds = $accessesTenantIds,
+    permissions = $permissions
+  RETURN AFTER;`;
+
+  const result = await db.query<[SharedRecord[]]>(query, bindings);
+  const created = result[0]?.[0];
+  if (!created) {
+    return {
+      success: false,
+      errors: [{ field: "shared_record", errors: ["common.error.generic"] }],
+    };
+  }
+  return { success: true, data: created };
+}
+
+/**
+ * Deletes `shared_record` rows by their ids.
+ */
+export async function genericDeleteSharedRecords(
+  ids: string[],
+): Promise<{ success: boolean; deletedCount: number }> {
+  if (ids.length === 0) return { success: true, deletedCount: 0 };
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    ids: ids.map((id) => rid(id)),
+  };
+
+  const query =
+    `DELETE FROM shared_record WHERE id IN $ids RETURN count() AS c;`;
+
+  const result = await db.query<[{ c: number }[]]>(query, bindings);
+  return { success: true, deletedCount: result[0]?.[0]?.c ?? 0 };
 }

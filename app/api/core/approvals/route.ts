@@ -17,11 +17,15 @@ import {
   syncLeadChannels,
   updateLead,
 } from "@/server/db/queries/leads";
-import { genericCount } from "@/server/db/queries/generics";
-import { rid } from "@/server/db/connection";
+import {
+  genericAssociate,
+  genericCount,
+  genericCreateSharedRecord,
+} from "@/server/db/queries/generics";
+import { getDb, rid } from "@/server/db/connection";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { createTenantToken } from "@/server/utils/token";
-import { rememberActor } from "@/server/utils/actor-validity";
+import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
 
 interface LeadUpdatePayload {
   name?: string;
@@ -139,7 +143,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const actionKey = request.actionKey;
   const payload = request.payload as Record<string, unknown> | null;
 
-  // ── Registration / entity-channel confirmation flows ──────
   if (
     actionKey === "auth.action.register" ||
     actionKey === "auth.action.entityChannelAdd"
@@ -264,6 +267,126 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
         faceDescriptor: leadPayload.faceDescriptor,
       });
     }
+  } else if (actionKey === "access.request") {
+    const entityType = String(payload?.entityType ?? "");
+    const entityId = String(payload?.entityId ?? "");
+    const targetTenantId = String(payload?.targetTenantId ?? "");
+    const permission = payload?.permission as string | undefined;
+    const requesterTenantId = payload?.requesterTenantId as string | undefined;
+
+    if (!entityType || !entityId || !targetTenantId) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "VALIDATION", message: "validation.payload.invalid" },
+        },
+        { status: 400 },
+      );
+    }
+
+    const shareableRaw = await Core.getInstance().getSetting(
+      "core.shareableEntities",
+    );
+    const restrictedRaw = await Core.getInstance().getSetting(
+      "core.restrictedEntities",
+    );
+
+    const shareableEntities: string[] = shareableRaw
+      ? JSON.parse(shareableRaw)
+      : [];
+    const restrictedEntities: string[] = restrictedRaw
+      ? JSON.parse(restrictedRaw)
+      : [];
+
+    if (restrictedEntities.includes(entityType)) {
+      if (!permission || !["r", "w", "rw", "share"].includes(permission)) {
+        return Response.json(
+          {
+            success: false,
+            error: {
+              code: "VALIDATION",
+              message: "validation.permission.required",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      const ownerTenantId = requesterTenantId ?? "";
+
+      await genericCreateSharedRecord({
+        recordId: entityId,
+        ownerTenantIds: ownerTenantId ? [ownerTenantId] : [],
+        accessesTenantIds: [targetTenantId],
+        permissions: permission as "r" | "w" | "rw" | "share",
+      });
+    } else if (shareableEntities.includes(entityType)) {
+      if (entityType === "user") {
+        const db = await getDb();
+        const tenantRows = await db.query<
+          [{ companyId?: string; systemId?: string }[]]
+        >(
+          `SELECT companyId, systemId FROM tenant WHERE id = $tid LIMIT 1`,
+          { tid: rid(targetTenantId) },
+        );
+        const tenantRow = tenantRows[0]?.[0];
+        const companyId = String(tenantRow?.companyId ?? "");
+        const systemId = String(tenantRow?.systemId ?? "");
+
+        if (!companyId || !systemId) {
+          return Response.json(
+            {
+              success: false,
+              error: {
+                code: "VALIDATION",
+                message: "validation.tenant.invalid",
+              },
+            },
+            { status: 400 },
+          );
+        }
+
+        const resolveRoles =
+          `(SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT id FROM tenant WHERE !actorId AND !companyId AND systemId = ${
+            rid(systemId)
+          } LIMIT 1) LIMIT 1)`;
+        await db.query(
+          `LET $existing = (SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);
+           IF array::len($existing) = 0 {
+             CREATE tenant SET
+               actorId = $userId,
+               companyId = $companyId,
+               systemId = $systemId,
+               roleIds = ${resolveRoles};
+           };`,
+          {
+            userId: rid(entityId),
+            companyId: rid(companyId),
+            systemId: rid(systemId),
+          },
+        );
+
+        await forgetActor({
+          id: targetTenantId,
+          actorId: entityId,
+        });
+      } else {
+        await genericAssociate(entityType, entityId, {
+          id: targetTenantId,
+        });
+      }
+    } else {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION",
+            errors: ["access.error.invalidEntityType"],
+          },
+        },
+        { status: 400 },
+      );
+    }
   }
 
   await markVerificationUsed(request.id);
@@ -275,6 +398,6 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
 }
 
 export const POST = compose(
-  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 5 } }),
+  withAuthAndLimit({ rateLimit: { windowMs: 60_000, maxRequests: 10 } }),
   handler,
 );

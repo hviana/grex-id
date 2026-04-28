@@ -26,6 +26,7 @@ const componentRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
   "grexid-settings": lazy(
     () => import("@/src/components/systems/grex-id/SettingsPage"),
   ),
+  groups: lazy(() => import("@/src/components/shared/GroupsPage")),
 };
 
 export function registerComponent(

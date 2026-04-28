@@ -50,10 +50,11 @@ interface UserViewProps {
   user: UserViewData;
   systemSlug?: string;
   controls?: ReactNode;
+  groupNames?: string[];
 }
 
 export default function UserView(
-  { user, systemSlug, controls }: UserViewProps,
+  { user, systemSlug, controls, groupNames }: UserViewProps,
 ) {
   const { t } = useTenantContext();
   const isVerified = userHasVerifiedChannel(user);
@@ -96,8 +97,9 @@ export default function UserView(
             tenant={{
               id: user.id,
               roles: user.contextRoles ?? [],
+              groupIds: groupNames,
             }}
-            visibleFields={["roles"]}
+            visibleFields={["roles", "groupIds"]}
             compact
           />
         </div>

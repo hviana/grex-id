@@ -21,6 +21,7 @@ export type TenantFieldName =
   | "actorId"
   | "systemSlug"
   | "roles"
+  | "groupIds"
   | "actorType"
   | "exchangeable"
   | "frontendUse"
@@ -36,6 +37,7 @@ export interface TenantFormData {
   actorId?: string;
   actorType?: TenantActorType;
   roles?: string[];
+  groupIds?: BadgeValue[];
   exchangeable?: boolean;
   frontendUse?: boolean;
   frontendDomains?: string[];
@@ -57,6 +59,7 @@ const ALL_FIELDS: TenantFieldName[] = [
   "actorId",
   "actorType",
   "roles",
+  "groupIds",
   "exchangeable",
   "frontendUse",
   "frontendDomains",
@@ -142,6 +145,19 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
       const arr = initialData?.roles;
       if (!arr) return [];
       return arr.map((r) => r);
+    });
+    const [groupIds, setGroupIds] = useState<BadgeValue[]>(() => {
+      const arr = initialData?.groupIds;
+      if (!Array.isArray(arr)) return [];
+      return arr.map((entry: unknown) => {
+        if (entry && typeof entry === "object") {
+          return {
+            id: (entry as Record<string, unknown>).id as string,
+            name: (entry as Record<string, unknown>).name as string,
+          };
+        }
+        return { id: String(entry), name: String(entry) };
+      });
     });
     const [exchangeable, setExchangeable] = useState(
       initialData?.exchangeable ?? false,
@@ -257,6 +273,26 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
       [authHeaders, systemId],
     );
 
+    const fetchGroups = useCallback(
+      async (search: string): Promise<BadgeValue[]> => {
+        const params = new URLSearchParams();
+        if (search) params.set("search", search);
+        params.set("limit", "50");
+        const res = await fetch(`/api/groups?${params}`, {
+          headers: authHeaders,
+        });
+        const json = await res.json();
+        return ((json.items ?? json.data ?? []) as Record<string, unknown>[])
+          .map(
+            (g) => ({
+              id: String(g.id),
+              name: String(g.name ?? ""),
+            }),
+          );
+      },
+      [authHeaders],
+    );
+
     useImperativeHandle(ref, () => ({
       getData: () => {
         const data: Record<string, unknown> = {};
@@ -277,6 +313,9 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
         }
         if (show("roles")) {
           data.roles = roles.map((r) => typeof r === "string" ? r : r.name);
+        }
+        if (show("groupIds")) {
+          data.groupIds = groupIds.map((g) => typeof g === "string" ? g : g.id);
         }
         if (show("exchangeable")) {
           data.exchangeable = exchangeable;
@@ -455,6 +494,21 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
                   onRemove={remove}
                 />
               )}
+            />
+          </div>
+        )}
+
+        {show("groupIds") && (
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
+              {t("common.groups.entity")}
+            </label>
+            <MultiBadgeField
+              name={t("common.groups.entity")}
+              mode="search"
+              value={groupIds}
+              onChange={setGroupIds}
+              fetchFn={fetchGroups}
             />
           </div>
         )}

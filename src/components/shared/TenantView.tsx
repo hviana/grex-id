@@ -16,6 +16,7 @@ export interface TenantViewData {
   actorName?: string;
   actorType?: TenantActorType;
   roles?: string[];
+  groupIds?: string[];
   exchangeable?: boolean;
   frontendUse?: boolean;
   frontendDomains?: string[];
@@ -32,6 +33,7 @@ const ALL_VIEW_FIELDS: TenantFieldName[] = [
   "actorId",
   "actorType",
   "roles",
+  "groupIds",
   "exchangeable",
   "frontendUse",
   "frontendDomains",
@@ -128,6 +130,7 @@ export default function TenantView({
   const hasSystem = show("systemId") && tenant.systemName;
   const hasActor = show("actorId") && tenant.actorName;
   const hasRoles = show("roles") && (tenant.roles?.length ?? 0) > 0;
+  const hasGroups = show("groupIds") && (tenant.groupIds?.length ?? 0) > 0;
   const hasIsolation = show("isolateSystem") || show("isolateCompany") ||
     show("isolateUser");
   const hasCors = show("frontendUse") &&
@@ -162,6 +165,13 @@ export default function TenantView({
             kind="role"
             tokens={tenant.roles}
             systemSlug={tenant.systemSlug}
+            compact
+          />
+        )}
+        {hasGroups && (
+          <TranslatedBadgeList
+            kind="group"
+            tokens={tenant.groupIds}
             compact
           />
         )}
@@ -221,7 +231,8 @@ export default function TenantView({
       )}
 
       {/* Authorization section */}
-      {(hasRoles || (show("exchangeable") && tenant.exchangeable)) && (
+      {(hasRoles || hasGroups ||
+        (show("exchangeable") && tenant.exchangeable)) && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
             {t("core.tenant.view.authorization")}
@@ -231,6 +242,13 @@ export default function TenantView({
               kind="role"
               tokens={tenant.roles}
               systemSlug={tenant.systemSlug}
+              compact
+            />
+          )}
+          {hasGroups && (
+            <TranslatedBadgeList
+              kind="group"
+              tokens={tenant.groupIds}
               compact
             />
           )}

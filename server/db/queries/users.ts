@@ -25,7 +25,9 @@ export async function getUsersForTenant(params: {
 
   let query = `SELECT id, profileId, channelIds, resourceLimitId, createdAt,
        (SELECT VALUE name FROM role WHERE id IN (SELECT VALUE roleIds FROM tenant
-         WHERE id = $tenantId AND actorId = $parent.id LIMIT 1)) AS contextRoles
+         WHERE id = $tenantId AND actorId = $parent.id LIMIT 1)) AS contextRoles,
+       (SELECT VALUE groupIds FROM tenant
+         WHERE id = $tenantId AND actorId = $parent.id LIMIT 1)[0] AS groupIds
      FROM user
      WHERE id IN (SELECT VALUE actorId FROM tenant
        WHERE id = $tenantId AND actorId != NONE)`;
@@ -100,8 +102,21 @@ export async function inviteExistingUser(params: {
   inviterId: string;
   companyId: string;
   systemId: string;
+  groupIds?: string[];
 }): Promise<InviteExistingUserResult> {
   const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+    tenantId: rid(params.tenantId),
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    roleNames: params.roles,
+    inviterId: rid(params.inviterId),
+  };
+  const groupIdsField = params.groupIds?.length
+    ? `groupIds = [${params.groupIds.map((g) => rid(g)).join(", ")}],`
+    : "";
+
   const batchResult = await db.query<
     [
       unknown,
@@ -121,6 +136,7 @@ export async function inviteExistingUser(params: {
      LET $existingUserTenant = (SELECT id FROM tenant WHERE id = $tenantId AND actorId = $userId LIMIT 1);
      IF array::len($existingUserTenant) = 0 {
        CREATE tenant SET
+         ${groupIdsField}
          actorId = $userId,
          companyId = $companyId,
          systemId = $systemId,
@@ -131,14 +147,7 @@ export async function inviteExistingUser(params: {
      LET $inviter = (SELECT profileId.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profileId);
      LET $invitee = (SELECT profileId.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profileId);
      RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
-    {
-      userId: rid(params.userId),
-      tenantId: rid(params.tenantId),
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
-      roleNames: params.roles,
-      inviterId: rid(params.inviterId),
-    },
+    bindings,
   );
 
   const returnData = batchResult[batchResult.length - 1] as {
@@ -165,8 +174,18 @@ export async function createTenantAssociations(params: {
   companyId: string;
   systemId: string;
   roles: string[];
+  groupIds?: string[];
 }): Promise<void> {
   const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    roleNames: params.roles,
+  };
+  const groupIdsSet = params.groupIds?.length
+    ? `groupIds = [${params.groupIds.map((g) => rid(g)).join(", ")}],`
+    : "";
   await db.query(
     `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $systemTenantId);
      LET $companyTenant = (SELECT id FROM tenant WHERE !actorId AND companyId = $companyId AND !systemId LIMIT 1);
@@ -174,16 +193,12 @@ export async function createTenantAssociations(params: {
        CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
      };
      CREATE tenant SET
+       ${groupIdsSet}
        actorId = $userId,
        companyId = $companyId,
        systemId = $systemId,
        roleIds = $resolvedRoleIds;`,
-    {
-      userId: rid(params.userId),
-      companyId: rid(params.companyId),
-      systemId: rid(params.systemId),
-      roleNames: params.roles,
-    },
+    bindings,
   );
 }
 

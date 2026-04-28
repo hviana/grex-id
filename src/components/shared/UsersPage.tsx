@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
@@ -12,6 +12,8 @@ import UserView, {
   userHasVerifiedChannel,
   type UserViewData,
 } from "@/src/components/shared/UserView";
+import AccessRequestModal from "@/src/components/shared/AccessRequestModal";
+import RemoveAccessModal from "@/src/components/shared/RemoveAccessModal";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
@@ -31,9 +33,43 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [shareUser, setShareUser] = useState<UserViewData | null>(null);
+  const [removeAccessUser, setRemoveAccessUser] = useState<UserViewData | null>(
+    null,
+  );
 
   const createFormRef = useRef<SubformRef>(null);
   const editFormRef = useRef<SubformRef>(null);
+
+  const [groupsMap, setGroupsMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!systemToken) return;
+    let cancelled = false;
+    const fetchGroups = async () => {
+      try {
+        const res = await fetch(
+          `/api/groups?limit=200`,
+          { headers: { Authorization: `Bearer ${systemToken}` } },
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        const items = (json.items ?? json.data ?? []) as Record<
+          string,
+          unknown
+        >[];
+        const map = new Map<string, string>();
+        for (const g of items) {
+          map.set(String(g.id), String(g.name ?? ""));
+        }
+        setGroupsMap(map);
+      } catch { /* groups feature is optional */ }
+    };
+    fetchGroups();
+    return () => {
+      cancelled = true;
+    };
+  }, [systemToken]);
 
   const fetchUsers = useCallback(
     async (
@@ -78,7 +114,12 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({ ...data, companyId, systemId }),
+        body: JSON.stringify({
+          ...data,
+          companyId,
+          systemId,
+          groupIds: data.groupIds,
+        }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -115,7 +156,13 @@ export default function UsersPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({ id: editUser.id, ...data, companyId, systemId }),
+        body: JSON.stringify({
+          id: editUser.id,
+          ...data,
+          companyId,
+          systemId,
+          groupIds: data.groupIds,
+        }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -220,6 +267,11 @@ export default function UsersPage() {
           <UserView
             user={user}
             systemSlug={systemSlug ?? undefined}
+            groupNames={Array.isArray(user.groupIds)
+              ? (user.groupIds as string[]).map((id) =>
+                groupsMap.get(String(id))
+              ).filter((n): n is string => !!n)
+              : undefined}
             controls={isAdmin
               ? (
                 <>
@@ -233,6 +285,28 @@ export default function UsersPage() {
                       {resendingId === user.id ? <Spinner size="sm" /> : "📨"}
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      setShareUser(user);
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    title={t("access.share")}
+                    className="text-sm px-2 py-1 rounded border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] hover:bg-[var(--color-primary-green)]/10 transition-colors"
+                  >
+                    🔗
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRemoveAccessUser(user);
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    title={t("access.removeTitle")}
+                    className="text-sm px-2 py-1 rounded border border-[var(--color-secondary-blue)]/30 text-[var(--color-secondary-blue)] hover:bg-[var(--color-secondary-blue)]/10 transition-colors"
+                  >
+                    🔓
+                  </button>
                   <EditButton
                     onClick={() => {
                       setEditUser(user);
@@ -313,6 +387,12 @@ export default function UsersPage() {
               initialData={{
                 name: editUser.profileId?.name ?? "",
                 contextRoles: editUser.contextRoles ?? [],
+                groupIds: Array.isArray(editUser.groupIds)
+                  ? (editUser.groupIds as string[]).map((id) => ({
+                    id: String(id),
+                    name: groupsMap.get(String(id)) ?? String(id),
+                  }))
+                  : undefined,
               }}
               systemSlug={systemSlug ?? undefined}
             />
@@ -331,6 +411,38 @@ export default function UsersPage() {
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Share access modal */}
+      {shareUser && (
+        <AccessRequestModal
+          entityType="user"
+          entityId={shareUser.id}
+          entityLabel={shareUser.profileId?.name ?? String(shareUser.id)}
+          onSuccess={() => {
+            setShareUser(null);
+            setSuccessMsg("access.requestSent");
+            triggerReload();
+          }}
+          onClose={() => setShareUser(null)}
+        />
+      )}
+
+      {/* Remove access modal */}
+      {removeAccessUser && (
+        <RemoveAccessModal
+          entityType="user"
+          entityId={removeAccessUser.id}
+          entityLabel={removeAccessUser.profileId?.name ??
+            String(removeAccessUser.id)}
+          showPermission={false}
+          onSuccess={() => {
+            setRemoveAccessUser(null);
+            setSuccessMsg("access.removed");
+            triggerReload();
+          }}
+          onClose={() => setRemoveAccessUser(null)}
+        />
       )}
     </div>
   );

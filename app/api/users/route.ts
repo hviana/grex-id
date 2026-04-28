@@ -3,6 +3,7 @@ import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import { clampPageLimit } from "@/src/lib/validators";
+import { getDb, rid } from "@/server/db/connection";
 import {
   createTenantAssociations,
   deleteUserWithAdminCheck,
@@ -102,7 +103,7 @@ async function getHandler(req: Request, ctx: RequestContext) {
 
 async function postHandler(req: Request, ctx: RequestContext) {
   const body = await req.json();
-  const { password, name, roles } = body;
+  const { password, name, roles, groupIds } = body;
   const channels = await parseChannels(body.channels);
   const companyId = ctx.tenantContext.tenant.companyId!;
   const systemId = ctx.tenantContext.tenant.systemId!;
@@ -160,6 +161,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       inviterId: ctx.tenantContext.tenant.actorId!,
       companyId,
       systemId,
+      groupIds: Array.isArray(groupIds) ? groupIds.map(String) : undefined,
     });
 
     // Roles changed for the invited user — evict from this tenant's
@@ -211,6 +213,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
     companyId,
     systemId,
     roles: roles ?? [],
+    groupIds: Array.isArray(groupIds) ? groupIds.map(String) : undefined,
   });
 
   const guardResult = await communicationGuard({
@@ -372,7 +375,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   const body = await req.json();
-  const { id, name, companyId, systemId, roles } = body;
+  const { id, name, companyId, systemId, roles, groupIds } = body;
 
   if (!id) {
     return Response.json(
@@ -387,6 +390,22 @@ async function putHandler(req: Request, ctx: RequestContext) {
   if (name !== undefined) {
     const stdName = await standardizeField("name", name, "user");
     await updateUserProfileName(String(id), stdName);
+  }
+
+  // Update groupIds on tenant row if provided
+  const tenantId = ctx.tenantContext.tenant.id!;
+  if (groupIds !== undefined && companyId && systemId) {
+    const db = await getDb();
+    await db.query(
+      `UPDATE tenant SET groupIds = $groupIds WHERE id = $tenantId AND actorId = $userId`,
+      {
+        tenantId: rid(tenantId),
+        userId: rid(String(id)),
+        groupIds: Array.isArray(groupIds)
+          ? groupIds.map((g: unknown) => rid(String(g)))
+          : [],
+      },
+    );
   }
 
   if (
