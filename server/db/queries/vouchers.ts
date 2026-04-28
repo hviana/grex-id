@@ -9,7 +9,7 @@ assertServerOnly("vouchers");
  * Returns the created voucher with resourceLimitId fetched.
  */
 export async function createVoucherWithResourceLimit(data: {
-  code: string;
+  name: string;
   applicableTenantIds: string[];
   applicablePlanIds: string[];
   expiresAt?: Date;
@@ -35,14 +35,14 @@ export async function createVoucherWithResourceLimit(data: {
       creditLimitByResourceKey = $creditLimitByResourceKey,
       frontendDomains = $frontendDomains;
     LET $v = CREATE voucher SET
-      code = $code,
+      name = $name,
       applicableTenantIds = $applicableTenantIds,
       applicablePlanIds = $applicablePlanIds,
       resourceLimitId = $rl[0].id,
       expiresAt = $expiresAt;
     SELECT * FROM $v[0].id FETCH resourceLimitId;`,
     {
-      code: data.code,
+      name: data.name,
       applicableTenantIds: data.applicableTenantIds.map((id) => rid(id)),
       applicablePlanIds: data.applicablePlanIds.map((id) => rid(id)),
       expiresAt: data.expiresAt ?? undefined,

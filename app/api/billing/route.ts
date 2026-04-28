@@ -353,9 +353,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "apply_voucher") {
-    const { voucherCode } = body;
+    const { voucherName } = body;
 
-    if (!voucherCode) {
+    if (!voucherName) {
       return Response.json(
         {
           success: false,
@@ -373,7 +373,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
     const { voucher, subscription: activeSub, oldVoucher } =
       await lookupVoucherAndSubscription({
-        voucherCode,
+        voucherName,
         tenantId: ctx.tenantContext.tenant.id!,
       });
 

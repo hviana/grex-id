@@ -29,5 +29,7 @@
   "channel.conflict": "One of the provided values is already in use",
   "identifier.required": "Please provide a channel value to sign in",
   "verification.previousNotExpired": "A previous verification request is still active. Please check your email or wait for it to expire.",
-  "verification.rateLimited": "Too many verification requests. Please try again later."
+  "verification.rateLimited": "Too many verification requests. Please try again later.",
+  "voucher.nameRequired": "Voucher name is required",
+  "billing.voucherFields": "Voucher name is required"
 }

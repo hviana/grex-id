@@ -14,7 +14,7 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherItem {
   id: string;
-  code: string;
+  name: string;
   applicableTenantIds: string[];
   applicablePlanIds: string[];
   resourceLimitId?: ResourceLimitsData | null;
@@ -74,7 +74,7 @@ export default function VouchersPage() {
 
   const openEdit = (item: VoucherItem) => {
     setFormInitial({
-      code: item.code,
+      name: item.name,
       applicableTenantIds: item.applicableTenantIds ?? [],
       applicablePlanIds: item.applicablePlanIds ?? [],
       expiresAt: item.expiresAt,

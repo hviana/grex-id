@@ -24,7 +24,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
   const result = await genericList<Voucher>({
     table: "voucher",
     select: "*, resourceLimitId.* AS resourceLimitId",
-    searchFields: ["code"],
+    searchFields: ["name"],
     limit,
     cursor,
     search,
@@ -36,23 +36,23 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
-    code,
+    name,
     applicableTenantIds,
     applicablePlanIds,
     resourceLimits,
     expiresAt,
   } = body;
 
-  const codeErrors = await validateField("name", code);
-  if (codeErrors.length > 0 || !code) {
+  const nameErrors = await validateField("name", name);
+  if (nameErrors.length > 0 || !name) {
     return Response.json(
       {
         success: false,
         error: {
           code: "VALIDATION",
-          errors: codeErrors.length > 0
-            ? codeErrors
-            : ["validation.voucher.codeRequired"],
+          errors: nameErrors.length > 0
+            ? nameErrors
+            : ["validation.voucher.nameRequired"],
         },
       },
       { status: 400 },
@@ -61,7 +61,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 
   try {
     const voucher = await createVoucherWithResourceLimit({
-      code: await standardizeField("name", sanitizeString(code)),
+      name: await standardizeField("name", sanitizeString(name)),
       applicableTenantIds: applicableTenantIds ?? [],
       applicablePlanIds: applicablePlanIds ?? [],
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
@@ -104,7 +104,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
     id,
-    code,
+    name,
     applicableTenantIds,
     applicablePlanIds,
     resourceLimits,
@@ -126,9 +126,9 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     const rlSets: string[] = [];
     const bindings: Record<string, unknown> = {};
 
-    if (code !== undefined) {
-      voucherSets.push("code = $code");
-      bindings.code = await standardizeField("name", sanitizeString(code));
+    if (name !== undefined) {
+      voucherSets.push("name = $name");
+      bindings.name = await standardizeField("name", sanitizeString(name));
     }
     if (applicableTenantIds !== undefined) {
       voucherSets.push("applicableTenantIds = $applicableTenantIds");

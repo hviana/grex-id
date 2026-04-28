@@ -9,7 +9,7 @@ import type { ResourceLimit } from "./resource-limit.ts";
  */
 export interface Voucher {
   id: string;
-  code: string;
+  name: string;
   applicableTenantIds: string[];
   applicablePlanIds: string[];
   resourceLimitId?: ResourceLimit;

@@ -10,7 +10,7 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 interface VoucherCardProps {
   voucher: {
     id: string;
-    code: string;
+    name: string;
     applicablePlanIds: string[];
     resourceLimitId?: ResourceLimitsData | null;
     expiresAt: string | null;
@@ -36,7 +36,7 @@ export default function VoucherCard(
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-mono font-semibold text-white text-lg">
-                {voucher.code}
+                {voucher.name}
               </h3>
               {isExpired && (
                 <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">

@@ -20,8 +20,8 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
     const { t } = useTenantContext();
     const { systemToken } = useTenantContext();
 
-    const [code, setCode] = useState(
-      (initialData?.code as string) ?? "",
+    const [name, setName] = useState(
+      (initialData?.name as string) ?? "",
     );
     const [priceModifier, setPriceModifier] = useState(
       String((initialData?.priceModifier as number) ?? 0),
@@ -50,7 +50,7 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
       getData: () => {
         const limitsData = limitsRef.current?.getData() ?? {};
         return {
-          code,
+          name,
           priceModifier: Number(priceModifier),
           applicableTenantIds: applicableTenantIds.map((b) =>
             typeof b === "string" ? b : b.id ?? b.name
@@ -60,21 +60,21 @@ const VoucherSubform = forwardRef<SubformRef, VoucherSubformProps>(
           resourceLimits: limitsData,
         };
       },
-      isValid: () => !!code.trim(),
+      isValid: () => !!name.trim(),
     }));
 
     return (
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-            {t("core.vouchers.code")} *
+            {t("core.vouchers.name")} *
           </label>
           <input
             type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             required
-            placeholder={t("core.vouchers.placeholder.code")}
+            placeholder={t("core.vouchers.placeholder.name")}
             className={`${inputCls} font-mono`}
           />
         </div>

@@ -340,7 +340,7 @@ export interface VoucherLookupResult {
 }
 
 export async function lookupVoucherAndSubscription(params: {
-  voucherCode: string;
+  voucherName: string;
   tenantId: string;
 }): Promise<VoucherLookupResult> {
   const db = await getDb();
@@ -357,7 +357,7 @@ export async function lookupVoucherAndSubscription(params: {
       }[],
     ]
   >(
-    `SELECT * FROM voucher WHERE code = $code LIMIT 1 FETCH resourceLimitId;
+    `SELECT * FROM voucher WHERE name = $name LIMIT 1 FETCH resourceLimitId;
      SELECT planId, voucherId, remainingOperationCount FROM subscription
        WHERE tenantIds CONTAINS $tenantId AND status = "active"
        LIMIT 1;
@@ -370,7 +370,7 @@ export async function lookupVoucherAndSubscription(params: {
        SELECT NONE FROM NONE;
      };`,
     {
-      code: params.voucherCode,
+      name: params.voucherName,
       tenantId: rid(params.tenantId),
     },
   );

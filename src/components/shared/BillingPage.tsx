@@ -15,7 +15,7 @@ import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherInfo {
   id: string;
-  code: string;
+  name: string;
   priceModifier: number;
   resourceLimitId?: ResourceLimitsData | null;
   expiresAt?: string;
@@ -102,7 +102,7 @@ export default function BillingPage() {
 
   // Voucher — per-section feedback
   const [applyingVoucher, setApplyingVoucher] = useState(false);
-  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherName, setVoucherName] = useState("");
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [voucherSuccess, setVoucherSuccess] = useState<string | null>(null);
 
@@ -371,7 +371,7 @@ export default function BillingPage() {
   };
 
   const handleApplyVoucher = async () => {
-    if (!companyId || !systemId || !systemToken || !voucherCode.trim()) return;
+    if (!companyId || !systemId || !systemToken || !voucherName.trim()) return;
     setApplyingVoucher(true);
     setVoucherError(null);
     setVoucherSuccess(null);
@@ -384,7 +384,7 @@ export default function BillingPage() {
         },
         body: JSON.stringify({
           action: "apply_voucher",
-          voucherCode: voucherCode.trim(),
+          voucherName: voucherName.trim(),
         }),
       });
       const json = await res.json();
@@ -392,7 +392,7 @@ export default function BillingPage() {
         setVoucherError(json.error?.message ?? "common.error.generic");
       } else {
         setVoucherSuccess("billing.voucher.success");
-        setVoucherCode("");
+        setVoucherName("");
         await loadData();
       }
     } catch {
@@ -667,7 +667,7 @@ export default function BillingPage() {
                     key={activeVoucher.id}
                     className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full"
                   >
-                    🏷️ {activeVoucher.code} {activeVoucher.priceModifier < 0
+                    🏷️ {activeVoucher.name} {activeVoucher.priceModifier < 0
                       ? `(-${
                         formatPrice(
                           Math.abs(activeVoucher.priceModifier),
@@ -1070,18 +1070,18 @@ export default function BillingPage() {
         <div className="flex gap-3">
           <input
             type="text"
-            value={voucherCode}
+            value={voucherName}
             onChange={(e) => {
-              setVoucherCode(e.target.value);
+              setVoucherName(e.target.value);
               setVoucherError(null);
               setVoucherSuccess(null);
             }}
-            placeholder={t("billing.voucher.code")}
+            placeholder={t("billing.voucher.name")}
             className={`${inputCls} flex-1`}
           />
           <button
             onClick={handleApplyVoucher}
-            disabled={applyingVoucher || !voucherCode.trim()}
+            disabled={applyingVoucher || !voucherName.trim()}
             className="rounded-lg bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] px-4 py-2 font-semibold text-black transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
           >
             {applyingVoucher && (
@@ -1114,7 +1114,7 @@ export default function BillingPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 text-xs bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 text-[var(--color-primary-green)] px-3 py-1 rounded-full">
-                🏷️ {activeVoucher.code}
+                🏷️ {activeVoucher.name}
                 {activeVoucher.priceModifier !== 0 && activePlan && (
                   <span className="ml-1 opacity-70">
                     {activeVoucher.priceModifier < 0 ? "-" : "+"}

@@ -29,5 +29,7 @@
   "channel.conflict": "Um dos valores informados já está em uso",
   "identifier.required": "Informe um canal para fazer login",
   "verification.previousNotExpired": "Uma solicitação de verificação anterior ainda está ativa. Verifique seu e-mail ou aguarde a expiração.",
-  "verification.rateLimited": "Muitas solicitações de verificação. Por favor, tente novamente mais tarde."
+  "verification.rateLimited": "Muitas solicitações de verificação. Por favor, tente novamente mais tarde.",
+  "voucher.nameRequired": "Nome do voucher é obrigatório",
+  "billing.voucherFields": "Nome do voucher é obrigatório"
 }
