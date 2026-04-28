@@ -7,7 +7,7 @@ DEFINE FIELD token       ON verification_request TYPE string;
 DEFINE FIELD payload     ON verification_request TYPE option<object> FLEXIBLE;
 DEFINE FIELD expiresAt   ON verification_request TYPE datetime;
 DEFINE FIELD usedAt      ON verification_request TYPE option<datetime>;
-DEFINE FIELD tenantIds   On verification_request TYPE option<array<record<tenant>, 1>>;
+DEFINE FIELD tenantIds   On verification_request TYPE option<set<record<tenant>, 1>>;
 DEFINE FIELD createdAt   ON verification_request TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_vr_token      ON verification_request FIELDS token UNIQUE;

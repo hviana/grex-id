@@ -1,7 +1,7 @@
 DEFINE TABLE voucher SCHEMAFULL;
 DEFINE FIELD name                  ON voucher TYPE string;
-DEFINE FIELD applicableTenantIds  ON voucher TYPE array<record<tenant>> DEFAULT [];
-DEFINE FIELD applicablePlanIds     ON voucher TYPE array<record<plan>> DEFAULT [];
+DEFINE FIELD applicableTenantIds  ON voucher TYPE set<record<tenant>> DEFAULT <set>[];
+DEFINE FIELD applicablePlanIds     ON voucher TYPE set<record<plan>> DEFAULT <set>[];
 DEFINE FIELD resourceLimitId         ON voucher TYPE record<resource_limit>;
 DEFINE FIELD expiresAt             ON voucher TYPE option<datetime>;
 DEFINE FIELD createdAt             ON voucher TYPE datetime DEFAULT time::now();

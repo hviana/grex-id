@@ -1,5 +1,5 @@
 DEFINE TABLE payment_method SCHEMAFULL;
-DEFINE FIELD tenantIds       ON payment_method TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds       ON payment_method TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD type            ON payment_method TYPE string DEFAULT "credit_card";
 DEFINE FIELD data            ON payment_method TYPE object FLEXIBLE;
 DEFINE FIELD billingAddressId  ON payment_method TYPE record<address>;

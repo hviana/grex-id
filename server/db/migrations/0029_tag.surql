@@ -1,7 +1,7 @@
 DEFINE TABLE tag SCHEMAFULL;
 DEFINE FIELD name      ON tag TYPE string;
 DEFINE FIELD color     ON tag TYPE string;
-DEFINE FIELD tenantIds On tag TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds On tag TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD createdAt ON tag TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_tag_tenant      On tag FIELDS tenantIds;

@@ -1,7 +1,7 @@
 DEFINE TABLE location SCHEMAFULL;
 DEFINE FIELD name             ON location TYPE string;
 DEFINE FIELD description      ON location TYPE option<string>;
-DEFINE FIELD tenantIds        On location TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds        On location TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD address          ON location TYPE object;
 DEFINE FIELD address.street   ON location TYPE string;
 DEFINE FIELD address.number   ON location TYPE string;

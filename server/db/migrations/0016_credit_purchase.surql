@@ -1,5 +1,5 @@
 DEFINE TABLE credit_purchase SCHEMAFULL;
-DEFINE FIELD tenantIds      ON credit_purchase TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds      ON credit_purchase TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD amount          ON credit_purchase TYPE int;
 DEFINE FIELD paymentMethodId ON credit_purchase TYPE record<payment_method>;
 DEFINE FIELD status          ON credit_purchase TYPE string

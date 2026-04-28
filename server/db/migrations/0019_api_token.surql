@@ -1,5 +1,5 @@
 DEFINE TABLE api_token SCHEMAFULL;
-DEFINE FIELD tenantIds         ON api_token TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds         ON api_token TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD name              ON api_token TYPE string;
 DEFINE FIELD description       ON api_token TYPE option<string>;
 DEFINE FIELD actorType      ON api_token TYPE string

@@ -1,7 +1,7 @@
 DEFINE TABLE plan SCHEMAFULL;
 DEFINE FIELD name             ON plan TYPE string;
 DEFINE FIELD description      ON plan TYPE string;
-DEFINE FIELD tenantIds        ON plan TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds        ON plan TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD price            ON plan TYPE int;
 DEFINE FIELD currency         ON plan TYPE string DEFAULT "USD";
 DEFINE FIELD recurrenceDays   ON plan TYPE int;

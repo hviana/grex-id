@@ -1,5 +1,5 @@
 DEFINE TABLE payment SCHEMAFULL;
-DEFINE FIELD tenantIds       On payment TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds       On payment TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD subscriptionId  ON payment TYPE record<subscription>;
 DEFINE FIELD amount          ON payment TYPE int;
 DEFINE FIELD currency        ON payment TYPE string DEFAULT "USD";

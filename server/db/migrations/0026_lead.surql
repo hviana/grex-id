@@ -1,9 +1,9 @@
 DEFINE TABLE lead SCHEMAFULL;
 DEFINE FIELD name          ON lead TYPE string;
 DEFINE FIELD profileId     ON lead TYPE record<profile>;
-DEFINE FIELD channelIds    ON lead TYPE array<record<entity_channel>> DEFAULT [];
-DEFINE FIELD tagIds        ON lead TYPE array<record<tag>> DEFAULT [];
-DEFINE FIELD tenantIds    On lead TYPE array<record<tenant>> DEFAULT [];
+DEFINE FIELD channelIds    ON lead TYPE set<record<entity_channel>> DEFAULT <set>[];
+DEFINE FIELD tagIds        ON lead TYPE set<record<tag>> DEFAULT <set>[];
+DEFINE FIELD tenantIds    On lead TYPE set<record<tenant>> DEFAULT <set>[];
 DEFINE FIELD ownerId     On lead TYPE option<record<user>>;
 DEFINE INDEX idx_lead_owner  On lead FIELDS ownerId;
 DEFINE FIELD createdAt     ON lead TYPE datetime DEFAULT time::now();

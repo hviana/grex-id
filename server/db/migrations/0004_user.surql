@@ -1,7 +1,7 @@
 DEFINE TABLE user SCHEMAFULL;
 DEFINE FIELD passwordHash ON user TYPE string;
 DEFINE FIELD profileId    ON user TYPE record<profile>;
-DEFINE FIELD channelIds   ON user TYPE array<record<entity_channel>> DEFAULT [];
+DEFINE FIELD channelIds   ON user TYPE set<record<entity_channel>> DEFAULT <set>[];
 DEFINE FIELD twoFactorEnabled        ON user TYPE bool DEFAULT false;
 DEFINE FIELD twoFactorSecret         ON user TYPE option<string>;
 DEFINE FIELD pendingTwoFactorSecret  ON user TYPE option<string>;
@@ -9,7 +9,7 @@ DEFINE FIELD stayLoggedIn     ON user TYPE bool DEFAULT false;
 DEFINE FIELD resourceLimitId         ON user TYPE record<resource_limit>;
 DEFINE FIELD createdAt    ON user TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt    ON user TYPE datetime DEFAULT time::now();
-DEFINE FIELD tenantIds    ON user TYPE array<record<tenant>> DEFAULT [];
+DEFINE FIELD tenantIds    ON user TYPE set<record<tenant>> DEFAULT <set>[];
 
 DEFINE INDEX idx_user_profile  ON user FIELDS profileId UNIQUE;
 DEFINE INDEX idx_user_channels ON user FIELDS channelIds;

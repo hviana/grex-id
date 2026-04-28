@@ -1,5 +1,5 @@
 DEFINE TABLE subscription SCHEMAFULL;
-DEFINE FIELD tenantIds              ON subscription TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds              ON subscription TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD planId                 ON subscription TYPE record<plan>;
 DEFINE FIELD paymentMethodId        ON subscription TYPE option<record<payment_method>>;
 DEFINE FIELD status                 ON subscription TYPE string

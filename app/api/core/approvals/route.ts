@@ -8,7 +8,7 @@ import {
   markVerificationUsed,
   resolveUserMembership,
 } from "@/server/db/queries/auth";
-import { applyEventPayload } from "@/server/db/queries/payloads";
+import { apply } from "@/server/db/queries/db-changes";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
@@ -128,7 +128,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const changes = (payload.changes ?? []) as DBChangeRequest[];
 
   if (changes.length > 0) {
-    const result = await applyEventPayload(changes);
+    const result = await apply(changes);
     if (!result.success) {
       return Response.json(
         {

@@ -1,5 +1,5 @@
 DEFINE TABLE usage_record SCHEMAFULL;
-DEFINE FIELD tenantIds  ON usage_record TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds  ON usage_record TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD resourceKey   ON usage_record TYPE string;
 DEFINE FIELD value      ON usage_record TYPE number;
 DEFINE FIELD period     ON usage_record TYPE string;

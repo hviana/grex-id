@@ -1,5 +1,5 @@
 DEFINE TABLE credit_expense SCHEMAFULL;
-DEFINE FIELD tenantIds   ON credit_expense TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds   ON credit_expense TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD resourceKey  ON credit_expense TYPE string;
 DEFINE FIELD amount       ON credit_expense TYPE number;
 DEFINE FIELD count        ON credit_expense TYPE number DEFAULT 0;

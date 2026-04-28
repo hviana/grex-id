@@ -11,7 +11,7 @@ import {
 import { associateLeadWithTenant, syncLeadChannels } from "./leads";
 import { forgetActor } from "../../utils/actor-validity";
 
-assertServerOnly("payloads");
+assertServerOnly("db-changes");
 
 // ---------------------------------------------------------------------------
 // Custom dispatcher — complex operations keyed by actionKey + entity + fields
@@ -110,7 +110,7 @@ async function handleCustom(c: DBChangeRequest): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// applyEventPayload — replay DBChangeRequest[] from a verification payload
+// apply — replay DBChangeRequest[] from a verification payload
 // ---------------------------------------------------------------------------
 //
 // Iterates over DBChangeRequest entries.  "create" / "update" / "delete" are
@@ -118,7 +118,7 @@ async function handleCustom(c: DBChangeRequest): Promise<void> {
 // fieldSpecs — fields are already DB-ready).  "custom" entries are handled
 // internally via actionKey-based dispatch.
 
-export async function applyEventPayload(
+export async function apply(
   changes: DBChangeRequest[],
 ): Promise<
   { success: boolean; errors?: { changeIndex: number; message: string }[] }

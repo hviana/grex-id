@@ -1,6 +1,6 @@
 DEFINE TABLE role SCHEMAFULL;
 DEFINE FIELD name        ON role TYPE string;
-DEFINE FIELD tenantIds   ON role TYPE array<record<tenant>, 1> DEFAULT [];
+DEFINE FIELD tenantIds   ON role TYPE set<record<tenant>, 1> DEFAULT <set>[];
 DEFINE FIELD isBuiltIn   ON role TYPE bool DEFAULT false;
 DEFINE FIELD createdAt   ON role TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt   ON role TYPE option<datetime>;

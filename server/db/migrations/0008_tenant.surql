@@ -8,7 +8,7 @@ DEFINE FIELD isOwner   ON tenant TYPE bool DEFAULT false;
 DEFINE FIELD createdAt ON tenant TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt ON tenant TYPE datetime DEFAULT time::now();
 
--- Better than array<record<group>> if you want to avoid duplicated groups
+-- Better than set<record<group>> if you want to avoid duplicated groups
 DEFINE FIELD groupIds ON tenant TYPE set<record<group>> DEFAULT <set>[];
 
 -- Prevent duplicated tenant membership for the same actor + company + system
