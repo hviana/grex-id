@@ -5,7 +5,10 @@ import GenericList from "@/src/components/shared/GenericList";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
 import NameDescSubform from "@/src/components/subforms/NameDescSubform";
 import AddressSubform from "@/src/components/subforms/AddressSubform";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

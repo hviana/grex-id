@@ -1,6 +1,6 @@
 export interface MenuItem {
   id: string;
-  tenantIds: string[]; // references system-only tenant rows
+  tenantIds: string[];
   parentId?: string;
   label: string;
   emoji?: string;
@@ -8,6 +8,5 @@ export interface MenuItem {
   sortOrder: number;
   requiredRoles: string[];
   hiddenInPlanIds: string[];
-  children?: MenuItem[];
   createdAt: string;
 }

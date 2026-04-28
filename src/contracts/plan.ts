@@ -1,5 +1,3 @@
-import type { ResourceLimit } from "./resource-limit.ts";
-
 export interface Plan {
   id: string;
   name: string;
@@ -8,7 +6,7 @@ export interface Plan {
   price: number;
   currency: string;
   recurrenceDays: number;
-  resourceLimitId?: ResourceLimit;
+  resourceLimitId: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

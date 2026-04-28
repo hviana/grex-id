@@ -6,7 +6,10 @@ import Spinner from "@/src/components/shared/Spinner";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { Bar } from "react-chartjs-2";

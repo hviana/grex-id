@@ -10,7 +10,10 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import PlanCard from "@/src/components/shared/PlanCard";
 import PlanSubform from "@/src/components/subforms/PlanSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PlanItem {

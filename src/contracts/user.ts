@@ -1,21 +1,13 @@
-import type { EntityChannel } from "./entity-channel.ts";
-import type { Profile } from "./profile.ts";
-import type { ResourceLimit } from "./resource-limit.ts";
-
 export interface User {
   id: string;
-  profileId: Profile;
-  channelIds: EntityChannel[];
+  passwordHash: string;
+  profileId: string;
+  channelIds: string[];
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
-  /**
-   * Temporary secret staged by `POST /api/auth/two-factor action:setup-totp`
-   * and promoted to `twoFactorSecret` by the verify handler when the user
-   * clicks the `auth.action.twoFactorEnable` confirmation link (§8.8).
-   */
   pendingTwoFactorSecret?: string;
   stayLoggedIn: boolean;
-  resourceLimitId?: ResourceLimit;
+  resourceLimitId: string;
   tenantIds: string[];
   createdAt: string;
   updatedAt: string;

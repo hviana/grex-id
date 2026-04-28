@@ -1,12 +1,10 @@
-import type { EntityChannel } from "./entity-channel.ts";
-
 export interface Profile {
   id: string;
   name: string;
   avatarUri?: string;
   dateOfBirth?: string;
   locale?: string;
-  recoveryChannelIds: EntityChannel[];
+  recoveryChannelIds: string[];
   createdAt: string;
   updatedAt: string;
 }

@@ -8,7 +8,10 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ConnectedApp {

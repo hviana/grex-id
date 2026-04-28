@@ -5,7 +5,10 @@ import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import Spinner from "@/src/components/shared/Spinner";
 import DownloadData from "@/src/components/shared/DownloadData";
 import GenericList from "@/src/components/shared/GenericList";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { Bar, Pie } from "react-chartjs-2";
 import {
   ArcElement,

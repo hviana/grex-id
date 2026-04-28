@@ -15,7 +15,10 @@ import type {
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

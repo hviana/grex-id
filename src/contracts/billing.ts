@@ -1,48 +1,47 @@
-import type { Address } from "./address.ts";
-
 export interface Subscription {
   id: string;
-  tenantIds: string[]; // references company-system tenant rows
+  tenantIds: string[];
   planId: string;
-  paymentMethodId?: string; // optional for free plans
+  paymentMethodId?: string;
   status: "active" | "past_due" | "cancelled";
   currentPeriodStart: string;
   currentPeriodEnd: string;
-  voucherId?: string; // single voucher — replaced on re-apply
-  remainingPlanCredits: number; // resets on renewal
-  remainingOperationCount?: Record<string, number>; // per-resourceKey map; resets on renewal
-  creditAlertSent: boolean; // one-shot credit exhaustion alert
-  operationCountAlertSent?: Record<string, boolean>; // per-resourceKey one-shot alert map
+  voucherId?: string;
+  remainingPlanCredits: number;
+  remainingOperationCount?: Record<string, number>;
+  creditAlertSent: boolean;
+  operationCountAlertSent?: Record<string, boolean>;
   autoRechargeEnabled?: boolean;
-  autoRechargeAmount?: number; // cents; 0 when disabled
-  autoRechargeInProgress?: boolean; // re-entrancy guard
-  retryPaymentInProgress: boolean; // re-entrancy guard for retry_payment
+  autoRechargeAmount?: number;
+  autoRechargeInProgress?: boolean;
+  retryPaymentInProgress: boolean;
   createdAt: string;
   updatedAt?: string;
 }
 
 export interface PaymentMethod {
   id: string;
-  tenantIds: string[]; // references company-only tenant rows
-  type: "credit_card";
-  data: Record<string, unknown>; // flexible object — cardToken, cardMask, holderName, etc.
-  billingAddressId: Address;
+  tenantIds: string[];
+  type: string;
+  data: Record<string, unknown>;
+  billingAddressId: string;
   isDefault: boolean;
   createdAt: string;
 }
 
 export interface CreditPurchase {
   id: string;
-  tenantIds: string[]; // references company-system tenant rows
+  tenantIds: string[];
   amount: number;
   paymentMethodId: string;
   status: "pending" | "completed" | "failed" | "expired";
+  subscriptionId?: string;
   createdAt: string;
 }
 
 export interface Payment {
   id: string;
-  tenantIds: string[]; // references company-system tenant rows
+  tenantIds: string[];
   subscriptionId: string;
   amount: number;
   currency: string;

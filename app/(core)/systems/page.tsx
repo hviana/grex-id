@@ -8,7 +8,10 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import FileUploadField from "@/src/components/fields/FileUploadField";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SystemItem {

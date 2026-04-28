@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { FieldType } from "@/src/contracts/common";
 import type {
   CursorParams,
-  FieldType,
   PaginatedResult,
-} from "@/src/contracts/common";
+} from "@/src/contracts/high_level/pagination";
 import type { FilterConfig, FilterValues } from "./FilterDropdown.tsx";
 import SearchField from "./SearchField.tsx";
 import CreateButton from "./CreateButton.tsx";

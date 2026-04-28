@@ -12,7 +12,10 @@ import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface ApiToken {

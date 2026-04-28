@@ -10,7 +10,10 @@ import DeleteButton from "@/src/components/shared/DeleteButton";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface RoleItem {

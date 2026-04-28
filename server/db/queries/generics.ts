@@ -10,7 +10,10 @@ import {
 } from "../../utils/entity-deduplicator.ts";
 import { decryptField, decryptFieldOptional } from "../../utils/crypto.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import type { Tenant } from "@/src/contracts/tenant";
 
 /**

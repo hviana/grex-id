@@ -17,10 +17,9 @@ export interface VerificationRequest {
   ownerType: VerificationOwnerType;
   actionKey: string;
   token: string;
-  expiresAt: string;
-  usedAt: string | null;
   payload?: Record<string, unknown> | null;
+  expiresAt: string;
+  usedAt?: string | null;
   tenantIds?: string[];
-  systemSlug?: string;
   createdAt: string;
 }

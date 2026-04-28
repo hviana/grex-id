@@ -15,7 +15,10 @@ import UserView, {
 import AccessRequestModal from "@/src/components/shared/AccessRequestModal";
 import RemoveAccessModal from "@/src/components/shared/RemoveAccessModal";
 import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function UsersPage() {

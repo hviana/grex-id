@@ -3,7 +3,10 @@
 import React from "react";
 import GenericList from "@/src/components/shared/GenericList";
 import TenantView from "@/src/components/shared/TenantView";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
 import type { SubformConfig } from "@/src/components/shared/GenericList";
 import type {

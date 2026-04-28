@@ -139,8 +139,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     }
 
     const rl = plan.resourceLimitId ?? {};
-    const planOpMap =
-      (rl as Record<string, unknown>).maxOperationCountByResourceKey as Record<
+    const planOpMap = (rl as unknown as Record<string, unknown>)
+      .maxOperationCountByResourceKey as Record<
         string,
         number
       > ?? {};
@@ -195,7 +195,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       planId,
       paymentMethodId: paymentMethodId ?? null,
       userId,
-      planCredits: (rl as Record<string, unknown>).credits as number ?? 0,
+      planCredits:
+        (rl as unknown as Record<string, unknown>).credits as number ?? 0,
       operationCountMap,
       start: now,
       end: periodEnd,

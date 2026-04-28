@@ -1,5 +1,8 @@
 import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
-import type { CursorParams, PaginatedResult } from "@/src/contracts/common";
+import type {
+  CursorParams,
+  PaginatedResult,
+} from "@/src/contracts/high_level/pagination";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
 
