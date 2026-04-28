@@ -334,7 +334,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
 export const POST = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.manage_leads"],
+    roles: ["grexid.manage_leads", "admin"],
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
@@ -342,7 +342,7 @@ export const POST = compose(
 export const PUT = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.manage_leads"],
+    roles: ["grexid.manage_leads", "admin"],
   }),
   async (req, ctx) => putHandler(req, ctx),
 );

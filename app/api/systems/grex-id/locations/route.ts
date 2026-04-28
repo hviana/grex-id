@@ -155,7 +155,7 @@ async function deleteHandler(req: Request, ctx: RequestContext) {
 export const GET = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.list_locations"],
+    roles: ["grexid.list_locations", "admin"],
   }),
   async (req, ctx) => getHandler(req, ctx),
 );
@@ -163,7 +163,7 @@ export const GET = compose(
 export const POST = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.manage_locations"],
+    roles: ["grexid.manage_locations", "admin"],
   }),
   async (req, ctx) => postHandler(req, ctx),
 );
@@ -171,7 +171,7 @@ export const POST = compose(
 export const PUT = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.manage_locations"],
+    roles: ["grexid.manage_locations", "admin"],
   }),
   async (req, ctx) => putHandler(req, ctx),
 );
@@ -179,7 +179,7 @@ export const PUT = compose(
 export const DELETE = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
-    roles: ["grexid.manage_locations"],
+    roles: ["grexid.manage_locations", "admin"],
   }),
   async (req, ctx) => deleteHandler(req, ctx),
 );

@@ -271,7 +271,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           headers: { Authorization: `Bearer ${systemToken}` },
         });
         const compJson = await compRes.json();
-        const companies = compJson.success ? (compJson.data ?? []) : [];
+        const companies = compJson.success ? (compJson.items ?? []) : [];
 
         if (cancelled) return;
 
