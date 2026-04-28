@@ -956,7 +956,7 @@ export async function genericDelete(
     Object.assign(dissociateBindings, tenantBind.bindings);
 
     const queries: string[] = [
-      `UPDATE ${opts.table} SET tenantIds = tenantIds.filter(|x| x != $tenantId) WHERE id = $id${tenantWhereClause};`,
+      `UPDATE ${opts.table} SET tenantIds = tenantIds[WHERE $this != $tenantId] WHERE id = $id AND array::len(tenantIds) > 1${tenantWhereClause};`,
     ];
 
     const orphanChecks = await buildOrphanChecks(opts.table, id, opts.cascade);
@@ -1027,18 +1027,18 @@ async function buildOrphanChecks(
 
       if (isArray) {
         checks.push(
-          `(SELECT count() AS c FROM ${child.table} WHERE $eid IN ${parentField} GROUP ALL)[0].c = 0`,
+          `array::len(SELECT id FROM ${child.table} WHERE $eid IN ${parentField}) = 0`,
         );
       } else {
         checks.push(
-          `(SELECT count() AS c FROM ${child.table} WHERE ${parentField} = $eid GROUP ALL)[0].c = 0`,
+          `array::len(SELECT id FROM ${child.table} WHERE ${parentField} = $eid) = 0`,
         );
       }
     }
   }
 
   checks.push(
-    `(SELECT count() AS c FROM ${table} WHERE id = $eid GROUP ALL)[0].c = 0`,
+    `array::len(SELECT id FROM ${table} WHERE id = $eid AND array::len(tenantIds) > 1) = 0`,
   );
 
   const queries = [
@@ -1066,7 +1066,7 @@ async function buildCascadeStatements(
     if (parentField) {
       if (child.isArray) {
         queries.push(
-          `UPDATE ${child.table} SET ${parentField} = ${parentField}.filter(|x| x != $eid);`,
+          `UPDATE ${child.table} SET ${parentField} = ${parentField}[WHERE $this != $eid];`,
         );
       } else {
         queries.push(

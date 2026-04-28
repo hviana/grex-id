@@ -94,7 +94,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       table: "location",
       tenant: ctx.tenantContext.tenant,
     },
-    { name, description: description || null, address },
+    { name, description: description || undefined, address },
   );
 
   return Response.json(
@@ -119,7 +119,7 @@ async function putHandler(req: Request, ctx: RequestContext) {
 
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
-  if (description !== undefined) data.description = description || null;
+  if (description !== undefined) data.description = description || undefined;
   if (address !== undefined) data.address = address;
 
   const result = await genericUpdate<Location>(

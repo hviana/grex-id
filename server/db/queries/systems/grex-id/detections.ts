@@ -100,8 +100,6 @@ interface RawDetectionRow {
     & {
       id: unknown;
       name: string;
-      companyId: unknown;
-      systemId: unknown;
     };
   faceId?:
     | (Record<string, unknown> & { id: unknown })
@@ -137,8 +135,7 @@ export async function listDetections(
   };
 
   let whereClause = `
-    WHERE locationId.companyId = $companyId
-      AND locationId.systemId = $systemId
+    WHERE locationId.tenantIds CONTAINS $sysTenantId
       AND detectedAt >= type::datetime($startDate)
       AND detectedAt <= type::datetime($endDate)`;
 
@@ -151,21 +148,23 @@ export async function listDetections(
     bindings.cursor = params.cursor;
   }
 
-  // Single batched query (§7.2): detections + lead membership via tenantIds
+  // Single batched query: detections + lead membership via tenantIds
+  // LET statements produce null entries in the result array, shifting indices
   const query =
-    `SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
+    `LET $sysTenantId = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
 
-    LET $leadIds = array::distinct(SELECT VALUE leadId.id FROM grexid_detection ${whereClause} AND leadId ORDER BY detectedAt DESC LIMIT $limit);
+    SELECT * FROM grexid_detection ${whereClause} ORDER BY detectedAt DESC LIMIT $limit FETCH locationId, faceId, leadId, leadId.profileId;
 
-    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
+    LET $leadIds = array::distinct(SELECT VALUE leadId FROM (SELECT leadId, detectedAt FROM grexid_detection ${whereClause} AND leadId ORDER BY detectedAt DESC LIMIT $limit));
 
     SELECT id AS leadId, ownerId FROM lead
       WHERE id IN $leadIds
-        AND tenantIds CONTAINS $sysTenant
+        AND tenantIds CONTAINS $sysTenantId
       FETCH ownerId, ownerId.profileId;`;
 
   const result = await db.query<
     [
+      unknown,
       RawDetectionRow[],
       unknown,
       {
@@ -179,8 +178,8 @@ export async function listDetections(
       }[],
     ]
   >(query, bindings);
-  const rawItems = result[0] ?? [];
-  const assocRows = result[2] ?? [];
+  const rawItems = result[1] ?? [];
+  const assocRows = result[3] ?? [];
   const hasMore = rawItems.length > limit;
   const fetched = hasMore ? rawItems.slice(0, limit) : rawItems;
 
@@ -318,14 +317,17 @@ export async function getDetectionStats(params: {
     bindings.locationId = rid(params.locationId);
   }
 
-  // Single batched query (§7.2):
+  // Single batched query:
   //  1) Per-face aggregation via GROUP BY: count, max score, last detectedAt
   //  2) Raw detections for hourly/daily unique-face counting
   //  3) lead membership check via tenantIds for classification
+  // LET statements produce null entries in the result array, shifting indices
   const result = await db.query<
     [
+      unknown,
       AggregatedFaceRow[],
       { faceId: unknown; detectedAt: string }[],
+      unknown,
       {
         leadId: unknown;
         ownerId:
@@ -338,7 +340,9 @@ export async function getDetectionStats(params: {
     ]
   >(
     // 1) Group by faceId — SurrealDB GROUP BY provides count() and aggregate functions
-    `SELECT
+    `LET $sysTenantId = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
+
+    SELECT
         faceId,
         array::first(leadId) AS leadId,
         array::first(locationId) AS locationId,
@@ -346,8 +350,7 @@ export async function getDetectionStats(params: {
         math::max(score) AS bestScore,
         time::max(detectedAt) AS lastDetectedAt
       FROM grexid_detection
-      WHERE locationId.companyId = $companyId
-        AND locationId.systemId = $systemId
+      WHERE locationId.tenantIds CONTAINS $sysTenantId
         AND detectedAt >= type::datetime($startDate)
         AND detectedAt <= type::datetime($endDate)${locationFilter}
       GROUP BY faceId
@@ -356,33 +359,28 @@ export async function getDetectionStats(params: {
 
     // 2) Raw faceId + detectedAt for hourly/daily unique counts (lightweight)
     SELECT faceId, detectedAt FROM grexid_detection
-      WHERE locationId.companyId = $companyId
-        AND locationId.systemId = $systemId
+      WHERE locationId.tenantIds CONTAINS $sysTenantId
         AND detectedAt >= type::datetime($startDate)
         AND detectedAt <= type::datetime($endDate)${locationFilter};
 
     // 3) Batch-check lead membership via tenantIds for classification
-    LET $leadIds = (SELECT VALUE array::first(leadId)
+    LET $leadIds = array::distinct(SELECT VALUE leadId
       FROM grexid_detection
-      WHERE locationId.companyId = $companyId
-        AND locationId.systemId = $systemId
+      WHERE locationId.tenantIds CONTAINS $sysTenantId
         AND detectedAt >= type::datetime($startDate)
         AND detectedAt <= type::datetime($endDate)${locationFilter}
-        AND leadId
-      GROUP BY faceId);
-
-    LET $sysTenant = (SELECT VALUE id FROM tenant WHERE companyId = $companyId AND systemId = $systemId AND !actorId LIMIT 1)[0];
+        AND leadId);
 
     SELECT id AS leadId, ownerId FROM lead
       WHERE id IN $leadIds
-        AND tenantIds CONTAINS $sysTenant
+        AND tenantIds CONTAINS $sysTenantId
       FETCH ownerId, ownerId.profileId;`,
     bindings,
   );
 
-  const aggregatedFaces = result[0] ?? [];
-  const rawDetections = result[1] ?? [];
-  const assocRows = result[2] ?? [];
+  const aggregatedFaces = result[1] ?? [];
+  const rawDetections = result[2] ?? [];
+  const assocRows = result[4] ?? [];
 
   // Build membership lookup map
   const assocMap = new Map<string, { ownerId?: string; ownerName?: string }>();

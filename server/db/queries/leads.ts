@@ -275,7 +275,7 @@ export async function removeLeadFromTenant(
   const normalizedLeadId = requireRecordId(leadId, "leadId");
   const normalizedTenantId = requireRecordId(tenantId, "tenantId");
   await db.query(
-    `UPDATE $leadId SET tenantIds = tenantIds.filter(|$x| $x != $tenantId), updatedAt = time::now();`,
+    `UPDATE $leadId SET tenantIds = tenantIds[WHERE $this != $tenantId], updatedAt = time::now();`,
     {
       leadId: rid(normalizedLeadId),
       tenantId: rid(normalizedTenantId),
