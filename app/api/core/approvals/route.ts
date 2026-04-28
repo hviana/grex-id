@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
-import type { EventChange } from "@/src/contracts/high_level/event-payload";
+import type { DBChangeRequest } from "@/src/contracts/high_level/event-payload";
 import {
   findUserByVerifiedChannel,
   findVerificationRequest,
@@ -12,7 +12,6 @@ import { applyEventPayload } from "@/server/db/queries/payloads";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
-
 
 async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   const body = await req.json();
@@ -126,7 +125,7 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   }
 
   // ── All other actions — apply payload.changes via generics ─────────
-  const changes = (payload.changes ?? []) as EventChange[];
+  const changes = (payload.changes ?? []) as DBChangeRequest[];
 
   if (changes.length > 0) {
     const result = await applyEventPayload(changes);
@@ -147,7 +146,10 @@ async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
   // ── Non-DB side effects ────────────────────────────────────────────
   if (actionKey === "auth.action.leadUpdate") {
     const hooks = payload.hooks as Record<string, unknown> | undefined;
-    if (hooks?.faceDescriptor && Array.isArray(hooks.faceDescriptor) && hooks.faceDescriptor.length > 0) {
+    if (
+      hooks?.faceDescriptor && Array.isArray(hooks.faceDescriptor) &&
+      hooks.faceDescriptor.length > 0
+    ) {
       await runLifecycleHooks("lead:verify", {
         leadId: ownerId,
         systemSlug: hooks.systemSlug as string | undefined,

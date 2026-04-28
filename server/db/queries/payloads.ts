@@ -1,17 +1,14 @@
 import { getDb, rid } from "../connection.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import type { EventChange } from "@/src/contracts/high_level/event-payload";
+import type { DBChangeRequest } from "@/src/contracts/high_level/event-payload";
 import {
-  genericCreate,
-  genericUpdate,
-  genericDelete,
   genericAssociate,
   genericCount,
+  genericCreate,
+  genericDelete,
+  genericUpdate,
 } from "./generics";
-import {
-  associateLeadWithTenant,
-  syncLeadChannels,
-} from "./leads";
+import { associateLeadWithTenant, syncLeadChannels } from "./leads";
 import { forgetActor } from "../../utils/actor-validity";
 
 assertServerOnly("payloads");
@@ -20,7 +17,7 @@ assertServerOnly("payloads");
 // Custom dispatcher — complex operations keyed by actionKey + entity + fields
 // ---------------------------------------------------------------------------
 
-async function handleCustom(c: EventChange): Promise<void> {
+async function handleCustom(c: DBChangeRequest): Promise<void> {
   const fields = c.fields as Record<string, unknown>;
 
   // ── twoFactorEnable: promote pendingTwoFactorSecret → twoFactorSecret ──
@@ -77,7 +74,9 @@ async function handleCustom(c: EventChange): Promise<void> {
     if (!companyId || !systemId) return;
 
     const resolveRoles =
-      `(SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT id FROM tenant WHERE !actorId AND !companyId AND systemId = ${rid(systemId)} LIMIT 1) LIMIT 1)`;
+      `(SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT id FROM tenant WHERE !actorId AND !companyId AND systemId = ${
+        rid(systemId)
+      } LIMIT 1) LIMIT 1)`;
     await db.query(
       `LET $existing = (SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1);
        IF array::len($existing) = 0 {
@@ -87,7 +86,11 @@ async function handleCustom(c: EventChange): Promise<void> {
            systemId = $systemId,
            roleIds = ${resolveRoles};
        };`,
-      { userId: rid(f.actorId), companyId: rid(companyId), systemId: rid(systemId) },
+      {
+        userId: rid(f.actorId),
+        companyId: rid(companyId),
+        systemId: rid(systemId),
+      },
     );
 
     await forgetActor({ id: f.targetTenantId, actorId: f.actorId });
@@ -95,7 +98,10 @@ async function handleCustom(c: EventChange): Promise<void> {
   }
 
   // ── access.request: generic associate (other shareable entities) ────
-  if (c.actionKey === "access.request" && typeof fields.associateTenant === "string") {
+  if (
+    c.actionKey === "access.request" &&
+    typeof fields.associateTenant === "string"
+  ) {
     await genericAssociate(c.entity, c.id!, {
       id: fields.associateTenant as string,
     });
@@ -104,17 +110,19 @@ async function handleCustom(c: EventChange): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// applyEventPayload — replay EventChange[] from a verification payload
+// applyEventPayload — replay DBChangeRequest[] from a verification payload
 // ---------------------------------------------------------------------------
 //
-// Iterates over EventChange entries.  "create" / "update" / "delete" are
+// Iterates over DBChangeRequest entries.  "create" / "update" / "delete" are
 // dispatched to genericCreate / genericUpdate / genericDelete (with empty
 // fieldSpecs — fields are already DB-ready).  "custom" entries are handled
 // internally via actionKey-based dispatch.
 
 export async function applyEventPayload(
-  changes: EventChange[],
-): Promise<{ success: boolean; errors?: { changeIndex: number; message: string }[] }> {
+  changes: DBChangeRequest[],
+): Promise<
+  { success: boolean; errors?: { changeIndex: number; message: string }[] }
+> {
   const errors: { changeIndex: number; message: string }[] = [];
 
   for (let i = 0; i < changes.length; i++) {
@@ -127,7 +135,10 @@ export async function applyEventPayload(
             c.fields,
           );
           if (!r.success) {
-            errors.push({ changeIndex: i, message: `create ${c.entity} failed` });
+            errors.push({
+              changeIndex: i,
+              message: `create ${c.entity} failed`,
+            });
           }
           break;
         }
@@ -142,7 +153,10 @@ export async function applyEventPayload(
             c.fields,
           );
           if (!r.success) {
-            errors.push({ changeIndex: i, message: `update ${c.entity} failed` });
+            errors.push({
+              changeIndex: i,
+              message: `update ${c.entity} failed`,
+            });
           }
           break;
         }
@@ -156,7 +170,10 @@ export async function applyEventPayload(
             c.id,
           );
           if (!r.success) {
-            errors.push({ changeIndex: i, message: `delete ${c.entity} failed` });
+            errors.push({
+              changeIndex: i,
+              message: `delete ${c.entity} failed`,
+            });
           }
           break;
         }

@@ -3,13 +3,13 @@ import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import {
-  genericAssociate,
   genericDeleteSharedRecords,
   genericDisassociate,
   genericList,
   genericListSharedRecords,
 } from "@/server/db/queries/generics";
-import { getDb, rid } from "@/server/db/connection";
+import { deleteUserTenantAccess } from "@/server/db/queries/access";
+import { rid } from "@/server/db/connection";
 
 async function getHandler(
   req: Request,
@@ -161,13 +161,7 @@ async function deleteHandler(
     }
 
     if (entityType === "user") {
-      // For users, delete the user-access tenant rows directly
-      const db = await getDb();
-      const resolvedIds = tenantIds.map((id: string) => rid(id));
-      await db.query(
-        `DELETE FROM tenant WHERE id IN $ids AND actorId = $actorId`,
-        { ids: resolvedIds, actorId: rid(entityId) },
-      );
+      await deleteUserTenantAccess(entityId, tenantIds);
       return Response.json({ success: true });
     }
 

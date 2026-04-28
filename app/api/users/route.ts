@@ -220,7 +220,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
     ownerId: String(user.id),
     ownerType: "user",
     actionKey: "auth.action.register",
-    payload: { changes: channelIds.map((id) => ({ action: "update" as const, actionKey: "auth.action.register", entity: "entity_channel", id: String(id), fields: { verified: true } })) },
+    payload: {
+      changes: channelIds.map((id) => ({
+        action: "update" as const,
+        actionKey: "auth.action.register",
+        entity: "entity_channel",
+        id: String(id),
+        fields: { verified: true },
+      })),
+    },
     tenant: {
       tenantIds: [ctx.tenantContext.tenant.id!],
       systemSlug: systemSlug,

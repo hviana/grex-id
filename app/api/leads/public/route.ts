@@ -210,7 +210,9 @@ async function postHandler(req: Request, ctx: RequestContext) {
               : []),
           ],
           hooks: {
-            faceDescriptor: Array.isArray(faceDescriptor) ? faceDescriptor : undefined,
+            faceDescriptor: Array.isArray(faceDescriptor)
+              ? faceDescriptor
+              : undefined,
             systemId,
             systemSlug,
           },
@@ -318,7 +320,15 @@ async function postHandler(req: Request, ctx: RequestContext) {
       ownerId: lead.id,
       ownerType: "lead",
       actionKey: "auth.action.leadRegister",
-      payload: { changes: channelIds.map((id: string) => ({ action: "update" as const, actionKey: "auth.action.leadRegister", entity: "entity_channel", id, fields: { verified: true } })) },
+      payload: {
+        changes: channelIds.map((id: string) => ({
+          action: "update" as const,
+          actionKey: "auth.action.leadRegister",
+          entity: "entity_channel",
+          id,
+          fields: { verified: true },
+        })),
+      },
       tenant: {
         tenantIds: [ctx.tenantContext.tenant.id!],
         systemSlug,

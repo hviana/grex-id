@@ -1,15 +1,15 @@
 /**
- * Describes a single database mutation to be applied by the verification
- * callback.  Producers that call `communicationGuard` pack one or more
- * `EventChange` entries inside `payload.changes` so the approvals route
- * can replay them generically via `applyEventPayload`.
+ * A single database mutation to be applied by the verification callback.
+ * Producers that call `communicationGuard` pack one or more `DBChangeRequest`
+ * entries inside `payload.changes` so the approvals route can replay them
+ * generically via `applyEventPayload`.
  *
  * `fields` must carry names and values that are **ready for insertion**
  * into the target table — pre-standardized, pre-validated, pre-encrypted.
  * The `applyEventPayload` utility writes them directly without re-running
  * the pipeline.
  */
-export interface EventChange {
+export interface DBChangeRequest {
   /** "create" | "update" | "delete" call genericCreate / genericUpdate /
    *  genericDelete.  "custom" is reserved for complex multi-table
    *  operations that cannot be expressed as a single-row CRUD call. */
@@ -31,6 +31,6 @@ export interface EventChange {
 
 /** Payload shape stored in `verification_request.payload` for any
  *  action that mutates the database. */
-export interface EventPayload {
-  changes: EventChange[];
+export interface DBChangeRequests {
+  changes: DBChangeRequest[];
 }
