@@ -24,7 +24,7 @@ export async function createPlanWithResourceLimit(data: {
   const result = await db.query<[unknown, unknown, Plan[]]>(
     `LET $rl = CREATE resource_limit SET
       benefits = $benefits,
-      roles = $roles,
+      roleIds = $roleIds,
       entityLimits = $entityLimits,
       apiRateLimit = $apiRateLimit,
       storageLimitBytes = $storageLimitBytes,
@@ -44,7 +44,7 @@ export async function createPlanWithResourceLimit(data: {
       currency = $currency,
       recurrenceDays = $recurrenceDays,
       isActive = $isActive,
-      resourceLimitId = $rl.id,
+      resourceLimitId = $rl[0].id,
       tenantIds = [$tenantId];
     SELECT * FROM $p[0].id FETCH resourceLimitId;`,
     {
@@ -56,7 +56,7 @@ export async function createPlanWithResourceLimit(data: {
       recurrenceDays: data.recurrenceDays,
       isActive: data.isActive,
       benefits: (rl.benefits as string[]) ?? [],
-      roles: (rl.roles as string[]) ?? [],
+      roleIds: (rl.roleIds as string[]) ?? [],
       entityLimits: rl.entityLimits ?? undefined,
       apiRateLimit: Number(rl.apiRateLimit ?? 0),
       storageLimitBytes: Number(rl.storageLimitBytes ?? 0),
@@ -94,12 +94,14 @@ export async function updatePlanWithResourceLimit(
     ? `UPDATE $id SET ${planSets.join(", ")}`
     : "";
   const rlUpdate = rlSets.length > 0
-    ? `UPDATE $id.resourceLimitId SET ${rlSets.join(", ")}`
+    ? `LET $rl = $id.resourceLimitId; UPDATE $rl SET ${rlSets.join(", ")}`
     : "";
 
   const sep = planUpdate && rlUpdate ? ";" : "";
-  const query =
-    `${planUpdate}${sep}${rlUpdate}SELECT * FROM $id FETCH resourceLimitId;`;
+  const hasPreceding = planUpdate || rlUpdate;
+  const query = `${planUpdate}${sep}${rlUpdate}${
+    hasPreceding ? ";" : ""
+  }SELECT * FROM $id FETCH resourceLimitId;`;
 
   const result = await db.query<[Plan[]]>(query, bindings);
   const lastIdx = result.length - 1;

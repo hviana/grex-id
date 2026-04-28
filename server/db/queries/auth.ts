@@ -394,29 +394,31 @@ export async function resolveUserExchange(
 }> {
   const db = await getDb();
   const result = await db.query<unknown[]>(
-    `LET $t = (SELECT id, roleIds FROM tenant
+    `LET $t = (SELECT id FROM tenant
        WHERE actorId = $userId
          AND companyId = $companyId
          AND systemId = $systemId
        LIMIT 1);
      LET $sys = (SELECT slug FROM system WHERE id = $systemId LIMIT 1);
-     LET $roleNames = IF array::len($t) > 0
-       THEN (SELECT VALUE name FROM role WHERE id IN $t[0].roleIds)
-       ELSE [] END;`,
+     LET $roleIds = IF array::len($t) > 0
+       THEN (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $userId LIMIT 1)[0]
+       ELSE [] END;
+     LET $roleNames = IF array::len($roleIds) > 0
+       THEN (SELECT VALUE name FROM role WHERE id IN $roleIds)
+       ELSE [] END;
+     [{ tenantId: $t[0].id, slug: $sys[0].slug, roles: $roleNames }];`,
     {
       userId: rid(userId),
       companyId: rid(companyId),
       systemId: rid(systemId),
     },
   );
-  const tenantRows = result[0] as { id: string }[] | undefined;
-  const sysRows = result[1] as { slug: string }[] | undefined;
-  const roleResult = result[2] as string[] | undefined;
-  const tenantRow = tenantRows?.[0] ?? null;
+  const last = result[result.length - 1] as Record<string, unknown>[];
+  const row = last?.[0] as Record<string, unknown> | undefined;
   return {
-    tenantId: tenantRow ? String(tenantRow.id) : null,
-    roles: Array.isArray(roleResult) ? roleResult : [],
-    slug: sysRows?.[0]?.slug ?? "core",
+    tenantId: row?.tenantId ? String(row.tenantId) : null,
+    roles: Array.isArray(row?.roles) ? (row.roles as string[]) : [],
+    slug: (row?.slug as string) ?? "core",
   };
 }
 

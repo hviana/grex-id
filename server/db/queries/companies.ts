@@ -10,13 +10,34 @@ export async function createCompany(data: {
   documentType: string;
   billingAddress?: Record<string, string>;
   ownerId: string;
-  systemId: string;
+  systemId?: string;
 }): Promise<Company> {
   const db = await getDb();
 
   const hasAddress = data.billingAddress &&
     Object.keys(data.billingAddress).length > 0;
   const addr = data.billingAddress;
+  const hasSystemId = !!data.systemId;
+
+  // The user-access tenant row is only created when a systemId is provided.
+  // When systemId is absent (onboarding flow), we skip it — the subscribe
+  // action will create the company-system tenant + user-access tenant later.
+  const userAccessClause = hasSystemId
+    ? `LET $userAccessTenant = CREATE tenant SET
+         actorId = $ownerId,
+         companyId = $comp[0].id,
+         systemId = $systemId;`
+    : "";
+
+  const baseBindings: Record<string, unknown> = {
+    name: data.name,
+    document: data.document,
+    documentType: data.documentType,
+    ownerId: rid(data.ownerId),
+  };
+  if (hasSystemId) {
+    baseBindings.systemId = rid(data.systemId!);
+  }
 
   if (hasAddress) {
     const result = await db.query<
@@ -45,10 +66,7 @@ export async function createCompany(data: {
         companyId = $comp[0].id,
         systemId = NONE,
         isOwner = true;
-      LET $userAccessTenant = CREATE tenant SET
-        actorId = $ownerId,
-        companyId = $comp[0].id,
-        systemId = $systemId;
+      ${userAccessClause}
       SELECT * FROM $comp[0].id FETCH billingAddressId;`,
       {
         street: addr!.street ?? "",
@@ -59,14 +77,11 @@ export async function createCompany(data: {
         state: addr!.state ?? "",
         country: addr!.country ?? "",
         postalCode: addr!.postalCode ?? "",
-        name: data.name,
-        document: data.document,
-        documentType: data.documentType,
-        ownerId: rid(data.ownerId),
-        systemId: rid(data.systemId),
+        ...baseBindings,
       },
     );
-    return result[5][0];
+    // Result indices: addr, comp, companyTenant, ownerTenant, [userAccessTenant,] SELECT
+    return hasSystemId ? result[5][0] : result[4][0];
   }
 
   const result = await db.query<
@@ -85,18 +100,10 @@ export async function createCompany(data: {
       companyId = $comp[0].id,
       systemId = NONE,
       isOwner = true;
-    LET $userAccessTenant = CREATE tenant SET
-      actorId = $ownerId,
-      companyId = $comp[0].id,
-      systemId = $systemId;
+    ${userAccessClause}
     SELECT * FROM $comp[0].id FETCH billingAddressId;`,
-    {
-      name: data.name,
-      document: data.document,
-      documentType: data.documentType,
-      ownerId: rid(data.ownerId),
-      systemId: rid(data.systemId),
-    },
+    baseBindings,
   );
-  return result[4][0];
+  // Result indices: comp, companyTenant, ownerTenant, [userAccessTenant,] SELECT
+  return hasSystemId ? result[4][0] : result[3][0];
 }

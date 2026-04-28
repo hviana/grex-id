@@ -40,7 +40,7 @@ const NameDescSubform = forwardRef<SubformRef, NameDescSubformProps>(
       getData: () => {
         const data: Record<string, unknown> = {};
         if (showName) data.name = name;
-        if (showDescription) data.description = description || null;
+        if (showDescription) data.description = description || undefined;
         return data;
       },
       isValid: () => {

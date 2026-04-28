@@ -82,7 +82,7 @@ export default function PlansPage() {
           headers: { Authorization: `Bearer ${systemToken}` },
         });
         const json = await res.json();
-        if (json.success && !cancelled) setSystems(json.data ?? []);
+        if (json.success && !cancelled) setSystems(json.items ?? []);
       } catch {
         /* ignore */
       }

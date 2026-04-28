@@ -4,6 +4,7 @@ import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
+import { getDb, rid } from "@/server/db/connection";
 import {
   addPaymentMethod,
   applyVoucherToSubscription,
@@ -155,8 +156,40 @@ async function postHandler(req: Request, ctx: RequestContext) {
       now.getTime() + (plan.recurrenceDays ?? 30) * 86400000,
     );
 
+    // Resolve the company-system tenant ID for the subscription.
+    // During onboarding the token may not carry a real tenant record ID.
+    const db = await getDb();
+    const tenantRows = await db.query<[[{ id: string }]]>(
+      `SELECT id FROM tenant
+       WHERE !actorId AND companyId = $companyId AND systemId = $systemId
+       LIMIT 1`,
+      { companyId: rid(companyId), systemId: rid(systemId) },
+    );
+    let tenantId = tenantRows[0]?.[0]?.id;
+    if (!tenantId) {
+      const created = await db.query<[[{ id: string }]]>(
+        `CREATE tenant SET
+           actorId = NONE,
+           companyId = $companyId,
+           systemId = $systemId,
+           isOwner = false
+         RETURN id`,
+        { companyId: rid(companyId), systemId: rid(systemId) },
+      );
+      tenantId = created[0]?.[0]?.id;
+    }
+    if (!tenantId) {
+      return Response.json(
+        {
+          success: false,
+          error: { code: "SERVER_ERROR", message: "common.error.generic" },
+        },
+        { status: 500 },
+      );
+    }
+
     const result = await subscribe({
-      tenantId: ctx.tenantContext.tenant.id!,
+      tenantId,
       companyId,
       systemId,
       planId,
@@ -168,7 +201,16 @@ async function postHandler(req: Request, ctx: RequestContext) {
       end: periodEnd,
     });
 
-    await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
+    await Core.getInstance().reloadSubscription(tenantId);
+    await Core.getInstance().reloadTenantLimits({ systemId, companyId });
+    if (userId) {
+      await Core.getInstance().reloadTenantRoles({ actorId: userId });
+      await Core.getInstance().reloadActorLimits({
+        systemId,
+        companyId,
+        actorId: userId,
+      });
+    }
 
     return Response.json({ success: true, data: result }, { status: 201 });
   }
@@ -180,6 +222,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     await cancelSubscription(ctx.tenantContext.tenant.id!);
 
     await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
+    await Core.getInstance().reloadTenantLimits({
+      systemId: ctx.tenantContext.tenant.systemId,
+      companyId: ctx.tenantContext.tenant.companyId,
+    });
 
     return Response.json({ success: true });
   }
@@ -440,6 +486,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
     });
 
     await Core.getInstance().reloadSubscription(ctx.tenantContext.tenant.id!);
+    await Core.getInstance().reloadTenantLimits({
+      systemId: ctx.tenantContext.tenant.systemId,
+      companyId: ctx.tenantContext.tenant.companyId,
+    });
 
     return Response.json({
       success: true,

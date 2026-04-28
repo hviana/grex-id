@@ -12,6 +12,7 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
+import { rid } from "@/server/db/connection";
 import type { MenuItem } from "@/src/contracts/menu";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
@@ -46,6 +47,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   const body = await req.json();
   const {
     tenantId,
+    systemId,
     parentId,
     label,
     emoji,
@@ -55,9 +57,27 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     hiddenInPlanIds,
   } = body;
 
+  let resolvedTenantId = tenantId;
+
+  // Resolve tenantId from systemId when the frontend sends systemId instead
+  if (!resolvedTenantId && systemId) {
+    const { getDb } = await import("@/server/db/connection");
+    const db = await getDb();
+    const rows = await db.query<
+      [{ id: string; actorId?: unknown; companyId?: unknown }[]]
+    >(
+      `SELECT id, actorId, companyId FROM tenant WHERE systemId = $systemId LIMIT 10`,
+      { systemId: rid(systemId) },
+    );
+    const systemTenant = (rows[0] ?? []).find(
+      (r) => !r.actorId && !r.companyId,
+    );
+    resolvedTenantId = systemTenant?.id;
+  }
+
   const errors: string[] = [];
   errors.push(...await validateField("name", label));
-  if (!tenantId) errors.push("validation.tenant.required");
+  if (!resolvedTenantId) errors.push("validation.tenant.required");
 
   if (errors.length > 0) {
     return Response.json(
@@ -74,7 +94,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       {
         table: "menu_item",
         tenant: {
-          id: tenantId,
+          id: resolvedTenantId,
         },
       },
       {

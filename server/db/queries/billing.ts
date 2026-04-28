@@ -142,8 +142,15 @@ export async function subscribe(params: {
          CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
        };
        IF array::len((SELECT id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId)) = 0 {
-         LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS (SELECT VALUE id FROM tenant WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1)[0][0] LIMIT 1)[0];
-         CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = $systemId, isOwner = false, roleIds = [$adminRoleId];
+         CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = $systemId, isOwner = false;
+       };
+       LET $sysTenantId = (SELECT VALUE id FROM tenant WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1)[0];
+       LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" AND tenantIds CONTAINS $sysTenantId LIMIT 1)[0];
+       IF $adminRoleId != NONE {
+         LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $userId LIMIT 1)[0];
+         IF $userRlId != NONE {
+           UPDATE $userRlId SET roleIds = array::union(roleIds ?? [], [$adminRoleId]);
+         };
        };`
     : "";
 

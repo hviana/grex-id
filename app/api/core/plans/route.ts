@@ -44,7 +44,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
 const RL_FIELDS = [
   "benefits",
-  "roles",
+  "roleIds",
   "entityLimits",
   "apiRateLimit",
   "storageLimitBytes",
@@ -93,7 +93,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       name: await standardizeField("name", sanitizeString(name)),
       description: sanitizeString(description ?? ""),
       tenantId,
-      price: Number(price),
+      price: Math.round(Number(price) * 100),
       currency: currency ?? "USD",
       recurrenceDays: Number(recurrenceDays),
       isActive: isActive ?? true,
@@ -160,6 +160,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
         const value = data[field];
         bindings[field] = field === "name" || field === "description"
           ? await standardizeField(field, sanitizeString(value))
+          : field === "price"
+          ? Math.round(Number(value) * 100)
           : value;
         planSets.push(`${field} = $${field}`);
       }

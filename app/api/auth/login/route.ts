@@ -166,35 +166,28 @@ async function handler(
 
   const mem = await resolveUserMembership(String(user.id));
 
-  if (!mem) {
-    return Response.json(
-      {
-        success: false,
-        error: {
-          code: "NO_MEMBERSHIP",
-          message: "auth.error.noMembership",
-        },
-      },
-      { status: 403 },
-    );
-  }
-
-  const tenant = {
-    id: mem.tenantId,
-    systemId: mem.systemId,
-    companyId: mem.companyId,
-    actorId: String(user.id),
-  };
+  const tenant = mem
+    ? {
+      id: mem.tenantId,
+      systemId: mem.systemId,
+      companyId: mem.companyId,
+      actorId: String(user.id),
+    }
+    : {
+      id: String(user.id),
+      actorId: String(user.id),
+    };
 
   const systemToken = await createTenantToken(
     tenant,
     stayLoggedIn ?? false,
   );
 
-  // Role names are pre-resolved by resolveUserMembership via tenant.roleIds
-  const roles = mem.roles;
+  const roles = mem?.roles ?? [];
 
-  await rememberActor({ id: mem.tenantId, actorId: String(user.id) });
+  await rememberActor(tenant);
+
+  const frontendDomains: string[] = [];
 
   return Response.json({
     success: true,
@@ -204,7 +197,7 @@ async function handler(
       roles,
       actorType: "user" as const,
       exchangeable: true,
-      frontendDomains: [] as string[],
+      frontendDomains,
       user: {
         id: user.id,
         profileId: user.profileId,
@@ -217,7 +210,7 @@ async function handler(
 
 export const POST = compose(
   withAuthAndLimit({
-    rateLimit: { windowMs: 60_000, maxRequests: 5 },
+    rateLimit: { windowMs: 60_000, maxRequests: 60 },
   }),
   handler,
 );

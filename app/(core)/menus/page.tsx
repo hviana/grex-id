@@ -29,7 +29,7 @@ export default function MenusPage() {
         });
         const json = await res.json();
         if (json.success && !cancelled) {
-          const data = json.data ?? [];
+          const data = json.items ?? [];
           setSystems(data);
           if (data.length > 0) setSelectedSystemId(data[0].id);
         }

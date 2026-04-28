@@ -151,17 +151,6 @@ function buildMenuTree(
   return roots;
 }
 
-function findFirstComponent(items: MenuItem[]): string | null {
-  for (const item of items) {
-    if (item.componentName) return item.componentName;
-    if (item.children?.length) {
-      const found = findFirstComponent(item.children);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -254,135 +243,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [activeSystem?.defaultLocale, setLocale]);
 
-  // Initialize: load companies, systems, perform token exchange
+  // Load menus when system context is ready
   useEffect(() => {
-    if (authLoading) return;
-    if (!systemToken) {
-      router.push("/login");
-      return;
-    }
+    if (authLoading || !systemToken || !ctx.systemId || !ctx.companyId) return;
 
     let cancelled = false;
 
-    async function init() {
+    async function load() {
       try {
-        // Fetch user's companies
-        const compRes = await fetch("/api/companies", {
-          headers: { Authorization: `Bearer ${systemToken}` },
-        });
-        const compJson = await compRes.json();
-        const companies = compJson.success ? (compJson.items ?? []) : [];
-
-        if (cancelled) return;
-
-        if (companies.length === 0) {
-          router.push("/onboarding/company");
-          return;
-        }
-
-        ctx.setCompanies(
-          companies.map((c: { id: string; name: string }) => ({
-            id: c.id,
-            name: c.name,
-          })),
-        );
-
-        // Select company: restore from cookie or use first
-        const savedCompanyId = getCookie(COMPANY_COOKIE);
-        const validCompany = companies.find(
-          (c: { id: string }) => c.id === savedCompanyId,
-        );
-        const activeCompanyId = validCompany
-          ? validCompany.id
-          : companies[0].id;
-
-        // Fetch systems for the active company
-        const sysRes = await fetch(
-          `/api/companies/${activeCompanyId}/systems`,
-          { headers: { Authorization: `Bearer ${systemToken}` } },
-        );
-        const sysJson = await sysRes.json();
-        const systems = sysJson.success ? (sysJson.data ?? []) : [];
-
-        if (cancelled) return;
-
-        if (systems.length === 0) {
-          router.push("/onboarding/system");
-          return;
-        }
-
-        ctx.setSystems(
-          systems.map(
-            (s: {
-              id: string;
-              name: string;
-              slug: string;
-              logoUri: string;
-              defaultLocale?: string;
-            }) => ({
-              id: s.id,
-              name: s.name,
-              slug: s.slug,
-              logoUri: s.logoUri,
-              defaultLocale: s.defaultLocale,
-            }),
-          ),
-        );
-
-        // Select system: restore from cookie or use first
-        const savedSystemId = getCookie(SYSTEM_COOKIE);
-        const validSystem = systems.find(
-          (s: { id: string }) => s.id === savedSystemId,
-        );
-        const activeSys = validSystem ?? systems[0];
-        setCookie(SYSTEM_COOKIE, activeSys.id);
-
-        if (cancelled) return;
-
-        // Perform token exchange to embed the correct tenant in the JWT
-        try {
-          await exchangeTenant(activeCompanyId, activeSys.id);
-        } catch {
-          // Exchange might fail if token doesn't support it — continue with current token
-        }
-
-        if (cancelled) return;
-
+        const token = systemToken!;
         // Load plan
-        const plan = await loadPlan(
-          activeCompanyId,
-          activeSys.id,
-          systemToken!,
-        );
-        if (cancelled) return;
-        ctx.setPlan(plan);
+        let planId: string | null = null;
+        try {
+          const billingRes = await fetch("/api/billing", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const billingJson = await billingRes.json();
+          if (billingJson.success) {
+            const activeSub = (billingJson.data?.subscriptions ?? []).find(
+              (s: { status: string }) => s.status === "active",
+            );
+            if (activeSub?.planId) planId = activeSub.planId;
+          }
+        } catch { /* ignore */ }
 
-        // Load menus (roles now come from tenant)
+        if (cancelled) return;
+
+        // Load menus
         const tree = await loadMenus(
-          activeSys.id,
+          ctx.systemId!,
           roles ?? [],
-          plan?.id ?? null,
-          systemToken!,
+          planId,
+          token,
         );
-        const first = findFirstComponent(tree);
-        if (first && (!pathname || pathname === "/entry" || pathname === "/")) {
-          router.push(`/${first}`);
-        }
+        if (!cancelled) setInitializing(false);
+        return tree;
       } catch {
-        // Network error — stay on current page
-      } finally {
         if (!cancelled) setInitializing(false);
       }
     }
 
-    init();
+    load();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, systemToken]);
+  }, [authLoading, ctx.systemId, ctx.companyId]);
 
-  // Reload systems when company changes
+  // Reload systems and menus when company changes
   const companyIdRef = useRef(ctx.companyId);
   useEffect(() => {
     if (initializing || !systemToken || !ctx.companyId) return;
@@ -423,9 +331,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           const firstSys = systems[0];
           setCookie(SYSTEM_COOKIE, firstSys.id);
 
-          // Exchange tenant for new company+system
+          let currentToken = systemToken!;
           try {
-            await exchangeTenant(ctx.companyId!, firstSys.id);
+            const exchangeResult = await exchangeTenant(
+              ctx.companyId!,
+              firstSys.id,
+            );
+            currentToken = exchangeResult.systemToken ?? currentToken;
           } catch { /* ignore */ }
 
           if (cancelled) return;
@@ -433,24 +345,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           const plan = await loadPlan(
             ctx.companyId!,
             firstSys.id,
-            systemToken!,
+            currentToken,
           );
           ctx.setPlan(plan);
 
-          const tree = await loadMenus(
+          await loadMenus(
             firstSys.id,
             roles ?? [],
             plan?.id ?? null,
-            systemToken!,
+            currentToken,
           );
-          const first = findFirstComponent(tree);
-          if (first) router.push(`/${first}`);
         } else {
           setMenus([]);
         }
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
 
     reloadForCompany();
@@ -460,7 +368,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.companyId]);
 
-  // Reload when system changes
+  // Reload menus when system changes
   const systemIdRef = useRef(ctx.systemId);
   useEffect(() => {
     if (initializing || !systemToken || !ctx.companyId || !ctx.systemId) return;
@@ -471,9 +379,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     async function reloadForSystem() {
       try {
-        // Exchange tenant
+        let currentToken = systemToken!;
         try {
-          await exchangeTenant(ctx.companyId!, ctx.systemId!);
+          const exchangeResult = await exchangeTenant(
+            ctx.companyId!,
+            ctx.systemId!,
+          );
+          currentToken = exchangeResult.systemToken ?? currentToken;
         } catch { /* ignore */ }
 
         if (cancelled) return;
@@ -481,21 +393,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const plan = await loadPlan(
           ctx.companyId!,
           ctx.systemId!,
-          systemToken!,
+          currentToken,
         );
         ctx.setPlan(plan);
 
-        const tree = await loadMenus(
+        await loadMenus(
           ctx.systemId!,
           roles ?? [],
           plan?.id ?? null,
-          systemToken!,
+          currentToken,
         );
-        const first = findFirstComponent(tree);
-        if (first) router.push(`/${first}`);
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
 
     reloadForSystem();

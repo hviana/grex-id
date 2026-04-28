@@ -61,7 +61,10 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const validationErrors = await validateFields(
     [
       { field: "name", value: stdName },
-      { field: "cnpj", value: stdDocument },
+      {
+        field: documentType === "cnpj" ? "cnpj" : "document",
+        value: stdDocument,
+      },
     ],
     "company",
   );
@@ -88,19 +91,33 @@ async function postHandler(req: Request, ctx: RequestContext) {
 
   // Company has no ownerId — owner resolved via tenant.isOwner = true.
   // Pass the current systemId from the tenant context.
-  const company = await createCompany({
-    name: stdName!,
-    document: stdDocument!,
-    documentType: documentType ?? "cnpj",
-    billingAddress: billingAddress ?? {},
-    ownerId: ctx.tenantContext.tenant.actorId!,
-    systemId: ctx.tenantContext.tenant.systemId!,
-  });
+  try {
+    const company = await createCompany({
+      name: stdName!,
+      document: stdDocument!,
+      documentType: documentType ?? "cnpj",
+      billingAddress: billingAddress ?? {},
+      ownerId: ctx.tenantContext.tenant.actorId!,
+      systemId: ctx.tenantContext.tenant.systemId,
+    });
 
-  return Response.json(
-    { success: true, data: company },
-    { status: 201 },
-  );
+    return Response.json(
+      { success: true, data: company },
+      { status: 201 },
+    );
+  } catch (e) {
+    console.error(
+      "[companies POST] createCompany error:",
+      e instanceof Error ? e.message : String(e),
+    );
+    return Response.json(
+      {
+        success: false,
+        error: { code: "SERVER_ERROR", message: "common.error.generic" },
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export const GET = compose(

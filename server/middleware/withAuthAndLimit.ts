@@ -41,7 +41,8 @@ export function withAuthAndLimit(options?: AuthAndLimitOptions): Middleware {
     if (options?.rateLimit) {
       const forwarded = req.headers.get("x-forwarded-for");
       const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
-      const key = `ip:${ip}`;
+      const pathname = new URL(req.url).pathname;
+      const key = `ip:${ip}:${pathname}`;
 
       const rlResult = checkRateLimit(key, options.rateLimit);
       if (!rlResult.allowed) {

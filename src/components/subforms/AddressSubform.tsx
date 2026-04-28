@@ -28,8 +28,8 @@ const AddressSubform = forwardRef<SubformRef, AddressSubformProps>(
         [fieldPrefix]: {
           street,
           number,
-          complement: complement || null,
-          neighborhood: neighborhood || null,
+          ...(complement ? { complement } : {}),
+          ...(neighborhood ? { neighborhood } : {}),
           city,
           state,
           country,

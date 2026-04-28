@@ -21,7 +21,7 @@ export async function createVoucherWithResourceLimit(data: {
   const result = await db.query<[unknown, unknown, Voucher[]]>(
     `LET $rl = CREATE resource_limit SET
       benefits = $benefits,
-      roles = $roles,
+      roleIds = $roleIds,
       entityLimits = $entityLimits,
       apiRateLimit = $apiRateLimit,
       storageLimitBytes = $storageLimitBytes,
@@ -38,7 +38,7 @@ export async function createVoucherWithResourceLimit(data: {
       code = $code,
       applicableTenantIds = $applicableTenantIds,
       applicablePlanIds = $applicablePlanIds,
-      resourceLimitId = $rl.id,
+      resourceLimitId = $rl[0].id,
       expiresAt = $expiresAt;
     SELECT * FROM $v[0].id FETCH resourceLimitId;`,
     {
@@ -47,7 +47,7 @@ export async function createVoucherWithResourceLimit(data: {
       applicablePlanIds: data.applicablePlanIds.map((id) => rid(id)),
       expiresAt: data.expiresAt ?? undefined,
       benefits: (rl.benefits as string[]) ?? [],
-      roles: (rl.roles as string[]) ?? [],
+      roleIds: (rl.roleIds as string[]) ?? [],
       entityLimits: rl.entityLimits ?? undefined,
       apiRateLimit: Number(rl.apiRateLimit ?? 0),
       storageLimitBytes: Number(rl.storageLimitBytes ?? 0),
@@ -104,13 +104,14 @@ export async function updateVoucherWithCascade(
     ? `UPDATE $id SET ${voucherSets.join(", ")}`
     : "";
   const rlUpdate = rlSets.length > 0
-    ? `UPDATE $id.resourceLimitId SET ${rlSets.join(", ")}`
+    ? `LET $rl = $id.resourceLimitId; UPDATE $rl SET ${rlSets.join(", ")}`
     : "";
 
+  const hasPreceding = voucherUpdate || rlUpdate || cascadeParts.length > 0;
   const result = await db.query<[Voucher[]]>(
     `${voucherUpdate}${voucherUpdate && rlUpdate ? ";" : ""}${rlUpdate}${
       cascadeParts.join("")
-    }SELECT * FROM $id FETCH resourceLimitId;`,
+    }${hasPreceding ? ";" : ""}SELECT * FROM $id FETCH resourceLimitId;`,
     bindings,
   );
 

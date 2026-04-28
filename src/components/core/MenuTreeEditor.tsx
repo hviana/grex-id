@@ -105,7 +105,7 @@ export default function MenuTreeEditor(
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
-      return (json.data ?? []).map((r: { name: string }) => r.name);
+      return (json.items ?? []).map((r: { name: string }) => r.name);
     },
     [systemId],
   );
@@ -119,7 +119,7 @@ export default function MenuTreeEditor(
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
-      return (json.data ?? []).map((p: { id: string; name: string }) => ({
+      return (json.items ?? []).map((p: { id: string; name: string }) => ({
         id: String(p.id),
         name: p.name,
       }));
@@ -135,7 +135,7 @@ export default function MenuTreeEditor(
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
-      if (json.success) setItems(json.data ?? []);
+      if (json.success) setItems(json.items ?? []);
     } finally {
       setLoading(false);
     }
