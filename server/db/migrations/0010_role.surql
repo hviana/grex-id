@@ -7,3 +7,4 @@ DEFINE FIELD updatedAt   ON role TYPE option<datetime>;
 
 DEFINE INDEX idx_role_tenant      ON role FIELDS tenantIds;
 DEFINE INDEX idx_role_name_tenant ON role FIELDS name, tenantIds UNIQUE;
+DEFINE INDEX idx_role_name_fts    ON role FIELDS name FULLTEXT ANALYZER general_analyzer_fts BM25;
