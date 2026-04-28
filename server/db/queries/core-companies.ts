@@ -236,38 +236,38 @@ export async function getRevenueChart(params: {
     [{ canceled: number; paid: number; projected: number; errors: number }]
   >(
     `RETURN {
-      canceled: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
+      canceled: math::sum((
+        SELECT VALUE ((SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] ?? 0)
         FROM subscription
         WHERE ${canceledCond}
           AND updatedAt >= type::datetime($startDate)
           AND updatedAt <= type::datetime($endDate)
           ${extra}
-      ))[0] ?? 0,
-      paid: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
+      )) ?? 0,
+      paid: math::sum((
+        SELECT VALUE ((SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] ?? 0)
         FROM subscription
         WHERE ${paidCond}
           AND currentPeriodStart >= type::datetime($startDate)
           AND currentPeriodStart <= type::datetime($endDate)
           ${extra}
-      ))[0] ?? 0,
-      projected: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
+      )) ?? 0,
+      projected: math::sum((
+        SELECT VALUE ((SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] ?? 0)
         FROM subscription
         WHERE ${projectedCond}
           AND currentPeriodEnd >= type::datetime($startDate)
           AND currentPeriodEnd <= type::datetime($endDate)
           ${extra}
-      ))[0] ?? 0,
-      errors: (SELECT VALUE math::sum(planPrice) FROM (
-        SELECT (SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] AS planPrice
+      )) ?? 0,
+      errors: math::sum((
+        SELECT VALUE ((SELECT VALUE price FROM plan WHERE id = $parent.planId LIMIT 1)[0] ?? 0)
         FROM subscription
         WHERE ${errorsCond}
           AND updatedAt >= type::datetime($startDate)
           AND updatedAt <= type::datetime($endDate)
           ${extra}
-      ))[0] ?? 0
+      )) ?? 0
     };`,
     bindings,
   );

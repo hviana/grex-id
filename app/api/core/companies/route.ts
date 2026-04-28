@@ -25,9 +25,49 @@ async function getHandler(req: Request, _ctx: RequestContext) {
       });
     }
 
-    const chart = await getRevenueChart({
-      startDate,
-      endDate,
+    try {
+      const chart = await getRevenueChart({
+        startDate,
+        endDate,
+        systemIds: systemIdsParam
+          ? systemIdsParam.split(",").filter(Boolean)
+          : undefined,
+        planIds: planIdsParam
+          ? planIdsParam.split(",").filter(Boolean)
+          : undefined,
+        statuses: statusesParam
+          ? statusesParam.split(",").filter(Boolean)
+          : undefined,
+      });
+
+      return Response.json({ success: true, data: chart });
+    } catch (e) {
+      console.error(
+        "[core/companies GET chart] error:",
+        e instanceof Error ? e.message : String(e),
+      );
+      return Response.json(
+        {
+          success: false,
+          error: { code: "SERVER_ERROR", message: "common.error.generic" },
+        },
+        { status: 500 },
+      );
+    }
+  }
+
+  const search = url.searchParams.get("search") ?? undefined;
+  const cursor = url.searchParams.get("cursor") ?? undefined;
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 200);
+  const systemIdsParam = url.searchParams.get("systemIds");
+  const planIdsParam = url.searchParams.get("planIds");
+  const statusesParam = url.searchParams.get("statuses");
+
+  try {
+    const result = await listCoreCompanies({
+      search,
+      cursor,
+      limit,
       systemIds: systemIdsParam
         ? systemIdsParam.split(",").filter(Boolean)
         : undefined,
@@ -39,30 +79,20 @@ async function getHandler(req: Request, _ctx: RequestContext) {
         : undefined,
     });
 
-    return Response.json({ success: true, data: chart });
+    return Response.json({ success: true, ...result });
+  } catch (e) {
+    console.error(
+      "[core/companies GET list] error:",
+      e instanceof Error ? e.message : String(e),
+    );
+    return Response.json(
+      {
+        success: false,
+        error: { code: "SERVER_ERROR", message: "common.error.generic" },
+      },
+      { status: 500 },
+    );
   }
-
-  const search = url.searchParams.get("search") ?? undefined;
-  const cursor = url.searchParams.get("cursor") ?? undefined;
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20"), 200);
-  const systemIdsParam = url.searchParams.get("systemIds");
-  const planIdsParam = url.searchParams.get("planIds");
-  const statusesParam = url.searchParams.get("statuses");
-
-  const result = await listCoreCompanies({
-    search,
-    cursor,
-    limit,
-    systemIds: systemIdsParam
-      ? systemIdsParam.split(",").filter(Boolean)
-      : undefined,
-    planIds: planIdsParam ? planIdsParam.split(",").filter(Boolean) : undefined,
-    statuses: statusesParam
-      ? statusesParam.split(",").filter(Boolean)
-      : undefined,
-  });
-
-  return Response.json({ success: true, ...result });
 }
 
 export const GET = compose(

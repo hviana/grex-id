@@ -261,8 +261,9 @@ export default function CompaniesPage() {
     const res = await fetch(`/api/core/companies?${sp}`, {
       headers: { Authorization: `Bearer ${systemToken}` },
     });
-    const json = await res.json();
-    if (json.success) setChart(json.data);
+    if (!res.ok) return;
+    const json = await res.json().catch(() => null);
+    if (json?.success) setChart(json.data);
   }, [systemToken, startDate, endDate, systemIds, planIds, statusFilter]);
 
   useEffect(() => {
