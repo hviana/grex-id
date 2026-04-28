@@ -179,18 +179,7 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json(
-      {
-        success: false,
-        error: { code: "VALIDATION", errors: ["validation.body.required"] },
-      },
-      { status: 400 },
-    );
-  }
+  const body = await req.json();
   const { id } = body;
 
   if (!id) {
