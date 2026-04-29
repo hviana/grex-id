@@ -204,13 +204,13 @@ const defaults: DefaultSetting[] = [
     key: "core.shareableEntities",
     value: '["user"]',
     description:
-      "JSON array of entity types that can be shared between tenants via direct tenant association (genericAssociate/genericDisassociate)",
+      "JSON array of entity types that can be shared between tenants via direct tenant association (genericAssociate/genericDisassociate). These require human approval for sharing.",
   },
   {
     key: "core.restrictedEntities",
     value: "[]",
     description:
-      "JSON array of entity types that use shared_record with permissions (r/w/share). These require human approval for sharing.",
+      "JSON array of entity types that use shared_record with permissions (r/w/share).",
   },
 ];
 
