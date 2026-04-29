@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
@@ -15,11 +15,6 @@ import type { BadgeValue } from "@/src/contracts/high_level/components";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type {
-  TenantFieldName,
-  TenantFormData,
-} from "@/src/contracts/high_level/tenant-display";
-
-export type {
   TenantFieldName,
   TenantFormData,
 } from "@/src/contracts/high_level/tenant-display";

@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import TranslatedBadge, { type TranslatedBadgeKind } from "./TranslatedBadge";
+import TranslatedBadge from "./TranslatedBadge";
+import type { TranslatedBadgeKind } from "@/src/contracts/high_level/components";
 
 interface TranslatedBadgeListProps {
   kind: TranslatedBadgeKind;

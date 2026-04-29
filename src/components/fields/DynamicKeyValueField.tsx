@@ -1,11 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface KeyValueEntry {
-  key: string;
-  value: string;
-  description: string;
-}
+import type { KeyValueEntry } from "@/src/contracts/high_level/components";
 
 interface DynamicKeyValueFieldProps {
   fields: KeyValueEntry[];

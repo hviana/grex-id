@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";

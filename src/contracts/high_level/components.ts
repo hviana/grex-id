@@ -50,3 +50,17 @@ export interface EntityChannelsSubformProps {
   initialData?: Record<string, unknown>;
   systemToken?: string;
 }
+
+/** A system option for dropdown/select controls (id + slug + name). */
+export interface SystemOption {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+/** A single key-value entry with description, used by DynamicKeyValueField. */
+export interface KeyValueEntry {
+  key: string;
+  value: string;
+  description: string;
+}

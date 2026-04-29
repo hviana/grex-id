@@ -5,9 +5,8 @@ import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import MultiBadgeField, {
-  type BadgeValue,
-} from "@/src/components/fields/MultiBadgeField";
+import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/contracts/high_level/components";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type { MenuItemView } from "@/src/contracts/high_level/menu-item";
@@ -630,7 +629,7 @@ export default function MenuTreeEditor(
                 kind="role"
                 token={typeof item === "string"
                   ? item
-                  : (item as BadgeValue).name ?? String(item)}
+                  : item.name ?? String(item)}
                 systemSlug={systemSlug}
                 onRemove={remove}
               />

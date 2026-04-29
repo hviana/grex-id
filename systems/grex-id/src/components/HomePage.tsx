@@ -7,7 +7,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import BotProtection from "@/src/components/shared/BotProtection";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";

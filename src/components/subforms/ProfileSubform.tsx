@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import { resizeImage } from "@/src/lib/resize-image";
 import { useTenantContext } from "@/src/hooks/useTenantContext";

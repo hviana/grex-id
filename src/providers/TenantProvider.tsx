@@ -100,11 +100,6 @@ function resolveInitialLocale(defaultLocale?: string): SupportedLocale {
   return fallbackLocale;
 }
 
-export type {
-  AuthClaims,
-  TenantContextValue,
-} from "@/src/contracts/high_level/tenant-context";
-
 const TenantContext = createContext<TenantContextValue | null>(null);
 
 export function TenantProvider(

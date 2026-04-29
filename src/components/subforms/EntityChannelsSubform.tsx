@@ -9,7 +9,7 @@ import {
 } from "react";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type {
@@ -18,8 +18,6 @@ import type {
 } from "@/src/contracts/high_level/components";
 
 const DEFAULT_MAX = 10;
-
-export type { EntityChannelsSubformMode } from "@/src/contracts/high_level/components";
 
 function formatPhoneValue(value: string): string {
   return value.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4");

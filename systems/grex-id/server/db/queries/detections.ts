@@ -15,13 +15,6 @@ import type {
 
 assertServerOnly("detections");
 
-export type {
-  DetectionIndividual,
-  DetectionReportItem,
-  DetectionStats,
-  FaceMatchResult,
-};
-
 export async function createDetection(data: {
   locationId: string;
   leadId?: string;

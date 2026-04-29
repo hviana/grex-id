@@ -1,20 +1,15 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type { ResourceLimitField } from "@/src/contracts/high_level/resource-limits";
+import type { KeyValueEntry } from "@/src/contracts/high_level/components";
 
-interface EntityLimitEntry {
-  key: string;
-  value: string;
-  description: string;
-}
-
-function mapToKV(map: Record<string, number> | null): EntityLimitEntry[] {
+function mapToKV(map: Record<string, number> | null): KeyValueEntry[] {
   if (!map) return [];
   return Object.entries(map).map(([key, val]) => ({
     key,
@@ -23,7 +18,7 @@ function mapToKV(map: Record<string, number> | null): EntityLimitEntry[] {
   }));
 }
 
-function kvToMap(kv: EntityLimitEntry[]): Record<string, number> | null {
+function kvToMap(kv: KeyValueEntry[]): Record<string, number> | null {
   const filtered = kv.filter((e) => e.key.trim() && e.value.trim());
   if (filtered.length === 0) return null;
   const result: Record<string, number> = {};
@@ -32,8 +27,6 @@ function kvToMap(kv: EntityLimitEntry[]): Record<string, number> | null {
   }
   return result;
 }
-
-export type { ResourceLimitField } from "@/src/contracts/high_level/resource-limits";
 
 const FIELD_LABELS: Record<ResourceLimitField, string> = {
   benefits: "⭐",
@@ -141,7 +134,7 @@ const ResourceLimitsSubform = forwardRef<
       : [],
   );
 
-  const [entityLimits, setEntityLimits] = useState<EntityLimitEntry[]>(
+  const [entityLimits, setEntityLimits] = useState<KeyValueEntry[]>(
     mapToKV(
       (initialData?.entityLimits ?? null) as Record<string, number> | null,
     ),
@@ -185,7 +178,7 @@ const ResourceLimitsSubform = forwardRef<
 
   const [maxOperationCountByResourceKey, setMaxOperationCountByResourceKey] =
     useState<
-      EntityLimitEntry[]
+      KeyValueEntry[]
     >(
       mapToKV(
         (initialData?.maxOperationCountByResourceKey ?? null) as
@@ -195,7 +188,7 @@ const ResourceLimitsSubform = forwardRef<
     );
 
   const [creditLimitByResourceKey, setCreditLimitByResourceKey] = useState<
-    EntityLimitEntry[]
+    KeyValueEntry[]
   >(
     mapToKV(
       (initialData?.creditLimitByResourceKey ?? null) as

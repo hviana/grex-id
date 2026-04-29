@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import { useTenantContext } from "@/src/hooks/useTenantContext";

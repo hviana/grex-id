@@ -9,11 +9,12 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import PlanCard from "@/src/components/shared/PlanCard";
 import PlanSubform from "@/src/components/subforms/PlanSubform";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type { SystemOption } from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PlanItem {
@@ -28,12 +29,6 @@ interface PlanItem {
   isActive: boolean;
   createdAt: string;
   [key: string]: unknown;
-}
-
-interface SystemOption {
-  id: string;
-  slug: string;
-  name: string;
 }
 
 export default function PlansPage() {

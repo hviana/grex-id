@@ -6,13 +6,12 @@ import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import TenantView from "@/src/components/shared/TenantView";
-import type { TenantViewData } from "@/src/components/shared/TenantView";
+import type { TenantViewData } from "@/src/contracts/high_level/tenant-display";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
-import ResourceLimitsView, {
-  type ResourceLimitsData,
-} from "@/src/components/shared/ResourceLimitsView";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type {
   CursorParams,
   PaginatedResult,

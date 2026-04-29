@@ -11,9 +11,8 @@ import Modal from "@/src/components/shared/Modal";
 import GenericList from "@/src/components/shared/GenericList";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import PlanCard from "@/src/components/shared/PlanCard";
-import ResourceLimitsView, {
-  type ResourceLimitsData,
-} from "@/src/components/shared/ResourceLimitsView";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 import type {
   CreditPurchaseView,
   PaymentMethodView,

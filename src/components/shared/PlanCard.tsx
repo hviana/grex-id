@@ -1,8 +1,7 @@
 "use client";
 
-import ResourceLimitsView, {
-  type ResourceLimitsData,
-} from "@/src/components/shared/ResourceLimitsView";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 import type {
   PlanCardProps,
   PlanView,

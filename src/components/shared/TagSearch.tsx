@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type { TagView } from "@/src/contracts/high_level/tags";
 

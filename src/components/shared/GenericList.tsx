@@ -13,11 +13,6 @@ import type {
   SubformRef,
 } from "@/src/contracts/high_level/components";
 
-export type {
-  SubformConfig,
-  SubformRef,
-} from "@/src/contracts/high_level/components";
-
 import SearchField from "./SearchField.tsx";
 import CreateButton from "./CreateButton.tsx";
 import EditButton from "./EditButton.tsx";

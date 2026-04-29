@@ -11,7 +11,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import type {
   SubformConfig,
   SubformRef,
-} from "@/src/components/shared/GenericList";
+} from "@/src/contracts/high_level/components";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
@@ -19,7 +19,7 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
-import type { FilterValues } from "@/src/components/shared/FilterDropdown";
+import type { FilterValues } from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface OwnerSubformProps {

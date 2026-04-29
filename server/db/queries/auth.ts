@@ -5,11 +5,6 @@ import type {
   VerificationOwnerType,
   VerificationRequest,
 } from "@/src/contracts/verification-request";
-
-export type {
-  VerificationActorType,
-  VerificationOwnerType,
-} from "@/src/contracts/verification-request";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("auth");

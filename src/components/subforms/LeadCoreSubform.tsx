@@ -7,11 +7,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import EntityChannelsSubform from "./EntityChannelsSubform.tsx";
 import ProfileSubform from "./ProfileSubform.tsx";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/contracts/high_level/components";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

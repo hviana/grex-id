@@ -9,11 +9,12 @@ import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type { SystemOption } from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface RoleItem {
@@ -23,12 +24,6 @@ interface RoleItem {
   isBuiltIn: boolean;
   createdAt: string;
   [key: string]: unknown;
-}
-
-interface SystemOption {
-  id: string;
-  slug: string;
-  name: string;
 }
 
 export default function RolesPage() {

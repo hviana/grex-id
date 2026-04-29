@@ -8,7 +8,7 @@ import BotProtection from "@/src/components/shared/BotProtection";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import SystemBranding from "@/src/components/shared/SystemBranding";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import Link from "next/link";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

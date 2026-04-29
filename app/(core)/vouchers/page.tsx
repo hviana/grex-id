@@ -11,8 +11,8 @@ import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import VoucherCard from "@/src/components/core/VoucherCard";
 import VoucherSubform from "@/src/components/subforms/VoucherSubform";
-import type { SubformRef } from "@/src/components/shared/GenericList";
-import type { ResourceLimitsData } from "@/src/components/shared/ResourceLimitsView";
+import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherItem {

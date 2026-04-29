@@ -6,11 +6,6 @@ import type {
   FilterValues,
 } from "@/src/contracts/high_level/components";
 
-export type {
-  FilterConfig,
-  FilterValues,
-} from "@/src/contracts/high_level/components";
-
 interface FilterDropdownProps {
   filters: FilterConfig[];
   values: FilterValues;

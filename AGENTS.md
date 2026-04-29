@@ -99,10 +99,11 @@ informational surfaces show translation only.
 
 Every data table has a file with the same name in `src/contracts`, containing
 exactly the same fields, no more, no less. High-level application contracts are
-located in `src/contracts/high_level`. Contracts should not be replicated; types
-should be extended and existing types reused whenever possible. TypeScript
-typing is not allowed outside of these folders. No typescript hacks like "as
-unknown", etc.
+located in `src/contracts/high_level`. Re-exporting data types outside of
+contracts is also not allowed. Contracts should not be replicated; types should
+be extended and existing types reused whenever possible. TypeScript typing is
+not allowed outside of these folders. No typescript hacks like "as unknown",
+etc.
 
 ### 2.4 Data & safety
 

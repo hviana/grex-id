@@ -2,9 +2,8 @@
 
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
-import ResourceLimitsView, {
-  type ResourceLimitsData,
-} from "@/src/components/shared/ResourceLimitsView";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface VoucherCardProps {

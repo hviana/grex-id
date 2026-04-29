@@ -2,7 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { isValidPassword } from "@/src/lib/validators";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface PasswordSubformProps {

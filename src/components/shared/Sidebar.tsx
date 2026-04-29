@@ -33,7 +33,7 @@ function findActiveSection(
     if (item.children?.length) {
       const found = findInChildren(item.children, activeComponent);
       if (found) {
-        const label = t(item.label) !== item.label ? t(item.label) : item.label;
+        const label = t(item.name) !== item.name ? t(item.name) : item.name;
         return { emoji: item.emoji, label };
       }
     }

@@ -5,8 +5,6 @@ import { formatBytes, limitEmoji } from "@/src/components/shared/PlanCard";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 
-export type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
-
 interface ResourceLimitsViewProps {
   data: ResourceLimitsData;
   systemSlug?: string;

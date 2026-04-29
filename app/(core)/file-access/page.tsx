@@ -8,7 +8,7 @@ import type {
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
-import type { SubformConfig } from "@/src/components/shared/GenericList";
+import type { SubformConfig } from "@/src/contracts/high_level/components";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
@@ -41,7 +41,7 @@ const emptyUploadSection = (): FileAccessUploadSection => ({
 const formSubforms: SubformConfig[] = [
   {
     component: React.forwardRef<
-      import("@/src/components/shared/GenericList").SubformRef,
+      import("@/src/contracts/high_level/components").SubformRef,
       { initialData?: Record<string, unknown> }
     >((props, ref) => <FileAccessSubform ref={ref} {...props} />),
     key: "fileAccess",

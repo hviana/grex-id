@@ -6,8 +6,6 @@ import type {
   TenantViewData,
 } from "@/src/contracts/high_level/tenant-display";
 
-export type { TenantViewData } from "@/src/contracts/high_level/tenant-display";
-
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

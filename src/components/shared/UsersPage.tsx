@@ -14,7 +14,7 @@ import UserView, {
 } from "@/src/components/shared/UserView";
 import AccessRequestModal from "@/src/components/shared/AccessRequestModal";
 import RemoveAccessModal from "@/src/components/shared/RemoveAccessModal";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import type {
   CursorParams,
   PaginatedResult,

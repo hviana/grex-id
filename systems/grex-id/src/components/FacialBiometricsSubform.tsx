@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/components/shared/GenericList";
+import type { SubformRef } from "@/src/contracts/high_level/components";
 import Spinner from "@/src/components/shared/Spinner";
 import { resizeImage } from "@/src/lib/resize-image";
 import { useTenantContext } from "@/src/hooks/useTenantContext";

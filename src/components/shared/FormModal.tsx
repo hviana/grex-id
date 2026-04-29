@@ -4,7 +4,10 @@ import { useRef, useState } from "react";
 import Modal from "./Modal.tsx";
 import GenericFormButton from "./GenericFormButton.tsx";
 import ErrorDisplay from "./ErrorDisplay.tsx";
-import type { SubformConfig, SubformRef } from "./GenericList.tsx";
+import type {
+  SubformConfig,
+  SubformRef,
+} from "@/src/contracts/high_level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface FormModalProps {
