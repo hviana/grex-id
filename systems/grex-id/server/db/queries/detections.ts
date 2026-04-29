@@ -5,15 +5,15 @@ import type {
 } from "@/src/contracts/high-level/pagination";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "@/server/utils/server-only.ts";
+import type { GrexidDetection as Detection } from "@systems/grex-id/src/contracts/grexid-detection";
 import type {
   AggregatedFaceRow,
   DetectionIndividual,
   DetectionReportItem,
   DetectionStats,
   FaceMatchResult,
-  GrexidDetection as Detection,
   RawDetectionRow,
-} from "@systems/grex-id/src/contracts/grexid-detection";
+} from "@systems/grex-id/src/contracts/high-level/detection";
 
 assertServerOnly("detections");
 
