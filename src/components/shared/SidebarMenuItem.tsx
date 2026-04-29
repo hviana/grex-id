@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SidebarMenuItemProps {
-  item: MenuItem;
+  item: MenuItemTree;
   depth?: number;
   searchQuery?: string;
   activeComponent?: string;
   onNavigate: (componentName: string) => void;
 }
 
-function countLeaves(item: MenuItem): number {
+function countLeaves(item: MenuItemTree): number {
   if (!item.children?.length) return 0;
   return item.children.reduce(
     (sum, child) => sum + 1 + countLeaves(child),
@@ -33,7 +33,7 @@ export default function SidebarMenuItem(
 
   const matchesSearch = !searchQuery ||
     label.toLowerCase().includes(searchQuery.toLowerCase());
-  const childMatchesDeep = (children: MenuItem[] | undefined): boolean => {
+  const childMatchesDeep = (children: MenuItemTree[] | undefined): boolean => {
     if (!children) return false;
     return children.some((child) => {
       const childLabel = t(child.label);

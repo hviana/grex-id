@@ -7,6 +7,7 @@ import ProfileMenu from "@/src/components/shared/ProfileMenu";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import Spinner from "@/src/components/shared/Spinner";
 import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { type SupportedLocale, supportedLocales } from "@/src/i18n";
 import { getCookie, setCookie } from "@/src/lib/cookies";
@@ -123,7 +124,7 @@ function buildMenuTree(
   flatItems: MenuItem[],
   userRoles: string[],
   activePlanId: string | null,
-): MenuItem[] {
+): MenuItemTree[] {
   const visible = flatItems.filter((item) => {
     if (
       item.requiredRoles.length > 0 &&
@@ -137,12 +138,12 @@ function buildMenuTree(
     return true;
   });
 
-  const map = new Map<string, MenuItem>();
+  const map = new Map<string, MenuItemTree>();
   for (const item of visible) {
     map.set(item.id, { ...item, children: [] });
   }
 
-  const roots: MenuItem[] = [];
+  const roots: MenuItemTree[] = [];
   for (const item of map.values()) {
     if (item.parentId && map.has(item.parentId)) {
       const parent = map.get(item.parentId)!;
@@ -153,7 +154,7 @@ function buildMenuTree(
     }
   }
 
-  const sortItems = (items: MenuItem[]) => {
+  const sortItems = (items: MenuItemTree[]) => {
     items.sort((a, b) => a.sortOrder - b.sortOrder);
     for (const item of items) {
       if (item.children?.length) sortItems(item.children);
@@ -176,7 +177,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     t,
     setLocale,
   } = ctx;
-  const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [menus, setMenus] = useState<MenuItemTree[]>([]);
   const [initializing, setInitializing] = useState(true);
 
   // Fetch menus for the active system
@@ -185,7 +186,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     roles: string[],
     planId: string | null,
     token: string,
-  ): Promise<MenuItem[]> => {
+  ): Promise<MenuItemTree[]> => {
     try {
       const res = await fetch(
         `/api/core/menus?systemId=${encodeURIComponent(sysId)}&limit=200`,

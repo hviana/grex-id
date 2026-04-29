@@ -9,7 +9,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { User } from "@/src/contracts/user";
+import type { UserResolved } from "@/src/contracts/high_level/user";
 import type { Tenant } from "@/src/contracts/tenant";
 import type { TenantContext } from "@/src/contracts/high_level/tenant-context";
 import type { Company } from "@/src/contracts/company";
@@ -104,7 +104,7 @@ export interface AuthClaims {
 }
 
 export interface TenantContextValue {
-  user: User | null;
+  user: UserResolved | null;
   systemToken: string | null;
   anonymousToken: string | null;
   loading: boolean;
@@ -118,7 +118,7 @@ export interface TenantContextValue {
     password: string,
     stayLoggedIn?: boolean,
     twoFactorCode?: string,
-  ) => Promise<{ user: User; systemToken: string }>;
+  ) => Promise<{ user: UserResolved; systemToken: string }>;
   logout: () => void;
   refresh: (token?: string) => Promise<void>;
   exchangeTenant: (
@@ -158,7 +158,7 @@ const TenantContext = createContext<TenantContextValue | null>(null);
 export function TenantProvider(
   { children, defaultLocale }: { children: ReactNode; defaultLocale?: string },
 ) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserResolved | null>(null);
   const [systemToken, setSystemToken] = useState<string | null>(null);
   const [anonymousToken, setAnonymousToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -173,7 +173,7 @@ export function TenantProvider(
   function applyAuthResponse(
     data: {
       systemToken: string;
-      user?: User;
+      user?: UserResolved;
       roles?: string[];
       actorType?: "user" | "api_token";
       exchangeable?: boolean;

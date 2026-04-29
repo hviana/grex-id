@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { FrontCoreSetting } from "@/src/contracts/core-settings";
+import type { FrontSetting } from "@/src/contracts/front-setting";
 import {
   buildScopeKey,
   resolveTenantForScope,
@@ -10,19 +10,19 @@ import { assertServerOnly } from "../../utils/server-only.ts";
 assertServerOnly("front-settings");
 
 /**
- * Loads all front_setting rows for a given scopeKey into a Map<key, FrontCoreSetting>.
+ * Loads all front_setting rows for a given scopeKey into a Map<key, FrontSetting>.
  * Returns an empty map if no tenant row exists for the scope.
  */
 export async function loadFrontSettingsForScope(
   scopeKey: string,
-): Promise<Map<string, FrontCoreSetting>> {
+): Promise<Map<string, FrontSetting>> {
   const tenantId = await resolveTenantForScope(scopeKey);
-  const settings = new Map<string, FrontCoreSetting>();
+  const settings = new Map<string, FrontSetting>();
 
   if (!tenantId) return settings;
 
   const db = await getDb();
-  const result = await db.query<[FrontCoreSetting[]]>(
+  const result = await db.query<[FrontSetting[]]>(
     `SELECT * FROM front_setting WHERE tenantIds CONTAINS $tenantId`,
     { tenantId: rid(tenantId) },
   );
@@ -36,11 +36,11 @@ export async function loadFrontSettingsForScope(
 
 export async function listFrontSettings(
   scopeKey?: string,
-): Promise<FrontCoreSetting[]> {
+): Promise<FrontSetting[]> {
   const db = await getDb();
 
   if (!scopeKey || scopeKey === "__core__") {
-    const result = await db.query<[FrontCoreSetting[]]>(
+    const result = await db.query<[FrontSetting[]]>(
       `SELECT * FROM front_setting WHERE tenantIds CONTAINS (
         SELECT VALUE id FROM tenant
         WHERE !actorId AND !companyId AND systemId.slug = "core"
@@ -53,7 +53,7 @@ export async function listFrontSettings(
   const tenantId = await resolveTenantForScope(scopeKey);
   if (!tenantId) return [];
 
-  const result = await db.query<[FrontCoreSetting[]]>(
+  const result = await db.query<[FrontSetting[]]>(
     `SELECT * FROM front_setting WHERE tenantIds CONTAINS $tenantId ORDER BY key ASC`,
     { tenantId: rid(tenantId) },
   );

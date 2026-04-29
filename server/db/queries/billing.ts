@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { Subscription } from "@/src/contracts/billing";
+import type { Subscription } from "@/src/contracts/subscription";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("billing");

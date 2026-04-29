@@ -1,11 +1,11 @@
 import { getDb, rid } from "../connection.ts";
-import type { CoreSetting } from "@/src/contracts/core-settings";
+import type { Setting } from "@/src/contracts/setting";
 import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
 import type { MenuItem } from "@/src/contracts/menu";
 import type { Voucher } from "@/src/contracts/voucher";
-import type { Subscription } from "@/src/contracts/billing";
+import type { Subscription } from "@/src/contracts/subscription";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("core-settings");
@@ -80,19 +80,19 @@ export async function resolveTenantForScope(
 }
 
 /**
- * Loads all settings for a given scopeKey into a Map<key, CoreSetting>.
+ * Loads all settings for a given scopeKey into a Map<key, Setting>.
  * Returns an empty map if no tenant row exists for the scope.
  */
 export async function loadSettingsForScope(
   scopeKey: string,
-): Promise<Map<string, CoreSetting>> {
+): Promise<Map<string, Setting>> {
   const tenantId = await resolveTenantForScope(scopeKey);
-  const settings = new Map<string, CoreSetting>();
+  const settings = new Map<string, Setting>();
 
   if (!tenantId) return settings;
 
   const db = await getDb();
-  const result = await db.query<[CoreSetting[]]>(
+  const result = await db.query<[Setting[]]>(
     `SELECT * FROM setting WHERE tenantIds CONTAINS $tenantId`,
     { tenantId: rid(tenantId) },
   );
@@ -129,11 +129,11 @@ export function resolveScopeChain(scope?: SettingScope): string[] {
 
 export async function listSettings(
   scopeKey?: string,
-): Promise<CoreSetting[]> {
+): Promise<Setting[]> {
   const db = await getDb();
 
   if (!scopeKey || scopeKey === "__core__") {
-    const result = await db.query<[CoreSetting[]]>(
+    const result = await db.query<[Setting[]]>(
       `SELECT * FROM setting WHERE tenantIds CONTAINS (
         SELECT VALUE id FROM tenant
         WHERE !actorId AND !companyId AND systemId.slug = "core"
@@ -146,7 +146,7 @@ export async function listSettings(
   const tenantId = await resolveTenantForScope(scopeKey);
   if (!tenantId) return [];
 
-  const result = await db.query<[CoreSetting[]]>(
+  const result = await db.query<[Setting[]]>(
     `SELECT * FROM setting WHERE tenantIds CONTAINS $tenantId ORDER BY key ASC`,
     { tenantId: rid(tenantId) },
   );
@@ -156,7 +156,7 @@ export async function listSettings(
 export async function getSetting(
   key: string,
   tenantId?: string,
-): Promise<CoreSetting | null> {
+): Promise<Setting | null> {
   const db = await getDb();
   const bindings: Record<string, unknown> = { key };
 
@@ -167,7 +167,7 @@ export async function getSetting(
   }
   query += " LIMIT 1";
 
-  const result = await db.query<[CoreSetting[]]>(query, bindings);
+  const result = await db.query<[Setting[]]>(query, bindings);
   return result[0]?.[0] ?? null;
 }
 

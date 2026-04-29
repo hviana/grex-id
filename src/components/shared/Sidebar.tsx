@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import SidebarSearch from "./SidebarSearch.tsx";
 import SidebarMenuItem from "./SidebarMenuItem.tsx";
@@ -9,7 +9,7 @@ import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 interface SidebarProps {
-  menus: MenuItem[];
+  menus: MenuItemTree[];
   systemLogo?: string;
   systemName?: string;
   activeComponent?: string;
@@ -21,7 +21,7 @@ interface SidebarProps {
  * the current active component so we can display a breadcrumb-like indicator.
  */
 function findActiveSection(
-  menus: MenuItem[],
+  menus: MenuItemTree[],
   activeComponent: string | undefined,
   t: (key: string) => string,
 ): { emoji?: string; label: string } | null {
@@ -42,7 +42,7 @@ function findActiveSection(
 }
 
 function findInChildren(
-  items: MenuItem[],
+  items: MenuItemTree[],
   componentName: string,
 ): boolean {
   return items.some((child) => {

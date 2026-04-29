@@ -179,11 +179,13 @@ export async function createUserWithChannels(params: {
     SELECT * FROM $usr[0].id FETCH profileId, channelIds;`;
 
   const result = await db.query<unknown[]>(query, bindings);
-  const last = result[result.length - 1] as User[];
+  const last = result[result.length - 1] as Array<
+    { id: string; channelIds?: Array<{ id: string }> }
+  >;
   const user = last[0];
-  const channels = (user?.channelIds ?? []) as { id: string }[];
+  const channels = user?.channelIds ?? [];
   return {
-    user,
+    user: user as unknown as User,
     channelIds: channels.map((c) => String(c.id)),
   };
 }

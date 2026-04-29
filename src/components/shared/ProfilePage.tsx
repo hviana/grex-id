@@ -14,11 +14,11 @@ export default function ProfilePage() {
   const { t } = useTenantContext();
   const { companyId, systemSlug } = useTenantContext();
 
-  const [name, setName] = useState(user?.profileId?.name ?? "");
-  const [avatarUri, setAvatarUri] = useState(user?.profileId?.avatarUri ?? "");
+  const [name, setName] = useState(user?.profile?.name ?? "");
+  const [avatarUri, setAvatarUri] = useState(user?.profile?.avatarUri ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(
-    user?.profileId?.dateOfBirth
-      ? new Date(user.profileId.dateOfBirth as string).toISOString().split(
+    user?.profile?.dateOfBirth
+      ? new Date(user.profile?.dateOfBirth as string).toISOString().split(
         "T",
       )[0]
       : "",
@@ -29,11 +29,11 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setName(user.profileId?.name ?? "");
-      setAvatarUri(user.profileId?.avatarUri ?? "");
+      setName(user.profile?.name ?? "");
+      setAvatarUri(user.profile?.avatarUri ?? "");
       setDateOfBirth(
-        user.profileId?.dateOfBirth
-          ? new Date(user.profileId.dateOfBirth as string).toISOString().split(
+        user.profile?.dateOfBirth
+          ? new Date(user.profile?.dateOfBirth as string).toISOString().split(
             "T",
           )[0]
           : "",

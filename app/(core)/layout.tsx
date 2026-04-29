@@ -169,10 +169,10 @@ function CoreProfileMenu() {
         className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-white/5 transition-colors"
       >
         <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] flex items-center justify-center text-sm font-bold text-black">
-          {user?.profileId?.name?.[0]?.toUpperCase() ?? "?"}
+          {user?.profile?.name?.[0]?.toUpperCase() ?? "?"}
         </div>
         <span className="hidden sm:block text-sm text-white truncate max-w-32">
-          {user?.profileId?.name ?? t("common.user")}
+          {user?.profile?.name ?? t("common.user")}
         </span>
       </button>
 

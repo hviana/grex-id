@@ -1,6 +1,6 @@
 import { Worker } from "../event-queue/worker.ts";
 import { getAllHandlers, getHandler } from "../module-registry.ts";
-import type { WorkerConfig } from "@/src/contracts/event-queue";
+import type { WorkerConfig } from "@/src/contracts/high_level/worker-config";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("start-event-queue");

@@ -5,9 +5,10 @@ import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
 import type { MenuItem } from "@/src/contracts/menu";
-import type { CoreSetting } from "@/src/contracts/core-settings";
+import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
+import type { Setting } from "@/src/contracts/setting";
 import type { Voucher } from "@/src/contracts/voucher";
-import type { Subscription } from "@/src/contracts/billing";
+import type { Subscription } from "@/src/contracts/subscription";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
@@ -539,7 +540,7 @@ class Core {
 
   private async getOrLoadScope(
     scopeKey: string,
-  ): Promise<Map<string, CoreSetting>> {
+  ): Promise<Map<string, Setting>> {
     const cacheName = `settings:${scopeKey}`;
 
     if (!trackedScopes.has(scopeKey)) {
@@ -551,7 +552,7 @@ class Core {
       trackedScopes.add(scopeKey);
     }
 
-    return getCache<Map<string, CoreSetting>>(SETTINGS_SLUG, cacheName);
+    return getCache<Map<string, Setting>>(SETTINGS_SLUG, cacheName);
   }
 
   async refreshSettingsScope(scopeKey: string): Promise<void> {
@@ -929,9 +930,9 @@ class Core {
   }
 }
 
-function buildMenuTree(items: MenuItem[]): MenuItem[] {
-  const map = new Map<string, MenuItem>();
-  const roots: MenuItem[] = [];
+function buildMenuTree(items: MenuItem[]): MenuItemTree[] {
+  const map = new Map<string, MenuItemTree>();
+  const roots: MenuItemTree[] = [];
 
   for (const item of items) {
     map.set(item.id, { ...item, children: [] });

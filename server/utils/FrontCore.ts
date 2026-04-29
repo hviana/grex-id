@@ -1,5 +1,5 @@
 import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
-import type { FrontCoreSetting } from "@/src/contracts/core-settings.ts";
+import type { FrontSetting } from "@/src/contracts/front-setting";
 import { assertServerOnly } from "./server-only.ts";
 import { loadFrontSettingsForScope } from "../db/queries/front-settings.ts";
 import {
@@ -17,7 +17,7 @@ export interface MissingFrontSetting {
 }
 
 export interface FrontCoreData {
-  settings: Map<string, FrontCoreSetting>;
+  settings: Map<string, FrontSetting>;
 }
 
 export interface PublicSystemData {
@@ -80,7 +80,7 @@ class FrontCore {
 
   private async getOrLoadScope(
     scopeKey: string,
-  ): Promise<Map<string, FrontCoreSetting>> {
+  ): Promise<Map<string, FrontSetting>> {
     const cacheName = `settings:${scopeKey}`;
 
     if (!trackedScopes.has(scopeKey)) {
@@ -92,7 +92,7 @@ class FrontCore {
       trackedScopes.add(scopeKey);
     }
 
-    return getCache<Map<string, FrontCoreSetting>>(SETTINGS_SLUG, cacheName);
+    return getCache<Map<string, FrontSetting>>(SETTINGS_SLUG, cacheName);
   }
 
   async refreshSettingsScope(scopeKey: string): Promise<void> {

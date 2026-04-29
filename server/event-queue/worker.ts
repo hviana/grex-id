@@ -1,4 +1,4 @@
-import type { WorkerConfig } from "@/src/contracts/event-queue";
+import type { WorkerConfig } from "@/src/contracts/high_level/worker-config";
 import {
   claimCandidateDeliveries,
   getEventPayload,
