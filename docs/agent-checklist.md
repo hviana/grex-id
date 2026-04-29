@@ -77,18 +77,18 @@ file crosses a boundary (§2.7).
       link, child has no back-pointer (§2.4, §3.3).
 - [ ] Cascade deletion: dissociate → orphan-check → hard-delete cycle; shared
       data dissociated first, hard-deleted only if orphaned across all tenants
-      (§2.4.2). Human confirmation required before association/dissociation
-      sensitive data such `user` or `lead` from a tenant.
+      (§2.4.2). Human confirmation required before association/dissociation of
+      sensitive data such `user` or `lead` from a tenant. New entities `group`
+      and `shared_record` follow the same cascade rules.
 - [ ] Cursor-based pagination, capped at 200 (§2.4).
 - [ ] Queries in `server/db/queries/` — never inlined in handlers (§2.4).
 - [ ] Record-reference field naming. Every field typed `record<T>` ends with
-      `Id` (single) or `Ids` (multiple - `array<record<T>>`). **Tenant
-      references always use `tenantIds: array<record<tenant>>`** — never a
-      single `tenantId` column, and never scattered
-      `companyId`/`systemId`/`userId` columns. Table names are singular, in
-      lowercase with words separated by underscores. Fields are in camel case.
-      Non-shared entities must declare `TYPE array<record<tenant>, 1>` on
-      `tenantIds` (§2.4).
+      `Id` (single) or `Ids` (multiple - `set<record<T>>`). **Tenant references
+      always use `tenantIds: set<record<tenant>>`** — never a single `tenantId`
+      column, and never scattered `companyId`/`systemId`/`userId` columns. Table
+      names are singular, in lowercase with words separated by underscores.
+      Fields are in camel case. Non-shared entities must declare
+      `TYPE set<record<tenant>, 1>` on `tenantIds` (§2.4).
 - [ ] **Generic queries first:** check `generics.ts` (§2.4.1) before writing a
       bespoke query. Only write custom SQL when generics cannot express the
       logic (compositional creates, complex subqueries).
@@ -125,11 +125,11 @@ file crosses a boundary (§2.7).
       ID used as universal scope key). Auth claims (roles, actorType,
       frontendDomains, systemSlug) are resolved from `ctx.tenantContext` (§4.1).
 - [ ] All functions accept `tenant: Tenant`, not loose ids (§2.5).
-- [ ] Scoped tables use `tenantIds: array<record<tenant>>` instead of separate
+- [ ] Scoped tables use `tenantIds: set<record<tenant>>` instead of separate
       `companyId`/`systemId` fields or a single `tenantId` column (§3.4).
       Queries filter with `tenantIds CONTAINS $tenantId`.
-- [ ] Context change only via `/api/auth/exchange`; API/connected-app tokens
-      non-exchangeable (§8.6).
+- [ ] Context change only via `/api/auth/exchange`; API tokens (both
+      `actorType: "token"` and `actorType: "app"`) are non-exchangeable (§8.6).
 - [ ] Frontend stores opaque token only; derives identity from
       `useTenantContext().tenant` and claims from `useTenantContext().roles` /
       `actorType` / `exchangeable` (§10.2).
@@ -143,7 +143,8 @@ file crosses a boundary (§2.7).
 
 - [ ] Single unified middleware `withAuthAndLimit` (§4.3). Checks execute
       cheapest-first inside one function: rate limit → JWT verify → resolve
-      TenantContext → actor validity → CORS → role → plan access → entity limit.
+      TenantContext → actor validity → CORS → role (superuser and anonymous
+      bypass) → plan access → entity limit.
 - [ ] `withAuthAndLimit` resolves auth claims (roles, actorType,
       frontendDomains, systemSlug) from Core cache at request time (§4.2). Auth
       routes use `withAuthAndLimit({ rateLimit })` only.
@@ -166,8 +167,8 @@ a `Tenant` object (§4.2):
 
 - [ ] Login → `rememberActor(tenant)`. Logout → `forgetActor(tenant)`.
 - [ ] Exchange → `forgetActor(oldTenant)` + `rememberActor(newTenant)`.
-- [ ] Token create/OAuth authorize → `rememberActor(tenant)`. Revoke →
-      `revokedAt` + `forgetActor(tenant)`.
+- [ ] API token create (manual or OAuth authorize) → `rememberActor(tenant)`.
+      Revoke → set `revokedAt` + `forgetActor(tenant)`.
 - [ ] Role/membership change (via `resource_limit.roleIds`) →
       `forgetActor(tenant)`. Data-deletion → `reloadTenant(tenant)`.
 
@@ -179,7 +180,8 @@ a `Tenant` object (§4.2):
       directly (§5.2).
 - [ ] Only two template families: `human-confirmation` or `notification` (§5.3).
 - [ ] Human-confirmation backed by `verification_request` via
-      `communicationGuard` (§4.12).
+      `communicationGuard` (§4.12). Payload carries `changes: DBChangeRequest[]`
+      — the mutations to apply on approval via `/api/approvals`.
 - [ ] Handlers idempotent (delivery/event id as key); registered via
       `registerHandler` (§5.1, §4.6).
 - [ ] Tenant context in `templateData`; no sensitive data (§5.2, §5.3).
@@ -275,13 +277,15 @@ Before calling done, answer:
       mutations (§3.3). Deletion follows cascade: dissociate → orphan-check →
       hard-delete (§2.4.2).
 - [ ] **Shared across tenants?** Dissociate first; hard-delete only if orphaned
-      across all tenants (§2.4.2).
+      across all tenants (§2.4.2). Use `shared_record` (for restricted entities)
+      or direct tenant association (for shareable entities) per §9.10.
 - [ ] **Charges money?** `payment` row before charge; async flows set
       `continuityData`+`expiresAt` (§7.5, §7.6).
 - [ ] **Delivers messages?** `dispatchCommunication(…)` + canonical template; no
       bespoke template (§5.2, §5.3).
 - [ ] **Needs human confirmation?** `communicationGuard` +
-      `verification_request` — no state mutation before click (§4.12).
+      `verification_request` with `DBChangeRequest[]` payload — no state
+      mutation before `/api/approvals` applies the changes (§4.12, §9.10).
 - [ ] **Write invalidates cache?** Mutation path lists its
       `updateCache`/`reload()` call (§2.8).
 - [ ] **Relies on per-instance state?** Acknowledge in-memory rate limit /
