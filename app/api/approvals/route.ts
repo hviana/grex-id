@@ -12,9 +12,11 @@ import { apply } from "@/server/db/queries/db-changes";
 import { runLifecycleHooks } from "@/server/module-registry";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { token } = body;
 
   if (!token) {

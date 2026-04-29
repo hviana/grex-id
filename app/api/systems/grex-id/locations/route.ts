@@ -10,6 +10,7 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -52,7 +53,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, description, address } = body;
 
   if (!name || !address) {
@@ -95,7 +97,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, name, description, address } = body;
 
   if (!id) {

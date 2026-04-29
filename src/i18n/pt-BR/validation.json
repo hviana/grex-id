@@ -2,6 +2,7 @@
   "email.required": "E-mail é obrigatório",
   "email.invalid": "Formato de e-mail inválido",
   "phone.invalid": "Número de telefone inválido (deve ter 10-15 dígitos)",
+  "json.invalid": "Corpo da requisição inválido",
   "password.required": "Senha é obrigatória",
   "password.tooShort": "A senha deve ter pelo menos 8 caracteres",
   "password.mismatch": "As senhas não conferem",

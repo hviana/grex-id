@@ -18,6 +18,7 @@ import {
 import type { Lead } from "@/src/contracts/lead";
 import { rid } from "@/server/db/connection";
 import { standardizeField } from "@/server/utils/field-standardizer";
+import { parseBody } from "@/server/utils/parse-body";
 import { validateField } from "@/server/utils/field-validator";
 import type { SubmittedChannel } from "@/src/contracts/high-level/channels";
 
@@ -90,7 +91,8 @@ async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const companyId = ctx.tenantContext.tenant.companyId!;
   const systemId = ctx.tenantContext.tenant.systemId!;
   const tenantId = ctx.tenantContext.tenant.id!;
@@ -185,7 +187,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const companyId = ctx.tenantContext.tenant.companyId!;
   const systemId = ctx.tenantContext.tenant.systemId!;
   const { id, profile, ownerId } = body;

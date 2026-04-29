@@ -10,6 +10,7 @@ import {
 import { buildScopeKey } from "@/server/db/queries/core-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import FrontCore from "@/server/utils/FrontCore";
+import { parseBody } from "@/server/utils/parse-body";
 
 const MAX_SETTINGS_SIZE_BYTES = 64 * 1024; // 64 KB
 
@@ -39,7 +40,8 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json() as Record<string, unknown>;
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { settings } = body as {
     settings: { key: string; value: string; description?: string }[];
   };
@@ -107,7 +109,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json() as Record<string, unknown>;
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { key } = body;
   const systemId = typeof body.systemId === "string"
     ? body.systemId

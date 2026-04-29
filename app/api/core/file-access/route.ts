@@ -13,6 +13,7 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 
 const defaultSection = () => ({
   isolateSystem: false,
@@ -39,7 +40,8 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, categoryPattern, download, upload } = body;
 
   const nameErrors = await validateField("name", name);
@@ -133,7 +135,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, name, categoryPattern, download, upload } = body;
 
   if (!id) {

@@ -11,6 +11,7 @@ import Core from "@/server/utils/Core";
 import { genericDecrypt, genericVerify } from "@/server/db/queries/generics";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { rememberActor } from "@/server/utils/actor-validity";
+import { parseBody } from "@/server/utils/parse-body";
 import { NobleCryptoPlugin, ScureBase32Plugin, TOTP } from "otplib";
 
 function guessChannelType(raw: string): string | undefined {
@@ -25,7 +26,8 @@ async function handler(
   req: Request,
   _ctx: RequestContext,
 ): Promise<Response> {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { password, stayLoggedIn, identifier, twoFactorCode } = body as {
     password?: string;
     stayLoggedIn?: boolean;

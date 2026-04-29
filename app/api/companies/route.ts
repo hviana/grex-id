@@ -9,6 +9,7 @@ import type { Company } from "@/src/contracts/company";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateFields } from "@/server/utils/field-validator";
 import { checkDuplicates } from "@/server/utils/entity-deduplicator";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -48,7 +49,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, document, documentType, billingAddress } = body;
 
   const stdName = name

@@ -6,12 +6,14 @@ import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { addShare, genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function postHandler(
   req: Request,
   ctx: RequestContext,
 ): Promise<Response> {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { entityType, entityId, targetTenantId, permissions } = body;
 
   if (!entityType || !entityId || !targetTenantId) {

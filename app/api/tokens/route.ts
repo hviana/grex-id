@@ -9,6 +9,7 @@ import {
 } from "@/server/db/queries/tokens";
 import { genericList } from "@/server/db/queries/generics";
 import type { ApiToken } from "@/src/contracts/api-token";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -33,7 +34,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const {
     name,
     description,
@@ -141,7 +143,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

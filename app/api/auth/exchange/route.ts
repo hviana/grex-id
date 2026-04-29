@@ -8,6 +8,7 @@ import {
   resolveSuperuserExchange,
   resolveUserExchange,
 } from "@/server/db/queries/auth";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const { tenant } = ctx.tenantContext;
@@ -35,7 +36,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { companyId, systemId } = body;
 
   if (!companyId || !systemId) {

@@ -8,6 +8,7 @@ import {
   genericUpdate,
 } from "@/server/db/queries/generics";
 import type { System } from "@/src/contracts/system";
+import { parseBody } from "@/server/utils/parse-body";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 
@@ -51,7 +52,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, slug, logoUri, defaultLocale, termsOfService } = body;
 
   const result = await genericCreate<System>(
@@ -109,7 +111,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, name, slug, logoUri, defaultLocale, termsOfService } = body;
 
   if (!id) {
@@ -179,7 +182,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

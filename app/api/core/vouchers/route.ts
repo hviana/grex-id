@@ -11,6 +11,7 @@ import {
   deleteVoucher,
   updateVoucherWithCascade,
 } from "@/server/db/queries/vouchers";
+import { parseBody } from "@/server/utils/parse-body";
 import { genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import type { Voucher } from "@/src/contracts/voucher";
@@ -34,7 +35,8 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const {
     name,
     applicableTenantIds,
@@ -101,7 +103,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
  * PUT — updates a voucher and its resource_limit with auto-removal cascade.
  */
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const {
     id,
     name,
@@ -233,7 +236,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

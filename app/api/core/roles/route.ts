@@ -8,6 +8,7 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import type { Role } from "@/src/contracts/role";
@@ -61,7 +62,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, tenantId, isBuiltIn } = body;
 
   if (!tenantId) {
@@ -136,7 +138,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, ...data } = body;
 
   if (!id) {
@@ -222,7 +225,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

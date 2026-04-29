@@ -10,8 +10,19 @@ import {
 import { genericGetById } from "@/server/db/queries/generics";
 
 async function handler(req: Request, _ctx: RequestContext): Promise<Response> {
-  const body = await req.json();
-  const { systemToken } = body;
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "VALIDATION", message: "validation.token.required" },
+      },
+      { status: 400 },
+    );
+  }
+  const { systemToken } = body as { systemToken?: string };
 
   if (!systemToken) {
     return Response.json(

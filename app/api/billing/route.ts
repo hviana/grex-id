@@ -6,6 +6,7 @@ import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
 import { getDb, rid } from "@/server/db/connection";
 import type { ResourceLimit } from "@/src/contracts/resource-limit";
+import { parseBody } from "@/server/utils/parse-body";
 import {
   addPaymentMethod,
   applyVoucherToSubscription,
@@ -80,7 +81,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { action } = body;
 
   const core = Core.getInstance();

@@ -18,6 +18,7 @@ import {
   updateUserRolesWithAdminCheck,
 } from "@/server/db/queries/users";
 import { genericList } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 import { createUserWithChannels } from "@/server/db/queries/auth";
 import { findChannelOwners } from "@/server/db/queries/entity-channels";
 import { standardizeField } from "@/server/utils/field-standardizer";
@@ -98,7 +99,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { password, name, roles, groupIds } = body;
   const channels = await parseChannels(body.channels);
   const companyId = ctx.tenantContext.tenant.companyId!;
@@ -272,7 +274,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
   const action = url.searchParams.get("action");
 
   if (action === "locale") {
-    const body = await req.json();
+    const { body, error } = await parseBody(req);
+    if (error) return error;
     const locale = body.locale as string | undefined;
     if (!locale || typeof locale !== "string") {
       return Response.json(
@@ -289,7 +292,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "resend-invitation") {
-    const body = await req.json();
+    const { body, error } = await parseBody(req);
+    if (error) return error;
     const { userId } = body;
 
     if (!userId) {
@@ -352,7 +356,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
   }
 
   if (action === "profile") {
-    const body = await req.json();
+    const { body, error } = await parseBody(req);
+    if (error) return error;
     const { name, avatarUri, dateOfBirth } = body;
     const userId = ctx.tenantContext.tenant.actorId!;
 
@@ -378,7 +383,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true, data: updatedUser });
   }
 
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, name, companyId, systemId, roles, groupIds } = body;
 
   if (!id) {
@@ -448,7 +454,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { userId } = body;
 
   if (!userId) {

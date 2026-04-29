@@ -10,6 +10,7 @@ import {
 } from "@/server/db/queries/auth";
 import { createTokenWithResourceLimit } from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
+import { parseBody } from "@/server/utils/parse-body";
 
 /** resource_limit field names that OAuth may receive from the client. */
 const RESOURCE_LIMIT_FIELDS = [
@@ -39,7 +40,8 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { clientName, systemSlug, companyId, redirectOrigin } = body;
 
   if (!clientName || !systemSlug || !companyId) {

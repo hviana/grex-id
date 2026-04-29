@@ -161,7 +161,7 @@ export async function createUserWithChannels(params: {
       recoveryChannelIds = <set>[];
     LET $rl = CREATE resource_limit SET
       roleIds = <set>[],
-      benefits = [];
+      benefits = <set>[];
     LET $usr  = CREATE user SET
       passwordHash = crypto::argon2::generate($password),
       profileId = $prof[0].id,
@@ -173,13 +173,18 @@ export async function createUserWithChannels(params: {
 
   const result = await db.query<unknown[]>(query, bindings);
   const last = result[result.length - 1] as Array<
-    { id: string; channelIds?: Array<{ id: string }> }
+    { id: string; channelIds?: unknown }
   >;
   const user = last[0];
-  const channels = user?.channelIds ?? [];
+  const rawChannels = user?.channelIds;
+  const channels: { id: unknown }[] = Array.isArray(rawChannels)
+    ? rawChannels
+    : rawChannels instanceof Set
+    ? [...rawChannels]
+    : [];
   return {
     user: user as unknown as User,
-    channelIds: channels.map((c) => String(c.id)),
+    channelIds: channels.map((c) => String((c as { id: unknown }).id)),
   };
 }
 

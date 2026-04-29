@@ -10,6 +10,7 @@ import {
 import { standardizeField } from "@/server/utils/field-standardizer";
 import Core from "@/server/utils/Core";
 import type { SettingScope } from "@/src/contracts/high-level/cache-data";
+import { parseBody } from "@/server/utils/parse-body";
 
 const MAX_SETTINGS_SIZE_BYTES = 64 * 1024; // 64 KB
 
@@ -113,7 +114,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json() as Record<string, unknown>;
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { settings } = body;
   const scope = parseScopeFromBody(body);
 
@@ -177,7 +179,8 @@ async function putHandler(req: Request, ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json() as Record<string, unknown>;
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { key } = body;
   const scope = parseScopeFromBody(body);
 

@@ -9,10 +9,12 @@ import { listVerifiedChannelTypes } from "@/server/db/queries/entity-channels";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   const core = Core.getInstance();
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const {
     currentPassword,
     newPassword,

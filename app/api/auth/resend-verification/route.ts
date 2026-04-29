@@ -11,6 +11,7 @@ import {
 } from "@/server/db/queries/entity-channels";
 import { userHasVerifiedChannel } from "@/server/db/queries/auth";
 import { genericGetById } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 
 function guessChannelType(raw: string): string | undefined {
   const trimmed = raw.trim();
@@ -25,7 +26,8 @@ async function handler(
   _ctx: RequestContext,
 ): Promise<Response> {
   const core = Core.getInstance();
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const systemSlug = body.systemSlug as string | undefined;
   const system = systemSlug
     ? await core.getSystemBySlug(systemSlug)

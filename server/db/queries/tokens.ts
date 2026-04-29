@@ -22,54 +22,67 @@ export async function createTokenWithResourceLimit(data: {
   const db = await getDb();
   const rl = data.resourceLimits ?? {};
 
+  const rlFields: string[] = [];
+  const bindings: Record<string, unknown> = {
+    name: data.name,
+    description: data.description ?? "",
+    actorType: data.actorType,
+    tenantId: rid(data.tenantId),
+    neverExpires: data.neverExpires,
+  };
+  if (data.expiresAt) {
+    bindings.expiresAt = data.expiresAt;
+  }
+
+  const setIf = (field: string, value: unknown) => {
+    if (value !== undefined && value !== null) {
+      rlFields.push(`${field} = $${field}`);
+      bindings[field] = value;
+    }
+  };
+
+  const setArrayIf = (field: string, value: unknown) => {
+    const arr = value as unknown[];
+    if (arr && arr.length > 0) {
+      rlFields.push(`${field} = $${field}`);
+      bindings[field] = value;
+    }
+  };
+
+  setArrayIf("benefits", rl.benefits);
+  setArrayIf("roleIds", rl.roleIds);
+  setIf("entityLimits", rl.entityLimits);
+  setIf("apiRateLimit", Number(rl.apiRateLimit ?? 0));
+  setIf("storageLimitBytes", Number(rl.storageLimitBytes ?? 0));
+  setIf("fileCacheLimitBytes", Number(rl.fileCacheLimitBytes ?? 0));
+  setIf("credits", Number(rl.credits ?? 0));
+  setIf("maxConcurrentDownloads", Number(rl.maxConcurrentDownloads ?? 0));
+  setIf("maxConcurrentUploads", Number(rl.maxConcurrentUploads ?? 0));
+  setIf("maxDownloadBandwidthMB", Number(rl.maxDownloadBandwidthMB ?? 0));
+  setIf("maxUploadBandwidthMB", Number(rl.maxUploadBandwidthMB ?? 0));
+  setIf("maxOperationCountByResourceKey", rl.maxOperationCountByResourceKey);
+  setIf("creditLimitByResourceKey", rl.creditLimitByResourceKey);
+  setArrayIf("frontendDomains", rl.frontendDomains);
+
+  const apiTokenSets = [
+    "tenantIds = {$tenantId,}",
+    "name = $name",
+    "description = $description",
+    "actorType = $actorType",
+    "resourceLimitId = $rl[0].id",
+    "neverExpires = $neverExpires",
+  ];
+  if (data.expiresAt) {
+    apiTokenSets.push("expiresAt = $expiresAt");
+  }
+
   const result = await db.query<[unknown, unknown, ApiToken[]]>(
     `LET $rl = CREATE resource_limit SET
-      benefits = $benefits,
-      roleIds = $roleIds,
-      entityLimits = $entityLimits,
-      apiRateLimit = $apiRateLimit,
-      storageLimitBytes = $storageLimitBytes,
-      fileCacheLimitBytes = $fileCacheLimitBytes,
-      credits = $credits,
-      maxConcurrentDownloads = $maxConcurrentDownloads,
-      maxConcurrentUploads = $maxConcurrentUploads,
-      maxDownloadBandwidthMB = $maxDownloadBandwidthMB,
-      maxUploadBandwidthMB = $maxUploadBandwidthMB,
-      maxOperationCountByResourceKey = $maxOperationCountByResourceKey,
-      creditLimitByResourceKey = $creditLimitByResourceKey,
-      frontendDomains = $frontendDomains;
+      ${rlFields.join(",\n      ")};
     LET $tkn = CREATE api_token SET
-      tenantIds = {$tenantId},
-      name = $name,
-      description = $description,
-      actorType = $actorType,
-      resourceLimitId = $rl.id,
-      neverExpires = $neverExpires,
-      expiresAt = $expiresAt;
+      ${apiTokenSets.join(",\n      ")};
     SELECT * FROM $tkn[0].id FETCH resourceLimitId;`,
-    {
-      name: data.name,
-      description: data.description ?? "",
-      actorType: data.actorType,
-      tenantId: rid(data.tenantId),
-      benefits: (rl.benefits as string[]) ?? [],
-      roleIds: (rl.roleIds as string[]) ?? [],
-      entityLimits: rl.entityLimits ?? undefined,
-      apiRateLimit: Number(rl.apiRateLimit ?? 0),
-      storageLimitBytes: Number(rl.storageLimitBytes ?? 0),
-      fileCacheLimitBytes: Number(rl.fileCacheLimitBytes ?? 0),
-      credits: Number(rl.credits ?? 0),
-      maxConcurrentDownloads: Number(rl.maxConcurrentDownloads ?? 0),
-      maxConcurrentUploads: Number(rl.maxConcurrentUploads ?? 0),
-      maxDownloadBandwidthMB: Number(rl.maxDownloadBandwidthMB ?? 0),
-      maxUploadBandwidthMB: Number(rl.maxUploadBandwidthMB ?? 0),
-      maxOperationCountByResourceKey: rl.maxOperationCountByResourceKey ??
-        undefined,
-      creditLimitByResourceKey: rl.creditLimitByResourceKey ?? undefined,
-      frontendDomains: (rl.frontendDomains as string[]) ?? [],
-      neverExpires: data.neverExpires,
-      expiresAt: data.expiresAt ?? undefined,
-    },
+    bindings,
   );
 
   return result[2]?.[0] ?? null;

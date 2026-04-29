@@ -7,6 +7,7 @@ import { genericGetById, genericVerify } from "@/server/db/queries/generics";
 import { fetchCompanySystemTenantRow } from "@/server/db/queries/tenants";
 import { reloadTenant } from "@/server/utils/actor-validity";
 import type { Tenant } from "@/src/contracts/tenant";
+import { parseBody } from "@/server/utils/parse-body";
 
 /**
  * Resolves the company-system tenant row (actorId=NONE, companyId, systemId)
@@ -27,7 +28,8 @@ async function resolveCompanySystemTenant(
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { companyId, systemId, password } = body;
 
   if (!companyId || !systemId || !password) {

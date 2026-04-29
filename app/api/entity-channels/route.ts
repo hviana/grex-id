@@ -18,6 +18,7 @@ import { genericCount, genericGetById } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
+import { parseBody } from "@/server/utils/parse-body";
 import type { CommunicationGuardResult } from "@/src/contracts/high-level/verification";
 
 async function sendChannelConfirmation(
@@ -99,7 +100,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
   const userId = ctx.tenantContext.tenant.actorId!;
 
   if (action === "resend-verification") {
-    const body = await req.json();
+    const { body, error } = await parseBody(req);
+    if (error) return error;
     const { channelId } = body;
 
     if (!channelId) {
@@ -191,7 +193,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
     return Response.json({ success: true });
   }
 
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { type, value } = body;
 
   if (!type || !value) {
@@ -304,7 +307,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { channelId, requiredTypes } = body as {
     channelId?: string;
     requiredTypes?: string[];

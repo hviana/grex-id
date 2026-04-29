@@ -160,7 +160,7 @@ export async function findChannelOwners(
                   WHERE type IN $types AND value IN $values);
      LET $chIds = $chs.id;
      LET $owners = IF array::len($chIds) = 0
-                   THEN {}
+                   THEN []
                    ELSE (SELECT id, channelIds FROM ${table}
                           WHERE channelIds ANYINSIDE $chIds)
                    END;

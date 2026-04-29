@@ -2,6 +2,7 @@
   "email.required": "Email is required",
   "email.invalid": "Invalid email format",
   "phone.invalid": "Invalid phone number (must be 10-15 digits)",
+  "json.invalid": "Invalid request body",
   "password.required": "Password is required",
   "password.tooShort": "Password must be at least 8 characters",
   "password.mismatch": "Passwords do not match",

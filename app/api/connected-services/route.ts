@@ -10,6 +10,7 @@ import {
 } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import type { ConnectedService } from "@/src/contracts/connected-service";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -41,7 +42,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { name, data: serviceData } = body;
 
   const stdName = await standardizeField(
@@ -96,7 +98,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

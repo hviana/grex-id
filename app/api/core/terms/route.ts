@@ -9,6 +9,7 @@ import {
   buildScopeKey,
 } from "@/server/db/queries/core-settings";
 import Core from "@/server/utils/Core";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(_req: Request, _ctx: RequestContext) {
   const result = await genericList<System>({ table: "system", limit: 200 });
@@ -35,7 +36,8 @@ async function getHandler(_req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
 
   if (body.generic === true) {
     const content = typeof body.content === "string" ? body.content : "";

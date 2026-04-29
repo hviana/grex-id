@@ -11,6 +11,7 @@ import {
 } from "@/server/db/queries/generics";
 import { deleteUserTenantAccess } from "@/server/db/queries/access";
 import { rid } from "@/server/db/connection";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(
   req: Request,
@@ -101,7 +102,8 @@ async function deleteHandler(
   req: Request,
   ctx: RequestContext,
 ): Promise<Response> {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { entityType, entityId, shareIds, tenantIds } = body;
 
   if (!entityType || !entityId) {
@@ -196,7 +198,8 @@ async function putHandler(
   req: Request,
   ctx: RequestContext,
 ): Promise<Response> {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { shareId, permissions } = body;
 
   if (!shareId || !permissions || !Array.isArray(permissions)) {

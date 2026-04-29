@@ -7,6 +7,7 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import Core from "@/server/utils/Core";
 import { genericDelete, genericList } from "@/server/db/queries/generics";
+import { parseBody } from "@/server/utils/parse-body";
 import {
   createPlanWithResourceLimit,
   updatePlanWithResourceLimit,
@@ -60,7 +61,8 @@ const RL_FIELDS = [
 ] as const;
 
 async function postHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const {
     name,
     description,
@@ -128,7 +130,8 @@ async function postHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id, resourceLimits, ...data } = body;
 
   if (!id) {
@@ -223,7 +226,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
 }
 
 async function deleteHandler(req: Request, _ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {

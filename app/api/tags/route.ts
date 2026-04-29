@@ -9,6 +9,7 @@ import {
   genericUpdate,
 } from "@/server/db/queries/generics";
 import type { Tag } from "@/src/contracts/tag";
+import { parseBody } from "@/server/utils/parse-body";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -38,7 +39,8 @@ async function getHandler(req: Request, ctx: RequestContext) {
 }
 
 async function postHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const name = body.name?.trim();
   const color = body.color?.trim() ?? "";
 
@@ -103,7 +105,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
 }
 
 async function putHandler(req: Request, ctx: RequestContext) {
-  const body = await req.json();
+  const { body, error } = await parseBody(req);
+  if (error) return error;
   const { id } = body;
 
   if (!id) {
