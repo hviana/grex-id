@@ -9,7 +9,7 @@ DEFINE FIELD createdAt ON tenant TYPE datetime DEFAULT time::now();
 DEFINE FIELD updatedAt ON tenant TYPE datetime DEFAULT time::now();
 
 -- Better than set<record<group>> if you want to avoid duplicated groups
-DEFINE FIELD groupIds ON tenant TYPE set<record<group>> DEFAULT <set>[];
+DEFINE FIELD groupIds ON tenant TYPE option<set<record<group>>>;
 
 -- Prevent duplicated tenant membership for the same actor + company + system
 DEFINE INDEX idx_tenant_unique_actor_company_system
