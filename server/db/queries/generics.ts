@@ -125,15 +125,16 @@ function buildCallerTenantsSQL(
   tenant: Tenant | undefined,
   suffix = "",
 ): { sql: string; bindings: Record<string, unknown> } {
-  if (!tenant) return { sql: "[]", bindings: {} };
+  // Empty set when no tenant is provided
+  if (!tenant) return { sql: "{,}", bindings: {} };
 
   const bindings: Record<string, unknown> = {};
   const b = (n: string) => `${TB}${n}${suffix}`;
 
-  // Fast-path: explicit id bypasses the tenant table lookup.
+  // Fast path: explicit id → single-element SET literal (not array)
   if (tenant.id) {
     bindings[b("id")] = rid(tenant.id);
-    return { sql: `[$${b("id")}]`, bindings };
+    return { sql: `{$${b("id")},}`, bindings };
   }
 
   const conds: string[] = [];
@@ -151,7 +152,7 @@ function buildCallerTenantsSQL(
     bindings[b("sId")] = rid(tenant.systemId);
   }
   if (tenant.groupIds?.length) {
-    // Caller wants tenants whose groupIds contain ALL the specified groups.
+    // groupIds is a set → cast the JS-array binding with
     conds.push(`groupIds CONTAINSALL $${b("gIds")}`);
     bindings[b("gIds")] = tenant.groupIds.map((g) => rid(g));
   }
@@ -161,6 +162,7 @@ function buildCallerTenantsSQL(
   }
 
   const where = conds.length ? ` WHERE ${conds.join(" AND ")}` : "";
+  // SELECT VALUE returns an array → cast to set so callers can rely on set ops
   return { sql: `(SELECT VALUE id FROM tenant${where})`, bindings };
 }
 
@@ -246,11 +248,11 @@ async function buildAccessClause(
   const permKey = `${TB}perm${suffix}`;
 
   const clause = `(
-    tenantIds ANYINSIDE ${matching.sql}
+    tenantIds CONTAINSANY ${matching.sql}
     OR id IN (
       SELECT VALUE recordId FROM shared_record
       WHERE permissions CONTAINS $${permKey}
-        AND accessesTenantIds ANYINSIDE ${matching.sql}
+        AND accessesTenantIds CONTAINSANY ${matching.sql}
     )
   )`;
 
@@ -709,7 +711,7 @@ export async function genericCreate<T = Record<string, unknown>>(
     bindings[k] = v;
     setClauses.push(`${k} = $${k}`);
   }
-  if (tenantVar) setClauses.push(`tenantIds = [$${tenantVar}]`);
+  if (tenantVar) setClauses.push(`tenantIds = {$${tenantVar},}`);
 
   lets.push(
     `LET $__created = (CREATE ${opts.table} SET ${setClauses.join(", ")})[0];`,
@@ -726,8 +728,8 @@ export async function genericCreate<T = Record<string, unknown>>(
       lets.push(
         `CREATE shared_record SET
            recordId = $__created.id,
-           ownerTenantIds = [$${tenantVar}],
-           accessesTenantIds = [$${accessVar}],
+           ownerTenantIds = {$${tenantVar},},
+           accessesTenantIds = {$${accessVar},},
            permissions = $__sp${i};`,
       );
     });
@@ -875,7 +877,7 @@ export async function genericAssociate(
 
   const query = [
     ...tr.lets,
-    `UPDATE ${opts.table} SET tenantIds += $__at ` +
+    `UPDATE ${opts.table} SET tenantIds = set::add(tenantIds, $__at) ` +
     `WHERE ${where.join(" AND ")} RETURN AFTER;`,
   ].join("\n");
 
@@ -930,7 +932,7 @@ export async function genericDisassociate(
 
   // `array::complement(a, b)` returns elements in `a` not in `b`.
   const query =
-    `UPDATE ${opts.table} SET tenantIds = array::complement(tenantIds, ${matching.sql}) ` +
+    `UPDATE ${opts.table} SET tenantIds = set::difference(tenantIds, ${matching.sql}) ` +
     `WHERE ${where.join(" AND ")} RETURN AFTER;`;
 
   const db = await getDb();
@@ -1003,9 +1005,9 @@ export async function genericDelete(
       `IF $__before = NONE THEN
          RETURN { deleted: false, orphaned: false }
        END;`,
-      `LET $__remaining = array::complement($__before.tenantIds, ${matching.sql});`,
+      `LET $__remaining = set::difference($__before.tenantIds, ${matching.sql});`,
       // If something else still references this row, we only dissociate.
-      `IF array::len($__remaining) > 0 THEN
+      `IF set::len($__remaining) > 0 THEN
          UPDATE ${opts.table} SET tenantIds = $__remaining WHERE id = $id;
          RETURN { deleted: true, orphaned: true };
        END;`,
@@ -1070,9 +1072,9 @@ async function buildDeleteCascadeSQL(
     const extra = access.clause ? ` AND ${access.clause}` : "";
 
     if (child.isArray) {
-      // Array reference → subtract the parent id from each child's set
+      // Collection reference (set) → subtract the parent id from each child's set
       out.push(
-        `UPDATE ${child.table} SET ${parentField} = array::complement(${parentField}, [$id]) ` +
+        `UPDATE ${child.table} SET ${parentField} = set::difference(${parentField}, {$id,}) ` +
           `WHERE $id IN ${parentField}${extra};`,
       );
     } else {
@@ -1258,7 +1260,8 @@ export async function genericListSharedRecords(
     const matching = buildCallerTenantsSQL(opts.tenant, "_sr");
     Object.assign(bindings, matching.bindings);
     conds.push(
-      `(ownerTenantIds ANYINSIDE ${matching.sql} OR accessesTenantIds ANYINSIDE ${matching.sql})`,
+      `(ownerTenantIds CONTAINSANY ${matching.sql} ` +
+        `OR accessesTenantIds CONTAINSANY ${matching.sql})`,
     );
   }
 
@@ -1311,8 +1314,8 @@ export async function genericCreateSharedRecord(data: {
     ...accessLet.lets,
     `LET $__sr = (CREATE shared_record SET
         recordId = $__recordId,
-        ownerTenantIds = [$__own],
-        accessesTenantIds = [$__acc],
+        ownerTenantIds = {$__own,},
+        accessesTenantIds = {$__acc,},
         permissions = $__perms)[0];`,
     `RETURN $__sr;`,
   ].join("\n");
@@ -1349,8 +1352,8 @@ export async function genericDeleteSharedRecords(
     const matching = buildCallerTenantsSQL(caller, "_dsr");
     Object.assign(bindings, matching.bindings);
     where += ` AND (
-      ownerTenantIds ANYINSIDE ${matching.sql}
-      OR (accessesTenantIds ANYINSIDE ${matching.sql} AND permissions CONTAINS "share")
+      ownerTenantIds CONTAINSANY ${matching.sql}
+      OR (accessesTenantIds CONTAINSANY ${matching.sql} AND permissions CONTAINS "share")
     )`;
   }
 
@@ -1413,34 +1416,34 @@ export async function addShare(
     ...callerLet.lets,
     ...targetLet.lets,
 
-    // Is the caller a direct owner (tenantIds on the record itself)?
+    // Direct ownership: caller's matching tenants intersect the record's tenantIds
     `LET $__isOwner = (SELECT VALUE id FROM ${opts.table}
-        WHERE id = $__rid AND tenantIds ANYINSIDE ${callerMatch.sql} LIMIT 1)[0] != NONE;`,
+        WHERE id = $__rid AND tenantIds CONTAINSANY ${callerMatch.sql} LIMIT 1)[0] != NONE;`,
 
-    // What permissions does the caller already have via shared_records?
-    `LET $__callerPerms = array::distinct(array::flatten(
+    // Caller's existing permissions via shared_records on this record.
+    // SELECT VALUE returns array> → flatten then cast to set
+    // (distinct is implied by the set cast).
+    `LET $__callerPerms = array::flatten(
         SELECT VALUE permissions FROM shared_record
         WHERE recordId = $__rid
-          AND accessesTenantIds ANYINSIDE ${callerMatch.sql}
-     ));`,
+          AND accessesTenantIds CONTAINSANY ${callerMatch.sql}
+     );`,
 
-    // Owner can share anything; others must have 'share' in their perms.
     `LET $__canShare = $__isOwner OR $__callerPerms CONTAINS "share";`,
 
-    // Non-owners can only forward a subset of their own permissions.
+    // Owners can grant anything; non-owners are capped by what they have.
     `LET $__allowedPerms = IF $__isOwner
         THEN $__perms
-        ELSE array::intersect($__perms, $__callerPerms) END;`,
+        ELSE set::intersect($__perms, $__callerPerms) END;`,
 
-    `IF NOT $__canShare OR array::len($__allowedPerms) = 0 THEN
+    `IF NOT $__canShare OR set::len($__allowedPerms) = 0 THEN
         RETURN { success: false, errors: [{ field: "permissions", errors: ["common.error.forbidden"] }] }
      END;`,
 
-    // Create the shared_record (owner = caller tenant).
     `LET $__created = (CREATE shared_record SET
         recordId = $__rid,
-        ownerTenantIds = [$__caller],
-        accessesTenantIds = [$__target],
+        ownerTenantIds = {$__caller,},
+        accessesTenantIds = {$__target,},
         permissions = $__allowedPerms)[0];`,
 
     `RETURN { success: true, data: $__created };`,
@@ -1486,9 +1489,8 @@ export async function editShare(
         RETURN { success: false, errors: [{ field: "id", errors: ["common.error.notFound"] }] }
      END;`,
 
-    // Authorization role flags
-    `LET $__isOwner = $__sr.ownerTenantIds ANYINSIDE ${callerMatch.sql};`,
-    `LET $__hasShare = $__sr.accessesTenantIds ANYINSIDE ${callerMatch.sql}
+    `LET $__isOwner = $__sr.ownerTenantIds CONTAINSANY ${callerMatch.sql};`,
+    `LET $__hasShare = $__sr.accessesTenantIds CONTAINSANY ${callerMatch.sql}
                        AND $__sr.permissions CONTAINS "share";`,
     `LET $__canAct = $__isOwner OR $__hasShare;`,
 
@@ -1496,23 +1498,25 @@ export async function editShare(
         RETURN { success: false, errors: [{ field: "auth", errors: ["common.error.forbidden"] }] }
      END;`,
 
-    // Non-owner callers get their edits capped by their own perms on the record.
-    `LET $__callerPerms = IF $__isOwner THEN ["r", "w", "share"] ELSE array::distinct(array::flatten(
-        SELECT VALUE permissions FROM shared_record
-        WHERE recordId = $__sr.recordId
-          AND accessesTenantIds ANYINSIDE ${callerMatch.sql}
-     )) END;`,
+    // Owners are unconstrained; non-owners are capped by their own perms on the record.
+    `LET $__callerPerms = IF $__isOwner
+        THEN {"r", "w", "share"}
+        ELSE array::flatten(
+            SELECT VALUE permissions FROM shared_record
+            WHERE recordId = $__sr.recordId
+              AND accessesTenantIds CONTAINSANY ${callerMatch.sql}
+        ) END;`,
+
     `LET $__newPerms = IF $__isOwner
         THEN $__perms
-        ELSE array::intersect($__perms, $__callerPerms) END;`,
+        ELSE set::intersect($__perms, $__callerPerms) END;`,
 
-    // Empty → delete the shared_record entirely (removal).
-    `IF array::len($__newPerms) = 0 THEN
+    // Empty → remove the shared_record entirely.
+    `IF set::len($__newPerms) = 0 THEN
         DELETE shared_record WHERE id = $__sid;
         RETURN { success: true, data: NONE };
      END;`,
 
-    // Otherwise: update.
     `LET $__updated = (UPDATE shared_record SET permissions = $__newPerms
         WHERE id = $__sid RETURN AFTER)[0];`,
     `RETURN { success: true, data: $__updated };`,

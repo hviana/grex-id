@@ -3,6 +3,7 @@ import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import {
+  editShare,
   genericDeleteSharedRecords,
   genericDisassociate,
   genericList,
@@ -142,7 +143,10 @@ async function deleteHandler(
       );
     }
 
-    const result = await genericDeleteSharedRecords(shareIds);
+    const result = await genericDeleteSharedRecords(
+      shareIds,
+      ctx.tenantContext.tenant,
+    );
     return Response.json(result);
   }
 
@@ -167,7 +171,11 @@ async function deleteHandler(
 
     // Generic: disassociate from entity's own tenantIds
     for (const tenantId of tenantIds) {
-      await genericDisassociate(entityType, entityId, { id: tenantId });
+      await genericDisassociate(
+        { table: entityType },
+        entityId,
+        { id: tenantId },
+      );
     }
     return Response.json({ success: true });
   }
@@ -184,6 +192,48 @@ async function deleteHandler(
   );
 }
 
+async function putHandler(
+  req: Request,
+  ctx: RequestContext,
+): Promise<Response> {
+  const body = await req.json();
+  const { shareId, permissions } = body;
+
+  if (!shareId || !permissions || !Array.isArray(permissions)) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION",
+          message: "validation.fields.required",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const result = await editShare(
+    shareId,
+    { permissions },
+    ctx.tenantContext.tenant,
+  );
+
+  if (!result.success) {
+    return Response.json(
+      {
+        success: false,
+        error: {
+          code: "ERROR",
+          message: result.errors?.[0]?.errors?.[0] ?? "common.error.generic",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  return Response.json({ success: true, data: result.data });
+}
+
 export const GET = compose(
   withAuthAndLimit({
     rateLimit: { windowMs: 60_000, maxRequests: 60 },
@@ -198,4 +248,12 @@ export const DELETE = compose(
     roles: ["admin"],
   }),
   async (req, ctx) => deleteHandler(req, ctx),
+);
+
+export const PUT = compose(
+  withAuthAndLimit({
+    rateLimit: { windowMs: 60_000, maxRequests: 30 },
+    roles: ["admin"],
+  }),
+  async (req, ctx) => putHandler(req, ctx),
 );

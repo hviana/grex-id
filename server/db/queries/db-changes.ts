@@ -102,9 +102,11 @@ async function handleCustom(c: DBChangeRequest): Promise<void> {
     c.actionKey === "access.request" &&
     typeof fields.associateTenant === "string"
   ) {
-    await genericAssociate(c.entity, c.id!, {
-      id: fields.associateTenant as string,
-    });
+    await genericAssociate(
+      { table: c.entity },
+      c.id!,
+      { id: fields.associateTenant as string },
+    );
     return;
   }
 }

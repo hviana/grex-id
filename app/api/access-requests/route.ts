@@ -4,10 +4,7 @@ import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
-import {
-  genericCreateSharedRecord,
-  genericList,
-} from "@/server/db/queries/generics";
+import { addShare, genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 
 async function postHandler(
@@ -79,12 +76,13 @@ async function postHandler(
       );
     }
 
-    const result = await genericCreateSharedRecord({
-      recordId: entityId,
-      ownerTenantIds: [ctx.tenantContext.tenant.id!],
-      accessesTenantIds: [targetTenantId],
+    const result = await addShare(
+      { table: entityType },
+      entityId,
+      { id: targetTenantId },
       permissions,
-    });
+      ctx.tenantContext.tenant,
+    );
 
     if (!result.success) {
       return Response.json(
