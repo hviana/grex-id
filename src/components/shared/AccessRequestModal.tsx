@@ -58,7 +58,7 @@ export default function AccessRequestModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/core/access-requests", {
+      const res = await fetch("/api/access-requests", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

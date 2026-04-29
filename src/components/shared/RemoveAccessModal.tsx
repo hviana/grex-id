@@ -43,9 +43,9 @@ export default function RemoveAccessModal({
     setError(null);
     try {
       const res = await fetch(
-        `/api/core/access?entityType=${
-          encodeURIComponent(entityType)
-        }&entityId=${encodeURIComponent(entityId)}`,
+        `/api/access?entityType=${encodeURIComponent(entityType)}&entityId=${
+          encodeURIComponent(entityId)
+        }`,
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
@@ -124,7 +124,7 @@ export default function RemoveAccessModal({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/core/access", {
+      const res = await fetch("/api/access", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

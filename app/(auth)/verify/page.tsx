@@ -52,7 +52,7 @@ function VerifyContent() {
 
     (async () => {
       try {
-        const res = await fetch("/api/core/approvals", {
+        const res = await fetch("/api/approvals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
