@@ -105,7 +105,7 @@ export default function AccessRequestModal({
         {success
           ? (
             <div className="rounded-lg bg-[var(--color-primary-green)]/10 border border-[var(--color-primary-green)]/30 p-4 text-sm text-[var(--color-primary-green)]">
-              {t("access.pendingApproval")}
+              {isRestricted ? t("access.shared") : t("access.pendingApproval")}
             </div>
           )
           : (

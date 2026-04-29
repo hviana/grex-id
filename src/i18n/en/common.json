@@ -240,6 +240,7 @@
   "access.permission.readWrite": "Read/Write",
   "access.permission.share": "Share",
   "access.pendingApproval": "Access request sent. Awaiting approval.",
+  "access.shared": "Access shared successfully.",
   "access.noShares": "No shared access found.",
   "access.selectAll": "Select All",
   "access.requestSent": "Access request sent",

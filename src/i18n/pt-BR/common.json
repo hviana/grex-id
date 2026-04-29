@@ -240,6 +240,7 @@
   "access.permission.readWrite": "Leitura/Escrita",
   "access.permission.share": "Compartilhar",
   "access.pendingApproval": "Solicitação de acesso enviada. Aguardando aprovação.",
+  "access.shared": "Acesso compartilhado com sucesso.",
   "access.noShares": "Nenhum acesso compartilhado encontrado.",
   "access.selectAll": "Selecionar Todos",
   "access.requestSent": "Solicitação de acesso enviada",

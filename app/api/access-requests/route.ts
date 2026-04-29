@@ -4,7 +4,10 @@ import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
-import { genericList } from "@/server/db/queries/generics";
+import {
+  genericCreateSharedRecord,
+  genericList,
+} from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 
 async function postHandler(
@@ -56,7 +59,7 @@ async function postHandler(
     );
   }
 
-  // For restricted entities, permissions are required
+  // ── Restricted entities: direct shared_record creation (no human confirmation) ──
   if (restrictedEntities.includes(entityType)) {
     if (
       !permissions ||
@@ -75,9 +78,31 @@ async function postHandler(
         { status: 400 },
       );
     }
+
+    const result = await genericCreateSharedRecord({
+      recordId: entityId,
+      ownerTenantIds: [ctx.tenantContext.tenant.id!],
+      accessesTenantIds: [targetTenantId],
+      permissions,
+    });
+
+    if (!result.success) {
+      return Response.json(
+        {
+          success: false,
+          error: {
+            code: "ERROR",
+            message: result.errors?.[0]?.errors?.[0] ?? "common.error.generic",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    return Response.json({ success: true, data: result.data });
   }
 
-  // Resolve target tenant's admin(s) for the verification
+  // ── Shareable entities: human confirmation via communicationGuard ──
   const ownerId = ctx.tenantContext.tenant.actorId!;
   const systemSlug = ctx.tenantContext.systemSlug ?? "";
   const system = systemSlug
@@ -103,19 +128,7 @@ async function postHandler(
     ownerType: "user",
     actionKey: "access.request",
     payload: {
-      changes: restrictedEntities.includes(entityType)
-        ? [{
-          action: "create" as const,
-          actionKey: "access.request",
-          entity: "shared_record",
-          fields: {
-            recordId: entityId,
-            ownerTenantIds: [ctx.tenantContext.tenant.id],
-            accessesTenantIds: [targetTenantId],
-            permissions: permissions,
-          },
-        }]
-        : entityType === "user"
+      changes: entityType === "user"
         ? [{
           action: "custom" as const,
           actionKey: "access.request",
