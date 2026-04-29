@@ -65,9 +65,12 @@ function normalizeLead<T extends Partial<Lead>>(lead: T | null): T | null {
     ...lead,
     ...(normalizedId ? { id: normalizedId } : {}),
     tenantIds: normalizeRecordIds(
-      Array.isArray((lead as { tenantIds?: unknown[] }).tenantIds)
-        ? (lead as { tenantIds?: unknown[] }).tenantIds ?? []
-        : [],
+      (() => {
+        const raw = (lead as { tenantIds?: unknown }).tenantIds;
+        if (raw instanceof Set) return [...raw] as string[];
+        if (Array.isArray(raw)) return raw as string[];
+        return [];
+      })(),
     ),
   };
 }
@@ -81,7 +84,12 @@ async function getLeadTenantIds(id: string): Promise<string[]> {
   );
 
   const tenantIds = result[0]?.[0]?.tenantIds;
-  return normalizeRecordIds(Array.isArray(tenantIds) ? tenantIds : []);
+  const arr = tenantIds instanceof Set
+    ? [...tenantIds]
+    : Array.isArray(tenantIds)
+    ? tenantIds
+    : [];
+  return normalizeRecordIds(arr);
 }
 
 export async function findLeadByChannelValues(
@@ -124,7 +132,7 @@ export async function createLead(data: {
 
   const channelsArray = data.channels
     .map((_, i) => `$ch${i}[0].id`)
-    .join(", ");
+    .join(", ") + (data.channels.length > 0 ? "," : "");
 
   const bindings: Record<string, unknown> = {
     profileName: data.profile.name,
@@ -145,7 +153,7 @@ export async function createLead(data: {
       name = $profileName,
       avatarUri = $avatarUri,
       dateOfBirth = $dateOfBirth,
-      recoveryChannelIds = {};
+      recoveryChannelIds = <set>[];
     LET $ld = CREATE lead SET
       name = $name,
       profileId = $prof[0].id,
@@ -234,12 +242,12 @@ export async function deleteLead(id: string): Promise<void> {
   await runLifecycleHooks("lead:delete", { leadId });
   await db.query(
     `LET $ld    = (SELECT profileId, channelIds FROM lead WHERE id = $id)[0];
-     LET $chIds = IF $ld = NONE THEN {} ELSE $ld.channelIds END;
+     LET $chIds = IF $ld = NONE THEN [] ELSE $ld.channelIds END;
      LET $prof  = IF $ld = NONE OR $ld.profileId = NONE
                   THEN NONE
                   ELSE (SELECT recoveryChannelIds FROM $ld.profileId)[0]
                   END;
-     LET $recIds = IF $prof = NONE THEN {} ELSE $prof.recoveryChannelIds END;
+     LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
      DELETE verification_request WHERE ownerId = $id;
      DELETE FROM lead WHERE id = $id;
      FOR $cid IN $chIds { DELETE $cid; };
@@ -299,7 +307,7 @@ export async function syncLeadChannels(
   for (const ch of channels) {
     await db.query(
       `LET $lead = (SELECT channelIds FROM lead WHERE id = $owner)[0];
-         LET $ids  = IF $lead = NONE THEN {} ELSE $lead.channelIds END;
+         LET $ids  = IF $lead = NONE THEN [] ELSE $lead.channelIds END;
          LET $existing = (SELECT id FROM entity_channel
            WHERE id IN $ids AND type = $type AND value = $value
            LIMIT 1);

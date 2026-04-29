@@ -23,7 +23,9 @@ export function startPaymentExpiry(): void {
 
       for (const payment of payments) {
         const tenantId = String(
-          Array.isArray(payment.tenantIds)
+          payment.tenantIds instanceof Set
+            ? [...payment.tenantIds][0]
+            : Array.isArray(payment.tenantIds)
             ? payment.tenantIds[0]
             : payment.tenantIds,
         );

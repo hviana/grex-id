@@ -91,7 +91,7 @@ function normalizeSection(
     isolateSystem: !!raw.isolateSystem,
     isolateCompany: !!raw.isolateCompany,
     isolateUser: !!raw.isolateUser,
-    roles: Array.isArray(raw.roles) ? raw.roles : [],
+    roles: setToArray(raw.roles),
   };
 }
 
@@ -106,6 +106,8 @@ function normalizeUploadSection(
       : undefined,
     allowedExtensions: Array.isArray(raw.allowedExtensions)
       ? raw.allowedExtensions.map(String)
+      : raw.allowedExtensions instanceof Set
+      ? [...raw.allowedExtensions].map(String)
       : [],
   };
 }
@@ -156,9 +158,17 @@ function toRlNum(obj: RL, key: string, fallback = 0): number {
   return Number((obj as Record<string, number> | undefined)?.[key] ?? fallback);
 }
 
+/** Convert a SurrealDB set/array value to a plain string array. */
+function setToArray(v: unknown): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(String);
+  if (v instanceof Set) return [...v].map(String);
+  return [];
+}
+
 function toRlStrArr(obj: RL, key: string): string[] {
   const v = (obj as Record<string, unknown> | undefined)?.[key];
-  return Array.isArray(v) ? (v as string[]) : [];
+  return setToArray(v);
 }
 
 function toRlRec(obj: RL, key: string): Record<string, number> {
@@ -366,8 +376,8 @@ export async function loadCoreData(): Promise<CoreData> {
 
   const rolesBySystem = new Map<string, Role[]>();
   for (const r of roles) {
-    const raw = (r as unknown as Record<string, unknown>).tenantIds;
-    const key = String(Array.isArray(raw) ? raw[0] : raw);
+    const raw = setToArray((r as unknown as Record<string, unknown>).tenantIds);
+    const key = String(raw[0] ?? "");
     let list = rolesBySystem.get(key);
     if (!list) {
       list = [];
@@ -379,8 +389,8 @@ export async function loadCoreData(): Promise<CoreData> {
   const plansBySystem = new Map<string, Plan[]>();
   const plansById = new Map<string, Plan>();
   for (const p of plans) {
-    const raw = (p as unknown as Record<string, unknown>).tenantIds;
-    const sysKey = String(Array.isArray(raw) ? raw[0] : raw);
+    const raw = setToArray((p as unknown as Record<string, unknown>).tenantIds);
+    const sysKey = String(raw[0] ?? "");
     let list = plansBySystem.get(sysKey);
     if (!list) {
       list = [];
@@ -392,8 +402,8 @@ export async function loadCoreData(): Promise<CoreData> {
 
   const menusBySystem = new Map<string, MenuItem[]>();
   for (const m of menus) {
-    const raw = (m as unknown as Record<string, unknown>).tenantIds;
-    const key = String(Array.isArray(raw) ? raw[0] : raw);
+    const raw = setToArray((m as unknown as Record<string, unknown>).tenantIds);
+    const key = String(raw[0] ?? "");
     let list = menusBySystem.get(key);
     if (!list) {
       list = [];

@@ -92,8 +92,11 @@ export async function revokeToken(id: string): Promise<
     { id: rid(id) },
   );
   const row = result[0]?.[0];
-  const tenantId = Array.isArray(row?.tenantIds)
-    ? row!.tenantIds[0]
+  const rawTenantIds = row?.tenantIds;
+  const tenantId: string | undefined = rawTenantIds instanceof Set
+    ? ([...rawTenantIds][0] as string | undefined)
+    : Array.isArray(rawTenantIds)
+    ? rawTenantIds[0]
     : undefined;
   if (tenantId) {
     return {

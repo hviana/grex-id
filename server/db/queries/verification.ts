@@ -67,7 +67,7 @@ export async function atomicCommunicationGuard(params: {
         expiresAt = $expiresAt,
         payload = $payload,
         tenantIds = IF $tenantId != NONE THEN {$tenantId} ELSE NONE END
-    ) ELSE {} END;
+    ) ELSE [] END;
 
     [{
       blockedByPrevious: array::len($lastActive) > 0,

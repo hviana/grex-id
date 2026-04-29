@@ -38,7 +38,13 @@ export const processPayment: HandlerFn = async (payload) => {
   }
 
   const effectiveTenantId = tenantId ??
-    String(Array.isArray(sub.tenantIds) ? sub.tenantIds[0] : sub.tenantIds);
+    String(
+      sub.tenantIds instanceof Set
+        ? [...sub.tenantIds][0]
+        : Array.isArray(sub.tenantIds)
+        ? sub.tenantIds[0]
+        : sub.tenantIds,
+    );
 
   if (
     isRecurring && sub.status === "active" &&

@@ -162,7 +162,7 @@ export async function subscribe(params: {
        IF $adminRoleId != NONE {
          LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $userId LIMIT 1)[0];
          IF $userRlId != NONE {
-           UPDATE $userRlId SET roleIds = set::union(roleIds ?? {}, {$adminRoleId});
+           UPDATE $userRlId SET roleIds = set::union(roleIds ?? <set>[], {$adminRoleId,});
          };
        };`
     : "";

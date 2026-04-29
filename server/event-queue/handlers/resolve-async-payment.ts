@@ -53,7 +53,11 @@ export const resolveAsyncPayment: HandlerFn = async (payload) => {
   const chargeAmount = payment.amount;
   const isRecurring = kind === "recurring";
   const effectiveTenantId = String(
-    Array.isArray(payment.tenantIds) ? payment.tenantIds[0] : payment.tenantIds,
+    payment.tenantIds instanceof Set
+      ? [...payment.tenantIds][0]
+      : Array.isArray(payment.tenantIds)
+      ? payment.tenantIds[0]
+      : payment.tenantIds,
   );
 
   const billingUrl = `/billing?systemSlug=${systemSlug}`;

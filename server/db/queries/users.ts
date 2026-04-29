@@ -360,12 +360,12 @@ export async function hardDeleteUserIfOrphaned(
        WHERE actorId = $id AND companyId != NONE)[0].c;
      IF $tenantCount = 0 {
        LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
-       LET $chIds = IF $usr = NONE THEN {} ELSE $usr.channelIds END;
+       LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
        LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
                     THEN NONE
                     ELSE (SELECT recoveryChannelIds FROM $usr.profileId)[0]
                     END;
-       LET $recIds = IF $prof = NONE THEN {} ELSE $prof.recoveryChannelIds END;
+       LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
        DELETE verification_request WHERE ownerId = $id;
        DELETE tenant WHERE actorId = $id;
        DELETE $id;

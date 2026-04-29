@@ -68,7 +68,7 @@ export async function resolveChannelRecipients(
     const { table, id } = owners[i];
     vars[`owner_${i}`] = id;
     letStmts.push(
-      `LET $channels_${i} = (SELECT channelIds FROM ${table} WHERE id = $owner_${i})[0].channelIds ?? {};`,
+      `LET $channels_${i} = type::array((SELECT channelIds FROM ${table} WHERE id = $owner_${i})[0].channelIds) ?? [];`,
     );
   }
 

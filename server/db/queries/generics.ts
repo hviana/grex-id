@@ -347,8 +347,9 @@ function distributeCascade(
         ((parent as WithCascade<Record<string, unknown>>)._cascade ??= {});
       if (v == null) {
         slot[plan.sourceField] = plan.isArray ? [] : null;
-      } else if (Array.isArray(v)) {
-        slot[plan.sourceField] = v
+      } else if (Array.isArray(v) || v instanceof Set) {
+        const arr = v instanceof Set ? [...v] : v;
+        slot[plan.sourceField] = arr
           .map((id) => byId.get(stringifyId(id)))
           .filter((x): x is Record<string, unknown> => x != null);
       } else {

@@ -74,8 +74,8 @@ export async function createChannel(params: {
   const verified = params.verified ?? false;
   const table = ownerTable(params.ownerKind);
   const result = await db.query<unknown[]>(
-    `LET $owner = (SELECT id, channelIds FROM ${table} WHERE id = $ownerId), 0);
-     LET $count = IF $owner = NONE THEN NONE ELSE set::len($owner.channelIds) END;
+    `LET $owner = (SELECT id, channelIds FROM ${table} WHERE id = $ownerId);
+     LET $count = IF array::len($owner) = 0 THEN NONE ELSE set::len($owner[0].channelIds) END;
      LET $ch = IF ($count != NONE AND $count < $maxPerOwner) THEN (
        CREATE entity_channel SET
          type = $type,
