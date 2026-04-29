@@ -1,14 +1,10 @@
 import { getDb, rid } from "../connection.ts";
+import type { TenantRow } from "@/src/contracts/high_level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tenants");
 
-export interface TenantRow {
-  id: string;
-  companyId: string;
-  systemId: string;
-  roleIds?: string[];
-}
+export type { TenantRow };
 
 /**
  * Returns the core company-system tenant row (actorId=NONE, companyId NOT NONE).

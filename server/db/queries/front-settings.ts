@@ -1,10 +1,7 @@
 import { getDb, rid } from "../connection.ts";
 import type { FrontSetting } from "@/src/contracts/front-setting";
-import {
-  buildScopeKey,
-  resolveTenantForScope,
-  type SettingScope,
-} from "./core-settings";
+import { buildScopeKey, resolveTenantForScope } from "./core-settings";
+import type { SettingScope } from "@/src/contracts/high_level/cache-data";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("front-settings");

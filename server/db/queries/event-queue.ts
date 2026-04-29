@@ -1,22 +1,10 @@
 import { getDb, rid } from "../connection.ts";
+import type { CandidateDelivery } from "@/src/contracts/high_level/event-queue";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("event-queue");
 
-/**
- * Event queue queries. queue_event and delivery are not tenant-scoped —
- * they are infrastructure tables for the worker system. No tenant model
- * changes needed here.
- */
-
-// ─── Worker queries (§5.1) ──────────────────────────────────────────────────
-
-export interface CandidateDelivery {
-  id: string;
-  eventId: string;
-  attempts: number;
-  maxAttempts: number;
-}
+export type { CandidateDelivery };
 
 export async function claimCandidateDeliveries(
   handler: string,

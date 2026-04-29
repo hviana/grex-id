@@ -13,6 +13,16 @@ import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access";
+import type {
+  TenantResourceLimits,
+} from "@/src/contracts/high_level/resource-limits";
+import type {
+  CompiledFileAccess,
+  CoreData,
+  FileAccessCacheData,
+  MissingSetting,
+  SettingScope,
+} from "@/src/contracts/high_level/cache-data";
 import dbConfig from "../../database.json" with { type: "json" };
 import { assertServerOnly } from "./server-only.ts";
 import {
@@ -21,7 +31,6 @@ import {
   fetchAllCoreData,
   loadSettingsForScope,
   resolveScopeChain,
-  type SettingScope,
 } from "../db/queries/core-settings.ts";
 import { genericList } from "../db/queries/generics.ts";
 import {
@@ -31,58 +40,15 @@ import {
 
 assertServerOnly("Core");
 
-export type { SettingScope };
+export type {
+  CompiledFileAccess,
+  CoreData,
+  FileAccessCacheData,
+  MissingSetting,
+  SettingScope,
+  TenantResourceLimits,
+};
 export { buildScopeKey };
-
-/** Pre-computed merged resource limits (plan + voucher) cached per tenant. */
-export interface TenantResourceLimits {
-  roles: string[];
-  entityLimits: Record<string, number>;
-  apiRateLimit: number;
-  storageLimitBytes: number;
-  fileCacheLimitBytes: number;
-  credits: number;
-  maxConcurrentDownloads: number;
-  maxConcurrentUploads: number;
-  maxDownloadBandwidthMB: number;
-  maxUploadBandwidthMB: number;
-  maxOperationCountByResourceKey: Record<string, number>;
-  creditLimitByResourceKey: Record<string, number>;
-  frontendDomains: string[];
-}
-
-export interface MissingSetting {
-  key: string;
-  firstRequestedAt: string;
-}
-
-export interface CoreData {
-  systems: System[];
-  roles: Role[];
-  plans: Plan[];
-  vouchers: Voucher[];
-  menus: MenuItem[];
-  systemsBySlug: Map<string, System>;
-  systemsById: Map<string, System>;
-  rolesBySystem: Map<string, Role[]>;
-  plansBySystem: Map<string, Plan[]>;
-  menusBySystem: Map<string, MenuItem[]>;
-  plansById: Map<string, Plan>;
-  vouchersById: Map<string, Voucher>;
-}
-
-export interface CompiledFileAccess {
-  id: string;
-  name: string;
-  categoryPattern: string;
-  compiledPattern: RegExp;
-  download: FileAccessSection;
-  upload: FileAccessUploadSection;
-}
-
-export interface FileAccessCacheData {
-  rules: CompiledFileAccess[];
-}
 
 // ── Default resource limit (zero/empty) ────────────────────────────────────
 

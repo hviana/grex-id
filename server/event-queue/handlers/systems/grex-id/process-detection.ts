@@ -6,7 +6,7 @@ import {
 } from "@/server/db/queries/systems/grex-id/detections";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
-import type { HandlerFn } from "@/server/event-queue/worker";
+import type { HandlerFn } from "@/src/contracts/high_level/event-queue";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
 
 assertServerOnly("process-detection");

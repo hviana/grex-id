@@ -1,6 +1,12 @@
+import type {
+  RateLimitConfig,
+  RateLimitResult,
+} from "@/src/contracts/high_level/rate-limiter";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("rate-limiter.ts");
+
+export type { RateLimitConfig, RateLimitResult };
 
 interface SlidingWindowEntry {
   timestamps: number[];
@@ -25,16 +31,7 @@ function cleanup(windowMs: number): void {
   }
 }
 
-export interface RateLimitConfig {
-  windowMs: number;
-  maxRequests: number;
-}
-
-export interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetMs: number;
-}
+// RateLimitConfig and RateLimitResult types are now in @/src/contracts/high_level/rate-limiter
 
 export function checkRateLimit(
   key: string,

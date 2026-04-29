@@ -1,23 +1,12 @@
 import { queryDuplicateChecks } from "../db/queries/deduplication.ts";
+import type {
+  DeduplicationConflict,
+  DeduplicationField,
+  DeduplicationResult,
+} from "@/src/contracts/high_level/validation";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/entity-deduplicator.ts");
-
-export interface DeduplicationField {
-  field: string;
-  value: unknown;
-}
-
-export interface DeduplicationConflict {
-  field: string;
-  value: unknown;
-  existingRecordId: string;
-}
-
-export interface DeduplicationResult {
-  isDuplicate: boolean;
-  conflicts: DeduplicationConflict[];
-}
 
 /**
  * Checks whether any existing records in the given entity table match any of

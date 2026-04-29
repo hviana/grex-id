@@ -1,13 +1,8 @@
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { Middleware } from "@/src/contracts/high_level/middleware";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("compose");
-
-export type Middleware = (
-  req: Request,
-  ctx: RequestContext,
-  next: () => Promise<Response>,
-) => Promise<Response>;
 
 /**
  * Composes middlewares into a function compatible with Next.js App Router

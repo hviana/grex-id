@@ -1,19 +1,10 @@
+import type {
+  FileCacheResult,
+  FileCacheStats,
+} from "@/src/contracts/high_level/files";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("file-cache.ts");
-
-export interface FileCacheResult {
-  hit: boolean;
-  noCache: boolean;
-  data?: Uint8Array;
-  mimeType?: string;
-}
-
-export interface FileCacheStats {
-  usedBytes: number;
-  maxBytes: number;
-  fileCount: number;
-}
 
 interface CachedFile {
   data: Uint8Array;

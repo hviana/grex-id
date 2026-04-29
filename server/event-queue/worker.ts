@@ -1,4 +1,5 @@
 import type { WorkerConfig } from "@/src/contracts/high_level/worker-config";
+import type { HandlerFn } from "@/src/contracts/high_level/event-queue";
 import {
   claimCandidateDeliveries,
   getEventPayload,
@@ -10,8 +11,6 @@ import {
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("worker");
-
-export type HandlerFn = (payload: Record<string, unknown>) => Promise<void>;
 
 export class Worker {
   private config: WorkerConfig;

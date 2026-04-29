@@ -1,20 +1,33 @@
 import { getDb, rid } from "../connection.ts";
 import type { Subscription } from "@/src/contracts/subscription";
+import type {
+  AsyncPaymentContext,
+  AutoRechargeContext,
+  BillingGetData,
+  EnableAutoRechargeResult,
+  ExpiredPaymentOwnerInfo,
+  ExpiredPaymentRow,
+  PaymentSubscriptionContext,
+  PurchaseCreditsResult,
+  RetryPaymentResult,
+  VoucherLookupResult,
+} from "@/src/contracts/high_level/billing";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("billing");
 
-// --- GET billing data --------------------------------------------------------
-
-export interface BillingGetData {
-  subscriptions: Record<string, unknown>[];
-  paymentMethods: Record<string, unknown>[];
-  creditPurchases: Record<string, unknown>[];
-  creditsBalance: number;
-  payments?: Record<string, unknown>[];
-  paymentsNextCursor?: string | null;
-  pendingAsyncPayments: Record<string, unknown>[];
-}
+export type {
+  AsyncPaymentContext,
+  AutoRechargeContext,
+  BillingGetData,
+  EnableAutoRechargeResult,
+  ExpiredPaymentOwnerInfo,
+  ExpiredPaymentRow,
+  PaymentSubscriptionContext,
+  PurchaseCreditsResult,
+  RetryPaymentResult,
+  VoucherLookupResult,
+};
 
 export async function getBillingData(params: {
   tenantId: string;
@@ -282,10 +295,7 @@ export async function removePaymentMethod(
 
 // --- purchase_credits --------------------------------------------------------
 
-export interface PurchaseCreditsResult {
-  purchase: Record<string, unknown>;
-  activeSubscriptionId: string;
-}
+// PurchaseCreditsResult is now in @/src/contracts/high_level/billing
 
 export async function purchaseCredits(params: {
   tenantId: string;
@@ -327,17 +337,7 @@ export async function purchaseCredits(params: {
 
 // --- apply_voucher (lookup phase) --------------------------------------------
 
-export interface VoucherLookupResult {
-  voucher: Record<string, unknown> | undefined;
-  subscription: {
-    planId: string;
-    voucherId: string | null;
-    remainingOperationCount?: Record<string, number>;
-  } | undefined;
-  oldVoucher: {
-    resourceLimitId?: Record<string, unknown>;
-  } | undefined;
-}
+// VoucherLookupResult is now in @/src/contracts/high_level/billing
 
 export async function lookupVoucherAndSubscription(params: {
   voucherName: string;
@@ -421,9 +421,7 @@ export async function applyVoucherToSubscription(params: {
 
 // --- set_auto_recharge (enable) ----------------------------------------------
 
-export interface EnableAutoRechargeResult {
-  hasDefaultPaymentMethod: boolean;
-}
+// EnableAutoRechargeResult is now in @/src/contracts/high_level/billing
 
 export async function enableAutoRecharge(params: {
   tenantId: string;
@@ -477,10 +475,7 @@ export async function disableAutoRecharge(
 
 // --- retry_payment -----------------------------------------------------------
 
-export interface RetryPaymentResult {
-  status: "not_found" | "conflict" | "ok";
-  subscriptionId?: string;
-}
+// RetryPaymentResult is now in @/src/contracts/high_level/billing
 
 export async function retryPayment(
   tenantId: string,
@@ -539,14 +534,7 @@ export async function findPaymentByTransactionId(
 
 // --- Expire pending payments (used by expire-pending-payments job) -----------
 
-export interface ExpiredPaymentRow {
-  id: string;
-  tenantIds: string[];
-  subscriptionId: string;
-  kind: string;
-  amount: number;
-  currency: string;
-}
+// ExpiredPaymentRow is now in @/src/contracts/high_level/billing
 
 export async function markExpiredPayments(): Promise<ExpiredPaymentRow[]> {
   const db = await getDb();
@@ -560,10 +548,7 @@ export async function markExpiredPayments(): Promise<ExpiredPaymentRow[]> {
   return expired[0] ?? [];
 }
 
-export interface ExpiredPaymentOwnerInfo {
-  owner: { id: string; name: string } | undefined;
-  systemInfo: { name: string; slug: string } | undefined;
-}
+// ExpiredPaymentOwnerInfo is now in @/src/contracts/high_level/billing
 
 export async function resolveExpiredPaymentContext(params: {
   tenantId: string;
@@ -597,31 +582,7 @@ export async function resolveExpiredPaymentContext(params: {
 
 // --- process-payment handler queries -----------------------------------------
 
-export interface PaymentSubscriptionContext {
-  sub: {
-    id: string;
-    planId: string;
-    paymentMethodId: string;
-    tenantIds: string[];
-    status: string;
-    currentPeriodEnd: string;
-    voucherId: string | null;
-  } | undefined;
-  plan: {
-    price: number;
-    recurrenceDays: number;
-    currency: string;
-    resourceLimitId?: Record<string, unknown>;
-  } | undefined;
-  voucher:
-    | { priceModifier: number; resourceLimitId?: Record<string, unknown> }
-    | undefined;
-  owner: { id: string; name: string } | undefined;
-  systemInfo: { name: string; slug: string } | undefined;
-  purchaseStatus: string | undefined;
-  systemId: string | undefined;
-  companyId: string | undefined;
-}
+// PaymentSubscriptionContext is now in @/src/contracts/high_level/billing
 
 export async function getPaymentSubscriptionContext(params: {
   subscriptionId: string;
@@ -884,38 +845,7 @@ export async function paymentOnFailure(params: {
 
 // --- resolve-async-payment handler queries -----------------------------------
 
-export interface AsyncPaymentContext {
-  payment: {
-    id: string;
-    status: string;
-    subscriptionId: string;
-    tenantIds: string[];
-    amount: number;
-    currency: string;
-    kind: string;
-  } | undefined;
-  sub: {
-    id: string;
-    planId: string;
-    paymentMethodId: string;
-    status: string;
-    currentPeriodEnd: string;
-  } | undefined;
-  plan: {
-    price: number;
-    recurrenceDays: number;
-    currency: string;
-    resourceLimitId?: Record<string, unknown>;
-  } | undefined;
-  voucher:
-    | { priceModifier: number; resourceLimitId?: Record<string, unknown> }
-    | undefined;
-  owner: { id: string; name: string } | undefined;
-  systemInfo: { name: string; slug: string } | undefined;
-  creditPurchase: { status?: string } | undefined;
-  systemId: string | undefined;
-  companyId: string | undefined;
-}
+// AsyncPaymentContext is now in @/src/contracts/high_level/billing
 
 export async function getAsyncPaymentContext(
   paymentId: string,
@@ -1126,18 +1056,7 @@ export async function resolveAsyncPaymentFailure(params: {
 
 // --- auto-recharge handler queries -------------------------------------------
 
-export interface AutoRechargeContext {
-  sub: {
-    id: string;
-    autoRechargeEnabled: boolean;
-    autoRechargeAmount: number;
-    autoRechargeInProgress: boolean;
-    tenantIds: string[];
-  } | undefined;
-  paymentMethod: { id: string } | undefined;
-  owner: { id: string; name: string } | undefined;
-  systemInfo: { name: string; slug: string } | undefined;
-}
+// AutoRechargeContext is now in @/src/contracts/high_level/billing
 
 export async function getAutoRechargeContext(
   subscriptionId: string,

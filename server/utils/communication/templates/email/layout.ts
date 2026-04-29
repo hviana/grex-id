@@ -1,6 +1,7 @@
 import { t } from "@/src/i18n";
 import Core from "../../../Core.ts";
 import FrontCore from "../../../FrontCore.ts";
+import type { TenantBanner } from "@/src/contracts/high_level/communication-templates";
 import { assertServerOnly } from "../../../server-only.ts";
 
 assertServerOnly("layout");
@@ -13,11 +14,7 @@ export function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export interface TenantBanner {
-  actorName?: string;
-  companyName?: string;
-  systemName?: string;
-}
+// TenantBanner is now in @/src/contracts/high_level/communication-templates
 
 export async function emailLayout(
   content: string,

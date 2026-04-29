@@ -1,28 +1,17 @@
 import Core from "./Core.ts";
-import type { CompiledFileAccess } from "./Core.ts";
+import type { CompiledFileAccess } from "@/src/contracts/high_level/cache-data";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access.ts";
 import type { Tenant } from "@/src/contracts/tenant";
+import type {
+  FileAccessCheckParams,
+  FileAccessCheckResult,
+} from "@/src/contracts/high_level/files";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("file-access-guard.ts");
-
-export interface FileAccessCheckParams {
-  categoryPath: string[];
-  fileCompanyId: string;
-  fileSystemSlug: string;
-  fileUserId: string;
-  tenant: Tenant;
-  operation: "download" | "upload";
-}
-
-export interface FileAccessCheckResult {
-  allowed: boolean;
-  maxFileSizeBytes?: number;
-  allowedExtensions?: string[];
-}
 
 async function resolveRoles(tenant: Tenant): Promise<string[]> {
   if (!tenant.actorId) return [];

@@ -32,12 +32,8 @@ function getCurrentPeriod(): string {
   return `${year}-${month}`;
 }
 
-export interface CreditDeductionResult {
-  success: boolean;
-  source: "plan" | "purchased" | "insufficient" | "operationLimit";
-  remainingPlanCredits?: number;
-  remainingPurchasedCredits?: number;
-}
+import type { CreditDeductionResult } from "@/src/contracts/high_level/verification";
+export type { CreditDeductionResult };
 
 /**
  * Attempts to consume credits for an operation (§7.3).

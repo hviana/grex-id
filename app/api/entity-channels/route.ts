@@ -17,10 +17,8 @@ import {
 import { genericCount, genericGetById } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
-import {
-  communicationGuard,
-  type CommunicationGuardResult,
-} from "@/server/utils/verification-guard";
+import { communicationGuard } from "@/server/utils/verification-guard";
+import type { CommunicationGuardResult } from "@/src/contracts/high_level/verification";
 
 async function sendChannelConfirmation(
   userId: string,

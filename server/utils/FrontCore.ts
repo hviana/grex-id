@@ -1,32 +1,20 @@
 import { clearCache, getCache, registerCache, updateCache } from "./cache.ts";
 import type { FrontSetting } from "@/src/contracts/front-setting";
+import type {
+  FrontCoreData,
+  MissingFrontSetting,
+  PublicSystemData,
+} from "@/src/contracts/high_level/cache-data";
 import { assertServerOnly } from "./server-only.ts";
 import { loadFrontSettingsForScope } from "../db/queries/front-settings.ts";
 import {
   buildScopeKey,
   resolveScopeChain,
-  type SettingScope,
 } from "../db/queries/core-settings.ts";
+import type { SettingScope } from "@/src/contracts/high_level/cache-data";
 import Core from "./Core.ts";
 
 assertServerOnly("FrontCore");
-
-export interface MissingFrontSetting {
-  key: string;
-  firstRequestedAt: string;
-}
-
-export interface FrontCoreData {
-  settings: Map<string, FrontSetting>;
-}
-
-export interface PublicSystemData {
-  name: string;
-  slug: string;
-  logoUri?: string;
-  defaultLocale?: string;
-  termsOfService?: string;
-}
 
 const SETTINGS_SLUG = "front-settings";
 const trackedScopes: Set<string> = new Set();

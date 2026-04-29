@@ -6,15 +6,10 @@ import type { Plan } from "@/src/contracts/plan";
 import type { MenuItem } from "@/src/contracts/menu";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { Subscription } from "@/src/contracts/subscription";
+import type { SettingScope } from "@/src/contracts/high_level/cache-data";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("core-settings");
-
-export interface SettingScope {
-  systemId?: string;
-  companyId?: string;
-  actorId?: string;
-}
 
 /**
  * Constructs a scopeKey from scope components.

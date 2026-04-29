@@ -1,19 +1,14 @@
 import { getDb, rid } from "../connection.ts";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
+import type {
+  ChannelOwnerMatch,
+  EntityChannelOwnerKind,
+} from "@/src/contracts/high_level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("entity-channels");
 
-/**
- * Owner type for query-layer operations. `entity_channel` rows themselves have
- * no owner field — the owner is the parent whose `channelIds` array references
- * the row. These helpers accept the owner's (user|lead) id and the kind so
- * they know which parent array to read/mutate.
- *
- * Channels are composable and not directly tenant-scoped — they are linked via
- * the parent's array field (user.channelIds / lead.channelIds).
- */
-export type EntityChannelOwnerKind = "user" | "lead";
+export type { ChannelOwnerMatch, EntityChannelOwnerKind };
 
 function ownerTable(kind: EntityChannelOwnerKind): string {
   return kind;
@@ -140,16 +135,7 @@ export async function deleteChannel(params: {
   );
 }
 
-/**
- * Per-row result of {@link findChannelOwners}.
- */
-export interface ChannelOwnerMatch {
-  ownerId: string;
-  channelId: string;
-  type: string;
-  value: string;
-  verified: boolean;
-}
+// ChannelOwnerMatch is now in @/src/contracts/high_level/query-results
 
 /**
  * Batched conflict-detection helper for registration/invite flows. Given a

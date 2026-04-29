@@ -1,10 +1,8 @@
 import { assertServerOnly } from "../../../server-only.ts";
+import type { SmsLayoutBanner } from "@/src/contracts/high_level/communication-templates";
 assertServerOnly("layout");
-export interface SmsLayoutBanner {
-  actorName?: string;
-  companyName?: string;
-  systemName?: string;
-}
+
+export type { SmsLayoutBanner };
 
 export function smsLayout(body: string, banner?: SmsLayoutBanner): string {
   const parts: string[] = [];

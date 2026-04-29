@@ -9,7 +9,7 @@ import {
 } from "@/server/db/queries/core-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import Core from "@/server/utils/Core";
-import type { SettingScope } from "@/server/utils/Core";
+import type { SettingScope } from "@/src/contracts/high_level/cache-data";
 
 const MAX_SETTINGS_SIZE_BYTES = 64 * 1024; // 64 KB
 

@@ -1,37 +1,16 @@
-import Core, { type TenantResourceLimits } from "./Core.ts";
+import Core from "./Core.ts";
+import type { TenantResourceLimits } from "@/src/contracts/high_level/resource-limits";
 import type { Tenant } from "@/src/contracts/tenant";
+import type {
+  EntityLimitResult,
+  FileCacheLimitResult,
+  PlanAccessResult,
+  RateLimitConfigResult,
+  TransferLimitResult,
+} from "@/src/contracts/high_level/resource-limits";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("guards.ts");
-
-export interface EntityLimitResult {
-  limit: number | null;
-  planLimit: number | null;
-  voucherModifier: number;
-}
-
-export interface PlanAccessResult {
-  granted: boolean;
-  denyCode?: "NO_SUBSCRIPTION" | "SUBSCRIPTION_EXPIRED" | "PLAN_LIMIT";
-}
-
-export interface RateLimitConfigResult {
-  globalLimit: number;
-  planRateLimit: number;
-  voucherModifier: number;
-}
-
-export interface FileCacheLimitResult {
-  maxBytes: number;
-  planLimit: number;
-  voucherModifier: number;
-}
-
-export interface TransferLimitResult {
-  max: number;
-  planLimit: number;
-  voucherModifier: number;
-}
 
 /** Internal: fetch tenant limits without subscription checks. */
 async function getLimits(tenant: Tenant): Promise<TenantResourceLimits> {

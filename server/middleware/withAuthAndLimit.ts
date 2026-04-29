@@ -1,24 +1,20 @@
-import type { Middleware } from "./compose.ts";
+import type {
+  AuthAndLimitOptions,
+  Middleware,
+} from "@/src/contracts/high_level/middleware";
 import { verifyTenantToken } from "../utils/token.ts";
 import { enforceCors, getCorsHeaders } from "../utils/cors.ts";
 import {
   ensureActorValidityLoaded,
   isActorValid,
 } from "../utils/actor-validity.ts";
-import { checkRateLimit, type RateLimitConfig } from "../utils/rate-limiter.ts";
+import { checkRateLimit } from "../utils/rate-limiter.ts";
 import { checkPlanAccess, resolveEntityLimit } from "../utils/guards.ts";
 import { genericCount } from "../db/queries/generics.ts";
 import Core from "../utils/Core.ts";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("withAuthAndLimit");
-
-export interface AuthAndLimitOptions {
-  roles?: string[];
-  requireAuthenticated?: boolean;
-  entities?: string[];
-  rateLimit?: RateLimitConfig;
-}
 
 /**
  * Unified middleware — the single entry point for all auth, rate-limiting,

@@ -37,33 +37,33 @@
 // ============================================================================
 
 import { getDb, rid } from "../connection.ts";
-import {
-  type FieldEncryptionMode,
-  standardizeField,
-} from "../../utils/field-standardizer.ts";
+import { standardizeField } from "../../utils/field-standardizer.ts";
 import { validateFields } from "../../utils/field-validator.ts";
-import {
-  checkDuplicates,
-  type DeduplicationField,
-} from "../../utils/entity-deduplicator.ts";
+import { checkDuplicates } from "../../utils/entity-deduplicator.ts";
 import { decryptField, decryptFieldOptional } from "../../utils/crypto.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 import type { PaginatedResult } from "@/src/contracts/high_level/pagination";
+import type { Tenant } from "@/src/contracts/tenant";
+import type { SharedRecord as SharedRecordContract } from "@/src/contracts/shared-record";
+import type {
+  CascadeChild,
+  CascadeResult,
+  DateRangeFilter,
+  DecryptFieldSpec,
+  FieldEncryptionMode,
+  FieldSpec,
+  GenericCrudOptions,
+  GenericDeleteResult,
+  GenericListOptions,
+  GenericResult,
+  ListSharedRecordsOptions,
+  TagFilter,
+  ValidationError,
+  WithCascade,
+} from "@/src/contracts/high_level/generics";
+import type { DeduplicationField } from "@/src/contracts/high_level/validation";
 
 assertServerOnly("generics");
-
-// ============================================================================
-// Tenant contract & permission alphabet
-// ============================================================================
-
-export interface Tenant {
-  id?: string;
-  actorId?: string;
-  companyId?: string;
-  systemId?: string;
-  isOwner?: boolean;
-  groupIds?: string[];
-}
 
 type Permission = "r" | "w" | "share";
 
@@ -262,85 +262,7 @@ async function buildAccessClause(
   };
 }
 
-// ============================================================================
-// Public option & result types (surface-compatible with the old API)
-// ============================================================================
-
-export interface FieldSpec {
-  field: string;
-  entity?: string;
-  unique?: boolean;
-  encryption?: FieldEncryptionMode;
-}
-
-export interface CascadeChild {
-  /** Child table name. */
-  table: string;
-  /** For delete cascade: field on the child referencing the parent's id. */
-  parentField?: string;
-  /** For read cascade: field on the parent referencing the child id(s). */
-  sourceField?: string;
-  /** Whether the referencing field is a set (true) or scalar (false). */
-  isArray?: boolean;
-  /** Deeper cascade (depth-first). */
-  children?: CascadeChild[];
-}
-
-export type CascadeResult = Record<
-  string,
-  Record<string, unknown> | Record<string, unknown>[] | null
->;
-export type WithCascade<T> = T & { _cascade?: CascadeResult };
-
-export interface TagFilter {
-  tagsColumn?: string;
-  tagNames: string[];
-}
-
-export interface DateRangeFilter {
-  start?: string;
-  end?: string;
-}
-
-export interface GenericListOptions {
-  table: string;
-  select?: string;
-  fetch?: string;
-  cursorField?: string;
-  orderBy?: string;
-  orderByDirection?: "ASC" | "DESC";
-  searchFields?: string[];
-  dateRangeField?: string;
-  extraConditions?: string[];
-  extraBindings?: Record<string, unknown>;
-  cascade?: CascadeChild[];
-  limit?: number;
-  cursor?: string;
-  search?: string;
-  tenant?: Tenant;
-  tagFilter?: TagFilter;
-  dateRange?: DateRangeFilter;
-}
-
-export interface GenericCrudOptions {
-  table: string;
-  tenant?: Tenant;
-  fields?: FieldSpec[];
-  fetch?: string;
-  cascade?: CascadeChild[];
-}
-
-export interface ValidationError {
-  field: string;
-  errors: string[];
-}
-
-export interface GenericResult<T> {
-  success: boolean;
-  data?: T;
-  errors?: ValidationError[];
-  duplicateFields?: string[];
-}
+// All public option & result types are now in @/src/contracts/high_level/generics
 
 // ============================================================================
 // Read-cascade planner & distributor
@@ -948,7 +870,7 @@ export async function genericDisassociate(
 }
 
 // ============================================================================
-// DELETE — dissociate → orphan-check → cascade delete
+// DELETE — dissociate → orphan-check → cascade delete section
 // ----------------------------------------------------------------------------
 // Semantics (identical to the old code) but everything is batched:
 //   1) If the table has `tenantIds` and a caller tenant is supplied, first
@@ -956,16 +878,11 @@ export async function genericDisassociate(
 //      caller's matching tenants. If any remain, just write those back and
 //      return `{ orphaned: true }` — the record is still referenced.
 //   2) Otherwise (or for unscoped tables), cascade-delete children and then
-//      delete the root row itself.
+//      delete the root row itself with shared_record's together.
 // Every cascade level is independently access-checked against the caller.
 // ============================================================================
 
-export interface GenericDeleteResult {
-  success: boolean;
-  deleted: boolean;
-  orphaned: boolean;
-  cascaded?: string[];
-}
+// GenericDeleteResult is now in @/src/contracts/high_level/generics
 
 export async function genericDelete(
   opts: GenericCrudOptions,
@@ -995,6 +912,12 @@ export async function genericDelete(
     bindings,
   );
 
+  // Statement that cleans up every shared_record pointing at this row.
+  // Emitted only on the actual-delete paths, never on dissociate-only.
+  // Uses $id (already bound) so no extra bindings are required.
+  const deleteSharedRecordsSql =
+    `DELETE FROM shared_record WHERE recordId = $id;`;
+
   let lets: string[];
 
   if (hasTenantIds && opts.tenant) {
@@ -1007,12 +930,14 @@ export async function genericDelete(
        END;`,
       `LET $__remaining = set::difference($__before.tenantIds, ${matching.sql});`,
       // If something else still references this row, we only dissociate.
+      // shared_records are left alone here — the record still exists.
       `IF set::len($__remaining) > 0 THEN
          UPDATE ${opts.table} SET tenantIds = $__remaining WHERE id = $id;
          RETURN { deleted: true, orphaned: true };
        END;`,
-      // Otherwise: orphaned — cascade and delete.
+      // Otherwise: orphaned — cascade children, wipe shared_records, delete row.
       ...cascadeSqls,
+      deleteSharedRecordsSql,
       `DELETE FROM ${opts.table} WHERE id = $id;`,
       `RETURN { deleted: true, orphaned: false, cascaded: ${
         JSON.stringify(cascadedTables)
@@ -1025,6 +950,9 @@ export async function genericDelete(
       })[0];`,
       `IF $__before = NONE THEN RETURN { deleted: false, orphaned: false } END;`,
       ...cascadeSqls,
+      // Globally-scoped / non-tenant tables: row is always fully deleted,
+      // so its shared_records (if any) must go too.
+      deleteSharedRecordsSql,
       `DELETE FROM ${opts.table} WHERE id = $id;`,
       `RETURN { deleted: true, orphaned: false, cascaded: ${
         JSON.stringify(cascadedTables)
@@ -1033,7 +961,7 @@ export async function genericDelete(
   }
 
   const db = await getDb();
-  const result = await db.query<unknown[]>(lets.join("\n"), bindings);
+  const result = await db.query(lets.join("\n"), bindings);
   const ret = result[result.length - 1] as GenericDeleteResult | undefined;
   return {
     success: true,
@@ -1150,10 +1078,7 @@ export async function genericCount(opts: GenericListOptions): Promise<number> {
 // DECRYPT
 // ============================================================================
 
-export interface DecryptFieldSpec {
-  field: string;
-  optional?: boolean;
-}
+// DecryptFieldSpec is now in @/src/contracts/high_level/generics
 
 export async function genericDecrypt(
   opts: GenericCrudOptions & { decryptFields: DecryptFieldSpec[] },
@@ -1229,25 +1154,12 @@ export async function genericVerify(
 // SHARED RECORDS
 // ============================================================================
 
-export interface SharedRecord {
-  id: string;
-  recordId: string;
-  ownerTenantIds: string[];
-  accessesTenantIds: string[];
-  permissions: string[];
-}
-
-export interface ListSharedRecordsOptions {
-  recordId?: string;
-  tenant?: Tenant;
-  limit?: number;
-  cursor?: string;
-}
+// SharedRecord and ListSharedRecordsOptions are now in contracts
 
 /** List shared_record rows, optionally filtered by record and/or tenant scope. */
 export async function genericListSharedRecords(
   opts: ListSharedRecordsOptions,
-): Promise<PaginatedResult<SharedRecord>> {
+): Promise<PaginatedResult<SharedRecordContract>> {
   const conds: string[] = [];
   const bindings: Record<string, unknown> = {};
 
@@ -1278,7 +1190,7 @@ export async function genericListSharedRecords(
     `SELECT * FROM shared_record${where} ORDER BY id ASC LIMIT $__limit;`;
 
   const db = await getDb();
-  const result = await db.query<[SharedRecord[]]>(query, bindings);
+  const result = await db.query<[SharedRecordContract[]]>(query, bindings);
   const rows = result[0] ?? [];
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
@@ -1299,7 +1211,7 @@ export async function genericCreateSharedRecord(data: {
   ownerTenant: Tenant;
   accessTenant: Tenant;
   permissions: string[];
-}): Promise<GenericResult<SharedRecord>> {
+}): Promise<GenericResult<SharedRecordContract>> {
   const bindings: Record<string, unknown> = {
     __recordId: rid(data.recordId),
     __perms: data.permissions,
@@ -1322,7 +1234,7 @@ export async function genericCreateSharedRecord(data: {
 
   const db = await getDb();
   const result = await db.query<unknown[]>(query, bindings);
-  const created = result[result.length - 1] as SharedRecord | undefined;
+  const created = result[result.length - 1] as SharedRecordContract | undefined;
   if (!created) {
     return {
       success: false,
@@ -1359,7 +1271,7 @@ export async function genericDeleteSharedRecords(
 
   const query = `DELETE FROM shared_record WHERE ${where} RETURN BEFORE;`;
   const db = await getDb();
-  const result = await db.query<[SharedRecord[]]>(query, bindings);
+  const result = await db.query<[SharedRecordContract[]]>(query, bindings);
   return { success: true, deletedCount: (result[0] ?? []).length };
 }
 
@@ -1380,7 +1292,7 @@ export async function addShare(
   target: Tenant,
   permissions: string[],
   caller: Tenant,
-): Promise<GenericResult<SharedRecord>> {
+): Promise<GenericResult<SharedRecordContract>> {
   // Client-side sanity — filter out bogus permission tokens.
   const valid = new Set<Permission>(["r", "w", "share"]);
   const perms = permissions.filter((p): p is Permission =>
@@ -1451,7 +1363,7 @@ export async function addShare(
 
   const db = await getDb();
   const result = await db.query<unknown[]>(query, bindings);
-  return result[result.length - 1] as GenericResult<SharedRecord>;
+  return result[result.length - 1] as GenericResult<SharedRecordContract>;
 }
 
 // ============================================================================
@@ -1469,7 +1381,7 @@ export async function editShare(
   sharedRecordId: string,
   updates: { permissions: string[] },
   caller: Tenant,
-): Promise<GenericResult<SharedRecord | null>> {
+): Promise<GenericResult<SharedRecordContract | null>> {
   const valid = new Set<Permission>(["r", "w", "share"]);
   const perms = updates.permissions.filter((p): p is Permission =>
     valid.has(p as Permission)
@@ -1524,5 +1436,7 @@ export async function editShare(
 
   const db = await getDb();
   const result = await db.query<unknown[]>(query, bindings);
-  return result[result.length - 1] as GenericResult<SharedRecord | null>;
+  return result[result.length - 1] as GenericResult<
+    SharedRecordContract | null
+  >;
 }

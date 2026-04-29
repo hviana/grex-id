@@ -3,35 +3,15 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type {
+  CoreCompany,
+  CoreCompanySystem,
+  RevenueChart,
+} from "@/src/contracts/high_level/core-companies";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("core-companies");
-
-export interface CoreCompanySystem {
-  systemId: string;
-  systemName: string;
-  systemSlug: string;
-  subscriptionId: string | null;
-  planName: string | null;
-  planPrice: number;
-  status: "active" | "past_due" | "cancelled" | null;
-}
-
-export interface CoreCompany {
-  id: string;
-  name: string;
-  document: string;
-  createdAt: string;
-  systems: CoreCompanySystem[];
-}
-
-export interface RevenueChart {
-  canceled: number;
-  paid: number;
-  projected: number;
-  errors: number;
-}
 
 /**
  * Core admin company listing. Uses the `tenant` table to resolve

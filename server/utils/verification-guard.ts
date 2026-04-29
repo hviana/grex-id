@@ -9,12 +9,8 @@ import { atomicCommunicationGuard } from "../db/queries/verification.ts";
 
 assertServerOnly("verification-guard.ts");
 
-export interface CommunicationGuardResult {
-  allowed: boolean;
-  reason?: "previousNotExpired" | "rateLimited";
-  token?: string;
-  expiresAt?: Date;
-}
+import type { CommunicationGuardResult } from "@/src/contracts/high_level/verification";
+export type { CommunicationGuardResult };
 
 export async function communicationGuard(params: {
   ownerId: string;

@@ -83,12 +83,8 @@ export async function getUserContext(
  * Result of inviting an existing user to a tenant, including data needed
  * for the notification message.
  */
-export interface InviteExistingUserResult {
-  systemName: string;
-  companyName: string;
-  inviterName: string;
-  inviteeName: string;
-}
+import type { InviteExistingUserResult } from "@/src/contracts/high_level/query-results";
+export type { InviteExistingUserResult };
 
 /**
  * Idempotently associates an existing user with a tenant by creating a

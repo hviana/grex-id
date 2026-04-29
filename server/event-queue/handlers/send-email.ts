@@ -7,7 +7,7 @@ import {
 } from "../../module-registry.ts";
 import { publish } from "../publisher.ts";
 import { resolveChannelRecipients } from "../../db/queries/communications.ts";
-import type { HandlerFn } from "../worker.ts";
+import type { HandlerFn } from "@/src/contracts/high_level/event-queue";
 import type {
   TemplateBuilder,
   TemplateResult,

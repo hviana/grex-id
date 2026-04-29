@@ -1,4 +1,8 @@
 import { getDb, rid } from "../connection.ts";
+import type {
+  CoreCreditExpenseRow,
+  TenantUsageConfig,
+} from "@/src/contracts/high_level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("usage");
@@ -36,11 +40,7 @@ export async function getOperationCount(
   });
 }
 
-export interface CoreCreditExpenseRow {
-  resourceKey: string;
-  totalAmount: number;
-  totalCount: number;
-}
+// CoreCreditExpenseRow is now in @/src/contracts/high_level/query-results
 
 export async function getCoreCreditExpenses(params: {
   startDate: string;
@@ -84,14 +84,7 @@ export async function getCoreCreditExpenses(params: {
   return result[0] ?? [];
 }
 
-export interface TenantUsageConfig {
-  systemSlug: string | null;
-  subscriptionStorageLimit: number | null;
-  subscriptionCacheLimit: number | null;
-  voucherStorageModifier: number;
-  voucherCacheModifier: number;
-  creditExpenses: CoreCreditExpenseRow[];
-}
+// TenantUsageConfig is now in @/src/contracts/high_level/query-results
 
 /**
  * Upserts a usage record atomically (§2.4).
