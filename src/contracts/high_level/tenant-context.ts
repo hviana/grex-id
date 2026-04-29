@@ -54,7 +54,7 @@ export interface TenantContextValue {
   exchangeTenant: (
     companyId: string,
     systemId: string,
-  ) => Promise<{ token: string }>;
+  ) => Promise<{ systemToken: string }>;
   locale: SupportedLocale;
   setLocale: (locale: SupportedLocale) => void;
   t: (key: string, params?: Record<string, string>) => string;

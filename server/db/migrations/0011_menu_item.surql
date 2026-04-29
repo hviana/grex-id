@@ -5,7 +5,7 @@ DEFINE FIELD label          ON menu_item TYPE string;
 DEFINE FIELD emoji          ON menu_item TYPE option<string>;
 DEFINE FIELD componentName  ON menu_item TYPE string;
 DEFINE FIELD sortOrder      ON menu_item TYPE int DEFAULT 0;
-DEFINE FIELD requiredRoles  ON menu_item TYPE set<string>;
+DEFINE FIELD roleIds            ON resource_limit TYPE option<set<record<role>>>;
 DEFINE FIELD hiddenInPlanIds ON menu_item TYPE set<record<plan>>;
 DEFINE FIELD createdAt      ON menu_item TYPE datetime DEFAULT time::now();
 

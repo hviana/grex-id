@@ -41,7 +41,14 @@ export async function createCompany(data: {
 
   if (hasAddress) {
     const result = await db.query<
-      [unknown, unknown, unknown, unknown, unknown, Company[]]
+      [
+        Record<string, unknown>[],
+        Record<string, unknown>[],
+        Record<string, unknown>[],
+        Record<string, unknown>[],
+        Record<string, unknown>[],
+        Company[],
+      ]
     >(
       `LET $addr = CREATE address SET
         street = $street,

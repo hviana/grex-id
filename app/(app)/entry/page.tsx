@@ -9,7 +9,15 @@ import { getCookie, setCookie } from "@/src/lib/cookies";
 const COMPANY_COOKIE = "core_company";
 const SYSTEM_COOKIE = "core_system";
 
-function getDefaultMenus() {
+interface DefaultMenuItem {
+  id: string;
+  componentName: string;
+  sortOrder: number;
+  requiredRoles: string[];
+  hiddenInPlanIds: string[];
+}
+
+function getDefaultMenus(): DefaultMenuItem[] {
   return [
     {
       id: "_default_usage",
