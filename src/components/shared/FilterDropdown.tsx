@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import type {
+  FilterConfig,
+  FilterValues,
+} from "@/src/contracts/high_level/components";
 
-export interface FilterConfig {
-  key: string;
-  label: string;
-  type: "text" | "select" | "dateRange";
-  options?: { value: string; label: string }[];
-}
-
-export type FilterValues = Record<string, string>;
+export type {
+  FilterConfig,
+  FilterValues,
+} from "@/src/contracts/high_level/components";
 
 interface FilterDropdownProps {
   filters: FilterConfig[];

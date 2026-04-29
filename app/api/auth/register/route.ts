@@ -14,11 +14,7 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
-
-interface SubmittedChannel {
-  type: string;
-  value: string;
-}
+import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];

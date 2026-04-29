@@ -26,11 +26,7 @@ import { dispatchCommunication } from "@/server/event-queue/handlers/send-commun
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { forgetActor } from "@/server/utils/actor-validity";
-
-interface SubmittedChannel {
-  type: string;
-  value: string;
-}
+import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];

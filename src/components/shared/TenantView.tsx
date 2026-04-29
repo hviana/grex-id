@@ -1,30 +1,15 @@
 "use client";
 
 import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
-import type { TenantFieldName } from "@/src/components/subforms/TenantSubform";
+import type {
+  TenantFieldName,
+  TenantViewData,
+} from "@/src/contracts/high_level/tenant-display";
+
+export type { TenantViewData } from "@/src/contracts/high_level/tenant-display";
+
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-export interface TenantViewData {
-  id: string;
-  systemId?: string;
-  systemName?: string;
-  systemSlug?: string;
-  companyId?: string;
-  companyName?: string;
-  actorId?: string;
-  actorName?: string;
-  actorType?: TenantActorType;
-  roles?: string[];
-  groupIds?: string[];
-  exchangeable?: boolean;
-  frontendUse?: boolean;
-  frontendDomains?: string[];
-  isolateSystem?: boolean;
-  isolateCompany?: boolean;
-  isolateUser?: boolean;
-  isAnonymous?: boolean;
-}
 
 const ALL_VIEW_FIELDS: TenantFieldName[] = [
   "companyId",

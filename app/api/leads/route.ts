@@ -19,6 +19,7 @@ import type { Lead } from "@/src/contracts/lead";
 import { rid } from "@/server/db/connection";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
+import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);
@@ -71,11 +72,6 @@ async function getHandler(req: Request, ctx: RequestContext) {
   });
 
   return Response.json({ success: true, ...result });
-}
-
-interface SubmittedChannel {
-  type: string;
-  value: string;
 }
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {

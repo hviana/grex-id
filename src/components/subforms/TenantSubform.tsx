@@ -11,40 +11,18 @@ import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
+import type { BadgeValue } from "@/src/contracts/high_level/components";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type {
+  TenantFieldName,
+  TenantFormData,
+} from "@/src/contracts/high_level/tenant-display";
 
-export type TenantFieldName =
-  | "systemId"
-  | "companyId"
-  | "actorId"
-  | "systemSlug"
-  | "roles"
-  | "groupIds"
-  | "actorType"
-  | "exchangeable"
-  | "frontendUse"
-  | "frontendDomains"
-  | "isolateSystem"
-  | "isolateCompany"
-  | "isolateUser";
-
-export interface TenantFormData {
-  systemId?: string;
-  systemSlug?: string;
-  companyId?: string;
-  actorId?: string;
-  actorType?: TenantActorType;
-  roles?: string[];
-  groupIds?: BadgeValue[];
-  exchangeable?: boolean;
-  frontendUse?: boolean;
-  frontendDomains?: string[];
-  isolateSystem?: boolean;
-  isolateCompany?: boolean;
-  isolateUser?: boolean;
-}
+export type {
+  TenantFieldName,
+  TenantFormData,
+} from "@/src/contracts/high_level/tenant-display";
 
 interface TenantSubformProps {
   initialData?: Partial<TenantFormData>;

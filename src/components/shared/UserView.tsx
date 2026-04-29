@@ -3,27 +3,11 @@
 import type { ReactNode } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import TenantView from "@/src/components/shared/TenantView";
-import ResourceLimitsView, {
-  type ResourceLimitsData,
-} from "@/src/components/shared/ResourceLimitsView";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { UserViewData } from "@/src/contracts/high_level/user";
 
-export interface UserViewData {
-  id: string;
-  profileId?: {
-    name: string;
-    avatarUri?: string;
-  };
-  channelIds?: {
-    id: string;
-    type: string;
-    value: string;
-    verified: boolean;
-  }[];
-  contextRoles?: string[];
-  resourceLimitId?: ResourceLimitsData | null;
-  createdAt: string;
-  [key: string]: unknown;
-}
+export type { UserViewData } from "@/src/contracts/high_level/user";
 
 export function userPrimaryChannel(
   user: UserViewData,

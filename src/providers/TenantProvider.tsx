@@ -11,12 +11,16 @@ import {
 } from "react";
 import type { UserResolved } from "@/src/contracts/high_level/user";
 import type { Tenant } from "@/src/contracts/tenant";
-import type { TenantContext } from "@/src/contracts/high_level/tenant-context";
+import type {
+  AuthClaims,
+  TenantContext,
+  TenantContextValue,
+} from "@/src/contracts/high_level/tenant-context";
 import type { Company } from "@/src/contracts/company";
 import type { PublicSystemInfo, System } from "@/src/contracts/system";
+import type { SupportedLocale } from "@/src/contracts/high_level/i18n";
 import {
   defaultLocale as fallbackLocale,
-  type SupportedLocale,
   supportedLocales,
   t as translate,
 } from "@/src/i18n";
@@ -96,62 +100,10 @@ function resolveInitialLocale(defaultLocale?: string): SupportedLocale {
   return fallbackLocale;
 }
 
-export interface AuthClaims {
-  roles: string[];
-  actorType: "user" | "api_token" | null;
-  exchangeable: boolean;
-  frontendDomains: string[];
-}
-
-export interface TenantContextValue {
-  user: UserResolved | null;
-  systemToken: string | null;
-  anonymousToken: string | null;
-  loading: boolean;
-  tenant: Tenant;
-  roles: string[];
-  actorType: "user" | "api_token" | null;
-  exchangeable: boolean;
-  frontendDomains: string[];
-  login: (
-    identifier: string,
-    password: string,
-    stayLoggedIn?: boolean,
-    twoFactorCode?: string,
-  ) => Promise<{ user: UserResolved; systemToken: string }>;
-  logout: () => void;
-  refresh: (token?: string) => Promise<void>;
-  exchangeTenant: (
-    companyId: string,
-    systemId: string,
-  ) => Promise<{ token: string }>;
-  locale: SupportedLocale;
-  setLocale: (locale: SupportedLocale) => void;
-  t: (key: string, params?: Record<string, string>) => string;
-  supportedLocales: readonly string[];
-  companies: Pick<Company, "id" | "name">[];
-  systems: Pick<System, "id" | "name" | "slug" | "logoUri" | "defaultLocale">[];
-  plan: { id: string; name: string } | null;
-  companyId: string | null;
-  systemId: string | null;
-  systemSlug: string | null;
-  setCompanies: (companies: Pick<Company, "id" | "name">[]) => void;
-  setSystems: (
-    systems: Pick<
-      System,
-      "id" | "name" | "slug" | "logoUri" | "defaultLocale"
-    >[],
-  ) => void;
-  setPlan: (plan: { id: string; name: string } | null) => void;
-  switchCompany: (companyId: string) => void;
-  switchSystem: (systemId: string) => void;
-  getSetting: (key: string) => string | undefined;
-  frontCoreLoaded: boolean;
-  reloadFrontCore: () => Promise<void>;
-  publicSystem: PublicSystemInfo | null;
-  publicSystemLoading: boolean;
-  loadPublicSystem: (slug?: string) => Promise<void>;
-}
+export type {
+  AuthClaims,
+  TenantContextValue,
+} from "@/src/contracts/high_level/tenant-context";
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 

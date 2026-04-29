@@ -42,32 +42,10 @@ const DAY_KEYS = [
   "systems.grex-id.report.saturday",
 ];
 
-interface DetectionIndividual {
-  faceId: string;
-  leadId?: string;
-  leadName?: string;
-  leadEmail?: string;
-  leadPhone?: string;
-  leadAvatarUri?: string;
-  classification: "member" | "visitor" | "unknown";
-  detectionCount: number;
-  lastDetectedAt: string;
-  bestScore: number;
-  locationId: string;
-  locationName: string;
-  ownerId?: string;
-  ownerName?: string;
-  [key: string]: unknown;
-}
-
-interface DetectionStats {
-  uniqueMembers: number;
-  uniqueVisitors: number;
-  uniqueUnknowns: number;
-  individuals: DetectionIndividual[];
-  hourlyUnique: number[];
-  dailyUnique: number[];
-}
+import type {
+  DetectionIndividual,
+  DetectionStats,
+} from "@/src/contracts/systems/grex-id/grexid-detection";
 
 function formatDate(iso: string, locale: string): string {
   try {

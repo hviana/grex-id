@@ -1,15 +1,8 @@
 import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
+import type { Face } from "@/src/contracts/systems/grex-id/face";
 
 assertServerOnly("faces");
-
-export interface Face {
-  id: string;
-  leadId?: string;
-  embedding_type1: number[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 export async function upsertFace(data: {
   leadId: string;

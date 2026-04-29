@@ -1,6 +1,11 @@
 import type { Profile } from "../profile";
 import type { EntityChannel } from "../entity-channel";
 import type { ResourceLimit } from "../resource-limit";
+import type { ResourceLimitsData } from "./resource-limits";
+
+// ============================================================================
+// Resolved user types — used by TenantProvider and server queries.
+// ============================================================================
 
 /**
  * FETCH-resolved User with FK fields replaced by their resolved objects.
@@ -20,4 +25,35 @@ export interface UserResolved {
   tenantIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ============================================================================
+// Auth input contracts
+// ============================================================================
+
+export interface UserCredentials {
+  identifier: string;
+  password: string;
+}
+
+// ============================================================================
+// Display-oriented user data — used by UserView and UsersPage.
+// ============================================================================
+
+export interface UserViewData {
+  id: string;
+  profileId?: {
+    name: string;
+    avatarUri?: string;
+  };
+  channelIds?: {
+    id: string;
+    type: string;
+    value: string;
+    verified: boolean;
+  }[];
+  contextRoles?: string[];
+  resourceLimitId?: ResourceLimitsData | null;
+  createdAt: string;
+  [key: string]: unknown;
 }

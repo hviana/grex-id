@@ -3,23 +3,9 @@
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { formatBytes, limitEmoji } from "@/src/components/shared/PlanCard";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 
-export interface ResourceLimitsData {
-  benefits?: string[] | null;
-  roleIds?: string[] | null;
-  entityLimits?: Record<string, number> | null;
-  apiRateLimit?: number;
-  storageLimitBytes?: number;
-  fileCacheLimitBytes?: number;
-  credits?: number;
-  maxConcurrentDownloads?: number;
-  maxConcurrentUploads?: number;
-  maxDownloadBandwidthMB?: number;
-  maxUploadBandwidthMB?: number;
-  maxOperationCountByResourceKey?: Record<string, number> | null;
-  creditLimitByResourceKey?: Record<string, number> | null;
-  frontendDomains?: string[] | null;
-}
+export type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
 
 interface ResourceLimitsViewProps {
   data: ResourceLimitsData;

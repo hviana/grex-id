@@ -3,17 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { getCookie } from "@/src/lib/cookies";
+import type { DataTrackingConsentState } from "@/src/contracts/high_level/tracking";
+
+export type { DataTrackingConsentState } from "@/src/contracts/high_level/tracking";
 
 const CONSENT_COOKIE = "core_data_tracking_consent";
-
-export interface DataTrackingConsentState {
-  /** True only when the cookie equals "accepted". */
-  accepted: boolean;
-  /** True once the user has clicked either button (cookie present). */
-  decided: boolean;
-  /** Resolved list from `front.dataTracking.trackedCharacteristics`. */
-  trackedCharacteristics: string[];
-}
 
 /**
  * Gates access to the characteristics listed in

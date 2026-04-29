@@ -12,13 +12,3 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface SubmittedChannel {
-  type: string;
-  value: string;
-}
-
-export interface UserCredentials {
-  identifier: string;
-  password: string;
-}

@@ -5,56 +5,22 @@ import type {
 } from "@/src/contracts/high_level/pagination";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "../../../../utils/server-only.ts";
+import type {
+  DetectionIndividual,
+  DetectionReportItem,
+  DetectionStats,
+  FaceMatchResult,
+  GrexidDetection as Detection,
+} from "@/src/contracts/systems/grex-id/grexid-detection";
 
 assertServerOnly("detections");
 
-export interface Detection {
-  id: string;
-  locationId: string;
-  leadId?: string;
-  faceId?: string;
-  score: number;
-  detectedAt: string;
-  createdAt: string;
-}
-
-// Classification rules (multi-tenant):
-// - unknown: detection has no leadId (face did not match any registered lead)
-// - member:  lead is associated with the CURRENT company + system
-//            (lead.tenantIds contains the company-system tenant record)
-// - visitor: lead exists in the database but is NOT associated with the
-//            current company + system (it belongs to another tenant, or
-//            has no tenant at all)
-
-export interface DetectionReportItem {
-  id: string;
-  detectedAt: string;
-  score: number;
-  locationName: string;
-  locationId: string;
-  leadId?: string;
-  faceId?: string;
-  leadName?: string;
-  leadEmail?: string;
-  leadPhone?: string;
-  leadAvatarUri?: string;
-  ownerId?: string;
-  ownerName?: string;
-  classification: "member" | "visitor" | "unknown";
-}
-
-// leadId is exposed only for members. For visitors we intentionally hide
-// the record id so the frontend cannot correlate visitors across tenants.
-
-// Name and avatar are shown for members and visitors (so the operator
-// can still recognize a recurring visitor's face), but never for unknown.
-
-// Contact details are member-only. Visitors and unknown never expose
-// email/phone — that information belongs to the tenant that owns the lead.
-
-// Owner is resolved from lead.ownerId for the CURRENT tenant only,
-// so owners from other tenants are never leaked. It is only surfaced for
-// members because visitors have no association in this tenant.
+export type {
+  DetectionIndividual,
+  DetectionReportItem,
+  DetectionStats,
+  FaceMatchResult,
+};
 
 export async function createDetection(data: {
   locationId: string;
@@ -250,32 +216,6 @@ export async function listDetections(
       ? enriched[enriched.length - 1]?.id ?? undefined
       : undefined,
   };
-}
-
-export interface DetectionIndividual {
-  faceId: string;
-  leadId?: string;
-  leadName?: string;
-  leadEmail?: string;
-  leadPhone?: string;
-  leadAvatarUri?: string;
-  classification: "member" | "visitor" | "unknown";
-  detectionCount: number;
-  lastDetectedAt: string;
-  bestScore: number;
-  locationId: string;
-  locationName: string;
-  ownerId?: string;
-  ownerName?: string;
-}
-
-export interface DetectionStats {
-  uniqueMembers: number;
-  uniqueVisitors: number;
-  uniqueUnknowns: number;
-  individuals: DetectionIndividual[];
-  hourlyUnique: number[];
-  dailyUnique: number[];
 }
 
 // Aggregated row returned by SurrealQL GROUP BY + count/math::max
@@ -495,12 +435,6 @@ export async function detectionExistsForEvent(
     { locationId: rid(locationId), eventId },
   );
   return (existing[0] ?? []).length > 0;
-}
-
-export interface FaceMatchResult {
-  id: unknown;
-  leadId: unknown;
-  score: number;
 }
 
 /**

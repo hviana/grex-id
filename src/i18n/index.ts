@@ -21,6 +21,8 @@ import ptBREntities from "./pt-BR/entities.json";
 import ptBRResources from "./pt-BR/resources.json";
 import ptBRGrexId from "./pt-BR/systems/grex-id.json";
 
+import type { SupportedLocale } from "@/src/contracts/high_level/i18n";
+
 type TranslationMap = Record<string, string>;
 
 const translations: Record<string, Record<string, TranslationMap>> = {
@@ -118,6 +120,6 @@ export function t(
   return value;
 }
 
+export { type SupportedLocale } from "@/src/contracts/high_level/i18n";
 export const supportedLocales = ["en", "pt-BR"] as const;
-export type SupportedLocale = (typeof supportedLocales)[number];
 export const defaultLocale: SupportedLocale = "en";

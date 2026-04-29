@@ -1,4 +1,7 @@
-/** Pre-computed merged resource limits (plan + voucher) cached per tenant. */
+// ============================================================================
+// Pre-computed merged resource limits (plan + voucher) cached per tenant.
+// ============================================================================
+
 export interface TenantResourceLimits {
   roles: string[];
   entityLimits: Record<string, number>;
@@ -14,6 +17,46 @@ export interface TenantResourceLimits {
   creditLimitByResourceKey: Record<string, number>;
   frontendDomains: string[];
 }
+
+// ============================================================================
+// Display-oriented resource limits — used by ResourceLimitsView, PlanCard,
+// VoucherCard, BillingPage, and other frontend components. All fields are
+// optional and nullable to support partial data from different sources.
+// ============================================================================
+
+export interface ResourceLimitsData {
+  benefits?: string[] | null;
+  roleIds?: string[] | null;
+  entityLimits?: Record<string, number> | null;
+  apiRateLimit?: number;
+  storageLimitBytes?: number;
+  fileCacheLimitBytes?: number;
+  credits?: number;
+  maxConcurrentDownloads?: number;
+  maxConcurrentUploads?: number;
+  maxDownloadBandwidthMB?: number;
+  maxUploadBandwidthMB?: number;
+  maxOperationCountByResourceKey?: Record<string, number> | null;
+  creditLimitByResourceKey?: Record<string, number> | null;
+  frontendDomains?: string[] | null;
+}
+
+/** Field names exposed by ResourceLimitsSubform. */
+export type ResourceLimitField =
+  | "benefits"
+  | "roleIds"
+  | "entityLimits"
+  | "apiRateLimit"
+  | "storageLimitBytes"
+  | "fileCacheLimitBytes"
+  | "credits"
+  | "maxConcurrentDownloads"
+  | "maxConcurrentUploads"
+  | "maxDownloadBandwidthMB"
+  | "maxUploadBandwidthMB"
+  | "maxOperationCountByResourceKey"
+  | "creditLimitByResourceKey"
+  | "frontendDomains";
 
 // ============================================================================
 // Guard result types (returned by server/utils/guards.ts)

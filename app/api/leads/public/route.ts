@@ -16,11 +16,7 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { findVerifiedOwnerByTypedChannel } from "@/server/db/queries/entity-channels";
-
-interface SubmittedChannel {
-  type: string;
-  value: string;
-}
+import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];

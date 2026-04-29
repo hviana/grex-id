@@ -6,6 +6,7 @@ import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { ResourceLimitField } from "@/src/contracts/high_level/resource-limits";
 
 interface EntityLimitEntry {
   key: string;
@@ -32,21 +33,7 @@ function kvToMap(kv: EntityLimitEntry[]): Record<string, number> | null {
   return result;
 }
 
-export type ResourceLimitField =
-  | "benefits"
-  | "roleIds"
-  | "entityLimits"
-  | "apiRateLimit"
-  | "storageLimitBytes"
-  | "fileCacheLimitBytes"
-  | "credits"
-  | "maxConcurrentDownloads"
-  | "maxConcurrentUploads"
-  | "maxDownloadBandwidthMB"
-  | "maxUploadBandwidthMB"
-  | "maxOperationCountByResourceKey"
-  | "creditLimitByResourceKey"
-  | "frontendDomains";
+export type { ResourceLimitField } from "@/src/contracts/high_level/resource-limits";
 
 const FIELD_LABELS: Record<ResourceLimitField, string> = {
   benefits: "⭐",

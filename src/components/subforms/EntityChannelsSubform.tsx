@@ -12,6 +12,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { EntityChannelsSubformMode } from "@/src/contracts/high_level/components";
 
 const DEFAULT_MAX = 10;
 
@@ -30,7 +31,7 @@ const DEFAULT_MAX = 10;
  *   `getData()`/`isValid()` so the parent form can collect them.
  */
 
-export type EntityChannelsSubformMode = "authenticated" | "local";
+export type { EntityChannelsSubformMode } from "@/src/contracts/high_level/components";
 
 export interface EntityChannelsSubformProps {
   /**

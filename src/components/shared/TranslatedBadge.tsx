@@ -1,11 +1,8 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { TranslatedBadgeKind } from "@/src/contracts/high_level/components";
 
-export type TranslatedBadgeKind =
-  | "role"
-  | "entity"
-  | "resource"
-  | "group";
+export type { TranslatedBadgeKind } from "@/src/contracts/high_level/components";
 
 const KIND_SEGMENT: Record<TranslatedBadgeKind, string> = {
   role: "roles",

@@ -6,7 +6,18 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
-import type { FilterConfig, FilterValues } from "./FilterDropdown.tsx";
+import type {
+  FilterConfig,
+  FilterValues,
+  SubformConfig,
+  SubformRef,
+} from "@/src/contracts/high_level/components";
+
+export type {
+  SubformConfig,
+  SubformRef,
+} from "@/src/contracts/high_level/components";
+
 import SearchField from "./SearchField.tsx";
 import CreateButton from "./CreateButton.tsx";
 import EditButton from "./EditButton.tsx";
@@ -17,21 +28,6 @@ import GenericListItem from "./GenericListItem.tsx";
 import Spinner from "./Spinner.tsx";
 import FormModal from "./FormModal.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-export interface SubformConfig {
-  component: React.ComponentType<{
-    ref: React.Ref<SubformRef>;
-    initialData?: Record<string, unknown>;
-    [key: string]: unknown;
-  }>;
-  key: string;
-  extraProps?: Record<string, unknown>;
-}
-
-export interface SubformRef {
-  getData(): Record<string, unknown>;
-  isValid(): boolean;
-}
 
 interface GenericListProps<T extends Record<string, unknown>> {
   entityName: string;
