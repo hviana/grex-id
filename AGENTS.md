@@ -160,7 +160,10 @@ unknown", etc.
 Entity-agnostic CRUD helpers that enforce every §2.4 rule automatically. Every
 new query **must** check these first; bespoke queries are only for logic the
 generics cannot express (compositional creates across multiple tables, complex
-subqueries).
+subqueries). This file is very important because it explains how to handle
+complex database operations involving tenants and shared records (`tenant` and
+`shared_record` tables). It serves as a **reference** for any questions about
+how to deal with these issues.
 
 **API surface:**
 
