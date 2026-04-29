@@ -138,6 +138,7 @@
   "connectedApps.authorize": "Autorizar",
   "connectedApps.oauthRequest": "quer se conectar à sua conta",
   "connectedApps.requestedPermissions": "Permissões solicitadas",
+  "connectedApps.requestedResources": "Recursos solicitados",
   "connectedApps.noPermissions": "Nenhuma permissão específica solicitada",
   "connectedApps.selectCompany": "Conceder acesso à empresa",
   "connectedApps.authorizedAs": "Autorizando como",

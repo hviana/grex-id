@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
+import TenantView from "@/src/components/shared/TenantView";
+import type { TenantViewData } from "@/src/components/shared/TenantView";
+import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import ResourceLimitsView, {
   type ResourceLimitsData,
@@ -31,9 +32,24 @@ interface ApiToken {
 }
 
 export default function TokensPage() {
-  const { t } = useTenantContext();
-  const { systemToken } = useTenantContext();
-  const { companyId, systemId, systemSlug } = useTenantContext();
+  const {
+    t,
+    systemToken,
+    companyId,
+    systemId,
+    systemSlug,
+    companies,
+    systems,
+  } = useTenantContext();
+
+  const companyName = useMemo(
+    () => companies.find((c) => c.id === companyId)?.name,
+    [companies, companyId],
+  );
+  const systemName = useMemo(
+    () => systems.find((s) => s.id === systemId)?.name,
+    [systems, systemId],
+  );
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteToken, setDeleteToken] = useState<ApiToken | null>(null);
@@ -50,6 +66,22 @@ export default function TokensPage() {
   const [newExpiry, setNewExpiry] = useState("");
 
   const limitsRef = useRef<SubformRef>(null);
+  const tenantRef = useRef<SubformRef>(null);
+
+  function buildTokenTenantView(token: ApiToken): TenantViewData {
+    return {
+      id: token.id,
+      companyId: companyId ?? undefined,
+      companyName,
+      systemId: systemId ?? undefined,
+      systemName,
+      systemSlug: systemSlug ?? undefined,
+      actorId: token.id,
+      actorName: token.name,
+      actorType: token.actorType === "app" ? "api_token" : "api_token",
+      roles: token.resourceLimitId?.roleIds ?? undefined,
+    };
+  }
 
   const fetchTokens = useCallback(
     async (
@@ -58,9 +90,8 @@ export default function TokensPage() {
       if (!systemToken || !companyId) {
         return { items: [], total: 0, hasMore: false };
       }
-      const p = new URLSearchParams({
-        companyId,
-      });
+      const p = new URLSearchParams({ companyId });
+      if (systemId) p.set("systemId", systemId);
       if (params.search) p.set("search", params.search);
       if (params.cursor) p.set("cursor", params.cursor);
       p.set("limit", String(params.limit));
@@ -74,7 +105,7 @@ export default function TokensPage() {
         hasMore: false,
       };
     },
-    [systemToken, companyId],
+    [systemToken, companyId, systemId],
   );
 
   const triggerReload = () => setReloadKey((k) => k + 1);
@@ -112,6 +143,11 @@ export default function TokensPage() {
     setError(null);
     try {
       const limitsData = limitsRef.current?.getData() ?? {};
+      const tenantData = tenantRef.current?.getData() ?? {};
+
+      if (tenantData.roles) {
+        limitsData.roleIds = tenantData.roles;
+      }
 
       const res = await fetch("/api/tokens", {
         method: "POST",
@@ -209,8 +245,8 @@ export default function TokensPage() {
         fetchFn={fetchTokens}
         reloadKey={reloadKey}
         renderItem={(token) => (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
-            <div className="flex items-center justify-between mb-1">
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200 space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-white">{token.name}</h3>
                 <span className="text-xs bg-[var(--color-secondary-blue)]/20 text-[var(--color-secondary-blue)] px-2 py-0.5 rounded-full">
@@ -233,10 +269,19 @@ export default function TokensPage() {
               </div>
             </div>
             {token.description && (
-              <p className="text-sm text-[var(--color-light-text)] mb-2">
+              <p className="text-sm text-[var(--color-light-text)]">
                 {token.description}
               </p>
             )}
+
+            <div className="border-t border-dashed border-[var(--color-dark-gray)]" />
+
+            <TenantView
+              tenant={buildTokenTenantView(token)}
+              visibleFields={["roles"]}
+              compact
+            />
+
             {token.resourceLimitId && (
               <ResourceLimitsView
                 data={token.resourceLimitId}
@@ -256,8 +301,27 @@ export default function TokensPage() {
         }}
         title={t("common.tokens.create")}
       >
-        <ErrorDisplay message={error} />
         <div className="space-y-4">
+          <TenantView
+            tenant={{
+              id: "",
+              companyId: companyId ?? undefined,
+              companyName,
+              systemId: systemId ?? undefined,
+              systemName,
+              systemSlug: systemSlug ?? undefined,
+              actorType: newActorType === "app" ? "api_token" : "api_token",
+            }}
+            visibleFields={[
+              "companyId",
+              "systemId",
+              "actorType",
+            ]}
+            compact
+          />
+
+          <ErrorDisplay message={error} />
+
           <input
             type="text"
             value={newName}
@@ -286,6 +350,11 @@ export default function TokensPage() {
               <option value="app">{actorTypeLabel("app")}</option>
             </select>
           </div>
+          <TenantSubform
+            ref={tenantRef}
+            visibleFields={["roles"]}
+          />
+
           <ResourceLimitsSubform
             ref={limitsRef}
             valueMode="absolute"

@@ -1,28 +1,136 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
-import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
+import TenantView from "@/src/components/shared/TenantView";
+import type { TenantViewData } from "@/src/components/shared/TenantView";
+import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
+import type { ResourceLimitsData } from "@/src/components/shared/ResourceLimitsView";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+
+/** resource_limit fields that may appear in OAuth URL params and POST body. */
+const RESOURCE_LIMIT_FIELDS = [
+  "roleIds",
+  "entityLimits",
+  "apiRateLimit",
+  "storageLimitBytes",
+  "fileCacheLimitBytes",
+  "credits",
+  "maxConcurrentDownloads",
+  "maxConcurrentUploads",
+  "maxDownloadBandwidthMB",
+  "maxUploadBandwidthMB",
+  "maxOperationCountByResourceKey",
+  "creditLimitByResourceKey",
+  "frontendDomains",
+] as const;
+
+function parseJsonParam(raw: string | null): unknown | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseNumParam(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseCsvParam(raw: string | null): string[] | undefined {
+  if (!raw) return undefined;
+  const arr = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return arr.length > 0 ? arr : undefined;
+}
 
 function OAuthAuthorizeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { systemToken, user, loading: authLoading } = useTenantContext();
-  const { t } = useTenantContext();
+  const {
+    systemToken,
+    user,
+    loading: authLoading,
+    t,
+  } = useTenantContext();
 
   const clientName = searchParams.get("client_name") ?? "";
-  const rolesParam = searchParams.get("roles") ?? "";
   const systemSlug = searchParams.get("systemSlug") ?? "";
   const redirectOrigin = searchParams.get("redirect_origin") ?? "";
 
-  const roles = rolesParam
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
+  // Build resource-limits data from URL params using exact field names.
+  const requestedLimits = useMemo<ResourceLimitsData>(() => {
+    const rl: ResourceLimitsData = {};
+    const roleIds = parseCsvParam(searchParams.get("roleIds"));
+    if (roleIds) rl.roleIds = roleIds;
+    const entityLimits = parseJsonParam(searchParams.get("entityLimits"));
+    if (entityLimits && typeof entityLimits === "object") {
+      rl.entityLimits = entityLimits as Record<string, number>;
+    }
+    const apiRateLimit = parseNumParam(searchParams.get("apiRateLimit"));
+    if (apiRateLimit != null) rl.apiRateLimit = apiRateLimit;
+    const storageLimitBytes = parseNumParam(
+      searchParams.get("storageLimitBytes"),
+    );
+    if (storageLimitBytes != null) rl.storageLimitBytes = storageLimitBytes;
+    const fileCacheLimitBytes = parseNumParam(
+      searchParams.get("fileCacheLimitBytes"),
+    );
+    if (fileCacheLimitBytes != null) {
+      rl.fileCacheLimitBytes = fileCacheLimitBytes;
+    }
+    const credits = parseNumParam(searchParams.get("credits"));
+    if (credits != null) rl.credits = credits;
+    const maxConcurrentDownloads = parseNumParam(
+      searchParams.get("maxConcurrentDownloads"),
+    );
+    if (maxConcurrentDownloads != null) {
+      rl.maxConcurrentDownloads = maxConcurrentDownloads;
+    }
+    const maxConcurrentUploads = parseNumParam(
+      searchParams.get("maxConcurrentUploads"),
+    );
+    if (maxConcurrentUploads != null) {
+      rl.maxConcurrentUploads = maxConcurrentUploads;
+    }
+    const maxDownloadBandwidthMB = parseNumParam(
+      searchParams.get("maxDownloadBandwidthMB"),
+    );
+    if (maxDownloadBandwidthMB != null) {
+      rl.maxDownloadBandwidthMB = maxDownloadBandwidthMB;
+    }
+    const maxUploadBandwidthMB = parseNumParam(
+      searchParams.get("maxUploadBandwidthMB"),
+    );
+    if (maxUploadBandwidthMB != null) {
+      rl.maxUploadBandwidthMB = maxUploadBandwidthMB;
+    }
+    const maxOp = parseJsonParam(
+      searchParams.get("maxOperationCountByResourceKey"),
+    );
+    if (maxOp && typeof maxOp === "object") {
+      rl.maxOperationCountByResourceKey = maxOp as Record<string, number>;
+    }
+    const creditLim = parseJsonParam(
+      searchParams.get("creditLimitByResourceKey"),
+    );
+    if (creditLim && typeof creditLim === "object") {
+      rl.creditLimitByResourceKey = creditLim as Record<string, number>;
+    }
+    const frontendDomains = parseCsvParam(
+      searchParams.get("frontendDomains"),
+    );
+    if (frontendDomains) rl.frontendDomains = frontendDomains;
+    return rl;
+  }, [searchParams]);
 
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>(
     [],
@@ -39,10 +147,13 @@ function OAuthAuthorizeContent() {
       const params = new URLSearchParams({
         oauth: "1",
         client_name: clientName,
-        roles: rolesParam,
         systemSlug: systemSlug,
         redirect_origin: redirectOrigin,
       });
+      for (const field of RESOURCE_LIMIT_FIELDS) {
+        const v = searchParams.get(field);
+        if (v) params.set(field, v);
+      }
       router.replace(`/login?${params.toString()}`);
     }
   }, [
@@ -51,10 +162,12 @@ function OAuthAuthorizeContent() {
     user,
     router,
     clientName,
-    rolesParam,
     systemSlug,
     redirectOrigin,
+    searchParams,
   ]);
+
+  const [systemName, setSystemName] = useState("");
 
   // Load user's companies
   const loadCompanies = useCallback(async () => {
@@ -81,6 +194,50 @@ function OAuthAuthorizeContent() {
     if (systemToken && user) loadCompanies();
   }, [systemToken, user, loadCompanies]);
 
+  // Load system name from the target system slug
+  useEffect(() => {
+    if (!systemSlug) {
+      setSystemName("");
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/public/system?slug=${encodeURIComponent(systemSlug)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (!cancelled && json.success && json.data?.name) {
+          setSystemName(json.data.name);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [systemSlug]);
+
+  // Build TenantViewData for the app's requested authorization scope
+  const tenantViewData = useMemo<TenantViewData | null>(() => {
+    const company = companies.find((c) => c.id === selectedCompanyId);
+    return {
+      id: "",
+      systemSlug: systemSlug || undefined,
+      systemName: systemName || undefined,
+      companyId: selectedCompanyId || undefined,
+      companyName: company?.name,
+      actorName: clientName || undefined,
+      actorType: "api_token",
+      roles: (requestedLimits as Record<string, unknown>).roleIds as
+        | string[]
+        | undefined,
+    };
+  }, [
+    companies,
+    selectedCompanyId,
+    systemSlug,
+    systemName,
+    clientName,
+    requestedLimits,
+  ]);
+
   const sendMessageAndClose = (data: Record<string, unknown>) => {
     if (redirectOrigin && globalThis.opener) {
       try {
@@ -97,19 +254,23 @@ function OAuthAuthorizeContent() {
     setAuthorizing(true);
     setError(null);
     try {
+      const body: Record<string, unknown> = {
+        clientName,
+        systemSlug,
+        companyId: selectedCompanyId,
+        redirectOrigin,
+      };
+      for (const field of RESOURCE_LIMIT_FIELDS) {
+        const v = (requestedLimits as Record<string, unknown>)[field];
+        if (v != null) body[field] = v;
+      }
       const res = await fetch("/api/auth/oauth/authorize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${systemToken}`,
         },
-        body: JSON.stringify({
-          clientName,
-          roles: rolesParam,
-          systemSlug,
-          companyId: selectedCompanyId,
-          redirectOrigin,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!json.success) {
@@ -138,13 +299,15 @@ function OAuthAuthorizeContent() {
 
   if (!systemToken || !user) return null;
 
+  const hasLimits = Object.keys(requestedLimits).length > 0;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--color-black)] via-[#0a0a0a] to-[#111] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--color-black)] via-[#0a0a0a] to-[#111] px-4 py-8">
       <div className="absolute top-4 right-4">
         <LocaleSelector />
       </div>
 
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-8 space-y-6 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-300">
           {/* App icon + name */}
           <div className="text-center">
@@ -161,23 +324,28 @@ function OAuthAuthorizeContent() {
             </p>
           </div>
 
-          {/* Roles */}
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)]">
-              {t("common.connectedApps.requestedRoles")}
-            </p>
-            <TranslatedBadgeList
-              kind="role"
-              tokens={roles}
-              systemSlug={systemSlug || undefined}
-              compact
-              mode="column"
-              prefix={
-                <span className="text-[var(--color-primary-green)]">✓</span>
-              }
-              emptyText={t("common.connectedApps.noRoles")}
-            />
-          </div>
+          {/* Requested authorization scope */}
+          {tenantViewData && (
+            <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)] mb-2">
+                {t("common.connectedApps.requestedRoles")}
+              </p>
+              <TenantView tenant={tenantViewData} compact />
+            </div>
+          )}
+
+          {/* Requested resource limits */}
+          {hasLimits && (
+            <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-light-text)] mb-2">
+                {t("common.connectedApps.requestedResources")}
+              </p>
+              <ResourceLimitsView
+                data={requestedLimits}
+                systemSlug={systemSlug || undefined}
+              />
+            </div>
+          )}
 
           {/* Company selector */}
           {loadingCompanies
@@ -211,7 +379,7 @@ function OAuthAuthorizeContent() {
 
           <ErrorDisplay message={error} />
 
-          {/* Authorizing user info */}
+          {/* Authorizing user */}
           <p className="text-xs text-center text-[var(--color-light-text)]">
             {t("common.connectedApps.authorizedAs")}{" "}
             <span className="text-white font-medium">

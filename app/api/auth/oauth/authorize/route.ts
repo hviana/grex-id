@@ -1,7 +1,6 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
-import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { createTenantToken } from "@/server/utils/token";
 import { rememberActor } from "@/server/utils/actor-validity";
@@ -11,6 +10,23 @@ import {
 } from "@/server/db/queries/auth";
 import { createTokenWithResourceLimit } from "@/server/db/queries/tokens";
 import type { Tenant } from "@/src/contracts/tenant";
+
+/** resource_limit field names that OAuth may receive from the client. */
+const RESOURCE_LIMIT_FIELDS = [
+  "roleIds",
+  "entityLimits",
+  "apiRateLimit",
+  "storageLimitBytes",
+  "fileCacheLimitBytes",
+  "credits",
+  "maxConcurrentDownloads",
+  "maxConcurrentUploads",
+  "maxDownloadBandwidthMB",
+  "maxUploadBandwidthMB",
+  "maxOperationCountByResourceKey",
+  "creditLimitByResourceKey",
+  "frontendDomains",
+] as const;
 
 async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   if (!ctx.tenantContext.tenant.actorId) {
@@ -24,15 +40,7 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
   }
 
   const body = await req.json();
-  const {
-    clientName,
-    roles: requestedRoles,
-    systemSlug,
-    companyId,
-    redirectOrigin,
-    monthlySpendLimit,
-    maxOperationCountByResourceKey,
-  } = body;
+  const { clientName, systemSlug, companyId, redirectOrigin } = body;
 
   if (!clientName || !systemSlug || !companyId) {
     return Response.json(
@@ -60,12 +68,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const grantedRoles: string[] = typeof requestedRoles === "string"
-    ? requestedRoles.split(",").map((r: string) => r.trim()).filter(Boolean)
-    : Array.isArray(requestedRoles)
-    ? requestedRoles
-    : [];
-
   const userId = ctx.tenantContext.tenant.actorId;
 
   const resolved = await resolveUserExchange(userId, companyId, systemId);
@@ -85,15 +87,11 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     companyId: String(companyId),
   };
 
-  const resourceLimits: Record<string, unknown> = { roleIds: grantedRoles };
-  if (monthlySpendLimit != null) {
-    resourceLimits.creditLimitByResourceKey = {
-      default: Number(monthlySpendLimit),
-    };
-  }
-  if (maxOperationCountByResourceKey != null) {
-    resourceLimits.maxOperationCountByResourceKey =
-      maxOperationCountByResourceKey;
+  const resourceLimits: Record<string, unknown> = {};
+  for (const field of RESOURCE_LIMIT_FIELDS) {
+    if (field in body && body[field] != null) {
+      resourceLimits[field] = body[field];
+    }
   }
 
   const createdToken = await createTokenWithResourceLimit({

@@ -138,6 +138,7 @@
   "connectedApps.authorize": "Authorize",
   "connectedApps.oauthRequest": "wants to connect to your account",
   "connectedApps.requestedRoles": "Requested roles",
+  "connectedApps.requestedResources": "Requested resources",
   "connectedApps.noRoles": "No specific roles requested",
   "connectedApps.selectCompany": "Grant access to company",
   "connectedApps.authorizedAs": "Authorizing as",

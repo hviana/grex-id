@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import GenericList from "@/src/components/shared/GenericList";
 import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import TenantView from "@/src/components/shared/TenantView";
+import type { TenantViewData } from "@/src/components/shared/TenantView";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
@@ -24,9 +26,24 @@ interface ConnectedApp {
 }
 
 export default function ConnectedAppsPage() {
-  const { t } = useTenantContext();
-  const { systemToken } = useTenantContext();
-  const { companyId, systemId, systemSlug } = useTenantContext();
+  const {
+    t,
+    systemToken,
+    companyId,
+    systemId,
+    systemSlug,
+    companies,
+    systems,
+  } = useTenantContext();
+
+  const companyName = useMemo(
+    () => companies.find((c) => c.id === companyId)?.name,
+    [companies, companyId],
+  );
+  const systemName = useMemo(
+    () => systems.find((s) => s.id === systemId)?.name,
+    [systems, systemId],
+  );
 
   const [revokeApp, setRevokeApp] = useState<ConnectedApp | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -89,8 +106,23 @@ export default function ConnectedAppsPage() {
   const authorizeUrl = typeof window !== "undefined"
     ? `${globalThis.location.origin}/oauth/authorize?systemSlug=${
       encodeURIComponent(systemSlug ?? "")
-    }&client_name=YOUR_APP_NAME&roles=read:*&redirect_origin=https://yourapp.com`
+    }&client_name=YOUR_APP_NAME&roleIds=read:*&redirect_origin=https://yourapp.com`
     : "";
+
+  function buildAppTenantView(app: ConnectedApp): TenantViewData {
+    return {
+      id: app.id,
+      companyId: companyId ?? undefined,
+      companyName,
+      systemId: systemId ?? undefined,
+      systemName,
+      systemSlug: systemSlug ?? undefined,
+      actorId: app.id,
+      actorName: app.name,
+      actorType: "api_token",
+      roles: app.resourceLimitId?.roleIds ?? undefined,
+    };
+  }
 
   return (
     <div className="space-y-6">
@@ -133,22 +165,13 @@ export default function ConnectedAppsPage() {
         fetchFn={fetchApps}
         reloadKey={reloadKey}
         renderItem={(app) => (
-          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200">
+          <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-xl p-4 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all duration-200 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-white">{app.name}</h3>
-                  <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full">
-                    {t("common.connectedApps.authorized")}
-                  </span>
-                </div>
-                {app.resourceLimitId && (
-                  <ResourceLimitsView
-                    data={app.resourceLimitId}
-                    systemSlug={systemSlug ?? undefined}
-                    className="mt-2"
-                  />
-                )}
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-white">{app.name}</h3>
+                <span className="text-xs bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)] px-2 py-0.5 rounded-full">
+                  {t("common.connectedApps.authorized")}
+                </span>
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-3">
                 <span className="text-xs text-[var(--color-light-text)]">
@@ -165,6 +188,27 @@ export default function ConnectedAppsPage() {
                 </button>
               </div>
             </div>
+
+            <div className="border-t border-dashed border-[var(--color-dark-gray)]" />
+
+            <TenantView
+              tenant={buildAppTenantView(app)}
+              visibleFields={[
+                "actorId",
+                "actorType",
+                "companyId",
+                "systemId",
+                "roles",
+              ]}
+              compact
+            />
+
+            {app.resourceLimitId && (
+              <ResourceLimitsView
+                data={app.resourceLimitId}
+                systemSlug={systemSlug ?? undefined}
+              />
+            )}
           </div>
         )}
       />
