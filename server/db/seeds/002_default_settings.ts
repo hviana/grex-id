@@ -210,7 +210,7 @@ const defaults: DefaultSetting[] = [
     key: "core.restrictedEntities",
     value: "[]",
     description:
-      "JSON array of entity types that use shared_record with permissions (r/w/rw). These do not require human approval for sharing.",
+      "JSON array of entity types that use shared_record with permissions (r/w/share). These require human approval for sharing.",
   },
 ];
 

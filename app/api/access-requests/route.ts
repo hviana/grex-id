@@ -12,7 +12,7 @@ async function postHandler(
   ctx: RequestContext,
 ): Promise<Response> {
   const body = await req.json();
-  const { entityType, entityId, targetTenantId, permission } = body;
+  const { entityType, entityId, targetTenantId, permissions } = body;
 
   if (!entityType || !entityId || !targetTenantId) {
     return Response.json(
@@ -56,11 +56,13 @@ async function postHandler(
     );
   }
 
-  // For restricted entities, permission is required
+  // For restricted entities, permissions are required
   if (restrictedEntities.includes(entityType)) {
     if (
-      !permission ||
-      !["r", "w", "rw", "share"].includes(permission)
+      !permissions ||
+      !Array.isArray(permissions) ||
+      permissions.length === 0 ||
+      !permissions.every((p: string) => ["r", "w", "share"].includes(p))
     ) {
       return Response.json(
         {
@@ -110,7 +112,7 @@ async function postHandler(
             recordId: entityId,
             ownerTenantIds: [ctx.tenantContext.tenant.id],
             accessesTenantIds: [targetTenantId],
-            permissions: permission,
+            permissions: permissions,
           },
         }]
         : entityType === "user"

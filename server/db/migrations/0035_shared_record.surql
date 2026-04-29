@@ -5,7 +5,7 @@ DEFINE FIELD recordId ON TABLE shared_record
 
 -- Since this must have exactly one item, this should probably be scalar.
 DEFINE FIELD ownerTenantIds ON TABLE shared_record
-  ON usage_record TYPE set<record<tenant>, 1> DEFAULT <set>[];
+  TYPE set<record<tenant>, 1> DEFAULT <set>[];
 
 DEFINE FIELD accessesTenantIds ON TABLE shared_record
   TYPE set<record<tenant>>

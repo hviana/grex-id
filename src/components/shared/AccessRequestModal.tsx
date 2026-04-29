@@ -31,7 +31,13 @@ export default function AccessRequestModal({
   const [targetTenant, setTargetTenant] = useState<
     { id: string; label: string }[]
   >([]);
-  const [permission, setPermission] = useState<string>("r");
+  const [permissions, setPermissions] = useState<string[]>(["r"]);
+
+  const togglePermission = (p: string) => {
+    setPermissions((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+    );
+  };
 
   const searchTenants = async (search: string) => {
     if (!systemToken) return [];
@@ -53,6 +59,10 @@ export default function AccessRequestModal({
       setError(t("access.targetTenant"));
       return;
     }
+    if (isRestricted && permissions.length === 0) {
+      setError(t("validation.fields.required"));
+      return;
+    }
     if (!systemToken) return;
 
     setLoading(true);
@@ -68,7 +78,7 @@ export default function AccessRequestModal({
           entityType,
           entityId,
           targetTenantId: targetTenant[0].id,
-          permission: isRestricted ? permission : undefined,
+          permissions: isRestricted ? permissions : undefined,
         }),
       });
       const json = await res.json();
@@ -132,26 +142,22 @@ export default function AccessRequestModal({
                     {t("access.permission")}
                   </label>
                   <div className="flex gap-3">
-                    {(["r", "w", "rw"] as const).map((p) => (
+                    {(["r", "w", "share"] as const).map((p) => (
                       <label
                         key={p}
                         className="flex items-center gap-1.5 text-sm text-[var(--color-light-text)] cursor-pointer"
                       >
                         <input
-                          type="radio"
-                          name="permission"
-                          value={p}
-                          checked={permission === p}
-                          onChange={() => setPermission(p)}
+                          type="checkbox"
+                          checked={permissions.includes(p)}
+                          onChange={() => togglePermission(p)}
                           className="accent-[var(--color-primary-green)]"
                         />
-                        {t(`access.permission.${
-                          p === "rw"
-                            ? "readWrite"
-                            : p === "r"
-                            ? "read"
-                            : "write"
-                        }`)}
+                        {t(
+                          `access.permission.${
+                            p === "r" ? "read" : p === "w" ? "write" : "share"
+                          }`,
+                        )}
                       </label>
                     ))}
                   </div>

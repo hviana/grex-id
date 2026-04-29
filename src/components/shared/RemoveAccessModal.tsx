@@ -58,35 +58,28 @@ export default function RemoveAccessModal({
       }
 
       const items = (json.items ?? []) as Record<string, unknown>[];
-      const entries: ShareEntry[] = items.map((item) => ({
-        id: String(item.id),
-        tenantId: String(item.tenantId ?? item.id),
-        tenantLabel: String(
-          item.companyId ?? item.accessesTenantIds ?? item.id,
-        ),
-        permission: item.permissions ? String(item.permissions) : undefined,
-        isSelected: false,
-      }));
-
-      // For shared_record entities, resolve tenant labels
-      if (showPermission && entries.length > 0) {
-        // Try to resolve tenant names — entries already have raw ids
-        for (const entry of entries) {
-          if (entry.permission) {
-            entry.tenantLabel = `${entry.tenantLabel} (${
+      const entries: ShareEntry[] = items.map((item) => {
+        const rawPermissions = item.permissions as string[] | undefined;
+        const permLabel = rawPermissions?.length
+          ? rawPermissions
+            .map((p) =>
               t(`access.permission.${
-                entry.permission === "rw"
-                  ? "readWrite"
-                  : entry.permission === "r"
-                  ? "read"
-                  : entry.permission === "w"
-                  ? "write"
-                  : "share"
+                p === "r" ? "read" : p === "w" ? "write" : "share"
               }`)
-            })`;
-          }
-        }
-      }
+            )
+            .join(", ")
+          : undefined;
+
+        return {
+          id: String(item.id),
+          tenantId: String(item.tenantId ?? item.id),
+          tenantLabel: String(
+            item.companyId ?? item.accessesTenantIds ?? item.id,
+          ),
+          permission: permLabel,
+          isSelected: false,
+        };
+      });
 
       setShares(entries);
     } catch {

@@ -1,7 +1,7 @@
 export interface SharedRecord {
   id: string;
   recordId: string;
-  ownerTenantId: string;
+  ownerTenantIds: string[];
   accessesTenantIds: string[];
   permissions: string[];
 }

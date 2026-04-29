@@ -1281,8 +1281,7 @@ export interface SharedRecord {
   recordId: string;
   ownerTenantIds: string[];
   accessesTenantIds: string[];
-  permissions: "r" | "w" | "rw" | "share";
-  shareKey: string;
+  permissions: string[];
 }
 
 export interface ListSharedRecordsOptions {
@@ -1352,7 +1351,7 @@ export async function genericCreateSharedRecord(data: {
   recordId: string;
   ownerTenantIds: string[];
   accessesTenantIds: string[];
-  permissions: "r" | "w" | "rw" | "share";
+  permissions: string[];
 }): Promise<GenericResult<SharedRecord>> {
   const db = await getDb();
   const bindings: Record<string, unknown> = {
