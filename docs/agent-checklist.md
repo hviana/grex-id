@@ -28,12 +28,13 @@ import from each other or from systems. Systems never import from each other. No
 file crosses a boundary (§2.7).
 
 - [ ] New UI goes to the correct shared dir
-      (`src/components/shared|fields|subforms|core`) or system/framework subtree
-      (§2.7, §10.3, §10.1).
-- [ ] System code under `[slug]` subfolders of every root; framework code under
-      `frameworks/<name>/` (§2.7).
+      (`src/components/shared|fields|subforms|core`) or system/framework
+      `src/components/` subtree (§2.7, §10.3, §10.1).
+- [ ] System code under `systems/<slug>/` (self-contained bundle with `src/`,
+      `server/`, `public/`); framework code under `frameworks/<name>/` (same
+      internal shape) (§2.7).
 - [ ] New system → `systems/<slug>/register.ts` wired into `systems/index.ts`;
-      same for frameworks (§4.6).
+      same for frameworks via `frameworks/index.ts` (§4.6).
 - [ ] System/framework `AGENTS.md` inherits root, never overrides (§2.7).
 - [ ] Empty structural folders contain `.gitkeep` (§2.7).
 
@@ -59,8 +60,9 @@ file crosses a boundary (§2.7).
 ## 4. Internationalization (§2.3)
 
 - [ ] New keys under correct domain file (`common`, `auth`, `core`, `billing`,
-      `homepage`, `templates`, `validation`, `systems/<slug>`,
-      `frameworks/<name>`).
+      `homepage`, `templates`, `validation` for Core;
+      `systems/<slug>/src/i18n/{locale}/<slug>.json` for systems;
+      `frameworks/<name>/src/i18n/{locale}/<name>.json` for frameworks).
 - [ ] DB-stored display labels hold i18n keys; machine identifiers stay raw
       (§2.3).
 - [ ] Role/entity/resource tokens follow §2.3.1 key structure.

@@ -23,16 +23,16 @@ import dbConfig from "../../database.json" with { type: "json" };
  *
  *   2. --create-subsystem <slug> --name "<Display Name>"
  *      OR --create-framework <name>
- *      Scaffolds the folder structure mandated by the root AGENTS.md
- *      (§6 for subsystems, §26.1 for frameworks). Subsystem create also
- *      inserts a `system` row. Requires `"test": true` in database.json
- *      for subsystem mutations.
+ *      Scaffolds the self-contained bundle structure mandated by the root
+ *      AGENTS.md (§2.7, §11). Subsystem create also inserts a `system`
+ *      row. Requires `"test": true` in database.json for subsystem
+ *      mutations.
  *
  *   3. --remove-subsystem <slug>  OR  --remove-framework <name>
  *      Dry-run by default (exit 2). Pass --yes to actually delete. Removes
- *      every folder and file the scaffolder created, un-wires the entry
- *      from the matching index.ts, and (for subsystems) deletes the
- *      `system` row. Requires `"test": true` for subsystem mutations.
+ *      the entire bundle directory, un-wires the entry from the matching
+ *      index.ts, and (for subsystems) deletes the `system` row. Requires
+ *      `"test": true` for subsystem mutations.
  *
  * Runtime-agnostic: only uses `node:*` built-ins.
  */
@@ -201,10 +201,11 @@ function assertTestMode(): void {
 const USAGE_HELP = `\
 Scaffold a new subsystem or framework:
   ${CLI} --create-subsystem <slug> --name "<Display Name>"
-    (slug IS the systemSlug — same string used as the folder name, the
-     system.slug DB column, the URL segment in /api/systems/<slug>/,
-     the i18n namespace systems.<slug>.*, and the tenant.systemSlug in
-     every JWT. --name is the human-readable display label.)
+    (slug IS the systemSlug — same string used as the namespace folder
+     systems/<slug>/, the system.slug DB column, the URL segment in
+     /api/systems/<slug>/, the i18n namespace systems.<slug>.*, and the
+     tenant.systemSlug in every JWT. --name is the human-readable
+     display label.)
   ${CLI} --create-framework <name>
 
 Completely remove an existing subsystem or framework (destructive):
@@ -236,18 +237,19 @@ The three layers:
                    rules, tables, routes, components, settings. Knows
                    nothing about any specific subsystem or framework.
 
-  2. Subsystem   — a runtime tenant / product. Lives under a [slug]
-                   subfolder inside every relevant root (app/api/systems/,
-                   src/components/systems/, server/db/queries/systems/,
-                   src/i18n/<locale>/systems/, systems/<slug>/). Consumes
-                   Core and any frameworks it declares. Never extends Core.
+  2. Subsystem   — a runtime tenant / product. Self-contained bundle under
+                   systems/<slug>/ with src/ (components, contracts, hooks,
+                   i18n, lib, providers), server/ (db, event-queue, jobs,
+                   middleware, utils), and public/<slug>/. API routes at
+                   /api/systems/<slug>/... (Core-level). Consumes Core and
+                   any frameworks it declares. Never extends Core.
 
-  3. Framework   — a reusable, design-time extension of Core. Lives under
-                   frameworks/<name>/ with its own AGENTS.md, routes at
-                   /api/<name>/..., components, migrations, queries, i18n,
-                   seeds, and register.ts. Consumed by zero or more
-                   subsystems. Never imports from Core internals, other
-                   frameworks, or any subsystem.
+  3. Framework   — a reusable, design-time extension of Core. Self-contained
+                   bundle under frameworks/<name>/ with the same internal
+                   shape as a subsystem (src/, server/, public/<name>/).
+                   API routes at /api/<name>/... (Core-level). Consumed by
+                   zero or more subsystems. Never imports from Core
+                   internals, other frameworks, or any subsystem.
 
   Layering is one-way:  Core  <=  Frameworks  <=  Subsystems
 
@@ -284,13 +286,13 @@ function printSystemSlugExplainer(slug: string | undefined): never {
 Creating a subsystem needs TWO values — BOTH are mandatory:
 
   1. slug       — the machine-readable identifier (the systemSlug).
-                  Same string used as the folder name, the system.slug
-                  column in the database, the URL segment in
-                  /api/systems/<slug>/, the i18n namespace
-                  systems.<slug>.*, and the tenant.systemSlug carried
-                  in every JWT. Lowercase letters, digits, hyphens;
-                  must start with a letter. Chosen ONCE — renaming it
-                  later means a migration.
+                  Same string used as the namespace folder
+                  systems/<slug>/, the system.slug column in the
+                  database, the URL segment in /api/systems/<slug>/,
+                  the i18n namespace systems.<slug>.*, and the
+                  tenant.systemSlug carried in every JWT. Lowercase
+                  letters, digits, hyphens; must start with a letter.
+                  Chosen ONCE — renaming it later means a migration.
 
   2. name       — the human-readable display name shown on the system
                   card, in the ProfileMenu system selector, and on
@@ -318,19 +320,23 @@ Ask the user for BOTH values and re-run. Do not proceed without them.`,
 
 function subsystemRegisterStub(slug: string, camel: string): string {
   return `import { registerSystemI18n } from "@/server/module-registry";
-import en${camel} from "@/src/i18n/en/systems/${slug}.json";
-import ptBR${camel} from "@/src/i18n/pt-BR/systems/${slug}.json";
+import en${camel} from "./src/i18n/en/${slug}.json";
+import ptBR${camel} from "./src/i18n/pt-BR/${slug}.json";
 
 export function register(): void {
   // Event handlers — registerHandler("<event_name>", handlerFn);
+  //   import { myHandler } from "./server/event-queue/handlers/my-handler";
 
-  // Components — registerComponent("<componentName>", () => import("@/src/components/systems/${slug}/Foo"));
+  // Components — registerComponent("<componentName>", () => import("./src/components/Foo"));
 
-  // Homepage — registerHomePage("${slug}", () => import("@/src/components/systems/${slug}/HomePage"));
+  // Homepage — registerHomePage("${slug}", () => import("./src/components/HomePage"));
 
   // i18n
   registerSystemI18n("${slug}", "en", en${camel});
   registerSystemI18n("${slug}", "pt-BR", ptBR${camel});
+
+  // Jobs — registerJob("<name>", startFn);
+  //   import { startMyJob } from "./server/jobs/my-job";
 
   // Lifecycle hooks — registerLifecycleHook("lead:verify", async (payload) => { ... });
 }
@@ -348,6 +354,12 @@ structure, naming policy, and architectural decision from the root
 ## Slug
 
 \`${slug}\`
+
+## Structure
+
+This subsystem is a self-contained bundle under \`systems/${slug}/\` with
+\`src/\`, \`server/\`, and \`public/${slug}/\` subdirectories (root AGENTS.md
+§2.7, §11). No system code lives outside this root.
 
 ## Consumed frameworks
 
@@ -369,14 +381,18 @@ structure, naming policy, and architectural decision from the root
 }
 
 function frameworkRegisterStub(name: string): string {
-  return `// Framework register entry point (§26.4).
+  return `// Framework register entry point (AGENTS.md §4.6).
 
 export function register(): void {
   // Event handlers — registerHandler("<event_name>", handlerFn);
+  //   import { myHandler } from "./server/event-queue/handlers/my-handler";
   // Communication channels — registerChannel("<channel>"); registerHandler("send_<channel>", fn);
   // Templates — registerTemplate("<channel>", "<path>", fn) or registerTemplateBuilder("<name>", fn).
+  //   import { myTemplate } from "./server/utils/communication/templates/<channel>/my-template";
   // Caches — registerCache("${name}", "<cache-name>", loader);
   // Lifecycle hooks — registerLifecycleHook("lead:delete", fn);
+  // Jobs — registerJob("<name>", startFn);
+  //   import { startMyJob } from "./server/jobs/my-job";
 }
 `;
 }
@@ -391,6 +407,12 @@ structure, naming policy, and architectural decision from the root
 ## Name
 
 \`${name}\`
+
+## Structure
+
+This framework is a self-contained bundle under \`frameworks/${name}/\` with
+\`src/\`, \`server/\`, and \`public/${name}/\` subdirectories (root AGENTS.md
+§2.7, §11). No framework code lives outside this root.
 
 ## Owned entities
 
@@ -442,41 +464,29 @@ async function createSubsystem(slug: string, name: string): Promise<void> {
       process.exit(1);
     }
 
-    // 1. Files with content. Per AGENTS.md §6: the slug appears in the
-    //    folder name of every Core root and in the i18n filename.
+    const sysRoot = resolve(projectRoot, "systems", slug);
+
+    // 1. Files with content. Per AGENTS.md §2.7 / §11: the system is a
+    //    self-contained bundle under systems/<slug>/.
     const files: { label: string; path: string; content: string }[] = [
       {
         label: "file",
-        path: resolve(projectRoot, "systems", slug, "register.ts"),
+        path: resolve(sysRoot, "register.ts"),
         content: subsystemRegisterStub(slug, camel),
       },
       {
         label: "file",
-        path: resolve(projectRoot, "systems", slug, "AGENTS.md"),
+        path: resolve(sysRoot, "AGENTS.md"),
         content: subsystemAgentsStub(slug),
       },
       {
         label: "i18n",
-        path: resolve(
-          projectRoot,
-          "src",
-          "i18n",
-          "en",
-          "systems",
-          `${slug}.json`,
-        ),
+        path: resolve(sysRoot, "src", "i18n", "en", `${slug}.json`),
         content: "{}\n",
       },
       {
         label: "i18n",
-        path: resolve(
-          projectRoot,
-          "src",
-          "i18n",
-          "pt-BR",
-          "systems",
-          `${slug}.json`,
-        ),
+        path: resolve(sysRoot, "src", "i18n", "pt-BR", `${slug}.json`),
         content: "{}\n",
       },
     ];
@@ -484,16 +494,22 @@ async function createSubsystem(slug: string, name: string): Promise<void> {
       reportAction(f.label, f.path, writeIfAbsent(f.path, f.content));
     }
 
-    // 2. Scoped directories per AGENTS.md §6 — each gets a .gitkeep when
-    //    empty so git preserves the tree.
+    // 2. Scoped directories per AGENTS.md §2.7 — all under systems/<slug>/.
     const scopedDirs = [
-      `src/components/systems/${slug}`,
-      `server/db/migrations/systems/${slug}`,
-      `server/db/queries/systems/${slug}`,
-      `server/db/frontend-queries/systems/${slug}`,
-      `server/event-queue/handlers/systems/${slug}`,
-      `app/api/systems/${slug}`,
-      `public/systems/${slug}`,
+      `systems/${slug}/src/components`,
+      `systems/${slug}/src/contracts`,
+      `systems/${slug}/src/hooks`,
+      `systems/${slug}/src/lib`,
+      `systems/${slug}/src/providers`,
+      `systems/${slug}/server/db/migrations`,
+      `systems/${slug}/server/db/queries`,
+      `systems/${slug}/server/db/frontend-queries`,
+      `systems/${slug}/server/db/seeds`,
+      `systems/${slug}/server/event-queue/handlers`,
+      `systems/${slug}/server/jobs`,
+      `systems/${slug}/server/middleware`,
+      `systems/${slug}/server/utils`,
+      `systems/${slug}/public/${slug}`,
     ];
     for (const rel of scopedDirs) {
       const abs = resolve(projectRoot, rel);
@@ -542,7 +558,7 @@ async function createSubsystem(slug: string, name: string): Promise<void> {
     `  - Update systems/${slug}/AGENTS.md with subsystem-specific rules.`,
   );
   console.log(
-    `  - Place routes under app/api/systems/${slug}/, queries under server/db/queries/systems/${slug}/, etc.`,
+    `  - Place components under systems/${slug}/src/components/, queries under systems/${slug}/server/db/queries/, routes under app/api/systems/${slug}/, etc.`,
   );
 }
 
@@ -561,9 +577,8 @@ function createFramework(name: string): void {
     process.exit(1);
   }
 
-  // 1. Files with content. Per AGENTS.md §26.1: the name appears in the
-  //    parent folder AND in each namespaced subfolder (app/api/<name>,
-  //    src/components/<name>, public/<name>) AND in the i18n filenames.
+  // 1. Files with content. Per AGENTS.md §2.7 / §11: the framework is a
+  //    self-contained bundle under frameworks/<name>/.
   const files: { label: string; path: string; content: string }[] = [
     {
       label: "file",
@@ -590,16 +605,20 @@ function createFramework(name: string): void {
     reportAction(f.label, f.path, writeIfAbsent(f.path, f.content));
   }
 
-  // 2. Directories per AGENTS.md §26.1 — namespaced subfolders keep the
-  //    <name> in their path; shared subfolders are scoped implicitly by
-  //    the `frameworks/<name>/` parent.
+  // 2. Directories per AGENTS.md §2.7 — all under frameworks/<name>/.
   const scopedDirs = [
-    `frameworks/${name}/app/api/${name}`,
-    `frameworks/${name}/src/components/${name}`,
+    `frameworks/${name}/src/components`,
     `frameworks/${name}/src/contracts`,
+    `frameworks/${name}/src/hooks`,
+    `frameworks/${name}/src/lib`,
+    `frameworks/${name}/src/providers`,
     `frameworks/${name}/server/db/migrations`,
     `frameworks/${name}/server/db/queries`,
+    `frameworks/${name}/server/db/frontend-queries`,
     `frameworks/${name}/server/db/seeds`,
+    `frameworks/${name}/server/event-queue/handlers`,
+    `frameworks/${name}/server/jobs`,
+    `frameworks/${name}/server/middleware`,
     `frameworks/${name}/server/utils`,
     `frameworks/${name}/public/${name}`,
   ];
@@ -625,7 +644,7 @@ function createFramework(name: string): void {
     `  - Update frameworks/${name}/AGENTS.md with framework-specific rules.`,
   );
   console.log(
-    `  - Place routes under frameworks/${name}/app/api/${name}/, queries under frameworks/${name}/server/db/queries/, etc.`,
+    `  - Place components under frameworks/${name}/src/components/, queries under frameworks/${name}/server/db/queries/, routes under app/api/${name}/, etc.`,
   );
 }
 
@@ -637,35 +656,11 @@ function collectSubsystemTargets(slug: string): {
   dirs: string[];
   files: string[];
 } {
+  // With the self-contained bundle structure (AGENTS.md §2.7, §11), the
+  // entire subsystem lives under systems/<slug>/.
   return {
-    dirs: [
-      resolve(projectRoot, "systems", slug),
-      resolve(projectRoot, "src", "components", "systems", slug),
-      resolve(projectRoot, "server", "db", "migrations", "systems", slug),
-      resolve(projectRoot, "server", "db", "queries", "systems", slug),
-      resolve(
-        projectRoot,
-        "server",
-        "db",
-        "frontend-queries",
-        "systems",
-        slug,
-      ),
-      resolve(
-        projectRoot,
-        "server",
-        "event-queue",
-        "handlers",
-        "systems",
-        slug,
-      ),
-      resolve(projectRoot, "app", "api", "systems", slug),
-      resolve(projectRoot, "public", "systems", slug),
-    ],
-    files: [
-      resolve(projectRoot, "src", "i18n", "en", "systems", `${slug}.json`),
-      resolve(projectRoot, "src", "i18n", "pt-BR", "systems", `${slug}.json`),
-    ],
+    dirs: [resolve(projectRoot, "systems", slug)],
+    files: [],
   };
 }
 

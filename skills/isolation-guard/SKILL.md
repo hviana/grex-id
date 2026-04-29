@@ -68,13 +68,15 @@ After running it:
 
 #### Subsystem
 
-**Subsystem creation is mandatory-interactive.** Before running the command you
-MUST collect TWO values from the user:
+**Subsystem creation is mandatory-interactive.** Subsystems are self-contained
+bundles under `systems/<slug>/` with `src/`, `server/`, and `public/`
+subdirectories (AGENTS.md §2.7, §11). All system code lives under this single
+root — no files are scattered across Core directories.
+
+Before running the command you MUST collect TWO values from the user:
 
 1. **slug** (positional argument after `--create-subsystem`) — the `systemSlug`.
-   The same string is used as the folder name under every Core root
-   (`systems/<slug>/`, `src/components/systems/<slug>/`,
-   `app/api/systems/<slug>/`, `server/db/queries/systems/<slug>/`, etc.), as the
+   The same string is used as the namespace folder (`systems/<slug>/`), as the
    `system.slug` column in the database, as the URL segment in
    `/api/systems/<slug>/…`, as the i18n namespace `systems.<slug>.*`, and as the
    `tenant.systemSlug` embedded in every JWT. Lowercase letters, digits,
@@ -103,15 +105,19 @@ What the command does (in order):
 3. Refuses if `systems/<slug>/` already exists or a `system` row with that slug
    already exists in the DB (exit `1`).
 4. Writes `systems/<slug>/register.ts` (i18n-pre-wired stub) and
-   `systems/<slug>/AGENTS.md` (inheriting stub, §26.2).
-5. Writes empty `src/i18n/{en,pt-BR}/systems/<slug>.json` placeholders.
-6. Creates every scoped subfolder mandated by AGENTS.md §6 and drops a
+   `systems/<slug>/AGENTS.md` (inheriting stub, §2.7).
+5. Writes empty `systems/<slug>/src/i18n/{en,pt-BR}/<slug>.json` placeholders.
+6. Creates every scoped subfolder mandated by AGENTS.md §2.7 and drops a
    `.gitkeep` into any that would otherwise be empty:
-   `src/components/systems/<slug>/`, `server/db/migrations/systems/<slug>/`,
-   `server/db/queries/systems/<slug>/`,
-   `server/db/frontend-queries/systems/<slug>/`,
-   `server/event-queue/handlers/systems/<slug>/`, `app/api/systems/<slug>/`,
-   `public/systems/<slug>/`.
+   `systems/<slug>/src/components/`, `systems/<slug>/src/contracts/`,
+   `systems/<slug>/src/hooks/`, `systems/<slug>/src/lib/`,
+   `systems/<slug>/src/providers/`, `systems/<slug>/server/db/migrations/`,
+   `systems/<slug>/server/db/queries/`,
+   `systems/<slug>/server/db/frontend-queries/`,
+   `systems/<slug>/server/db/seeds/`,
+   `systems/<slug>/server/event-queue/handlers/`, `systems/<slug>/server/jobs/`,
+   `systems/<slug>/server/middleware/`, `systems/<slug>/server/utils/`,
+   `systems/<slug>/public/<slug>/`.
 7. Adds an import and a call to `register<Slug>()` inside `registerAllSystems()`
    in `systems/index.ts`.
 8. INSERTs a `system` row: `name = <display name>`, `slug = <slug>`,
@@ -134,13 +140,17 @@ What the command does:
    `frameworks/<name>/register.ts` (empty stub).
 4. Writes empty `frameworks/<name>/src/i18n/{en,pt-BR}/<name>.json`
    placeholders.
-5. Creates every scoped subfolder mandated by AGENTS.md §26.1 and drops a
+5. Creates every scoped subfolder mandated by AGENTS.md §2.7 and drops a
    `.gitkeep` into any that would otherwise be empty:
-   `frameworks/<name>/app/api/<name>/`,
-   `frameworks/<name>/src/components/<name>/`,
-   `frameworks/<name>/src/contracts/`,
+   `frameworks/<name>/src/components/`, `frameworks/<name>/src/contracts/`,
+   `frameworks/<name>/src/hooks/`, `frameworks/<name>/src/lib/`,
+   `frameworks/<name>/src/providers/`,
    `frameworks/<name>/server/db/migrations/`,
-   `frameworks/<name>/server/db/queries/`, `frameworks/<name>/server/db/seeds/`,
+   `frameworks/<name>/server/db/queries/`,
+   `frameworks/<name>/server/db/frontend-queries/`,
+   `frameworks/<name>/server/db/seeds/`,
+   `frameworks/<name>/server/event-queue/handlers/`,
+   `frameworks/<name>/server/jobs/`, `frameworks/<name>/server/middleware/`,
    `frameworks/<name>/server/utils/`, `frameworks/<name>/public/<name>/`.
 6. Adds an import and a call to `register<Name>Framework()` inside
    `registerAllFrameworks()` in `frameworks/index.ts`.
@@ -162,8 +172,7 @@ tsx skills/isolation-guard/run.ts --remove-framework <name> --yes
 
 Subsystem removal (dry-run lists each item, `--yes` deletes):
 
-- Every folder the scaffolder created (all eight scoped roots).
-- The `src/i18n/{en,pt-BR}/systems/<slug>.json` files.
+- `systems/<slug>/` and everything inside it (the entire self-contained bundle).
 - The import and `register<Slug>();` call in `systems/index.ts`.
 - The `system` row in the DB (`DELETE system WHERE slug = <slug>`). Requires
   `"test": true`. Silently skipped when no matching row exists.
@@ -197,16 +206,17 @@ One of these is enough:
 Ambiguous answers ("the backend", "the API", "the app") cross layer boundaries —
 run the skill again.
 
-## Layer cheat-sheet (mirror of AGENTS.md §6 + §26)
+## Layer cheat-sheet (mirror of AGENTS.md §2.7 + §11)
 
 - **Core** — platform foundation at the project root (`app/`, `src/`,
   `server/`). Knows nothing about specific subsystems or frameworks.
-- **Subsystems** — runtime tenants. One `<slug>` folder per product under every
-  relevant root. Consume from Core and declared frameworks; never extend Core,
-  never reach into another subsystem.
+- **Subsystems** — runtime tenants. Each lives under `systems/<slug>/` as a
+  self-contained bundle (`src/`, `server/`, `public/`). Consume from Core and
+  declared frameworks; never extend Core, never reach into another subsystem.
 - **Frameworks** — reusable, design-time extensions of Core under
-  `frameworks/<name>/`. Consumed by zero or more subsystems; never import from
-  Core internals, another framework, or any subsystem.
+  `frameworks/<name>/` with the same self-contained internal shape as systems.
+  Consumed by zero or more subsystems; never import from Core internals, another
+  framework, or any subsystem.
 
 Layering is one-way: **Core ⇐ Frameworks ⇐ Subsystems**.
 

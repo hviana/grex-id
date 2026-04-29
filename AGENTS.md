@@ -70,9 +70,11 @@ stricter rule. They are stated once.
 - **Locale resolution (server):** `payload.locale` → `System.defaultLocale` →
   `"en"`.
 - **Files:**
-  `src/i18n/{locale}/{common,auth,core,billing,homepage,templates,validation}.json` +
-  `systems/<slug>.json`; framework i18n under
-  `frameworks/<name>/src/i18n/{locale}/<name>.json`.
+  `src/i18n/{locale}/{common,auth,core,billing,homepage,templates,validation}.json`
+  (Core). System i18n lives under
+  `systems/<slug>/src/i18n/{locale}/<slug>.json`; framework i18n under
+  `frameworks/<name>/src/i18n/{locale}/<name>.json`. Both are self-contained
+  within their namespace root.
 - **DB-stored labels** (role display names, plan names, menu labels, file-access
   rule names, benefit strings) are **i18n keys**, not text. Machine-readable
   identifiers (slugs, role tokens, category patterns) are not.
@@ -162,8 +164,10 @@ new query **must** check these first; bespoke queries are only for logic the
 generics cannot express (compositional creates across multiple tables, complex
 subqueries). This file is very important because it explains how to handle
 complex database operations involving tenants and shared records (`tenant` and
-`shared_record` tables). It serves as a **reference** for any questions about
-how to deal with these issues.
+`shared_record` tables). It also explains the issue of cascading operations in
+conjunction with tenants and shared records; if an entity is deleted, its
+sub-entities can also be deleted when convenient for cleanup purposes. It serves
+as a **reference** for any questions about how to deal with these issues.
 
 **API surface:**
 
@@ -277,22 +281,42 @@ their own pagination, hand-rolled email/phone inputs, plain comma-separated
 ### 2.7 Namespace isolation (Core / systems / frameworks)
 
 - A file belongs to exactly one of: Core, one system, one framework.
-- **System** code lives under `systems/<slug>/`,
-  `server/db/{migrations,queries,frontend-queries,seeds}/systems/<slug>/`,
-  `server/event-queue/handlers/systems/<slug>/`,
-  `src/components/systems/<slug>/`, `app/api/systems/<slug>/`,
-  `public/systems/<slug>/`, `src/i18n/<locale>/systems/<slug>.json`.
+- **System** code lives entirely under `systems/<slug>/` as a self-contained
+  bundle:
+
+  ```
+  systems/<slug>/
+  ├── AGENTS.md
+  ├── register.ts
+  ├── src/
+  │   ├── components/       # UI components (replaces src/components/systems/<slug>/)
+  │   ├── contracts/        # system-specific types
+  │   ├── hooks/            # React hooks
+  │   ├── i18n/{en,pt-BR}/  # <slug>.json per locale
+  │   ├── lib/              # isomorphic helpers
+  │   └── providers/        # React context providers
+  ├── server/
+  │   ├── db/{migrations,queries,frontend-queries,seeds}/
+  │   ├── event-queue/handlers/
+  │   ├── jobs/
+  │   ├── middleware/
+  │   └── utils/
+  └── public/<slug>/         # static assets (logo, etc.)
+  ```
+
+  API routes live at `app/api/systems/<slug>/` (Core-level — Next.js App Router
+  convention). Every other system file is inside `systems/<slug>/`.
+
 - **Framework** code lives entirely under `frameworks/<name>/` with the same
-  internal layer shape (`app/api/<name>/`, `src/components/<name>/`,
-  `server/db/migrations/`, `server/db/queries/`, `server/utils/`,
-  `src/i18n/<locale>/<name>.json`).
+  internal layer shape as systems (`src/`, `server/`, `public/<name>/`). API
+  routes live at `app/api/<name>/` (Core-level).
 - API routes are namespaced: framework → `/api/<name>/…`; system →
   `/api/systems/<slug>/…`.
 - **Migrations are globally numbered** but physically isolated. The runner scans
-  root + every `systems/<slug>/` + every
-  `frameworks/<name>/server/db/migrations/`, merges, sorts by numeric prefix
-  globally, and records the relative path in `_migrations`. Same pattern for
-  seeds.
+  root `server/db/migrations/` + every `systems/<slug>/server/db/migrations/` +
+  every `frameworks/<name>/server/db/migrations/`, merges, sorts by numeric
+  prefix globally, and records the relative path in `_migrations`. Same pattern
+  for seeds.
 - The Core never imports system or framework code directly — all wiring goes
   through the module registry (§4.6).
 - Each system/framework **may** ship its own `AGENTS.md` that inherits Core by
@@ -426,11 +450,14 @@ company.
 ### 3.5 Migration & seed runners
 
 - **Migrations runner** (`server/db/migrations/runner.ts`): scans the three
-  trees (root, systems, frameworks), sorts by numeric prefix globally, executes
-  pending in a transaction, records the relative path.
-- **Seeds runner** (`server/db/seeds/runner.ts`): same scan pattern. Each
-  `NNN_*.ts` exports `async function seed(db: Surreal): Promise<void>` and is
-  idempotent (existence-check before insert).
+  trees (root `server/db/migrations/`, `systems/<slug>/server/db/migrations/`,
+  `frameworks/<name>/server/db/migrations/`), sorts by numeric prefix globally,
+  executes pending in a transaction, records the relative path.
+- **Seeds runner** (`server/db/seeds/runner.ts`): same scan pattern across root
+  `server/db/seeds/`, `systems/<slug>/server/db/seeds/`,
+  `frameworks/<name>/server/db/seeds/`. Each `NNN_*.ts` exports
+  `async function seed(db: Surreal): Promise<void>` and is idempotent
+  (existence-check before insert).
 - **Required seeds (in order of dependency):**
   1. **Core company** — a `company` record representing the platform itself.
   2. **Core system** — a `system` record with slug `"core"`.
@@ -1689,7 +1716,7 @@ props/variants; cross-page duplication is forbidden.
 
 `src/components/systems/registry.ts` exports `registerHomePage(slug, loader)`
 and `getHomePage(slug)`. Homepages live at
-`src/components/systems/<slug>/HomePage.tsx`, receive no props, use
+`systems/<slug>/src/components/HomePage.tsx`, receive no props, use
 `useTenantContext().t`, link to `/login?systemSlug=<slug>`.
 
 ### 10.6 Payment contracts (client & server)
@@ -1722,22 +1749,25 @@ app/                            # Next.js App Router
     │         data-deletion,settings,settings/missing,front-settings,file-access}/
     ├── users, companies, companies/[id]/systems, billing, usage,
     ├── connected-apps, tokens, connected-services, entity-channels, leads, leads/public, tags,
-    └── files/{upload,download}, systems/[slug]/...
+    ├── files/{upload,download},
+    └── systems/[slug]/...       # system API routes (Core-level convention)
 
-src/
-├── components/{shared,fields,subforms,core,systems/{registry.ts,[slug]}}
+src/                            # Core shared code
+├── components/{shared,fields,subforms,core}
 ├── contracts/                  # isomorphic (no secrets)
-├── i18n/                       # en/, pt-BR/, systems/<slug>.json
+├── i18n/                       # en/, pt-BR/ (Core keys only;
+│                               #   system/framework i18n is self-contained)
 ├── hooks/
-└── lib/                        # formatters, validators (isomorphic),
-                                # db/connection.ts (frontend WS),
-                                # payment/ (client tokenization)
+├── lib/                        # formatters, validators (isomorphic),
+│                               # db/connection.ts (frontend WS),
+│                               # payment/ (client tokenization)
+└── providers/                  # TenantProvider, etc.
 
-server/
+server/                         # Core server code
 ├── db/
 │   ├── connection.ts
-│   ├── migrations/{runner.ts, *.surql, systems/[slug]/*.surql}
-│   ├── seeds/{runner.ts, NNN_*.ts, systems/[slug]/*.ts}
+│   ├── migrations/{runner.ts, NNN_*.surql}
+│   ├── seeds/{runner.ts, NNN_*.ts}
 │   ├── queries/, frontend-queries/
 ├── middleware/                 # compose, withAuthAndLimit
 ├── utils/                      # Core, FrontCore, cache, tenant, token, actor-validity,
@@ -1753,21 +1783,59 @@ server/
 └── jobs/{index, start-event-queue, recurring-billing, token-cleanup,
         expire-pending-payments}
 
-systems/
+systems/                        # Self-contained system bundles
 ├── index.ts                    # calls each system's register()
-└── [slug]/{AGENTS.md?, register.ts}
+└── [slug]/
+    ├── AGENTS.md
+    ├── register.ts
+    ├── src/
+    │   ├── components/
+    │   ├── contracts/
+    │   ├── hooks/
+    │   ├── i18n/{en,pt-BR}/    # <slug>.json per locale
+    │   ├── lib/
+    │   └── providers/
+    ├── server/
+    │   ├── db/{migrations,queries,frontend-queries,seeds}/
+    │   ├── event-queue/handlers/
+    │   ├── jobs/
+    │   ├── middleware/
+    │   └── utils/
+    └── public/<slug>/          # logo.svg, etc.
 
-frameworks/
+frameworks/                     # Self-contained framework bundles
 ├── index.ts                    # calls each framework's register()
-└── [name]/{AGENTS.md, app/api/[name]/, src/{components/[name],contracts,i18n},
-           server/{db/{migrations,queries}, utils}, public/[name]/}
+└── [name]/
+    ├── AGENTS.md
+    ├── register.ts
+    ├── src/
+    │   ├── components/
+    │   ├── contracts/
+    │   ├── hooks/
+    │   ├── i18n/{en,pt-BR}/    # <name>.json per locale
+    │   ├── lib/
+    │   └── providers/
+    ├── server/
+    │   ├── db/{migrations,queries,frontend-queries,seeds}/
+    │   ├── event-queue/handlers/
+    │   ├── jobs/
+    │   ├── middleware/
+    │   └── utils/
+    └── public/<name>/
 
-public/systems/[slug]/logo.svg
 database.json                   # backend DB credentials (git-ignored, server-only)
 ```
 
-Adding a new system creates a matching subfolder in every structural tree listed
-above (with `.gitkeep` where empty). Same for new frameworks.
+Systems and frameworks are namespace-isolated: every file belonging to a system
+lives inside `systems/<slug>/`; every file belonging to a framework lives inside
+`frameworks/<name>/`. API routes remain at the Core `app/api/` level (Next.js
+App Router convention) but delegate to system/framework handlers registered
+through the module registry.
+
+Adding a new system creates the bundle under `systems/<slug>/` with all
+structural subdirectories (`.gitkeep` where empty) and wires `register.ts` into
+`systems/index.ts`. Same pattern for frameworks under `frameworks/<name>/`,
+wired into `frameworks/index.ts`.
 
 ---
 
