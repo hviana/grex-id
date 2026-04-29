@@ -4,8 +4,8 @@ DEFINE FIELD recordId ON TABLE shared_record
   TYPE record;
 
 -- Since this must have exactly one item, this should probably be scalar.
-DEFINE FIELD ownerTenantId ON TABLE shared_record
-  TYPE record<tenant>;
+DEFINE FIELD ownerTenantIds ON TABLE shared_record
+  ON usage_record TYPE set<record<tenant>, 1> DEFAULT <set>[];
 
 DEFINE FIELD accessesTenantIds ON TABLE shared_record
   TYPE set<record<tenant>>
@@ -19,7 +19,7 @@ DEFINE FIELD permissions ON TABLE shared_record
 
 DEFINE INDEX idx_shared_record_unique_share
   ON TABLE shared_record
-  COLUMNS recordId, ownerTenantId, accessesTenantIds, permissions
+  COLUMNS recordId, ownerTenantIds, accessesTenantIds, permissions
   UNIQUE;
 
 DEFINE INDEX idx_shared_record_record
@@ -28,7 +28,7 @@ DEFINE INDEX idx_shared_record_record
 
 DEFINE INDEX idx_shared_record_owner_tenant
   ON TABLE shared_record
-  COLUMNS ownerTenantId;
+  COLUMNS ownerTenantIds;
 
 DEFINE INDEX idx_shared_record_access_tenants
   ON TABLE shared_record
