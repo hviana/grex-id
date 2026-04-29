@@ -26,35 +26,35 @@ export async function seed(db: Surreal): Promise<void> {
   await db.query(
     `CREATE menu_item SET
        tenantIds = {$systemTenantId},
-       label = "systems.grex-id.menu.locations",
+       name = "systems.grex-id.menu.locations",
        emoji = "📍",
        componentName = "grexid-locations",
        sortOrder = 0,
-       requiredRoles = [],
+       roleIds = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
        tenantIds = {$systemTenantId},
-       label = "systems.grex-id.menu.leads",
+       name = "systems.grex-id.menu.leads",
        emoji = "👤",
        componentName = "grexid-leads",
        sortOrder = 1,
-       requiredRoles = [],
+       roleIds = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
        tenantIds = {$systemTenantId},
-       label = "systems.grex-id.menu.detections",
+       name = "systems.grex-id.menu.detections",
        emoji = "🎯",
        componentName = "grexid-detections",
        sortOrder = 2,
-       requiredRoles = [],
+       roleIds = [],
        hiddenInPlanIds = [];
      CREATE menu_item SET
        tenantIds = {$systemTenantId},
-       label = "systems.grex-id.menu.settings",
+       name = "systems.grex-id.menu.settings",
        emoji = "⚙️",
        componentName = "grexid-settings",
        sortOrder = 3,
-       requiredRoles = [],
+       roleIds = [],
        hiddenInPlanIds = [];`,
     { systemTenantId },
   );

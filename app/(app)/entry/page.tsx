@@ -13,7 +13,7 @@ interface DefaultMenuItem {
   id: string;
   componentName: string;
   sortOrder: number;
-  requiredRoles: string[];
+  roleIds: string[];
   hiddenInPlanIds: string[];
 }
 
@@ -23,49 +23,49 @@ function getDefaultMenus(): DefaultMenuItem[] {
       id: "_default_usage",
       componentName: "usage",
       sortOrder: 0,
-      requiredRoles: [],
+      roleIds: [],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_billing",
       componentName: "billing",
       sortOrder: 1,
-      requiredRoles: [],
+      roleIds: [],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_users",
       componentName: "users-list",
       sortOrder: 2,
-      requiredRoles: ["admin"],
+      roleIds: ["admin"],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_company",
       componentName: "company-edit",
       sortOrder: 3,
-      requiredRoles: ["admin"],
+      roleIds: ["admin"],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_apps",
       componentName: "connected-apps",
       sortOrder: 4,
-      requiredRoles: [],
+      roleIds: [],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_tokens",
       componentName: "tokens",
       sortOrder: 5,
-      requiredRoles: [],
+      roleIds: [],
       hiddenInPlanIds: [],
     },
     {
       id: "_default_connected_services",
       componentName: "connected-services",
       sortOrder: 6,
-      requiredRoles: [],
+      roleIds: [],
       hiddenInPlanIds: [],
     },
   ];
@@ -229,7 +229,7 @@ export default function EntryPage() {
             componentName?: string;
             children?: { componentName?: string; children?: any[] }[];
             sortOrder: number;
-            requiredRoles: string[];
+            roleIds: string[];
             hiddenInPlanIds: string[];
           }[] = menuJson.data ?? [];
           const defaults = getDefaultMenus();
@@ -244,8 +244,8 @@ export default function EntryPage() {
           const flatItems = [...customItems, ...offsetDefaults];
           const visible = flatItems.filter((item) => {
             if (
-              item.requiredRoles.length > 0 &&
-              !item.requiredRoles.some((r) => roles.includes(r))
+              item.roleIds.length > 0 &&
+              !item.roleIds.some((r) => roles.includes(r))
             ) return false;
             if (plan && item.hiddenInPlanIds.includes(plan.id)) return false;
             return true;

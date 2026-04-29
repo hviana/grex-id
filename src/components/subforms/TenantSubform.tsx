@@ -28,6 +28,7 @@ interface TenantSubformProps {
   initialData?: Partial<TenantFormData>;
   visibleFields?: TenantFieldName[];
   requiredFields?: TenantFieldName[];
+  roleValueMode?: "id" | "name";
 }
 
 const ALL_FIELDS: TenantFieldName[] = [
@@ -80,6 +81,7 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
       initialData,
       visibleFields = ALL_FIELDS,
       requiredFields = [],
+      roleValueMode = "name",
     },
     ref,
   ) => {
@@ -290,7 +292,9 @@ const TenantSubform = forwardRef<SubformRef, TenantSubformProps>(
           data.actorType = actorType || undefined;
         }
         if (show("roles")) {
-          data.roles = roles.map((r) => typeof r === "string" ? r : r.name);
+          data.roles = roles.map((r) =>
+            typeof r === "string" ? r : roleValueMode === "id" ? r.id : r.name
+          );
         }
         if (show("groupIds")) {
           data.groupIds = groupIds.map((g) => typeof g === "string" ? g : g.id);

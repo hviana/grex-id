@@ -15,11 +15,11 @@ interface MenuItemData {
   id: string;
   systemId: string;
   parentId: string | null;
-  label: string;
+  name: string;
   emoji: string | null;
   componentName: string;
   sortOrder: number;
-  requiredRoles: string[];
+  roleIds: string[];
   hiddenInPlanIds: string[];
   createdAt: string;
 }
@@ -83,11 +83,11 @@ export default function MenuTreeEditor(
   const addInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
-  const [formLabel, setFormLabel] = useState("");
+  const [formName, setFormName] = useState("");
   const [formEmoji, setFormEmoji] = useState("");
   const [formComponentName, setFormComponentName] = useState("");
   const [formSortOrder, setFormSortOrder] = useState("0");
-  const [formRequiredRoles, setFormRequiredRoles] = useState<BadgeValue[]>([]);
+  const [formRoleIds, setFormRoleIds] = useState<BadgeValue[]>([]);
   const [formHiddenInPlanIds, setFormHiddenInPlanIds] = useState<BadgeValue[]>(
     [],
   );
@@ -105,9 +105,14 @@ export default function MenuTreeEditor(
         { headers: { Authorization: `Bearer ${systemToken}` } },
       );
       const json = await res.json();
-      return (json.items ?? []).map((r: { name: string }) => r.name);
+      return (json.data ?? []).map(
+        (r: { id: string; name: string }) => ({
+          id: String(r.id),
+          name: r.name,
+        }),
+      );
     },
-    [systemId],
+    [systemId, systemToken],
   );
 
   const fetchPlans = useCallback(
@@ -172,7 +177,7 @@ export default function MenuTreeEditor(
         body: JSON.stringify({
           systemId,
           parentId: parentId || null,
-          label: addLabel.trim(),
+          name: addLabel.trim(),
           sortOrder: maxSort + 1,
         }),
       });
@@ -188,15 +193,37 @@ export default function MenuTreeEditor(
   };
 
   const openEdit = async (item: MenuItemData) => {
-    setFormLabel(item.label);
+    setFormName(item.name);
     setFormEmoji(item.emoji ?? "");
     setFormComponentName(item.componentName ?? "");
     setFormSortOrder(String(item.sortOrder));
-    setFormRequiredRoles(
-      Array.isArray(item.requiredRoles) ? [...item.requiredRoles] : [],
-    );
     setError(null);
     setValidationErrors([]);
+
+    // Resolve role IDs to { id, name } objects
+    const roleIdList = Array.isArray(item.roleIds)
+      ? item.roleIds.map(String)
+      : [];
+    if (roleIdList.length > 0) {
+      try {
+        const res = await fetch(
+          `/api/core/roles?systemId=${encodeURIComponent(systemId)}&limit=200`,
+          { headers: { Authorization: `Bearer ${systemToken}` } },
+        );
+        const json = await res.json();
+        const roleMap = new Map<string, string>();
+        for (const r of json.data ?? []) {
+          roleMap.set(String(r.id), r.name);
+        }
+        setFormRoleIds(
+          roleIdList.map((id) => ({ id, name: roleMap.get(id) ?? id })),
+        );
+      } catch {
+        setFormRoleIds(roleIdList.map((id) => ({ id, name: id })));
+      }
+    } else {
+      setFormRoleIds([]);
+    }
 
     // Resolve plan IDs to { id, name } objects
     const planIds = Array.isArray(item.hiddenInPlanIds)
@@ -241,12 +268,12 @@ export default function MenuTreeEditor(
         },
         body: JSON.stringify({
           id: editItem.id,
-          label: formLabel,
+          name: formName,
           emoji: formEmoji || null,
           componentName: formComponentName,
           sortOrder: Number(formSortOrder),
-          requiredRoles: formRequiredRoles.map((r) =>
-            typeof r === "string" ? r : r.name
+          roleIds: formRoleIds.map((r) =>
+            typeof r === "string" ? r : r.id ?? r.name
           ),
           hiddenInPlanIds: formHiddenInPlanIds.map((p) =>
             typeof p === "string" ? p : p.id ?? p.name
@@ -472,7 +499,7 @@ export default function MenuTreeEditor(
                   {node.emoji ?? (node.children.length > 0 ? "📁" : "📄")}
                 </span>
                 <span className="font-medium text-sm text-white truncate">
-                  {t(node.label)}
+                  {t(node.name)}
                 </span>
                 {node.componentName && (
                   <span className="hidden sm:inline text-xs text-[var(--color-light-text)]/40 font-mono truncate">
@@ -553,12 +580,12 @@ export default function MenuTreeEditor(
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-[var(--color-light-text)] mb-1">
-                {t("core.menus.label")} *
+                {t("core.menus.name")} *
               </label>
               <input
                 type="text"
-                value={formLabel}
-                onChange={(e) => setFormLabel(e.target.value)}
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
                 required
                 className={inputCls}
               />
@@ -605,15 +632,17 @@ export default function MenuTreeEditor(
           </div>
 
           <MultiBadgeField
-            name={t("core.menus.requiredRoles")}
+            name={t("core.menus.roleIds")}
             mode="search"
-            value={formRequiredRoles}
-            onChange={(vals) => setFormRequiredRoles(vals)}
+            value={formRoleIds}
+            onChange={(vals) => setFormRoleIds(vals)}
             fetchFn={fetchRoles}
             renderBadge={(item, remove) => (
               <TranslatedBadge
                 kind="role"
-                token={typeof item === "string" ? item : item.name}
+                token={typeof item === "string"
+                  ? item
+                  : (item as BadgeValue).name ?? String(item)}
                 systemSlug={systemSlug}
                 onRemove={remove}
               />

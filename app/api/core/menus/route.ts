@@ -31,7 +31,7 @@ async function getHandler(req: Request, _ctx: RequestContext) {
 
   const result = await genericList<MenuItem>({
     table: "menu_item",
-    searchFields: ["label"],
+    searchFields: ["name"],
     orderBy: "sortOrder ASC, createdAt DESC",
     extraConditions,
     extraBindings,
@@ -49,11 +49,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
     tenantId,
     systemId,
     parentId,
-    label,
+    name,
     emoji,
     componentName,
     sortOrder,
-    requiredRoles,
+    roleIds,
     hiddenInPlanIds,
   } = body;
 
@@ -76,7 +76,7 @@ async function postHandler(req: Request, _ctx: RequestContext) {
   }
 
   const errors: string[] = [];
-  errors.push(...await validateField("name", label));
+  errors.push(...await validateField("name", name));
   if (!resolvedTenantId) errors.push("validation.tenant.required");
 
   if (errors.length > 0) {
@@ -99,11 +99,11 @@ async function postHandler(req: Request, _ctx: RequestContext) {
       },
       {
         parentId: parentId || undefined,
-        label: await standardizeField("name", sanitizeString(label)),
+        name: await standardizeField("name", sanitizeString(name)),
         emoji: emoji || undefined,
         componentName: sanitizeString(componentName ?? ""),
         sortOrder: Number(sortOrder ?? 0),
-        requiredRoles: requiredRoles ?? [],
+        roleIds: roleIds ?? [],
         hiddenInPlanIds: hiddenInPlanIds ?? [],
       },
     );
@@ -156,10 +156,10 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (data.parentId !== undefined) {
       updates.parentId = data.parentId || undefined;
     }
-    if (data.label !== undefined) {
-      updates.label = await standardizeField(
+    if (data.name !== undefined) {
+      updates.name = await standardizeField(
         "name",
-        sanitizeString(data.label),
+        sanitizeString(data.name),
       );
     }
     if (data.emoji !== undefined) {
@@ -171,8 +171,8 @@ async function putHandler(req: Request, _ctx: RequestContext) {
     if (data.sortOrder !== undefined) {
       updates.sortOrder = Number(data.sortOrder);
     }
-    if (data.requiredRoles !== undefined) {
-      updates.requiredRoles = data.requiredRoles;
+    if (data.roleIds !== undefined) {
+      updates.roleIds = data.roleIds;
     }
     if (data.hiddenInPlanIds !== undefined) {
       updates.hiddenInPlanIds = data.hiddenInPlanIds;

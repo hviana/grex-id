@@ -2,11 +2,11 @@ export interface MenuItem {
   id: string;
   tenantIds: string[];
   parentId?: string;
-  label: string;
+  name: string;
   emoji?: string;
   componentName: string;
   sortOrder: number;
-  requiredRoles: string[];
+  roleIds: string[];
   hiddenInPlanIds: string[];
   createdAt: string;
 }

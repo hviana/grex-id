@@ -27,7 +27,7 @@ export default function SidebarMenuItem(
   const { t } = useTenantContext();
   const [expanded, setExpanded] = useState(false);
   const hasChildren = item.children && item.children.length > 0;
-  const label = t(item.label) !== item.label ? t(item.label) : item.label;
+  const label = t(item.name) !== item.name ? t(item.name) : item.name;
   const isActive = !hasChildren && item.componentName === activeComponent;
   const childCount = hasChildren ? countLeaves(item) : 0;
 
@@ -36,7 +36,7 @@ export default function SidebarMenuItem(
   const childMatchesDeep = (children: MenuItemTree[] | undefined): boolean => {
     if (!children) return false;
     return children.some((child) => {
-      const childLabel = t(child.label);
+      const childLabel = t(child.name);
       if (
         childLabel.toLowerCase().includes((searchQuery ?? "").toLowerCase())
       ) {

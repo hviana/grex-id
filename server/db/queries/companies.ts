@@ -27,7 +27,7 @@ export async function createCompany(data: {
          actorId = $ownerId,
          companyId = $comp[0].id,
          systemId = $systemId;`
-    : "";
+    : "LET $userAccessTenant = NULL;";
 
   const baseBindings: Record<string, unknown> = {
     name: data.name,
@@ -87,12 +87,17 @@ export async function createCompany(data: {
         ...baseBindings,
       },
     );
-    // Result indices: addr, comp, companyTenant, ownerTenant, [userAccessTenant,] SELECT
-    return hasSystemId ? result[5][0] : result[4][0];
+    return result[5][0];
   }
 
   const result = await db.query<
-    [unknown, unknown, unknown, unknown, Company[]]
+    [
+      Record<string, unknown>[],
+      Record<string, unknown>[],
+      Record<string, unknown>[],
+      Record<string, unknown>[],
+      Company[],
+    ]
   >(
     `LET $comp = CREATE company SET
       name = $name,
@@ -111,6 +116,5 @@ export async function createCompany(data: {
     SELECT * FROM $comp[0].id FETCH billingAddressId;`,
     baseBindings,
   );
-  // Result indices: comp, companyTenant, ownerTenant, [userAccessTenant,] SELECT
-  return hasSystemId ? result[4][0] : result[3][0];
+  return result[4][0];
 }
