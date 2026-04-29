@@ -4,30 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface CompanyData {
-  id: string;
-  name: string;
-  document: string;
-  documentType: string;
-  billingAddressId?: {
-    street: string;
-    number: string;
-    complement?: string;
-    neighborhood?: string;
-    city: string;
-    state: string;
-    country: string;
-    postalCode: string;
-  };
-}
+import type { CompanyView } from "@/src/contracts/high_level/companies";
 
 export default function CompanyEditPage() {
   const { t } = useTenantContext();
   const { systemToken } = useTenantContext();
   const { companyId } = useTenantContext();
 
-  const [company, setCompany] = useState<CompanyData | null>(null);
+  const [company, setCompany] = useState<CompanyView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +31,7 @@ export default function CompanyEditPage() {
       );
       const json = await res.json();
       const found = (json.data ?? []).find(
-        (c: CompanyData) => c.id === companyId,
+        (c: CompanyView) => c.id === companyId,
       );
       if (found) {
         setCompany(found);

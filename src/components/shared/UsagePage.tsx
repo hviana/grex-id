@@ -16,6 +16,8 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
+import type { UsageData } from "@/src/contracts/high_level/usage";
+import type { CoreCreditExpenseRow } from "@/src/contracts/high_level/query-results";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 ChartJS.register(
@@ -39,34 +41,6 @@ const EXPENSE_COLORS = [
   "#36a2eb",
   "#c9cbcf",
 ];
-
-interface UsageData {
-  storage: {
-    usedBytes: number;
-    limitBytes: number;
-  };
-  cache: {
-    usedBytes: number;
-    maxBytes: number;
-    fileCount: number;
-  };
-  operationCount: {
-    resourceKey: string;
-    used: number;
-    max: number;
-  }[];
-  creditExpenses: {
-    resourceKey: string;
-    totalAmount: number;
-    totalCount: number;
-  }[];
-}
-
-interface CreditExpenseRow {
-  resourceKey: string;
-  totalAmount: number;
-  totalCount: number;
-}
 
 interface UsagePageProps {
   mode?: "tenant" | "core";
@@ -108,7 +82,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<UsageData | null>(null);
-  const [coreExpenses, setCoreExpenses] = useState<CreditExpenseRow[]>([]);
+  const [coreExpenses, setCoreExpenses] = useState<CoreCreditExpenseRow[]>([]);
 
   const [startDate, setStartDate] = useState(() =>
     new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10)
@@ -431,7 +405,7 @@ export default function UsagePage({ mode = "tenant" }: UsagePageProps) {
 
   // ── Shared summary table renderer ──
 
-  function renderSummaryTable(expenses: CreditExpenseRow[]) {
+  function renderSummaryTable(expenses: CoreCreditExpenseRow[]) {
     return (
       <div className="border-t border-[var(--color-dark-gray)] pt-4">
         <h3 className="text-sm font-semibold text-white mb-2">

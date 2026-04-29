@@ -14,68 +14,15 @@ import PlanCard from "@/src/components/shared/PlanCard";
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
+import type {
+  CreditPurchaseView,
+  PaymentMethodView,
+  PaymentRecordView,
+  PlanView,
+  SubscriptionView,
+  VoucherView,
+} from "@/src/contracts/high_level/billing-display";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface VoucherInfo {
-  id: string;
-  name: string;
-  priceModifier: number;
-  resourceLimitId?: ResourceLimitsData | null;
-  expiresAt?: string;
-}
-
-interface Subscription {
-  id: string;
-  planId: string;
-  status: string;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  voucherId: VoucherInfo | null; // single voucher, fetched via FETCH
-  remainingOperationCount: Record<string, number> | null; // per-resourceKey; null = unlimited
-  autoRechargeEnabled: boolean;
-  autoRechargeAmount: number; // cents; 0 when disabled
-  retryPaymentInProgress: boolean;
-}
-
-interface PlanInfo {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  currency: string;
-  recurrenceDays: number;
-  resourceLimitId?: ResourceLimitsData | null;
-  isActive: boolean;
-  [key: string]: unknown;
-}
-
-interface PaymentMethodInfo {
-  id: string;
-  cardMask: string;
-  holderName: string;
-  isDefault: boolean;
-  createdAt: string;
-}
-
-interface CreditPurchaseInfo {
-  id: string;
-  amount: number;
-  status: string;
-  createdAt: string;
-}
-
-interface PaymentRecord {
-  id: string;
-  amount: number;
-  currency: string;
-  kind: string;
-  status: string;
-  invoiceUrl?: string;
-  continuityData?: Record<string, any>;
-  expiresAt?: string;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function BillingPage() {
   const { t } = useTenantContext();
@@ -84,11 +31,11 @@ export default function BillingPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [plans, setPlans] = useState<PlanInfo[]>([]);
-  const [planMap, setPlanMap] = useState<Record<string, PlanInfo>>({});
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodInfo[]>([]);
-  const [creditPurchases, setCreditPurchases] = useState<CreditPurchaseInfo[]>(
+  const [subscriptions, setSubscriptions] = useState<SubscriptionView[]>([]);
+  const [plans, setPlans] = useState<PlanView[]>([]);
+  const [planMap, setPlanMap] = useState<Record<string, PlanView>>({});
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodView[]>([]);
+  const [creditPurchases, setCreditPurchases] = useState<CreditPurchaseView[]>(
     [],
   );
   const [creditsBalance, setCreditsBalance] = useState(0);
@@ -119,7 +66,7 @@ export default function BillingPage() {
 
   // Pending async payments
   const [pendingAsyncPayments, setPendingAsyncPayments] = useState<
-    PaymentRecord[]
+    PaymentRecordView[]
   >([]);
 
   // Payment history
@@ -134,7 +81,7 @@ export default function BillingPage() {
   const fetchPaymentHistory = useCallback(
     async (
       params: CursorParams & { search?: string },
-    ): Promise<PaginatedResult<PaymentRecord>> => {
+    ): Promise<PaginatedResult<PaymentRecordView>> => {
       if (!companyId || !systemId || !systemToken) {
         return { items: [], total: 0, hasMore: false };
       }
@@ -153,7 +100,7 @@ export default function BillingPage() {
       });
       const json = await res.json();
       return {
-        items: (json.data?.payments ?? []) as PaymentRecord[],
+        items: (json.data?.payments ?? []) as PaymentRecordView[],
         total: 0,
         hasMore: !!json.data?.paymentsNextCursor,
         nextCursor: json.data?.paymentsNextCursor,
@@ -191,12 +138,12 @@ export default function BillingPage() {
         );
       }
 
-      const allPlans: PlanInfo[] = (plansJson.data ?? []).filter(
-        (p: PlanInfo) => p.isActive,
+      const allPlans: PlanView[] = (plansJson.data ?? []).filter(
+        (p: PlanView) => p.isActive,
       );
       setPlans(allPlans);
 
-      const map: Record<string, PlanInfo> = {};
+      const map: Record<string, PlanView> = {};
       for (const p of allPlans) map[p.id] = p;
       setPlanMap(map);
     } catch {
@@ -237,7 +184,7 @@ export default function BillingPage() {
   const activePlan = displaySub ? planMap[displaySub.planId] : null;
 
   // Compute effective discount from active voucher (single voucher invariant §22.7)
-  const activeVoucher: VoucherInfo | null = activeSub?.voucherId &&
+  const activeVoucher: VoucherView | null = activeSub?.voucherId &&
       typeof activeSub.voucherId === "object" &&
       (!activeSub.voucherId.expiresAt ||
         new Date(activeSub.voucherId.expiresAt) > new Date())
@@ -521,7 +468,7 @@ export default function BillingPage() {
           </h2>
           <div className="space-y-3">
             {pendingAsyncPayments.map((p) => {
-              const cd = p.continuityData ?? {};
+              const cd = (p.continuityData ?? {}) as Record<string, string>;
               return (
                 <div
                   key={p.id}
@@ -1157,7 +1104,7 @@ export default function BillingPage() {
             }}
           />
         </div>
-        <GenericList<PaymentRecord>
+        <GenericList<PaymentRecordView>
           entityName={t("billing.paymentHistory.title")}
           searchEnabled={false}
           createEnabled={false}

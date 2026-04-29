@@ -10,14 +10,7 @@ import type {
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ConnectedService {
-  id: string;
-  name: string;
-  userName?: string;
-  createdAt: string;
-  [key: string]: unknown;
-}
+import type { ConnectedServiceView } from "@/src/contracts/high_level/connected-services";
 
 export default function ConnectedServicesPage() {
   const { t } = useTenantContext();
@@ -26,7 +19,7 @@ export default function ConnectedServicesPage() {
   const isAdmin = roles.includes("admin") || roles.includes("superuser");
 
   const [connectOpen, setConnectOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ConnectedService | null>(
+  const [deleteTarget, setDeleteTarget] = useState<ConnectedServiceView | null>(
     null,
   );
   const [actionLoading, setActionLoading] = useState(false);
@@ -36,7 +29,7 @@ export default function ConnectedServicesPage() {
   const fetchServices = useCallback(
     async (
       params: CursorParams & { search?: string },
-    ): Promise<PaginatedResult<ConnectedService>> => {
+    ): Promise<PaginatedResult<ConnectedServiceView>> => {
       if (!systemToken || !companyId || !systemId) {
         return { items: [], total: 0, hasMore: false };
       }
@@ -49,7 +42,7 @@ export default function ConnectedServicesPage() {
       });
       const json = await res.json();
       return {
-        items: (json.items ?? []) as ConnectedService[],
+        items: (json.items ?? []) as ConnectedServiceView[],
         total: json.total ?? 0,
         hasMore: json.hasMore ?? false,
         nextCursor: json.nextCursor,
@@ -134,7 +127,7 @@ export default function ConnectedServicesPage() {
 
       <ErrorDisplay message={error} />
 
-      <GenericList<ConnectedService>
+      <GenericList<ConnectedServiceView>
         entityName={t("common.menu.connectedServices")}
         searchEnabled={false}
         createEnabled={false}

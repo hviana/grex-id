@@ -4,14 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Modal from "./Modal";
 import Spinner from "./Spinner";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ShareEntry {
-  id: string;
-  tenantId?: string;
-  tenantLabel: string;
-  permission?: string;
-  isSelected: boolean;
-}
+import type { ShareEntry } from "@/src/contracts/high_level/sharing";
 
 interface RemoveAccessModalProps {
   entityType: string;

@@ -4,12 +4,7 @@ import { useCallback, useRef } from "react";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import type { BadgeValue } from "@/src/components/fields/MultiBadgeField";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface TagItem {
-  id: string;
-  name: string;
-  color: string;
-}
+import type { TagView } from "@/src/contracts/high_level/tags";
 
 interface TagSearchProps {
   value: string[];
@@ -26,7 +21,7 @@ export default function TagSearch({
 }: TagSearchProps) {
   const { t } = useTenantContext();
   const { systemToken } = useTenantContext();
-  const tagMapRef = useRef<Map<string, TagItem>>(new Map());
+  const tagMapRef = useRef<Map<string, TagView>>(new Map());
 
   const fetchTags = useCallback(
     async (search: string): Promise<BadgeValue[]> => {
@@ -39,7 +34,7 @@ export default function TagSearch({
         { headers },
       );
       const json = await res.json();
-      const tags: TagItem[] = json.data ?? [];
+      const tags: TagView[] = json.data ?? [];
 
       for (const tag of tags) {
         tagMapRef.current.set(tag.name, tag);

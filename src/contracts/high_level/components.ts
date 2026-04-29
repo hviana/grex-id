@@ -41,3 +41,12 @@ export type TranslatedBadgeKind = "role" | "entity" | "resource" | "group";
 
 /** Operating mode for EntityChannelsSubform. */
 export type EntityChannelsSubformMode = "authenticated" | "local";
+
+/** Props for the shared EntityChannelsSubform component. */
+export interface EntityChannelsSubformProps {
+  channelTypes: string[];
+  requiredTypes?: string[];
+  mode?: EntityChannelsSubformMode;
+  initialData?: Record<string, unknown>;
+  systemToken?: string;
+}

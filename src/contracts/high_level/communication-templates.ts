@@ -15,3 +15,35 @@ export interface SmsLayoutBanner {
   companyName?: string;
   systemName?: string;
 }
+
+// ============================================================================
+// Template data contracts — shared by email and SMS channel templates.
+// ============================================================================
+
+export interface MoneyValue {
+  amount: number;
+  currency: string;
+}
+
+export interface HumanConfirmationTemplateData {
+  actionKey: string;
+  confirmationLink: string;
+  occurredAt: string;
+  actorName?: string;
+  companyName?: string;
+  systemName?: string;
+  expiryMinutes?: string | number;
+}
+
+export interface NotificationTemplateData {
+  eventKey: string;
+  occurredAt: string;
+  actorName?: string;
+  companyName?: string;
+  systemName?: string;
+  resources?: string[];
+  value?: MoneyValue | number;
+  invoiceUrl?: string;
+  ctaKey?: string;
+  ctaUrl?: string;
+}

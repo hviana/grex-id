@@ -18,6 +18,7 @@ export interface CoreCompany {
   document: string;
   createdAt: string;
   systems: CoreCompanySystem[];
+  [key: string]: unknown;
 }
 
 export interface RevenueChart {

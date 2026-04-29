@@ -1,26 +1,14 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
+import type { NotificationTemplateData } from "@/src/contracts/high_level/communication-templates";
 import { smsLayout } from "./layout.ts";
 import { assertServerOnly } from "../../../server-only.ts";
 
 assertServerOnly("notification");
 
-interface NotificationData {
-  eventKey: string;
-  occurredAt: string;
-  actorName?: string;
-  companyName?: string;
-  systemName?: string;
-  resources?: string[];
-  value?: { amount: number; currency: string } | number;
-  invoiceUrl?: string;
-  ctaKey?: string;
-  ctaUrl?: string;
-}
-
 export async function notificationSmsTemplate(
   locale: string,
-  data: NotificationData,
+  data: NotificationTemplateData,
 ): Promise<TemplateResult> {
   const eventName = t(data.eventKey, locale);
   const parts: string[] = [eventName];

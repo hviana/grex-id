@@ -10,6 +10,11 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type {
+  CoreCompany,
+  CoreCompanySystem,
+  RevenueChart,
+} from "@/src/contracts/high_level/core-companies";
 import type { FilterValues } from "@/src/components/shared/FilterDropdown";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { Bar } from "react-chartjs-2";
@@ -32,37 +37,11 @@ ChartJS.register(
   Legend,
 );
 
-interface CompanySystem {
-  systemId: string;
-  systemName: string;
-  systemSlug: string;
-  subscriptionId: string | null;
-  planName: string | null;
-  planPrice: number;
-  status: "active" | "past_due" | "cancelled" | null;
-}
-
-interface Company {
-  id: string;
-  name: string;
-  document: string;
-  createdAt: string;
-  systems: CompanySystem[];
-  [key: string]: unknown;
-}
-
-interface RevenueChart {
-  canceled: number;
-  paid: number;
-  projected: number;
-  errors: number;
-}
-
 function formatCurrency(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function StatusBadge({ status }: { status: CompanySystem["status"] }) {
+function StatusBadge({ status }: { status: CoreCompanySystem["status"] }) {
   const { t } = useTenantContext();
   const cls = status === "active"
     ? "bg-[var(--color-primary-green)]/20 text-[var(--color-primary-green)]"
@@ -87,7 +66,7 @@ function StatusBadge({ status }: { status: CompanySystem["status"] }) {
   );
 }
 
-function AccessButton({ item }: { item: Company }) {
+function AccessButton({ item }: { item: CoreCompany }) {
   const { t } = useTenantContext();
   const { exchangeTenant } = useTenantContext();
   const [loading, setLoading] = useState(false);
@@ -130,7 +109,7 @@ function AccessButton({ item }: { item: Company }) {
 }
 
 function CompanyCard({ item, controls }: {
-  item: Company;
+  item: CoreCompany;
   controls: React.ReactNode;
 }) {
   const { t } = useTenantContext();
@@ -216,7 +195,7 @@ export default function CompaniesPage() {
   const fetchCompanies = useCallback(
     async (
       params: CursorParams & { search?: string; filters?: FilterValues },
-    ): Promise<PaginatedResult<Company>> => {
+    ): Promise<PaginatedResult<CoreCompany>> => {
       const sp = new URLSearchParams();
       if (params.search) sp.set("search", String(params.search));
       if (params.cursor) sp.set("cursor", String(params.cursor));
@@ -236,7 +215,7 @@ export default function CompaniesPage() {
       });
       const json = await res.json();
       return {
-        items: (json.items ?? []) as Company[],
+        items: (json.items ?? []) as CoreCompany[],
         total: json.total ?? 0,
         hasMore: json.hasMore ?? false,
         nextCursor: json.nextCursor,
@@ -451,7 +430,7 @@ export default function CompaniesPage() {
       )}
 
       {/* Company List via GenericList */}
-      <GenericList<Company>
+      <GenericList<CoreCompany>
         entityName={t("core.companies.title")}
         searchEnabled
         createEnabled={false}

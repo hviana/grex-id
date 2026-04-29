@@ -7,14 +7,7 @@ import SearchField from "@/src/components/shared/SearchField";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SettingItem {
-  id: string;
-  key: string;
-  value: string;
-  description: string;
-  updatedAt?: string;
-}
+import type { SettingItem } from "@/src/contracts/high_level/settings";
 
 interface SettingsEditorProps {
   mode?: "core" | "front";

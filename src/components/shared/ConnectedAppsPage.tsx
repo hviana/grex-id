@@ -14,16 +14,8 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type { ConnectedAppView } from "@/src/contracts/high_level/connected-apps";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ConnectedApp {
-  id: string;
-  name: string;
-  actorType: string;
-  resourceLimitId?: ResourceLimitsData | null;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function ConnectedAppsPage() {
   const {
@@ -45,7 +37,7 @@ export default function ConnectedAppsPage() {
     [systems, systemId],
   );
 
-  const [revokeApp, setRevokeApp] = useState<ConnectedApp | null>(null);
+  const [revokeApp, setRevokeApp] = useState<ConnectedAppView | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -53,7 +45,7 @@ export default function ConnectedAppsPage() {
   const fetchApps = useCallback(
     async (
       params: CursorParams & { search?: string },
-    ): Promise<PaginatedResult<ConnectedApp>> => {
+    ): Promise<PaginatedResult<ConnectedAppView>> => {
       if (!systemToken || !companyId || !systemId) {
         return { items: [], total: 0, hasMore: false };
       }
@@ -66,7 +58,7 @@ export default function ConnectedAppsPage() {
       });
       const json = await res.json();
       return {
-        items: (json.items ?? json.data ?? []) as ConnectedApp[],
+        items: (json.items ?? json.data ?? []) as ConnectedAppView[],
         total: json.total ?? 0,
         hasMore: json.hasMore ?? false,
         nextCursor: json.nextCursor,
@@ -109,7 +101,7 @@ export default function ConnectedAppsPage() {
     }&client_name=YOUR_APP_NAME&roleIds=read:*&redirect_origin=https://yourapp.com`
     : "";
 
-  function buildAppTenantView(app: ConnectedApp): TenantViewData {
+  function buildAppTenantView(app: ConnectedAppView): TenantViewData {
     return {
       id: app.id,
       companyId: companyId ?? undefined,
@@ -157,7 +149,7 @@ export default function ConnectedAppsPage() {
 
       <ErrorDisplay message={error} />
 
-      <GenericList<ConnectedApp>
+      <GenericList<ConnectedAppView>
         entityName={t("common.menu.connectedApps")}
         searchEnabled={false}
         createEnabled={false}

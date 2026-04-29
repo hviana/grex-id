@@ -1,19 +1,10 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
+import type { HumanConfirmationTemplateData } from "@/src/contracts/high_level/communication-templates";
 import { emailLayout, escapeHtml } from "./layout.ts";
 import { assertServerOnly } from "../../../server-only.ts";
 
 assertServerOnly("human-confirmation");
-
-interface HumanConfirmationData {
-  actionKey: string;
-  confirmationLink: string;
-  occurredAt: string;
-  actorName?: string;
-  companyName?: string;
-  systemName?: string;
-  expiryMinutes?: string | number;
-}
 
 function formatOccurredAt(iso: string, locale: string): string {
   try {
@@ -30,7 +21,7 @@ function formatOccurredAt(iso: string, locale: string): string {
 
 export async function humanConfirmationEmailTemplate(
   locale: string,
-  data: HumanConfirmationData,
+  data: HumanConfirmationTemplateData,
 ): Promise<TemplateResult> {
   const actionName = t(data.actionKey, locale);
   const expiryMinutes = String(data.expiryMinutes ?? "15");

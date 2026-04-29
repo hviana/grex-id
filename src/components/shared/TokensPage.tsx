@@ -17,19 +17,8 @@ import type {
   CursorParams,
   PaginatedResult,
 } from "@/src/contracts/high_level/pagination";
+import type { ApiTokenView } from "@/src/contracts/high_level/tokens";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ApiToken {
-  id: string;
-  name: string;
-  description?: string;
-  actorType: "app" | "token";
-  resourceLimitId?: ResourceLimitsData | null;
-  neverExpires?: boolean;
-  expiresAt?: string;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function TokensPage() {
   const {
@@ -52,7 +41,7 @@ export default function TokensPage() {
   );
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteToken, setDeleteToken] = useState<ApiToken | null>(null);
+  const [deleteToken, setDeleteToken] = useState<ApiTokenView | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -68,7 +57,7 @@ export default function TokensPage() {
   const limitsRef = useRef<SubformRef>(null);
   const tenantRef = useRef<SubformRef>(null);
 
-  function buildTokenTenantView(token: ApiToken): TenantViewData {
+  function buildTokenTenantView(token: ApiTokenView): TenantViewData {
     return {
       id: token.id,
       companyId: companyId ?? undefined,
@@ -86,7 +75,7 @@ export default function TokensPage() {
   const fetchTokens = useCallback(
     async (
       params: CursorParams & { search?: string },
-    ): Promise<PaginatedResult<ApiToken>> => {
+    ): Promise<PaginatedResult<ApiTokenView>> => {
       if (!systemToken || !companyId) {
         return { items: [], total: 0, hasMore: false };
       }
@@ -100,7 +89,7 @@ export default function TokensPage() {
       });
       const json = await res.json();
       return {
-        items: (json.data ?? []) as ApiToken[],
+        items: (json.data ?? []) as ApiTokenView[],
         total: 0,
         hasMore: false,
       };
@@ -237,7 +226,7 @@ export default function TokensPage() {
         </button>
       </div>
 
-      <GenericList<ApiToken>
+      <GenericList<ApiTokenView>
         entityName={t("common.menu.tokens")}
         searchEnabled={false}
         createEnabled={false}

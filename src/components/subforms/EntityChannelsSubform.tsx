@@ -12,53 +12,14 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import type { SubformRef } from "@/src/components/shared/GenericList";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { EntityChannelsSubformMode } from "@/src/contracts/high_level/components";
+import type {
+  EntityChannelsSubformMode,
+  EntityChannelsSubformProps,
+} from "@/src/contracts/high_level/components";
 
 const DEFAULT_MAX = 10;
 
-/**
- * EntityChannelsSubform
- *
- * Shared UI for collecting entity_channel rows (§8.7, §10.5). Two modes:
- *
- * - `"authenticated"` (default): talks to `/api/entity-channels` for an
- *   authenticated user — fetches, adds, removes, resends confirmation. Used
- *   in ProfilePage, lead editors, etc.
- * - `"local"`: holds channels in component state only. Used by
- *   unauthenticated forms (register, public lead submission) where channels
- *   are submitted as part of the parent request, not through
- *   `/api/entity-channels`. Exposes the accumulated list via
- *   `getData()`/`isValid()` so the parent form can collect them.
- */
-
 export type { EntityChannelsSubformMode } from "@/src/contracts/high_level/components";
-
-export interface EntityChannelsSubformProps {
-  /**
-   * Channel types that should appear in the add dropdown. Order defines the
-   * default selected type (first entry).
-   */
-  channelTypes: string[];
-  /**
-   * Channel types the owner must always have at least one entry for. In
-   * `"authenticated"` mode a verified entry is required; in `"local"` mode
-   * at least one entry of each required type must be present before the
-   * parent form can submit.
-   */
-  requiredTypes?: string[];
-  /**
-   * `"authenticated"` (default) talks to `/api/entity-channels`.
-   * `"local"` keeps channels in memory; the parent form collects them via
-   * `getData()`.
-   */
-  mode?: EntityChannelsSubformMode;
-  /**
-   * Prefill for local mode — channels entered on an earlier render that the
-   * parent wants to restore.
-   */
-  initialData?: Record<string, unknown>;
-  systemToken?: string;
-}
 
 function formatPhoneValue(value: string): string {
   return value.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, "+$1 ($2) $3-$4");

@@ -10,21 +10,9 @@ import MultiBadgeField, {
 } from "@/src/components/fields/MultiBadgeField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { MenuItemView } from "@/src/contracts/high_level/menu-item";
 
-interface MenuItemData {
-  id: string;
-  systemId: string;
-  parentId: string | null;
-  name: string;
-  emoji: string | null;
-  componentName: string;
-  sortOrder: number;
-  roleIds: string[];
-  hiddenInPlanIds: string[];
-  createdAt: string;
-}
-
-interface TreeNode extends MenuItemData {
+interface TreeNode extends MenuItemView {
   children: TreeNode[];
 }
 
@@ -33,7 +21,7 @@ interface MenuTreeEditorProps {
   systemSlug?: string;
 }
 
-function buildTree(items: MenuItemData[]): TreeNode[] {
+function buildTree(items: MenuItemView[]): TreeNode[] {
   const map = new Map<string, TreeNode>();
   const roots: TreeNode[] = [];
 
@@ -69,9 +57,9 @@ export default function MenuTreeEditor(
 ) {
   const { t } = useTenantContext();
   const { systemToken } = useTenantContext();
-  const [items, setItems] = useState<MenuItemData[]>([]);
+  const [items, setItems] = useState<MenuItemView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editItem, setEditItem] = useState<MenuItemData | null>(null);
+  const [editItem, setEditItem] = useState<MenuItemView | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -192,7 +180,7 @@ export default function MenuTreeEditor(
     }
   };
 
-  const openEdit = async (item: MenuItemData) => {
+  const openEdit = async (item: MenuItemView) => {
     setFormName(item.name);
     setFormEmoji(item.emoji ?? "");
     setFormComponentName(item.componentName ?? "");

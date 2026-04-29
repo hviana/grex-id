@@ -2,6 +2,7 @@ import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 
 import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { Location } from "@/src/contracts/location";
 import {
   genericCreate,
   genericDelete,
@@ -9,16 +10,6 @@ import {
   genericList,
   genericUpdate,
 } from "@/server/db/queries/generics";
-
-interface Location {
-  id: string;
-  name: string;
-  description?: string;
-  tenantIds: string[];
-  address: Record<string, string>;
-  createdAt: string;
-  updatedAt: string;
-}
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);

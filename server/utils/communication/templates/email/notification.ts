@@ -1,27 +1,13 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
+import type {
+  MoneyValue,
+  NotificationTemplateData,
+} from "@/src/contracts/high_level/communication-templates";
 import { emailLayout, escapeHtml } from "./layout.ts";
 import { assertServerOnly } from "../../../server-only.ts";
 
 assertServerOnly("notification");
-
-interface MoneyValue {
-  amount: number;
-  currency: string;
-}
-
-interface NotificationData {
-  eventKey: string;
-  occurredAt: string;
-  actorName?: string;
-  companyName?: string;
-  systemName?: string;
-  resources?: string[];
-  value?: MoneyValue | number;
-  invoiceUrl?: string;
-  ctaKey?: string;
-  ctaUrl?: string;
-}
 
 function formatOccurredAt(iso: string, locale: string): string {
   try {
@@ -57,7 +43,7 @@ function formatValue(value: MoneyValue | number, locale: string): string {
 
 export async function notificationEmailTemplate(
   locale: string,
-  data: NotificationData,
+  data: NotificationTemplateData,
 ): Promise<TemplateResult> {
   const eventName = t(data.eventKey, locale);
   const occurred = formatOccurredAt(data.occurredAt, locale);

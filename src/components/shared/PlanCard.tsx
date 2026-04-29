@@ -3,6 +3,10 @@
 import ResourceLimitsView, {
   type ResourceLimitsData,
 } from "@/src/components/shared/ResourceLimitsView";
+import type {
+  PlanCardProps,
+  PlanView,
+} from "@/src/contracts/high_level/billing-display";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export function formatBytes(bytes: number): string {
@@ -27,30 +31,6 @@ export function limitEmoji(key: string): string {
     tags: "🏷️",
   };
   return map[key] ?? "📦";
-}
-
-interface PlanData {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  currency: string;
-  recurrenceDays: number;
-  resourceLimitId?: ResourceLimitsData | null;
-  isActive?: boolean;
-  [key: string]: unknown;
-}
-
-export interface PlanCardProps {
-  plan: PlanData;
-  variant: "billing" | "onboarding" | "core";
-  highlighted?: boolean;
-  badges?: React.ReactNode;
-  actions?: React.ReactNode;
-  voucherPrice?: { original: number; effective: number; currency: string };
-  onClick?: () => void;
-  systemName?: string;
-  systemSlug?: string;
 }
 
 export default function PlanCard({
