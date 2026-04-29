@@ -13,7 +13,7 @@ import type {
   FaceMatchResult,
   GrexidDetection as Detection,
   RawDetectionRow,
-} from "../../../src/contracts/grexid-detection";
+} from "@systems/grex-id/src/contracts/grexid-detection";
 
 assertServerOnly("detections");
 

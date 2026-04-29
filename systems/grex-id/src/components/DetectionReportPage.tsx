@@ -45,7 +45,7 @@ const DAY_KEYS = [
 import type {
   DetectionIndividual,
   DetectionStats,
-} from "../contracts/grexid-detection";
+} from "@systems/grex-id/src/contracts/grexid-detection";
 
 function formatDate(iso: string, locale: string): string {
   try {

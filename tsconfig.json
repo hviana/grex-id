@@ -20,7 +20,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@systems/*": ["./systems/*"],
+      "@frameworks/*": ["./frameworks/*"]
     }
   },
   "include": [

@@ -16,8 +16,8 @@ import type {
   HumanFace,
   HumanInstance,
   HumanResult,
-} from "@/systems/grex-id/src/contracts/high-level/human";
-import type { FacialBiometricsSubformProps } from "@/systems/grex-id/src/contracts/high-level/component-props";
+} from "@systems/grex-id/src/contracts/high-level/human";
+import type { FacialBiometricsSubformProps } from "@systems/grex-id/src/contracts/high-level/component-props";
 
 /* ------------------------------------------------------------------ */
 /*  Human.js CDN loader (module-level, runs once)                      */

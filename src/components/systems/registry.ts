@@ -34,7 +34,7 @@ export { componentRegistry };
 
 // --- Homepage registry ---
 // Each system registers its own homepage component keyed by system slug.
-// Example: registerHomePage("my-system", () => import("@/systems/my-system/src/components/HomePage"))
+// Example: registerHomePage("my-system", () => import("@systems/my-system/src/components/HomePage"))
 const homepageRegistry: Record<string, LazyExoticComponent<ComponentType>> = {};
 
 export function registerHomePage(

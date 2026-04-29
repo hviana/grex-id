@@ -7,7 +7,7 @@ import {
   linkOrphanFaceToLead,
   searchOrphanFaceByEmbedding,
   tryUpsertFace,
-} from "@/systems/grex-id/server/db/queries/faces";
+} from "@systems/grex-id/server/db/queries/faces";
 import Core from "@/server/utils/Core";
 
 async function postHandler(req: Request, ctx: RequestContext) {

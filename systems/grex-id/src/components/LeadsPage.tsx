@@ -21,7 +21,7 @@ import type {
 } from "@/src/contracts/high-level/pagination";
 import type { FilterValues } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { OwnerSubformProps } from "@/systems/grex-id/src/contracts/high-level/component-props";
+import type { OwnerSubformProps } from "@systems/grex-id/src/contracts/high-level/component-props";
 
 const OwnerSubform = forwardRef<SubformRef, OwnerSubformProps>(
   ({ initialData }, ref) => {

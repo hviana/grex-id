@@ -1,6 +1,6 @@
 import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
 import { assertServerOnly } from "@/server/utils/server-only.ts";
-import type { Face } from "../../../src/contracts/face";
+import type { Face } from "@systems/grex-id/src/contracts/face";
 
 assertServerOnly("faces");
 

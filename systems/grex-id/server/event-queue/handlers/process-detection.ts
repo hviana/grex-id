@@ -3,7 +3,7 @@ import {
   batchCreateDetections,
   detectionExistsForEvent,
   searchMatchingFace,
-} from "../../db/queries/detections";
+} from "@systems/grex-id/server/db/queries/detections";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import type { HandlerFn } from "@/src/contracts/high-level/event-queue";
