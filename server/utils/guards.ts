@@ -1,5 +1,5 @@
 import Core from "./Core.ts";
-import type { TenantResourceLimits } from "@/src/contracts/high_level/resource-limits";
+import type { TenantResourceLimits } from "@/src/contracts/high-level/resource-limits";
 import type { Tenant } from "@/src/contracts/tenant";
 import type {
   EntityLimitResult,
@@ -7,7 +7,7 @@ import type {
   PlanAccessResult,
   RateLimitConfigResult,
   TransferLimitResult,
-} from "@/src/contracts/high_level/resource-limits";
+} from "@/src/contracts/high-level/resource-limits";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("guards.ts");

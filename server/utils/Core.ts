@@ -5,7 +5,7 @@ import type { System } from "@/src/contracts/system";
 import type { Role } from "@/src/contracts/role";
 import type { Plan } from "@/src/contracts/plan";
 import type { MenuItem } from "@/src/contracts/menu";
-import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
+import type { MenuItemTree } from "@/src/contracts/high-level/menu-item";
 import type { Setting } from "@/src/contracts/setting";
 import type { Voucher } from "@/src/contracts/voucher";
 import type { Subscription } from "@/src/contracts/subscription";
@@ -15,14 +15,14 @@ import type {
 } from "@/src/contracts/file-access";
 import type {
   TenantResourceLimits,
-} from "@/src/contracts/high_level/resource-limits";
+} from "@/src/contracts/high-level/resource-limits";
 import type {
   CompiledFileAccess,
   CoreData,
   FileAccessCacheData,
   MissingSetting,
   SettingScope,
-} from "@/src/contracts/high_level/cache-data";
+} from "@/src/contracts/high-level/cache-data";
 import dbConfig from "../../database.json" with { type: "json" };
 import { assertServerOnly } from "./server-only.ts";
 import {

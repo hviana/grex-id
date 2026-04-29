@@ -1,6 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { TranslatedBadgeKind } from "@/src/contracts/high_level/components";
+import type { TranslatedBadgeKind } from "@/src/contracts/high-level/components";
 
 const KIND_SEGMENT: Record<TranslatedBadgeKind, string> = {
   role: "roles",
@@ -37,20 +37,7 @@ const KIND_CLASSES: Record<
   },
 };
 
-interface TranslatedBadgeProps {
-  kind: TranslatedBadgeKind;
-  token: string;
-  systemSlug?: string;
-  frameworkName?: string;
-  onRemove?: () => void;
-  /**
-   * Human mode — renders ONLY the translation, hiding the raw token. Use on
-   * end-user surfaces (plan cards, usage panel, OAuth consent). Operator
-   * surfaces (forms, admin lists, token cards) must omit this prop so both
-   * the raw token and the translation are visible (§2.3.1).
-   */
-  compact?: boolean;
-}
+import type { TranslatedBadgeProps } from "@/src/contracts/high-level/component-props";
 
 /**
  * Compact badge that resolves a role / permission / entity / resource token

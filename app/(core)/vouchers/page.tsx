@@ -4,27 +4,16 @@ import { useCallback, useRef, useState } from "react";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import GenericList from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import VoucherCard from "@/src/components/core/VoucherCard";
 import VoucherSubform from "@/src/components/subforms/VoucherSubform";
-import type { SubformRef } from "@/src/contracts/high_level/components";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { SubformRef } from "@/src/contracts/high-level/components";
+import type { VoucherItem } from "@/src/contracts/high-level/billing-display";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface VoucherItem {
-  id: string;
-  name: string;
-  applicableTenantIds: string[];
-  applicablePlanIds: string[];
-  resourceLimitId?: ResourceLimitsData | null;
-  expiresAt: string | null;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function VouchersPage() {
   const { t } = useTenantContext();

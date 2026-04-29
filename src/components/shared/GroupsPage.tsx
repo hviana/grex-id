@@ -2,13 +2,13 @@
 
 import { useCallback } from "react";
 import GenericList from "@/src/components/shared/GenericList";
-import type { SubformConfig } from "@/src/contracts/high_level/components";
+import type { SubformConfig } from "@/src/contracts/high-level/components";
 import NameDescSubform from "@/src/components/subforms/NameDescSubform";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
-import type { FilterValues } from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/pagination";
+import type { FilterValues } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 const subforms: SubformConfig[] = [

@@ -6,14 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface PlanSubformProps {
-  initialData?: Record<string, unknown>;
-}
+import type { PlanSubformProps } from "@/src/contracts/high-level/component-props";
 
 const inputCls =
   "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";

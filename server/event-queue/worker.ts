@@ -1,5 +1,5 @@
-import type { WorkerConfig } from "@/src/contracts/high_level/worker-config";
-import type { HandlerFn } from "@/src/contracts/high_level/event-queue";
+import type { WorkerConfig } from "@/src/contracts/high-level/worker-config";
+import type { HandlerFn } from "@/src/contracts/high-level/event-queue";
 import {
   claimCandidateDeliveries,
   getEventPayload,

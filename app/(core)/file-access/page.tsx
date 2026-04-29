@@ -6,24 +6,15 @@ import TenantView from "@/src/components/shared/TenantView";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import FileAccessSubform from "@/src/components/subforms/FileAccessSubform";
-import type { SubformConfig } from "@/src/contracts/high_level/components";
+import type { SubformConfig } from "@/src/contracts/high-level/components";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
 } from "@/src/contracts/file-access";
+import type { FileAccessItem } from "@/src/contracts/high-level/files";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface FileAccessItem {
-  id: string;
-  name: string;
-  categoryPattern: string;
-  download: FileAccessSection;
-  upload: FileAccessUploadSection;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 const emptySection = (): FileAccessSection => ({
   isolateSystem: false,
@@ -41,7 +32,7 @@ const emptyUploadSection = (): FileAccessUploadSection => ({
 const formSubforms: SubformConfig[] = [
   {
     component: React.forwardRef<
-      import("@/src/contracts/high_level/components").SubformRef,
+      import("@/src/contracts/high-level/components").SubformRef,
       { initialData?: Record<string, unknown> }
     >((props, ref) => <FileAccessSubform ref={ref} {...props} />),
     key: "fileAccess",

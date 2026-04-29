@@ -2,12 +2,12 @@ import { getDb, rid } from "../connection.ts";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import type {
   CoreCompany,
   CoreCompanySystem,
   RevenueChart,
-} from "@/src/contracts/high_level/core-companies";
+} from "@/src/contracts/high-level/core-companies";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "../../utils/server-only.ts";
 

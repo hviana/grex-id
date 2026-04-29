@@ -9,16 +9,16 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { UserResolved } from "@/src/contracts/high_level/user";
+import type { UserResolved } from "@/src/contracts/high-level/user";
 import type { Tenant } from "@/src/contracts/tenant";
 import type {
   AuthClaims,
   TenantContext,
   TenantContextValue,
-} from "@/src/contracts/high_level/tenant-context";
+} from "@/src/contracts/high-level/tenant-context";
 import type { Company } from "@/src/contracts/company";
 import type { PublicSystemInfo, System } from "@/src/contracts/system";
-import type { SupportedLocale } from "@/src/contracts/high_level/i18n";
+import type { SupportedLocale } from "@/src/contracts/high-level/i18n";
 import {
   defaultLocale as fallbackLocale,
   supportedLocales,

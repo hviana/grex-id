@@ -6,25 +6,8 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import PlanCard from "@/src/components/shared/PlanCard";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SystemOption {
-  id: string;
-  name: string;
-  slug: string;
-  logoUri: string;
-}
-
-interface PlanOption {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  currency: string;
-  recurrenceDays: number;
-  resourceLimitId?: Record<string, unknown> | null;
-  isActive: boolean;
-  [key: string]: unknown;
-}
+import type { SystemOption } from "@/src/contracts/high-level/components";
+import type { PlanOption } from "@/src/contracts/high-level/billing-display";
 
 export default function OnboardingSystemPage() {
   const router = useRouter();

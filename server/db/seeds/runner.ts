@@ -1,13 +1,10 @@
 import { getDb } from "../connection.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { SeedModule } from "../../../src/contracts/high-level/seeds.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("Seed runner");
-
-interface SeedModule {
-  seed: (db: import("surrealdb").Surreal) => Promise<void>;
-}
 
 const SEEDS_TABLE_INIT = `
 DEFINE TABLE IF NOT EXISTS _seeds SCHEMAFULL;

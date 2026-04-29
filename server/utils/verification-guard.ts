@@ -9,7 +9,7 @@ import { atomicCommunicationGuard } from "../db/queries/verification.ts";
 
 assertServerOnly("verification-guard.ts");
 
-import type { CommunicationGuardResult } from "@/src/contracts/high_level/verification";
+import type { CommunicationGuardResult } from "@/src/contracts/high-level/verification";
 export type { CommunicationGuardResult };
 
 export async function communicationGuard(params: {

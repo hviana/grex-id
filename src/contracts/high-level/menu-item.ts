@@ -19,3 +19,23 @@ export interface MenuItemView
 export interface MenuItemTree extends MenuItem {
   children?: MenuItemTree[];
 }
+
+/** Recursive tree node for MenuTreeEditor. */
+export interface TreeNode extends MenuItemView {
+  children: TreeNode[];
+}
+
+/** Props for the MenuTreeEditor component. */
+export interface MenuTreeEditorProps {
+  systemId: string;
+  systemSlug?: string;
+}
+
+/** Default menu item resolved by the entry page. */
+export interface DefaultMenuItem {
+  id: string;
+  componentName: string;
+  sortOrder: number;
+  roleIds: string[];
+  hiddenInPlanIds: string[];
+}

@@ -5,7 +5,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -16,8 +16,8 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
-import type { UsageData } from "@/src/contracts/high_level/usage";
-import type { CoreCreditExpenseRow } from "@/src/contracts/high_level/query-results";
+import type { UsageData } from "@/src/contracts/high-level/usage";
+import type { CoreCreditExpenseRow } from "@/src/contracts/high-level/query-results";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 ChartJS.register(
@@ -42,9 +42,7 @@ const EXPENSE_COLORS = [
   "#c9cbcf",
 ];
 
-interface UsagePageProps {
-  mode?: "tenant" | "core";
-}
+import type { UsagePageProps } from "@/src/contracts/high-level/component-props";
 
 function extractIds(badges: BadgeValue[]): string[] {
   return badges.map((b) => typeof b === "string" ? b : b.id ?? b.name);

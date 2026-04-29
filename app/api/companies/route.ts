@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { createCompany } from "@/server/db/queries/companies";
 import { genericList } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";

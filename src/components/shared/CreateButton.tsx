@@ -1,10 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface CreateButtonProps {
-  onClick: () => void;
-  label?: string;
-}
+import type { CreateButtonProps } from "@/src/contracts/high-level/component-props";
 
 export default function CreateButton({ onClick, label }: CreateButtonProps) {
   const { t } = useTenantContext();

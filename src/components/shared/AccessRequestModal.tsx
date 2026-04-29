@@ -5,16 +5,7 @@ import Modal from "./Modal";
 import Spinner from "./Spinner";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface AccessRequestModalProps {
-  entityType: string;
-  entityId: string;
-  entityLabel?: string;
-  /** When true, shows permission selector (r/w/rw) for restricted entities. */
-  isRestricted?: boolean;
-  onSuccess: () => void;
-  onClose: () => void;
-}
+import type { AccessRequestModalProps } from "@/src/contracts/high-level/component-props";
 
 export default function AccessRequestModal({
   entityType,

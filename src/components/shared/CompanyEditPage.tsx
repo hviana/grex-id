@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { CompanyView } from "@/src/contracts/high_level/companies";
+import type { CompanyView } from "@/src/contracts/high-level/companies";
 
 export default function CompanyEditPage() {
   const { t } = useTenantContext();

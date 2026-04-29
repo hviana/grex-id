@@ -11,7 +11,7 @@ import type {
   PurchaseCreditsResult,
   RetryPaymentResult,
   VoucherLookupResult,
-} from "@/src/contracts/high_level/billing";
+} from "@/src/contracts/high-level/billing";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("billing");
@@ -295,7 +295,7 @@ export async function removePaymentMethod(
 
 // --- purchase_credits --------------------------------------------------------
 
-// PurchaseCreditsResult is now in @/src/contracts/high_level/billing
+// PurchaseCreditsResult is now in @/src/contracts/high-level/billing
 
 export async function purchaseCredits(params: {
   tenantId: string;
@@ -337,7 +337,7 @@ export async function purchaseCredits(params: {
 
 // --- apply_voucher (lookup phase) --------------------------------------------
 
-// VoucherLookupResult is now in @/src/contracts/high_level/billing
+// VoucherLookupResult is now in @/src/contracts/high-level/billing
 
 export async function lookupVoucherAndSubscription(params: {
   voucherName: string;
@@ -421,7 +421,7 @@ export async function applyVoucherToSubscription(params: {
 
 // --- set_auto_recharge (enable) ----------------------------------------------
 
-// EnableAutoRechargeResult is now in @/src/contracts/high_level/billing
+// EnableAutoRechargeResult is now in @/src/contracts/high-level/billing
 
 export async function enableAutoRecharge(params: {
   tenantId: string;
@@ -475,7 +475,7 @@ export async function disableAutoRecharge(
 
 // --- retry_payment -----------------------------------------------------------
 
-// RetryPaymentResult is now in @/src/contracts/high_level/billing
+// RetryPaymentResult is now in @/src/contracts/high-level/billing
 
 export async function retryPayment(
   tenantId: string,
@@ -534,7 +534,7 @@ export async function findPaymentByTransactionId(
 
 // --- Expire pending payments (used by expire-pending-payments job) -----------
 
-// ExpiredPaymentRow is now in @/src/contracts/high_level/billing
+// ExpiredPaymentRow is now in @/src/contracts/high-level/billing
 
 export async function markExpiredPayments(): Promise<ExpiredPaymentRow[]> {
   const db = await getDb();
@@ -548,7 +548,7 @@ export async function markExpiredPayments(): Promise<ExpiredPaymentRow[]> {
   return expired[0] ?? [];
 }
 
-// ExpiredPaymentOwnerInfo is now in @/src/contracts/high_level/billing
+// ExpiredPaymentOwnerInfo is now in @/src/contracts/high-level/billing
 
 export async function resolveExpiredPaymentContext(params: {
   tenantId: string;
@@ -582,7 +582,7 @@ export async function resolveExpiredPaymentContext(params: {
 
 // --- process-payment handler queries -----------------------------------------
 
-// PaymentSubscriptionContext is now in @/src/contracts/high_level/billing
+// PaymentSubscriptionContext is now in @/src/contracts/high-level/billing
 
 export async function getPaymentSubscriptionContext(params: {
   subscriptionId: string;
@@ -845,7 +845,7 @@ export async function paymentOnFailure(params: {
 
 // --- resolve-async-payment handler queries -----------------------------------
 
-// AsyncPaymentContext is now in @/src/contracts/high_level/billing
+// AsyncPaymentContext is now in @/src/contracts/high-level/billing
 
 export async function getAsyncPaymentContext(
   paymentId: string,
@@ -1056,7 +1056,7 @@ export async function resolveAsyncPaymentFailure(params: {
 
 // --- auto-recharge handler queries -------------------------------------------
 
-// AutoRechargeContext is now in @/src/contracts/high_level/billing
+// AutoRechargeContext is now in @/src/contracts/high-level/billing
 
 export async function getAutoRechargeContext(
   subscriptionId: string,

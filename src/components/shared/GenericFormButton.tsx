@@ -1,12 +1,7 @@
 "use client";
 
 import Spinner from "./Spinner.tsx";
-
-interface GenericFormButtonProps {
-  loading: boolean;
-  label: string;
-  disabled?: boolean;
-}
+import type { GenericFormButtonProps } from "@/src/contracts/high-level/component-props";
 
 export default function GenericFormButton(
   { loading, label, disabled }: GenericFormButtonProps,

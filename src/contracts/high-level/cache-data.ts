@@ -69,6 +69,9 @@ export interface MissingFrontSetting {
   firstRequestedAt: string;
 }
 
+/** Lazy cache loader signature. */
+export type CacheLoader<T> = () => Promise<T>;
+
 export interface PublicSystemData {
   name: string;
   slug: string;

@@ -1,12 +1,9 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface RoleFormProps {
-  initialData?: Record<string, unknown>;
-}
+import type { RoleFormProps } from "@/src/contracts/high-level/component-props";
 
 const RoleForm = forwardRef<SubformRef, RoleFormProps>(
   ({ initialData }, ref) => {

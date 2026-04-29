@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { getCookie } from "@/src/lib/cookies";
-import type { DataTrackingConsentState } from "@/src/contracts/high_level/tracking";
-
-export type { DataTrackingConsentState } from "@/src/contracts/high_level/tracking";
+import type { DataTrackingConsentState } from "@/src/contracts/high-level/tracking";
 
 const CONSENT_COOKIE = "core_data_tracking_consent";
 

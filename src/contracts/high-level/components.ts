@@ -56,6 +56,27 @@ export interface SystemOption {
   id: string;
   slug: string;
   name: string;
+  logoUri?: string;
+}
+
+/** System list item used by core admin systems page. */
+export interface SystemItem {
+  id: string;
+  name: string;
+  slug: string;
+  logoUri: string;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+/** Role list item used by core admin roles page. */
+export interface RoleItem {
+  id: string;
+  name: string;
+  systemId: string;
+  isBuiltIn: boolean;
+  createdAt: string;
+  [key: string]: unknown;
 }
 
 /** A single key-value entry with description, used by DynamicKeyValueField. */

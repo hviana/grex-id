@@ -3,20 +3,9 @@
 import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface VoucherCardProps {
-  voucher: {
-    id: string;
-    name: string;
-    applicablePlanIds: string[];
-    resourceLimitId?: ResourceLimitsData | null;
-    expiresAt: string | null;
-  };
-  onEdit: () => void;
-  onDelete: () => Promise<void>;
-}
+import type { VoucherCardProps } from "@/src/contracts/high-level/billing-display";
 
 export default function VoucherCard(
   { voucher, onEdit, onDelete }: VoucherCardProps,

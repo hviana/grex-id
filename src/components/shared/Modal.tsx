@@ -2,13 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-
-interface ModalProps {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}
+import type { ModalProps } from "@/src/contracts/high-level/component-props";
 
 export default function Modal({ open, onClose, title, children }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);

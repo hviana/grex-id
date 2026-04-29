@@ -2,24 +2,8 @@
 
 import type { ReactNode } from "react";
 import TranslatedBadge from "./TranslatedBadge";
-import type { TranslatedBadgeKind } from "@/src/contracts/high_level/components";
-
-interface TranslatedBadgeListProps {
-  kind: TranslatedBadgeKind;
-  tokens?: string[];
-  entries?: Record<string, string | number> | null;
-  systemSlug?: string;
-  frameworkName?: string;
-  compact?: boolean;
-  mode?: "row" | "column";
-  title?: string;
-  emptyText?: string;
-  prefix?: ReactNode | ((token: string) => ReactNode);
-  leading?: ReactNode;
-  formatValue?: (value: string | number) => ReactNode;
-  className?: string;
-  justifyValues?: boolean;
-}
+import type { TranslatedBadgeKind } from "@/src/contracts/high-level/components";
+import type { TranslatedBadgeListProps } from "@/src/contracts/high-level/component-props";
 
 export default function TranslatedBadgeList({
   kind,

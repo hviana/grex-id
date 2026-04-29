@@ -1,13 +1,14 @@
 "use client";
 
-import type { TenantActorType } from "@/src/contracts/high_level/tenant-context";
+import type { TenantActorType } from "@/src/contracts/high-level/tenant-context";
 import type {
   TenantFieldName,
   TenantViewData,
-} from "@/src/contracts/high_level/tenant-display";
+} from "@/src/contracts/high-level/tenant-display";
 
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
+import type { TenantViewProps } from "@/src/contracts/high-level/component-props";
 
 const ALL_VIEW_FIELDS: TenantFieldName[] = [
   "companyId",
@@ -24,12 +25,6 @@ const ALL_VIEW_FIELDS: TenantFieldName[] = [
   "isolateCompany",
   "isolateUser",
 ];
-
-interface TenantViewProps {
-  tenant: TenantViewData;
-  visibleFields?: TenantFieldName[];
-  compact?: boolean;
-}
 
 const ACTOR_TYPE_EMOJI: Record<string, string> = {
   user: "👤",

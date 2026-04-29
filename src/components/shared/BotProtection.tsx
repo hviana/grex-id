@@ -3,10 +3,7 @@
 import { useCallback, useState } from "react";
 import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface BotProtectionProps {
-  onVerified: (token: string) => void;
-}
+import type { BotProtectionProps } from "@/src/contracts/high-level/component-props";
 
 export default function BotProtection({ onVerified }: BotProtectionProps) {
   const { t } = useTenantContext();

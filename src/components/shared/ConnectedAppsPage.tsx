@@ -6,14 +6,14 @@ import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import TenantView from "@/src/components/shared/TenantView";
-import type { TenantViewData } from "@/src/contracts/high_level/tenant-display";
+import type { TenantViewData } from "@/src/contracts/high-level/tenant-display";
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
-import type { ConnectedAppView } from "@/src/contracts/high_level/connected-apps";
+} from "@/src/contracts/high-level/pagination";
+import type { ConnectedAppView } from "@/src/contracts/high-level/connected-apps";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function ConnectedAppsPage() {

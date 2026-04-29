@@ -11,17 +11,9 @@ import FileUploadField from "@/src/components/fields/FileUploadField";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
+import type { SystemItem } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SystemItem {
-  id: string;
-  name: string;
-  slug: string;
-  logoUri: string;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function SystemsPage() {
   const { t } = useTenantContext();

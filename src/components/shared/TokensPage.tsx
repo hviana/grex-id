@@ -6,17 +6,17 @@ import Modal from "@/src/components/shared/Modal";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import TenantView from "@/src/components/shared/TenantView";
-import type { TenantViewData } from "@/src/contracts/high_level/tenant-display";
+import type { TenantViewData } from "@/src/contracts/high-level/tenant-display";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
-import type { ApiTokenView } from "@/src/contracts/high_level/tokens";
+} from "@/src/contracts/high-level/pagination";
+import type { ApiTokenView } from "@/src/contracts/high-level/tokens";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function TokensPage() {

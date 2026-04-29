@@ -1,5 +1,5 @@
 import Core from "./Core.ts";
-import type { CompiledFileAccess } from "@/src/contracts/high_level/cache-data";
+import type { CompiledFileAccess } from "@/src/contracts/high-level/cache-data";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
@@ -8,7 +8,7 @@ import type { Tenant } from "@/src/contracts/tenant";
 import type {
   FileAccessCheckParams,
   FileAccessCheckResult,
-} from "@/src/contracts/high_level/files";
+} from "@/src/contracts/high-level/files";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("file-access-guard.ts");

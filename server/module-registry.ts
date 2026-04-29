@@ -32,13 +32,16 @@ export {
   registerCache,
   updateCache,
 } from "./utils/cache.ts";
+import type {
+  JobStarter,
+  LifecycleEvent,
+  LifecycleHook,
+} from "../src/contracts/high-level/module-registry.ts";
 import { assertServerOnly } from "./utils/server-only.ts";
 
 assertServerOnly("module-registry");
 
 // ── Jobs ──────────────────────────────────────────────────
-
-type JobStarter = () => void;
 
 const jobRegistry: Record<string, JobStarter> = {};
 
@@ -112,8 +115,6 @@ export function channelHandlerName(channel: string): string {
 
 // ── Lifecycle hooks ───────────────────────────────────────
 
-type LifecycleHook = (payload: Record<string, unknown>) => Promise<void>;
-
 interface LifecycleRegistry {
   "lead:delete": LifecycleHook[];
   "lead:verify": LifecycleHook[];
@@ -123,8 +124,6 @@ const lifecycleHooks: LifecycleRegistry = {
   "lead:delete": [],
   "lead:verify": [],
 };
-
-type LifecycleEvent = keyof LifecycleRegistry;
 
 export function registerLifecycleHook(
   event: LifecycleEvent,

@@ -42,7 +42,7 @@ import { validateFields } from "../../utils/field-validator.ts";
 import { checkDuplicates } from "../../utils/entity-deduplicator.ts";
 import { decryptField, decryptFieldOptional } from "../../utils/crypto.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import type { PaginatedResult } from "@/src/contracts/high_level/pagination";
+import type { PaginatedResult } from "@/src/contracts/high-level/pagination";
 import type { Tenant } from "@/src/contracts/tenant";
 import type { SharedRecord as SharedRecordContract } from "@/src/contracts/shared-record";
 import type {
@@ -57,15 +57,14 @@ import type {
   GenericListOptions,
   GenericResult,
   ListSharedRecordsOptions,
+  Permission,
   TagFilter,
   ValidationError,
   WithCascade,
-} from "@/src/contracts/high_level/generics";
-import type { DeduplicationField } from "@/src/contracts/high_level/validation";
+} from "@/src/contracts/high-level/generics";
+import type { DeduplicationField } from "@/src/contracts/high-level/validation";
 
 assertServerOnly("generics");
-
-type Permission = "r" | "w" | "share";
 
 // ============================================================================
 // Schema-introspection cache (`INFO FOR TABLE` is cached per process)
@@ -262,7 +261,7 @@ async function buildAccessClause(
   };
 }
 
-// All public option & result types are now in @/src/contracts/high_level/generics
+// All public option & result types are now in @/src/contracts/high-level/generics
 
 // ============================================================================
 // Read-cascade planner & distributor
@@ -882,7 +881,7 @@ export async function genericDisassociate(
 // Every cascade level is independently access-checked against the caller.
 // ============================================================================
 
-// GenericDeleteResult is now in @/src/contracts/high_level/generics
+// GenericDeleteResult is now in @/src/contracts/high-level/generics
 
 export async function genericDelete(
   opts: GenericCrudOptions,
@@ -1078,7 +1077,7 @@ export async function genericCount(opts: GenericListOptions): Promise<number> {
 // DECRYPT
 // ============================================================================
 
-// DecryptFieldSpec is now in @/src/contracts/high_level/generics
+// DecryptFieldSpec is now in @/src/contracts/high-level/generics
 
 export async function genericDecrypt(
   opts: GenericCrudOptions & { decryptFields: DecryptFieldSpec[] },

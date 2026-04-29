@@ -1,5 +1,5 @@
 import { assertServerOnly } from "../../../server-only.ts";
-import type { SmsLayoutBanner } from "@/src/contracts/high_level/communication-templates";
+import type { SmsLayoutBanner } from "@/src/contracts/high-level/communication-templates";
 assertServerOnly("layout");
 
 export type { SmsLayoutBanner };

@@ -1,16 +1,7 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { KeyValueEntry } from "@/src/contracts/high_level/components";
-
-interface DynamicKeyValueFieldProps {
-  fields: KeyValueEntry[];
-  onChange: (fields: KeyValueEntry[]) => void;
-  keyPlaceholder?: string;
-  valuePlaceholder?: string;
-  descriptionPlaceholder?: string;
-  addLabel?: string;
-  showDescription?: boolean;
-}
+import type { KeyValueEntry } from "@/src/contracts/high-level/components";
+import type { DynamicKeyValueFieldProps } from "@/src/contracts/high-level/component-props";
 
 export default function DynamicKeyValueField(
   {

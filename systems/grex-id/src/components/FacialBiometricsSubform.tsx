@@ -8,32 +8,16 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import Spinner from "@/src/components/shared/Spinner";
 import { resizeImage } from "@/src/lib/resize-image";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-/* ------------------------------------------------------------------ */
-/*  Human.js types                                                     */
-/* ------------------------------------------------------------------ */
-
-type HumanFace = { faceScore?: number; embedding?: ArrayLike<number> };
-type HumanResult = { face: HumanFace[] };
-
-type HumanInstance = {
-  load: () => Promise<void>;
-  warmup: () => Promise<void>;
-  detect: (input: HTMLVideoElement | HTMLCanvasElement) => Promise<HumanResult>;
-};
-
-declare global {
-  interface Window {
-    Human?: {
-      Human: { new (config?: Record<string, unknown>): HumanInstance };
-    };
-    __humanScriptPromise?: Promise<void>;
-  }
-}
+import type {
+  HumanFace,
+  HumanInstance,
+  HumanResult,
+} from "@/systems/grex-id/src/contracts/high-level/human";
+import type { FacialBiometricsSubformProps } from "@/systems/grex-id/src/contracts/high-level/component-props";
 
 /* ------------------------------------------------------------------ */
 /*  Human.js CDN loader (module-level, runs once)                      */
@@ -142,13 +126,6 @@ function getHumanInstance(): Promise<HumanInstance> {
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
-
-interface FacialBiometricsSubformProps {
-  initialData?: Record<string, unknown>;
-  companyId?: string;
-  systemSlug?: string;
-  systemToken?: string;
-}
 
 const DETECTION_INTERVAL_MS = 500;
 const MIN_FACE_SCORE = 0.5;

@@ -1,13 +1,13 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import DynamicKeyValueField from "@/src/components/fields/DynamicKeyValueField";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { ResourceLimitField } from "@/src/contracts/high_level/resource-limits";
-import type { KeyValueEntry } from "@/src/contracts/high_level/components";
+import type { ResourceLimitField } from "@/src/contracts/high-level/resource-limits";
+import type { KeyValueEntry } from "@/src/contracts/high-level/components";
 
 function mapToKV(map: Record<string, number> | null): KeyValueEntry[] {
   if (!map) return [];
@@ -80,11 +80,7 @@ function initialSelectedFields(
   return selected;
 }
 
-interface ResourceLimitsSubformProps {
-  valueMode: "absolute" | "modifier";
-  initialData?: Record<string, unknown>;
-  systemSlug?: string;
-}
+import type { ResourceLimitsSubformProps } from "@/src/contracts/high-level/component-props";
 
 const inputCls =
   "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";

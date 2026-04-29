@@ -1,11 +1,11 @@
 "use client";
 
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
 import type {
   PlanCardProps,
   PlanView,
-} from "@/src/contracts/high_level/billing-display";
+} from "@/src/contracts/high-level/billing-display";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export function formatBytes(bytes: number): string {

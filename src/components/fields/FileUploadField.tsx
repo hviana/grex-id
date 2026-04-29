@@ -5,29 +5,14 @@ import Spinner from "@/src/components/shared/Spinner";
 import Modal from "@/src/components/shared/Modal";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
+import type {
+  FileUploadFieldProps,
+  TransformResult,
+} from "@/src/contracts/high-level/component-props";
+
 const MIME_TO_EXT: Record<string, string> = {
   "image/webp": ".webp",
 };
-
-interface TransformResult {
-  data: Uint8Array;
-  type: string;
-}
-
-interface FileUploadFieldProps {
-  fieldName: string;
-  allowedExtensions: string[];
-  maxSizeBytes: number;
-  companyId: string;
-  systemSlug: string;
-  category: string[];
-  previewEnabled?: boolean;
-  descriptionEnabled?: boolean;
-  currentUri?: string;
-  transformFn?: (file: File) => Promise<TransformResult>;
-  onComplete: (uri: string) => void;
-  onRemove?: () => void;
-}
 
 export default function FileUploadField({
   fieldName,

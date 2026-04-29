@@ -1,10 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SpinnerProps {
-  size?: "sm" | "md" | "lg";
-  className?: string;
-}
+import type { SpinnerProps } from "@/src/contracts/high-level/component-props";
 
 const sizeClasses = {
   sm: "h-4 w-4 border-2",

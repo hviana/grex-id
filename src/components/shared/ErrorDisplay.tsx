@@ -1,10 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ErrorDisplayProps {
-  message: string | null;
-  errors?: string[];
-}
+import type { ErrorDisplayProps } from "@/src/contracts/high-level/component-props";
 
 export default function ErrorDisplay({ message, errors }: ErrorDisplayProps) {
   const { t } = useTenantContext();

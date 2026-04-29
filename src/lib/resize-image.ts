@@ -1,10 +1,4 @@
-type ResizeOptions =
-  & { format: string }
-  & (
-    | { width: number; height: number }
-    | { width: number; height?: undefined }
-    | { width?: undefined; height: number }
-  );
+import type { ResizeOptions } from "@/src/contracts/high-level/component-props";
 
 export async function resizeImage(
   file: File,

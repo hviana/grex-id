@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import {
   batchUpsertSettings,
   buildScopeKey,
@@ -9,7 +9,7 @@ import {
 } from "@/server/db/queries/core-settings";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import Core from "@/server/utils/Core";
-import type { SettingScope } from "@/src/contracts/high_level/cache-data";
+import type { SettingScope } from "@/src/contracts/high-level/cache-data";
 
 const MAX_SETTINGS_SIZE_BYTES = 64 * 1024; // 64 KB
 

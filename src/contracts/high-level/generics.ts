@@ -117,3 +117,16 @@ export interface GenericDeleteResult {
   orphaned: boolean;
   cascaded?: string[];
 }
+
+// ============================================================================
+// Permission, validation, and standardization function signatures
+// ============================================================================
+
+/** Permission level for shared_record access. */
+export type Permission = "r" | "w" | "share";
+
+/** Validator function signature — returns i18n error keys. */
+export type ValidatorFn = (value: unknown) => Promise<string[]>;
+
+/** Standardizer function signature. */
+export type StandardizerFn = (value: string) => Promise<string>;

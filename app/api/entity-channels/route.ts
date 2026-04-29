@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
 
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
@@ -18,7 +18,7 @@ import { genericCount, genericGetById } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import type { CommunicationGuardResult } from "@/src/contracts/high_level/verification";
+import type { CommunicationGuardResult } from "@/src/contracts/high-level/verification";
 
 async function sendChannelConfirmation(
   userId: string,

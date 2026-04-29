@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import {
   createUserWithChannels,
   purgeAbandonedUsers,
@@ -14,7 +14,7 @@ import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";
 import { dispatchCommunication } from "@/server/event-queue/handlers/send-communication";
 import { communicationGuard } from "@/server/utils/verification-guard";
-import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
+import type { SubmittedChannel } from "@/src/contracts/high-level/channels";
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];

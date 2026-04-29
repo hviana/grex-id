@@ -3,7 +3,7 @@ import type {
   DeduplicationConflict,
   DeduplicationField,
   DeduplicationResult,
-} from "@/src/contracts/high_level/validation";
+} from "@/src/contracts/high-level/validation";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("server/utils/entity-deduplicator.ts");

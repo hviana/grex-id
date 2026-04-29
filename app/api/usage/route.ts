@@ -1,6 +1,6 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { getFS } from "@/server/utils/fs";
 import FileCacheManager from "@/server/utils/file-cache";
 import { resolveFileCacheLimit } from "@/server/utils/guards";

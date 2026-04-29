@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { connectFrontendDb } from "@/src/lib/db/connection";
-
-interface UseLiveQueryOptions<T> {
-  query: string;
-  bindings?: Record<string, unknown>;
-  enabled?: boolean;
-}
+import type { UseLiveQueryOptions } from "@/src/contracts/high-level/component-props";
 
 export function useLiveQuery<T>(
   { query, bindings, enabled = true }: UseLiveQueryOptions<T>,

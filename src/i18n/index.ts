@@ -19,9 +19,10 @@ import ptBRRoles from "./pt-BR/roles.json";
 import ptBREntities from "./pt-BR/entities.json";
 import ptBRResources from "./pt-BR/resources.json";
 
-import type { SupportedLocale } from "@/src/contracts/high_level/i18n";
-
-type TranslationMap = Record<string, string>;
+import type {
+  SupportedLocale,
+  TranslationMap,
+} from "@/src/contracts/high-level/i18n";
 
 const translations: Record<string, Record<string, TranslationMap>> = {
   en: {
@@ -115,6 +116,5 @@ export function t(
   return value;
 }
 
-export { type SupportedLocale } from "@/src/contracts/high_level/i18n";
 export const supportedLocales = ["en", "pt-BR"] as const;
 export const defaultLocale: SupportedLocale = "en";

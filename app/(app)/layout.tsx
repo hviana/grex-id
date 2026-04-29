@@ -7,9 +7,10 @@ import ProfileMenu from "@/src/components/shared/ProfileMenu";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import Spinner from "@/src/components/shared/Spinner";
 import type { MenuItem } from "@/src/contracts/menu";
-import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
+import type { MenuItemTree } from "@/src/contracts/high-level/menu-item";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import { type SupportedLocale, supportedLocales } from "@/src/i18n";
+import { supportedLocales } from "@/src/i18n";
+import type { SupportedLocale } from "@/src/contracts/high-level/i18n";
 import { getCookie, setCookie } from "@/src/lib/cookies";
 
 const COMPANY_COOKIE = "core_company";

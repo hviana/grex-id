@@ -8,7 +8,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import { Bar, Pie } from "react-chartjs-2";
 import {
   ArcElement,

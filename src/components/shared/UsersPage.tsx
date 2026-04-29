@@ -10,15 +10,15 @@ import DeleteButton from "@/src/components/shared/DeleteButton";
 import UserSubform from "@/src/components/subforms/UserSubform";
 import UserView, {
   userHasVerifiedChannel,
-  type UserViewData,
 } from "@/src/components/shared/UserView";
+import type { UserViewData } from "@/src/contracts/high-level/user";
 import AccessRequestModal from "@/src/components/shared/AccessRequestModal";
 import RemoveAccessModal from "@/src/components/shared/RemoveAccessModal";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function UsersPage() {

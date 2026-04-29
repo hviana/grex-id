@@ -1,20 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
+import type { MenuItemTree } from "@/src/contracts/high-level/menu-item";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import SidebarSearch from "./SidebarSearch.tsx";
 import SidebarMenuItem from "./SidebarMenuItem.tsx";
 import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SidebarProps {
-  menus: MenuItemTree[];
-  systemLogo?: string;
-  systemName?: string;
-  activeComponent?: string;
-  onNavigate: (componentName: string) => void;
-}
+import type { SidebarProps } from "@/src/contracts/high-level/component-props";
 
 /**
  * Finds the section label (the parent group emoji + label) for

@@ -2,11 +2,7 @@
 
 import type { PublicSystemInfo } from "@/src/contracts/system";
 import Spinner from "./Spinner.tsx";
-
-interface SystemBrandingProps {
-  systemInfo: PublicSystemInfo | null;
-  loading?: boolean;
-}
+import type { SystemBrandingProps } from "@/src/contracts/high-level/component-props";
 
 export default function SystemBranding(
   { systemInfo, loading }: SystemBrandingProps,

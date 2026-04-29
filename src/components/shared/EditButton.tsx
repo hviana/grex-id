@@ -2,11 +2,7 @@
 
 import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface EditButtonProps {
-  onClick: () => void;
-  loading?: boolean;
-}
+import type { EditButtonProps } from "@/src/contracts/high-level/component-props";
 
 export default function EditButton({ onClick, loading }: EditButtonProps) {
   const { t } = useTenantContext();

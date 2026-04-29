@@ -1,6 +1,6 @@
 import { t } from "@/src/i18n";
 import type { TemplateResult } from "@/src/contracts/communication";
-import type { HumanConfirmationTemplateData } from "@/src/contracts/high_level/communication-templates";
+import type { HumanConfirmationTemplateData } from "@/src/contracts/high-level/communication-templates";
 import { smsLayout } from "./layout.ts";
 import { assertServerOnly } from "../../../server-only.ts";
 

@@ -8,9 +8,9 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { ConnectedServiceView } from "@/src/contracts/high_level/connected-services";
+import type { ConnectedServiceView } from "@/src/contracts/high-level/connected-services";
 
 export default function ConnectedServicesPage() {
   const { t } = useTenantContext();

@@ -6,19 +6,14 @@ import Modal from "@/src/components/shared/Modal";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { MenuItemView } from "@/src/contracts/high_level/menu-item";
-
-interface TreeNode extends MenuItemView {
-  children: TreeNode[];
-}
-
-interface MenuTreeEditorProps {
-  systemId: string;
-  systemSlug?: string;
-}
+import type {
+  MenuItemView,
+  MenuTreeEditorProps,
+  TreeNode,
+} from "@/src/contracts/high-level/menu-item";
 
 function buildTree(items: MenuItemView[]): TreeNode[] {
   const map = new Map<string, TreeNode>();

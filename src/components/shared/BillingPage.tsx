@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
@@ -12,7 +12,7 @@ import GenericList from "@/src/components/shared/GenericList";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import PlanCard from "@/src/components/shared/PlanCard";
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
 import type {
   CreditPurchaseView,
   PaymentMethodView,
@@ -20,7 +20,7 @@ import type {
   PlanView,
   SubscriptionView,
   VoucherView,
-} from "@/src/contracts/high_level/billing-display";
+} from "@/src/contracts/high-level/billing-display";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 
 export default function BillingPage() {

@@ -6,7 +6,7 @@ import {
 } from "../../db/queries/detections";
 import { rid } from "@/server/db/connection";
 import Core from "@/server/utils/Core";
-import type { HandlerFn } from "@/src/contracts/high_level/event-queue";
+import type { HandlerFn } from "@/src/contracts/high-level/event-queue";
 import { assertServerOnly } from "@/server/utils/server-only.ts";
 
 assertServerOnly("process-detection");

@@ -1,16 +1,13 @@
 "use client";
 
 import React, { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface VoucherSubformProps {
-  initialData?: Record<string, unknown>;
-}
+import type { VoucherSubformProps } from "@/src/contracts/high-level/component-props";
 
 const inputCls =
   "w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-2.5 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors";

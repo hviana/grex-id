@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
 
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { clampPageLimit } from "@/src/lib/validators";
 import { getDb, rid } from "@/server/db/connection";
 import {
@@ -26,7 +26,7 @@ import { dispatchCommunication } from "@/server/event-queue/handlers/send-commun
 import Core from "@/server/utils/Core";
 import { communicationGuard } from "@/server/utils/verification-guard";
 import { forgetActor } from "@/server/utils/actor-validity";
-import type { SubmittedChannel } from "@/src/contracts/high_level/channels";
+import type { SubmittedChannel } from "@/src/contracts/high-level/channels";
 
 async function parseChannels(raw: unknown): Promise<SubmittedChannel[]> {
   if (!Array.isArray(raw)) return [];

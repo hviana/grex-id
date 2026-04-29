@@ -5,7 +5,7 @@ import Spinner from "@/src/components/shared/Spinner";
 import MenuTreeEditor from "@/src/components/core/MenuTreeEditor";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { SystemOption } from "@/src/contracts/high_level/components";
+import type { SystemOption } from "@/src/contracts/high-level/components";
 
 export default function MenusPage() {
   const { t } = useTenantContext();

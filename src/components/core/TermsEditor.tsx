@@ -6,7 +6,7 @@ import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import Modal from "@/src/components/shared/Modal";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { SystemTerms, TermsData } from "@/src/contracts/high_level/terms";
+import type { SystemTerms, TermsData } from "@/src/contracts/high-level/terms";
 
 export default function TermsEditor() {
   const { t } = useTenantContext();

@@ -3,16 +3,8 @@
 import TranslatedBadgeList from "@/src/components/shared/TranslatedBadgeList";
 import { formatBytes, limitEmoji } from "@/src/components/shared/PlanCard";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
-
-interface ResourceLimitsViewProps {
-  data: ResourceLimitsData;
-  systemSlug?: string;
-  title?: string;
-  className?: string;
-  /** When true, numeric values are displayed as signed modifiers (+/-). */
-  modifier?: boolean;
-}
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
+import type { ResourceLimitsViewProps } from "@/src/contracts/high-level/component-props";
 
 function has<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) return false;

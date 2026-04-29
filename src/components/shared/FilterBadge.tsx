@@ -1,9 +1,5 @@
 "use client";
-
-interface FilterBadgeProps {
-  label: string;
-  onRemove: () => void;
-}
+import type { FilterBadgeProps } from "@/src/contracts/high-level/component-props";
 
 export default function FilterBadge({ label, onRemove }: FilterBadgeProps) {
   return (

@@ -27,7 +27,8 @@ stricter rule. They are stated once.
 - **Serverless runtime.** Only standard Web APIs (`fetch`, `crypto`,
   `Request`/`Response`, `crypto.subtle`, Web Crypto). Never `node:*`, `Deno.*`,
   `Bun.*`.
-- **TypeScript strict.** Isomorphic contracts under `src/contracts/` and `src/contracts/high_level`.
+- **TypeScript strict.** Isomorphic contracts under `src/contracts/` and
+  `src/contracts/high-level`.
 - **Allowed npm/jsr packages (exhaustive):** Next.js 16, SurrealDB 3.0,
   TailwindCSS 4.2, `@hviana/surreal-fs`, `@panva/jose`, `otplib`,
   `react-chartjs-2` (+ `chart.js` peer), `xlsx`. No others without explicit
@@ -99,11 +100,11 @@ informational surfaces show translation only.
 
 Every data table has a file with the same name in `src/contracts`, containing
 exactly the same fields, no more, no less. High-level application contracts are
-located in `src/contracts/high_level` (including React component Props). Re-exporting data types outside of
-contracts is also not allowed. Contracts should not be replicated; types should
-be extended and existing types reused whenever possible. TypeScript typing is
-not allowed outside of these folders. No typescript hacks like "as unknown",
-etc.
+located in `src/contracts/high-level` (including React component Props).
+Re-exporting data types outside of contracts is also not allowed. Contracts
+should not be replicated; types should be extended and existing types reused
+whenever possible. TypeScript typing is not allowed outside of these folders. No
+typescript hacks like "as unknown", etc.
 
 ### 2.4 Data & safety
 
@@ -292,7 +293,7 @@ their own pagination, hand-rolled email/phone inputs, plain comma-separated
   ├── src/
   │   ├── components/       # UI components (replaces src/components/systems/<slug>/)
   │   ├── contracts/        # system-specific database types
-  │       └── high_level/   # system-specific high-level types
+  │       └── high-level/   # system-specific high-level types
   │   ├── hooks/            # React hooks
   │   ├── i18n/{en,pt-BR}/  # <slug>.json per locale
   │   ├── lib/              # isomorphic helpers
@@ -517,7 +518,7 @@ interface Tenant {
 
 The JWT carries only identity fields. All auth claims are resolved server-side
 at request time and stored in the **`TenantContext`**
-(`src/contracts/high_level/tenant-context.ts`):
+(`src/contracts/high-level/tenant-context.ts`):
 
 ```ts
 interface TenantContext {
@@ -1793,7 +1794,7 @@ systems/                        # Self-contained system bundles
     ├── src/
     │   ├── components/
     │   ├── contracts/          # database types
-    │       └── high_level/     # high-level types
+    │       └── high-level/     # high-level types
     │   ├── hooks/
     │   ├── i18n/{en,pt-BR}/    # <slug>.json per locale
     │   ├── lib/

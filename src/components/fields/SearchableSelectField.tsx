@@ -4,16 +4,7 @@ import { useEffect, useState } from "react";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import Spinner from "@/src/components/shared/Spinner";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SearchableSelectFieldProps {
-  fetchFn: (search: string) => Promise<{ id: string; label: string }[]>;
-  debounceMs?: number;
-  multiple?: boolean;
-  onChange: (selected: { id: string; label: string }[]) => void;
-  initialSelected?: { id: string; label: string }[];
-  showAllOnEmpty?: boolean;
-  placeholder?: string;
-}
+import type { SearchableSelectFieldProps } from "@/src/contracts/high-level/component-props";
 
 export default function SearchableSelectField({
   fetchFn,

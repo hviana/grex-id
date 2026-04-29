@@ -1,3 +1,7 @@
+import type {
+  FileAccessSection,
+  FileAccessUploadSection,
+} from "../file-access";
 import type { Tenant } from "../tenant";
 
 // ============================================================================
@@ -34,4 +38,15 @@ export interface FileCacheStats {
   usedBytes: number;
   maxBytes: number;
   fileCount: number;
+}
+
+/** File access rule list item used by the core admin file-access page. */
+export interface FileAccessItem {
+  id: string;
+  name: string;
+  categoryPattern: string;
+  download: FileAccessSection;
+  upload: FileAccessUploadSection;
+  createdAt: string;
+  [key: string]: unknown;
 }

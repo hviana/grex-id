@@ -1,17 +1,11 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import { resizeImage } from "@/src/lib/resize-image";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface ProfileSubformProps {
-  initialData?: Record<string, unknown>;
-  companyId?: string;
-  systemSlug?: string;
-  hideAvatar?: boolean;
-}
+import type { ProfileSubformProps } from "@/src/contracts/high-level/component-props";
 
 const ProfileSubform = forwardRef<SubformRef, ProfileSubformProps>(
   ({ initialData, companyId, systemSlug, hideAvatar }, ref) => {

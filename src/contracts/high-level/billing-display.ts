@@ -74,6 +74,59 @@ export interface PaymentRecordView {
   [key: string]: unknown;
 }
 
+/** Props for the shared VoucherCard component. */
+export interface VoucherCardProps {
+  voucher: {
+    id: string;
+    name: string;
+    applicablePlanIds: string[];
+    resourceLimitId?: ResourceLimitsData | null;
+    expiresAt: string | null;
+  };
+  onEdit: () => void;
+  onDelete: () => Promise<void>;
+}
+
+/** Plan option used by the onboarding system page. */
+export interface PlanOption {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  recurrenceDays: number;
+  resourceLimitId?: Record<string, unknown> | null;
+  isActive: boolean;
+  [key: string]: unknown;
+}
+
+/** Plan list item used by the core admin plans page. */
+export interface PlanItem {
+  id: string;
+  name: string;
+  description: string;
+  systemId: string;
+  price: number;
+  currency: string;
+  recurrenceDays: number;
+  resourceLimitId?: Record<string, unknown> | null;
+  isActive: boolean;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+/** Voucher list item used by the core admin vouchers page. */
+export interface VoucherItem {
+  id: string;
+  name: string;
+  applicableTenantIds: string[];
+  applicablePlanIds: string[];
+  resourceLimitId?: ResourceLimitsData | null;
+  expiresAt: string | null;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
 /** Props for the shared PlanCard component. */
 export interface PlanCardProps {
   plan: PlanView;

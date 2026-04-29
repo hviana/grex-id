@@ -2,16 +2,10 @@
 
 import { useCallback, useRef } from "react";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { TagView } from "@/src/contracts/high_level/tags";
-
-interface TagSearchProps {
-  value: string[];
-  onChange: (tagIds: string[]) => void;
-  label?: string;
-  debounceMs?: number;
-}
+import type { TagView } from "@/src/contracts/high-level/tags";
+import type { TagSearchProps } from "@/src/contracts/high-level/component-props";
 
 export default function TagSearch({
   value,

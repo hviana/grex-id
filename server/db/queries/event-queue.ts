@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { CandidateDelivery } from "@/src/contracts/high_level/event-queue";
+import type { CandidateDelivery } from "@/src/contracts/high-level/event-queue";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("event-queue");

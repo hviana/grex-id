@@ -2,13 +2,9 @@
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { isValidPassword } from "@/src/lib/validators";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface PasswordSubformProps {
-  initialData?: Record<string, unknown>;
-  requiredFields?: string[];
-}
+import type { PasswordSubformProps } from "@/src/contracts/high-level/component-props";
 
 const PasswordSubform = forwardRef<SubformRef, PasswordSubformProps>(
   ({ initialData, requiredFields }, ref) => {

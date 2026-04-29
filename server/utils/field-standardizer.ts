@@ -1,13 +1,12 @@
 import { assertServerOnly } from "./server-only.ts";
 import { encryptField } from "./crypto.ts";
 import { argon2Hash } from "../db/queries/crypto.ts";
-import type { FieldEncryptionMode } from "@/src/contracts/high_level/generics";
+import type {
+  FieldEncryptionMode,
+  StandardizerFn,
+} from "../../src/contracts/high-level/generics.ts";
 
 assertServerOnly("server/utils/field-standardizer.ts");
-
-export type { FieldEncryptionMode };
-
-type StandardizerFn = (value: string) => Promise<string>;
 
 /**
  * Entity+field-specific standardizers override the generic field standardizer.
@@ -53,7 +52,7 @@ const fieldStandardizers: Record<string, StandardizerFn> = {
  * In both cases `standardizeField` returns the final value (ciphertext envelope
  * or argon2 hash string).  The caller writes it as a plain `$binding`.
  */
-// FieldEncryptionMode is now in @/src/contracts/high_level/generics
+// FieldEncryptionMode is now in @/src/contracts/high-level/generics
 
 /**
  * Standardizes a field value, then encrypts/hashes if requested.

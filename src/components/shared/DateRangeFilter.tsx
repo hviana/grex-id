@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface DateRangeFilterProps {
-  maxRangeDays: number;
-  onChange: (start: Date, end: Date) => void;
-}
+import type { DateRangeFilterProps } from "@/src/contracts/high-level/component-props";
 
 export default function DateRangeFilter(
   { maxRangeDays, onChange }: DateRangeFilterProps,

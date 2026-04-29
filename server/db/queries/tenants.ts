@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { TenantRow } from "@/src/contracts/high_level/query-results";
+import type { TenantRow } from "@/src/contracts/high-level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tenants");

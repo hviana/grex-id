@@ -7,11 +7,8 @@ import SearchField from "@/src/components/shared/SearchField";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { SettingItem } from "@/src/contracts/high_level/settings";
-
-interface SettingsEditorProps {
-  mode?: "core" | "front";
-}
+import type { SettingItem } from "@/src/contracts/high-level/settings";
+import type { SettingsEditorProps } from "@/src/contracts/high-level/component-props";
 
 export default function SettingsEditor(
   { mode = "core" }: SettingsEditorProps,

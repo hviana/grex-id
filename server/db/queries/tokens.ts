@@ -1,6 +1,6 @@
 import { getDb, rid } from "../connection.ts";
 import type { ApiToken } from "@/src/contracts/token";
-import type { TokenCleanupResult } from "@/src/contracts/high_level/query-results";
+import type { TokenCleanupResult } from "@/src/contracts/high-level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("tokens");
@@ -105,7 +105,7 @@ export async function revokeToken(id: string): Promise<
 
 // ─── Token cleanup (used by token-cleanup job) ────────────────────────────
 
-// TokenCleanupResult is now in @/src/contracts/high_level/query-results
+// TokenCleanupResult is now in @/src/contracts/high-level/query-results
 
 export async function cleanupRevokedTokens(): Promise<TokenCleanupResult> {
   const db = await getDb();

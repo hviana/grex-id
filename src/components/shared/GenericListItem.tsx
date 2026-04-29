@@ -9,12 +9,7 @@ import {
   formatPhone,
 } from "@/src/lib/formatters";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface GenericListItemProps {
-  data: Record<string, unknown>;
-  fieldMap: Record<string, FieldType>;
-  controls: React.ReactNode;
-}
+import type { GenericListItemProps } from "@/src/contracts/high-level/component-props";
 
 export default function GenericListItem(
   { data, fieldMap, controls }: GenericListItemProps,

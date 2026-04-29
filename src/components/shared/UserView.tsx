@@ -4,10 +4,8 @@ import type { ReactNode } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import TenantView from "@/src/components/shared/TenantView";
 import ResourceLimitsView from "@/src/components/shared/ResourceLimitsView";
-import type { ResourceLimitsData } from "@/src/contracts/high_level/resource-limits";
-import type { UserViewData } from "@/src/contracts/high_level/user";
-
-export type { UserViewData } from "@/src/contracts/high_level/user";
+import type { ResourceLimitsData } from "@/src/contracts/high-level/resource-limits";
+import type { UserViewData } from "@/src/contracts/high-level/user";
 
 export function userPrimaryChannel(
   user: UserViewData,
@@ -30,12 +28,7 @@ export function userFirstUnverifiedChannelId(
   return (user.channelIds ?? []).find((c) => !c.verified)?.id ?? null;
 }
 
-interface UserViewProps {
-  user: UserViewData;
-  systemSlug?: string;
-  controls?: ReactNode;
-  groupNames?: string[];
-}
+import type { UserViewProps } from "@/src/contracts/high-level/component-props";
 
 export default function UserView(
   { user, systemSlug, controls, groupNames }: UserViewProps,

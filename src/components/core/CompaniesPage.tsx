@@ -5,17 +5,17 @@ import GenericList from "@/src/components/shared/GenericList";
 import Spinner from "@/src/components/shared/Spinner";
 import DateRangeFilter from "@/src/components/shared/DateRangeFilter";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import type {
   CoreCompany,
   CoreCompanySystem,
   RevenueChart,
-} from "@/src/contracts/high_level/core-companies";
-import type { FilterValues } from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/core-companies";
+import type { FilterValues } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { Bar } from "react-chartjs-2";
 import {

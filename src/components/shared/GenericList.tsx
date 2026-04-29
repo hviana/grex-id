@@ -5,13 +5,14 @@ import type { FieldType } from "@/src/contracts/common";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import type {
   FilterConfig,
   FilterValues,
   SubformConfig,
   SubformRef,
-} from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/components";
+import type { GenericListProps } from "@/src/contracts/high-level/component-props";
 
 import SearchField from "./SearchField.tsx";
 import CreateButton from "./CreateButton.tsx";
@@ -23,33 +24,6 @@ import GenericListItem from "./GenericListItem.tsx";
 import Spinner from "./Spinner.tsx";
 import FormModal from "./FormModal.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface GenericListProps<T extends Record<string, unknown>> {
-  entityName: string;
-  searchEnabled?: boolean;
-  createEnabled?: boolean;
-  filters?: FilterConfig[];
-  fetchFn: (
-    params: CursorParams & { search?: string; filters?: FilterValues },
-  ) => Promise<PaginatedResult<T>>;
-  renderItem?: (item: T, controls: React.ReactNode) => React.ReactNode;
-  fieldMap?: Record<string, FieldType>;
-  controlButtons?: ("edit" | "delete")[];
-  actionComponents?: {
-    key: string;
-    component: React.ComponentType<{ item: T }>;
-  }[];
-  debounceMs?: number;
-  formSubforms?: SubformConfig[];
-  createRoute?: string;
-  editRoute?: (id: string) => string;
-  deleteRoute?: (id: string) => string;
-  fetchOneRoute?: (id: string) => string;
-  authToken?: string | null;
-  extraData?: Record<string, unknown>;
-  onCreateClick?: () => void;
-  reloadKey?: number | string;
-}
 
 export default function GenericList<T extends Record<string, unknown>>({
   entityName,

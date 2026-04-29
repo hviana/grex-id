@@ -64,3 +64,46 @@ export interface FaceMatchResult {
   leadId: string;
   score: number;
 }
+
+/** Raw detection row shape returned by SurrealDB queries in listDetections. */
+export interface RawDetectionRow {
+  id: unknown;
+  detectedAt: string;
+  score: number;
+  locationId:
+    & Record<string, unknown>
+    & { id: unknown; name: string };
+  faceId?:
+    | (Record<string, unknown> & { id: unknown })
+    | null;
+  leadId?:
+    | (Record<string, unknown> & {
+      id: unknown;
+      name?: string;
+      email?: string;
+      phone?: string;
+      profileId?: { avatarUri?: string };
+    })
+    | null;
+}
+
+/** Aggregated face row returned by SurrealDB GROUP BY in getDetectionStats. */
+export interface AggregatedFaceRow {
+  faceId: Record<string, unknown> & { id: unknown };
+  leadId:
+    | (Record<string, unknown> & {
+      id: unknown;
+      name?: string;
+      email?: string;
+      phone?: string;
+      profileId?: { avatarUri?: string };
+    })
+    | null;
+  locationId: Record<string, unknown> & {
+    id: unknown;
+    name: string;
+  };
+  detectionCount: number;
+  lastDetectedAt: string;
+  bestScore: number;
+}

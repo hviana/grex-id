@@ -9,22 +9,16 @@ import EditButton from "@/src/components/shared/EditButton";
 import DeleteButton from "@/src/components/shared/DeleteButton";
 import TranslatedBadge from "@/src/components/shared/TranslatedBadge";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
-import type { SystemOption } from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/pagination";
+import type {
+  RoleItem,
+  SystemOption,
+} from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface RoleItem {
-  id: string;
-  name: string;
-  systemId: string;
-  isBuiltIn: boolean;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 export default function RolesPage() {
   const { t } = useTenantContext();

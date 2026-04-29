@@ -497,7 +497,7 @@ async function createSubsystem(slug: string, name: string): Promise<void> {
     // 2. Scoped directories per AGENTS.md §2.7 — all under systems/<slug>/.
     const scopedDirs = [
       `systems/${slug}/src/components`,
-      `systems/${slug}/src/contracts`,
+      `systems/${slug}/src/contracts/high-level`,
       `systems/${slug}/src/hooks`,
       `systems/${slug}/src/lib`,
       `systems/${slug}/src/providers`,
@@ -608,7 +608,7 @@ function createFramework(name: string): void {
   // 2. Directories per AGENTS.md §2.7 — all under frameworks/<name>/.
   const scopedDirs = [
     `frameworks/${name}/src/components`,
-    `frameworks/${name}/src/contracts`,
+    `frameworks/${name}/src/contracts/high-level`,
     `frameworks/${name}/src/hooks`,
     `frameworks/${name}/src/lib`,
     `frameworks/${name}/src/providers`,

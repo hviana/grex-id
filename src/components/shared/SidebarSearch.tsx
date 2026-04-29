@@ -1,10 +1,6 @@
 "use client";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SidebarSearchProps {
-  value: string;
-  onChange: (value: string) => void;
-}
+import type { SidebarSearchProps } from "@/src/contracts/high-level/component-props";
 
 export default function SidebarSearch({ value, onChange }: SidebarSearchProps) {
   const { t } = useTenantContext();

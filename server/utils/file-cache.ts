@@ -1,7 +1,7 @@
 import type {
   FileCacheResult,
   FileCacheStats,
-} from "@/src/contracts/high_level/files";
+} from "@/src/contracts/high-level/files";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("file-cache.ts");

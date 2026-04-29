@@ -3,7 +3,7 @@ import type { EntityChannel } from "@/src/contracts/entity-channel";
 import type {
   ChannelOwnerMatch,
   EntityChannelOwnerKind,
-} from "@/src/contracts/high_level/query-results";
+} from "@/src/contracts/high-level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("entity-channels");
@@ -135,7 +135,7 @@ export async function deleteChannel(params: {
   );
 }
 
-// ChannelOwnerMatch is now in @/src/contracts/high_level/query-results
+// ChannelOwnerMatch is now in @/src/contracts/high-level/query-results
 
 /**
  * Batched conflict-detection helper for registration/invite flows. Given a

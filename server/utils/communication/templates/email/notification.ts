@@ -3,7 +3,7 @@ import type { TemplateResult } from "@/src/contracts/communication";
 import type {
   MoneyValue,
   NotificationTemplateData,
-} from "@/src/contracts/high_level/communication-templates";
+} from "@/src/contracts/high-level/communication-templates";
 import { emailLayout, escapeHtml } from "./layout.ts";
 import { assertServerOnly } from "../../../server-only.ts";
 

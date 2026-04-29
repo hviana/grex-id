@@ -4,15 +4,7 @@ import { useCallback, useState } from "react";
 import * as XLSX from "xlsx";
 import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface DownloadDataProps {
-  data:
-    | Record<string, unknown>[]
-    | (() => Promise<Record<string, unknown>[]>);
-  fileName?: string;
-  sheetName?: string;
-  label?: string;
-}
+import type { DownloadDataProps } from "@/src/contracts/high-level/component-props";
 
 export default function DownloadData({
   data,

@@ -6,17 +6,12 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import EntityChannelsSubform from "@/src/components/subforms/EntityChannelsSubform";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import ResourceLimitsSubform from "@/src/components/subforms/ResourceLimitsSubform";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface UserSubformProps {
-  initialData?: Record<string, unknown>;
-  isCreate?: boolean;
-  systemSlug?: string;
-}
+import type { UserSubformProps } from "@/src/contracts/high-level/component-props";
 
 const UserSubform = forwardRef<SubformRef, UserSubformProps>(
   ({ initialData, isCreate = false, systemSlug }, ref) => {

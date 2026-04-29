@@ -3,26 +3,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import Spinner from "@/src/components/shared/Spinner";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
-
-interface MultiBadgeFieldProps {
-  name: string;
-  mode: "custom" | "search";
-  value: BadgeValue[];
-  onChange: (value: BadgeValue[]) => void;
-  fetchFn?: (search: string) => Promise<BadgeValue[]>;
-  staticOptions?: BadgeValue[];
-  formatHint?: string;
-  debounceMs?: number;
-  /**
-   * Optional custom renderer for each selected badge — enables consumers
-   * (roles/entities/resources forms) to swap the default chip
-   * for `TranslatedBadge` so both the raw token and its translation appear
-   * (§5.6.1, §18.1.2). Receives the badge value and a remove callback; the
-   * default chip is used when this prop is omitted.
-   */
-  renderBadge?: (item: BadgeValue, remove: () => void) => React.ReactNode;
-}
+import type { BadgeValue } from "@/src/contracts/high-level/components";
+import type { MultiBadgeFieldProps } from "@/src/contracts/high-level/component-props";
 
 function getBadgeLabel(item: BadgeValue): string {
   return typeof item === "string" ? item : item.name;

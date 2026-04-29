@@ -4,11 +4,7 @@ import { useState } from "react";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface TwoFactorSubformProps {
-  twoFactorEnabled: boolean;
-  onRequested?: () => void;
-}
+import type { TwoFactorSubformProps } from "@/src/contracts/high-level/component-props";
 
 /**
  * Profile-page 2FA section (§8.8.4). Owns the setup-totp + confirm-totp

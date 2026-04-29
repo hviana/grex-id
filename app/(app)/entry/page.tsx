@@ -5,17 +5,10 @@ import { useRouter } from "next/navigation";
 import Spinner from "@/src/components/shared/Spinner";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { getCookie, setCookie } from "@/src/lib/cookies";
+import type { DefaultMenuItem } from "@/src/contracts/high-level/menu-item";
 
 const COMPANY_COOKIE = "core_company";
 const SYSTEM_COOKIE = "core_system";
-
-interface DefaultMenuItem {
-  id: string;
-  componentName: string;
-  sortOrder: number;
-  roleIds: string[];
-  hiddenInPlanIds: string[];
-}
 
 function getDefaultMenus(): DefaultMenuItem[] {
   return [

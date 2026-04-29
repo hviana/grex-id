@@ -4,13 +4,8 @@ import { useState } from "react";
 import type {
   FilterConfig,
   FilterValues,
-} from "@/src/contracts/high_level/components";
-
-interface FilterDropdownProps {
-  filters: FilterConfig[];
-  values: FilterValues;
-  onChange: (values: FilterValues) => void;
-}
+} from "@/src/contracts/high-level/components";
+import type { FilterDropdownProps } from "@/src/contracts/high-level/component-props";
 
 export default function FilterDropdown(
   { filters, values, onChange }: FilterDropdownProps,

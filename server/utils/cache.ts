@@ -1,4 +1,5 @@
 import { assertServerOnly } from "./server-only.ts";
+import type { CacheLoader } from "../../src/contracts/high-level/cache-data.ts";
 
 assertServerOnly("cache.ts");
 
@@ -24,8 +25,6 @@ async function ensureBooted(): Promise<void> {
   }
   await bootPromise;
 }
-
-type CacheLoader<T> = () => Promise<T>;
 
 interface CacheEntry<T> {
   loader: CacheLoader<T>;

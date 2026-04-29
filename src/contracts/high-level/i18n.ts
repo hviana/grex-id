@@ -4,3 +4,5 @@
 // ============================================================================
 
 export type SupportedLocale = "en" | "pt-BR";
+
+export type TranslationMap = Record<string, string>;

@@ -32,7 +32,7 @@ function getCurrentPeriod(): string {
   return `${year}-${month}`;
 }
 
-import type { CreditDeductionResult } from "@/src/contracts/high_level/verification";
+import type { CreditDeductionResult } from "@/src/contracts/high-level/verification";
 export type { CreditDeductionResult };
 
 /**

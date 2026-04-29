@@ -4,10 +4,7 @@ import { useState } from "react";
 import Modal from "./Modal.tsx";
 import Spinner from "./Spinner.tsx";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface DeleteButtonProps {
-  onConfirm: () => Promise<void>;
-}
+import type { DeleteButtonProps } from "@/src/contracts/high-level/component-props";
 
 export default function DeleteButton({ onConfirm }: DeleteButtonProps) {
   const { t } = useTenantContext();

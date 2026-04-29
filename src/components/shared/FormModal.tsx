@@ -7,20 +7,9 @@ import ErrorDisplay from "./ErrorDisplay.tsx";
 import type {
   SubformConfig,
   SubformRef,
-} from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface FormModalProps {
-  title: string;
-  subforms: SubformConfig[];
-  submitRoute: string;
-  method: "POST" | "PUT";
-  initialData?: Record<string, unknown>;
-  onSuccess: () => void;
-  onClose: () => void;
-  authToken?: string | null;
-  extraData?: Record<string, unknown>;
-}
+import type { FormModalProps } from "@/src/contracts/high-level/component-props";
 
 export default function FormModal({
   title,

@@ -4,16 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Modal from "./Modal";
 import Spinner from "./Spinner";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { ShareEntry } from "@/src/contracts/high_level/sharing";
-
-interface RemoveAccessModalProps {
-  entityType: string;
-  entityId: string;
-  entityLabel?: string;
-  showPermission?: boolean;
-  onSuccess: () => void;
-  onClose: () => void;
-}
+import type { ShareEntry } from "@/src/contracts/high-level/sharing";
+import type { RemoveAccessModalProps } from "@/src/contracts/high-level/component-props";
 
 export default function RemoveAccessModal({
   entityType,

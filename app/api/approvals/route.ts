@@ -1,7 +1,7 @@
 import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
-import type { DBChangeRequest } from "@/src/contracts/high_level/event-payload";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
+import type { DBChangeRequest } from "@/src/contracts/high-level/event-payload";
 import {
   findUserByVerifiedChannel,
   findVerificationRequest,

@@ -110,9 +110,9 @@ What the command does (in order):
 6. Creates every scoped subfolder mandated by AGENTS.md §2.7 and drops a
    `.gitkeep` into any that would otherwise be empty:
    `systems/<slug>/src/components/`, `systems/<slug>/src/contracts/`,
-   `systems/<slug>/src/hooks/`, `systems/<slug>/src/lib/`,
-   `systems/<slug>/src/providers/`, `systems/<slug>/server/db/migrations/`,
-   `systems/<slug>/server/db/queries/`,
+   `systems/<slug>/src/contracts/high-level/`, `systems/<slug>/src/hooks/`,
+   `systems/<slug>/src/lib/`, `systems/<slug>/src/providers/`,
+   `systems/<slug>/server/db/migrations/`, `systems/<slug>/server/db/queries/`,
    `systems/<slug>/server/db/frontend-queries/`,
    `systems/<slug>/server/db/seeds/`,
    `systems/<slug>/server/event-queue/handlers/`, `systems/<slug>/server/jobs/`,
@@ -143,8 +143,8 @@ What the command does:
 5. Creates every scoped subfolder mandated by AGENTS.md §2.7 and drops a
    `.gitkeep` into any that would otherwise be empty:
    `frameworks/<name>/src/components/`, `frameworks/<name>/src/contracts/`,
-   `frameworks/<name>/src/hooks/`, `frameworks/<name>/src/lib/`,
-   `frameworks/<name>/src/providers/`,
+   `frameworks/<name>/src/contracts/high-level/` `frameworks/<name>/src/hooks/`,
+   `frameworks/<name>/src/lib/`, `frameworks/<name>/src/providers/`,
    `frameworks/<name>/server/db/migrations/`,
    `frameworks/<name>/server/db/queries/`,
    `frameworks/<name>/server/db/frontend-queries/`,

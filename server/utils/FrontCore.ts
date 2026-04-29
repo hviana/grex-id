@@ -4,14 +4,14 @@ import type {
   FrontCoreData,
   MissingFrontSetting,
   PublicSystemData,
-} from "@/src/contracts/high_level/cache-data";
+} from "@/src/contracts/high-level/cache-data";
 import { assertServerOnly } from "./server-only.ts";
 import { loadFrontSettingsForScope } from "../db/queries/front-settings.ts";
 import {
   buildScopeKey,
   resolveScopeChain,
 } from "../db/queries/core-settings.ts";
-import type { SettingScope } from "@/src/contracts/high_level/cache-data";
+import type { SettingScope } from "@/src/contracts/high-level/cache-data";
 import Core from "./Core.ts";
 
 assertServerOnly("FrontCore");

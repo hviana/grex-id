@@ -83,7 +83,7 @@ export async function getUserContext(
  * Result of inviting an existing user to a tenant, including data needed
  * for the notification message.
  */
-import type { InviteExistingUserResult } from "@/src/contracts/high_level/query-results";
+import type { InviteExistingUserResult } from "@/src/contracts/high-level/query-results";
 export type { InviteExistingUserResult };
 
 /**

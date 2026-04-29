@@ -9,13 +9,13 @@ import {
 } from "react";
 import Spinner from "@/src/components/shared/Spinner";
 import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import type {
   EntityChannelsSubformMode,
   EntityChannelsSubformProps,
-} from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/components";
 
 const DEFAULT_MAX = 10;
 

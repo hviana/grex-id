@@ -1,7 +1,7 @@
 import type {
   AuthAndLimitOptions,
   Middleware,
-} from "@/src/contracts/high_level/middleware";
+} from "@/src/contracts/high-level/middleware";
 import { verifyTenantToken } from "../utils/token.ts";
 import { enforceCors, getCorsHeaders } from "../utils/cors.ts";
 import {

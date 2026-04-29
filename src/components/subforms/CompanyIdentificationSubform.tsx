@@ -1,12 +1,9 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface CompanyIdentificationSubformProps {
-  initialData?: Record<string, unknown>;
-}
+import type { CompanyIdentificationSubformProps } from "@/src/contracts/high-level/component-props";
 
 const CompanyIdentificationSubform = forwardRef<
   SubformRef,

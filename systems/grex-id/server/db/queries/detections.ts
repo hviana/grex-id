@@ -2,15 +2,17 @@ import { getDb, normalizeRecordId, rid } from "@/server/db/connection";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
+} from "@/src/contracts/high-level/pagination";
 import { clampPageLimit } from "@/src/lib/validators";
 import { assertServerOnly } from "@/server/utils/server-only.ts";
 import type {
+  AggregatedFaceRow,
   DetectionIndividual,
   DetectionReportItem,
   DetectionStats,
   FaceMatchResult,
   GrexidDetection as Detection,
+  RawDetectionRow,
 } from "../../../src/contracts/grexid-detection";
 
 assertServerOnly("detections");
@@ -51,30 +53,6 @@ export async function createDetection(data: {
     bindings,
   );
   return result[0][0];
-}
-
-interface RawDetectionRow {
-  id: unknown;
-  detectedAt: string;
-  score: number;
-  locationId:
-    & Record<string, unknown>
-    & {
-      id: unknown;
-      name: string;
-    };
-  faceId?:
-    | (Record<string, unknown> & { id: unknown })
-    | null;
-  leadId?:
-    | (Record<string, unknown> & {
-      id: unknown;
-      name?: string;
-      email?: string;
-      phone?: string;
-      profileId?: { avatarUri?: string };
-    })
-    | null;
 }
 
 export async function listDetections(
@@ -209,27 +187,6 @@ export async function listDetections(
       ? enriched[enriched.length - 1]?.id ?? undefined
       : undefined,
   };
-}
-
-// Aggregated row returned by SurrealQL GROUP BY + count/math::max
-interface AggregatedFaceRow {
-  faceId: Record<string, unknown> & { id: unknown };
-  leadId:
-    | (Record<string, unknown> & {
-      id: unknown;
-      name?: string;
-      email?: string;
-      phone?: string;
-      profileId?: { avatarUri?: string };
-    })
-    | null;
-  locationId: Record<string, unknown> & {
-    id: unknown;
-    name: string;
-  };
-  detectionCount: number;
-  lastDetectedAt: string;
-  bestScore: number;
 }
 
 export async function getDetectionStats(params: {

@@ -1,14 +1,11 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useState } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import FileUploadField from "@/src/components/fields/FileUploadField";
 import { resizeImage } from "@/src/lib/resize-image";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SystemFormProps {
-  initialData?: Record<string, unknown>;
-}
+import type { SystemFormProps } from "@/src/contracts/high-level/component-props";
 
 const SystemForm = forwardRef<SubformRef, SystemFormProps>(
   ({ initialData }, ref) => {

@@ -1,7 +1,7 @@
 import type {
   RateLimitConfig,
   RateLimitResult,
-} from "@/src/contracts/high_level/rate-limiter";
+} from "@/src/contracts/high-level/rate-limiter";
 import { assertServerOnly } from "./server-only.ts";
 
 assertServerOnly("rate-limiter.ts");
@@ -31,7 +31,7 @@ function cleanup(windowMs: number): void {
   }
 }
 
-// RateLimitConfig and RateLimitResult types are now in @/src/contracts/high_level/rate-limiter
+// RateLimitConfig and RateLimitResult types are now in @/src/contracts/high-level/rate-limiter
 
 export function checkRateLimit(
   key: string,

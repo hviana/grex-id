@@ -1,6 +1,6 @@
 import { getDb, rid } from "../connection.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
-import type { DBChangeRequest } from "@/src/contracts/high_level/event-payload";
+import type { DBChangeRequest } from "@/src/contracts/high-level/event-payload";
 import {
   genericAssociate,
   genericCount,

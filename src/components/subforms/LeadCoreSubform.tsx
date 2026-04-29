@@ -7,21 +7,14 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SubformRef } from "@/src/contracts/high_level/components";
+import type { SubformRef } from "@/src/contracts/high-level/components";
 import EntityChannelsSubform from "./EntityChannelsSubform.tsx";
 import ProfileSubform from "./ProfileSubform.tsx";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
-import type { BadgeValue } from "@/src/contracts/high_level/components";
+import type { BadgeValue } from "@/src/contracts/high-level/components";
 import type { EntityChannel } from "@/src/contracts/entity-channel";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface LeadCoreSubformProps {
-  initialData?: Record<string, unknown>;
-  hideTags?: boolean;
-  companyId?: string;
-  systemId?: string;
-  systemSlug?: string;
-}
+import type { LeadCoreSubformProps } from "@/src/contracts/high-level/component-props";
 
 const LeadCoreSubform = forwardRef<SubformRef, LeadCoreSubformProps>(
   ({ initialData, hideTags, companyId, systemId, systemSlug }, ref) => {

@@ -4,12 +4,7 @@ import { useState } from "react";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { useEffect } from "react";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SearchFieldProps {
-  onSearch: (query: string) => void;
-  debounceMs?: number;
-  placeholder?: string;
-}
+import type { SearchFieldProps } from "@/src/contracts/high-level/component-props";
 
 export default function SearchField(
   { onSearch, debounceMs = 300, placeholder }: SearchFieldProps,

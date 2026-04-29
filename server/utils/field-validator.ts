@@ -1,8 +1,7 @@
 import { assertServerOnly } from "./server-only.ts";
+import type { ValidatorFn } from "../../src/contracts/high-level/generics.ts";
 
 assertServerOnly("server/utils/field-validator.ts");
-
-type ValidatorFn = (value: unknown) => Promise<string[]>;
 
 /**
  * Entity+field-specific validators override the generic field validator.

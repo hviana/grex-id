@@ -1,16 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { MenuItemTree } from "@/src/contracts/high_level/menu-item";
+import type { MenuItemTree } from "@/src/contracts/high-level/menu-item";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface SidebarMenuItemProps {
-  item: MenuItemTree;
-  depth?: number;
-  searchQuery?: string;
-  activeComponent?: string;
-  onNavigate: (componentName: string) => void;
-}
+import type { SidebarMenuItemProps } from "@/src/contracts/high-level/component-props";
 
 function countLeaves(item: MenuItemTree): number {
   if (!item.children?.length) return 0;

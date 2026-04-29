@@ -1,5 +1,5 @@
-import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
-import type { Middleware } from "@/src/contracts/high_level/middleware";
+import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
+import type { Middleware } from "@/src/contracts/high-level/middleware";
 import { assertServerOnly } from "../utils/server-only.ts";
 
 assertServerOnly("compose");

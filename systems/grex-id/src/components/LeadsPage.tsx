@@ -11,20 +11,17 @@ import GenericList from "@/src/components/shared/GenericList";
 import type {
   SubformConfig,
   SubformRef,
-} from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/components";
 import LeadCoreSubform from "@/src/components/subforms/LeadCoreSubform";
 import FacialBiometricsSubform from "./FacialBiometricsSubform.tsx";
 import SearchableSelectField from "@/src/components/fields/SearchableSelectField";
 import type {
   CursorParams,
   PaginatedResult,
-} from "@/src/contracts/high_level/pagination";
-import type { FilterValues } from "@/src/contracts/high_level/components";
+} from "@/src/contracts/high-level/pagination";
+import type { FilterValues } from "@/src/contracts/high-level/components";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-
-interface OwnerSubformProps {
-  initialData?: Record<string, unknown>;
-}
+import type { OwnerSubformProps } from "@/systems/grex-id/src/contracts/high-level/component-props";
 
 const OwnerSubform = forwardRef<SubformRef, OwnerSubformProps>(
   ({ initialData }, ref) => {
