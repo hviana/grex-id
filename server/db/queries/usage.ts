@@ -99,7 +99,7 @@ export async function upsertUsageRecord(params: {
   const db = await getDb();
   await db.query(
     `UPSERT usage_record SET
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       resourceKey = $resourceKey,
       value += $value,
       period = $period

@@ -72,6 +72,12 @@ function normalizeLead<T extends Partial<Lead>>(lead: T | null): T | null {
         return [];
       })(),
     ),
+    channelIds: (() => {
+      const raw = (lead as { channelIds?: unknown }).channelIds;
+      if (raw instanceof Set) return [...raw] as string[];
+      if (Array.isArray(raw)) return raw as string[];
+      return [];
+    })(),
   };
 }
 
@@ -158,8 +164,8 @@ export async function createLead(data: {
       name = $name,
       profileId = $prof[0].id,
       channelIds = {${channelsArray}},
-      tenantIds = $tenantIds,
-      tagIds = $tags;
+      tenantIds = <set>$tenantIds,
+      tagIds = <set>$tagIds;
     SELECT * FROM $ld[0].id FETCH profileId, channelIds;`;
 
   const result = await db.query<unknown[]>(query, bindings);
@@ -191,11 +197,11 @@ export async function updateLead(
     bindings.name = data.name;
   }
   if (data.tags !== undefined) {
-    sets.push("tagIds = $tags");
+    sets.push("tagIds = <set>$tags");
     bindings.tags = data.tags;
   }
   if (tenantIds !== undefined) {
-    sets.push("tenantIds = $tenantIds");
+    sets.push("tenantIds = <set>$tenantIds");
     bindings.tenantIds = tenantIds.map((tenantId) => rid(tenantId));
   }
 

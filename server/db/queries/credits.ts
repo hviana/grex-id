@@ -109,7 +109,7 @@ export async function deductFromPlanCredits(params: {
         : ""
     };
      UPSERT credit_expense SET
-       tenantIds = {$tenantId},
+       tenantIds = <set>[$tenantId],
        resourceKey = $resourceKey, amount += $amount, count += 1, day = $day,
        actorId = $actorId
      WHERE tenantIds CONTAINS $tenantId
@@ -149,12 +149,12 @@ export async function deductFromPurchasedCredits(params: {
         : ""
     };
      UPSERT usage_record SET
-       tenantIds = {$tenantId},
+       tenantIds = <set>[$tenantId],
        resourceKey = "credits", value -= $fromPurchased, period = $period
      WHERE tenantIds CONTAINS $tenantId
        AND resourceKey = "credits";
      UPSERT credit_expense SET
-       tenantIds = {$tenantId},
+       tenantIds = <set>[$tenantId],
        resourceKey = $resourceKey, amount += $totalAmount, count += 1, day = $day,
        actorId = $actorId
      WHERE tenantIds CONTAINS $tenantId
@@ -255,7 +255,7 @@ export async function upsertCreditExpense(params: {
   const db = await getDb();
   await db.query(
     `UPSERT credit_expense SET
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       resourceKey = $resourceKey,
       amount += $amount,
       count += 1,

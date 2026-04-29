@@ -173,7 +173,7 @@ export async function subscribe(params: {
      };
      UPDATE subscription SET status = "cancelled" WHERE tenantIds CONTAINS $tenantId AND status = "active";
      CREATE subscription SET
-       tenantIds = {$tenantId},
+       tenantIds = <set>[$tenantId],
        planId = $planId,
        paymentMethodId = ${
       params.paymentMethodId ? "$paymentMethodId" : "NONE"
@@ -234,7 +234,7 @@ export async function addPaymentMethod(data: {
       postalCode = $postalCode;
     LET $existingCount = (SELECT count() FROM payment_method WHERE tenantIds CONTAINS $tenantId GROUP ALL).count ?? 0;
     LET $pm = CREATE payment_method SET
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       type = "credit_card",
       data = $cardData,
       billingAddressId = $addr[0].id,
@@ -309,7 +309,7 @@ export async function purchaseCredits(params: {
     `LET $subId = (SELECT id FROM subscription
       WHERE tenantIds CONTAINS $tenantId AND status = "active" LIMIT 1)[0].id;
      CREATE credit_purchase SET
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       amount = $amount,
       paymentMethodId = $paymentMethodId,
       subscriptionId = $subId,
@@ -665,7 +665,7 @@ export async function createPaymentRecord(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE payment SET
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       subscriptionId = $subId,
       amount = $amount,
       currency = $currency,
@@ -764,7 +764,7 @@ export async function creditPurchaseOnSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
        AND resourceKey = "credits";`,
@@ -980,7 +980,7 @@ export async function resolveAsyncCreditSuccess(params: {
   const stmts = [
     `UPSERT usage_record SET
       ${actorIdClause}
-      tenantIds = {$tenantId},
+      tenantIds = <set>[$tenantId],
       resourceKey = "credits", value += $amount, period = $period
      WHERE tenantIds CONTAINS $tenantId
        AND resourceKey = "credits";`,
@@ -1118,7 +1118,7 @@ export async function createAutoRechargePurchase(params: {
   const db = await getDb();
   const result = await db.query<[{ id: string }[]]>(
     `CREATE credit_purchase SET
-       tenantIds = {$tenantId},
+       tenantIds = <set>[$tenantId],
        amount = $amount,
        paymentMethodId = $paymentMethodId,
        subscriptionId = $subscriptionId,

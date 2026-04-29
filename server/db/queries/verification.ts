@@ -66,7 +66,7 @@ export async function atomicCommunicationGuard(params: {
         token = $verificationToken,
         expiresAt = $expiresAt,
         payload = $payload,
-        tenantIds = IF $tenantId != NONE THEN {$tenantId} ELSE NONE END
+        tenantIds = IF $tenantId != NONE THEN <set>[$tenantId] ELSE NONE END
     ) ELSE [] END;
 
     [{

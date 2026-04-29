@@ -125,7 +125,7 @@ export async function deleteChannel(params: {
   void ownerTable(params.ownerKind);
   await db.query(
     `UPDATE $ownerId SET
-        channelIds = set::difference(channelIds, {$channelId}),
+        channelIds = set::difference(channelIds, <set>[$channelId]),
         updatedAt = time::now();
      DELETE $channelId;`,
     {
@@ -266,15 +266,21 @@ export async function findVerifiedOwnerByChannelValue(
                   THEN {}
                   ELSE (SELECT id FROM user WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
-     LET $lHit  = IF $chId = NONE OR array::len($uHit) > 0
+     LET $lHit  = IF $chId = NONE
                   THEN {}
-                  ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
+                  ELSE (IF array::len($uHit) > 0
+                        THEN {}
+                        ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
+                        END)
                   END;
-     IF array::len($uHit) > 0
-       THEN [{ id: $uHit[0].id, ownerKind: "user", channel: $ch }]
-       ELSE (IF array::len($lHit) > 0
-         THEN [{ id: $lHit[0].id, ownerKind: "lead", channel: $ch }]
-         ELSE []
+     IF $chId = NONE
+       THEN {}
+       ELSE (IF array::len($uHit) > 0
+         THEN [{ id: $uHit[0].id, ownerKind: "user", channel: $ch }]
+         ELSE (IF array::len($lHit) > 0
+           THEN [{ id: $lHit[0].id, ownerKind: "lead", channel: $ch }]
+           ELSE {}
+         END)
        END)
      END;`,
     { value },
@@ -321,15 +327,21 @@ export async function findVerifiedOwnerByTypedChannel(
                   THEN {}
                   ELSE (SELECT id FROM user WHERE channelIds CONTAINS $chId LIMIT 1)
                   END;
-     LET $lHit  = IF $chId = NONE OR array::len($uHit) > 0
+     LET $lHit  = IF $chId = NONE
                   THEN {}
-                  ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
+                  ELSE (IF array::len($uHit) > 0
+                        THEN {}
+                        ELSE (SELECT id FROM lead WHERE channelIds CONTAINS $chId LIMIT 1)
+                        END)
                   END;
-     IF array::len($uHit) > 0
-       THEN [{ id: $uHit[0].id, ownerKind: "user", channel: $ch }]
-       ELSE (IF array::len($lHit) > 0
-         THEN [{ id: $lHit[0].id, ownerKind: "lead", channel: $ch }]
-         ELSE []
+     IF $chId = NONE
+       THEN {}
+       ELSE (IF array::len($uHit) > 0
+         THEN [{ id: $uHit[0].id, ownerKind: "user", channel: $ch }]
+         ELSE (IF array::len($lHit) > 0
+           THEN [{ id: $lHit[0].id, ownerKind: "lead", channel: $ch }]
+           ELSE {}
+         END)
        END)
      END;`,
     { type, value },
