@@ -8,7 +8,6 @@ import enValidation from "./en/validation.json";
 import enRoles from "./en/roles.json";
 import enEntities from "./en/entities.json";
 import enResources from "./en/resources.json";
-import enGrexId from "./en/systems/grex-id.json";
 import ptBRCommon from "./pt-BR/common.json";
 import ptBRAuth from "./pt-BR/auth.json";
 import ptBRCore from "./pt-BR/core.json";
@@ -19,7 +18,6 @@ import ptBRValidation from "./pt-BR/validation.json";
 import ptBRRoles from "./pt-BR/roles.json";
 import ptBREntities from "./pt-BR/entities.json";
 import ptBRResources from "./pt-BR/resources.json";
-import ptBRGrexId from "./pt-BR/systems/grex-id.json";
 
 import type { SupportedLocale } from "@/src/contracts/high_level/i18n";
 
@@ -52,10 +50,7 @@ const translations: Record<string, Record<string, TranslationMap>> = {
   },
 };
 
-const systemTranslations: Record<string, Record<string, TranslationMap>> = {
-  en: { "grex-id": enGrexId },
-  "pt-BR": { "grex-id": ptBRGrexId },
-};
+const systemTranslations: Record<string, Record<string, TranslationMap>> = {};
 const frameworkTranslations: Record<string, Record<string, TranslationMap>> =
   {};
 

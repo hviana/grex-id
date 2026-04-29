@@ -15,18 +15,6 @@ const componentRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
   "connected-services": lazy(
     () => import("@/src/components/shared/ConnectedServicesPage"),
   ),
-  "grexid-locations": lazy(
-    () => import("@/src/components/systems/grex-id/LocationsPage"),
-  ),
-  "grexid-leads": lazy(
-    () => import("@/src/components/systems/grex-id/LeadsPage"),
-  ),
-  "grexid-detections": lazy(
-    () => import("@/src/components/systems/grex-id/DetectionReportPage"),
-  ),
-  "grexid-settings": lazy(
-    () => import("@/src/components/systems/grex-id/SettingsPage"),
-  ),
 };
 
 export function registerComponent(
@@ -46,12 +34,8 @@ export { componentRegistry };
 
 // --- Homepage registry ---
 // Each system registers its own homepage component keyed by system slug.
-// Example: registerHomePage("my-system", () => import("@/src/components/systems/my-system/HomePage"))
-const homepageRegistry: Record<string, LazyExoticComponent<ComponentType>> = {
-  "grex-id": lazy(
-    () => import("@/src/components/systems/grex-id/HomePage"),
-  ),
-};
+// Example: registerHomePage("my-system", () => import("@/systems/my-system/src/components/HomePage"))
+const homepageRegistry: Record<string, LazyExoticComponent<ComponentType>> = {};
 
 export function registerHomePage(
   systemSlug: string,

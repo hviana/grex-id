@@ -5,7 +5,7 @@ import type { RequestContext } from "@/src/contracts/high_level/tenant-context";
 import {
   getDetectionStats,
   listDetections,
-} from "@/server/db/queries/systems/grex-id/detections";
+} from "@/systems/grex-id/server/db/queries/detections";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);

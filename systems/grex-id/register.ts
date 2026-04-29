@@ -5,11 +5,11 @@ import {
   registerLifecycleHook,
   registerSystemI18n,
 } from "@/server/module-registry";
-import { processDetection } from "@/server/event-queue/handlers/systems/grex-id/process-detection";
-import { deleteFaceByLeadId } from "@/server/db/queries/systems/grex-id/faces";
-import { tryUpsertFace } from "@/server/db/queries/systems/grex-id/faces";
-import enGrexId from "@/src/i18n/en/systems/grex-id.json";
-import ptBRGrexId from "@/src/i18n/pt-BR/systems/grex-id.json";
+import { processDetection } from "./server/event-queue/handlers/process-detection";
+import { deleteFaceByLeadId } from "./server/db/queries/faces";
+import { tryUpsertFace } from "./server/db/queries/faces";
+import enGrexId from "./src/i18n/en/grex-id.json";
+import ptBRGrexId from "./src/i18n/pt-BR/grex-id.json";
 
 export function register(): void {
   // Event handlers — name is both the event and the function key
@@ -18,25 +18,25 @@ export function register(): void {
   // Components
   registerComponent(
     "grexid-locations",
-    () => import("@/src/components/systems/grex-id/LocationsPage"),
+    () => import("./src/components/LocationsPage"),
   );
   registerComponent(
     "grexid-leads",
-    () => import("@/src/components/systems/grex-id/LeadsPage"),
+    () => import("./src/components/LeadsPage"),
   );
   registerComponent(
     "grexid-detections",
-    () => import("@/src/components/systems/grex-id/DetectionReportPage"),
+    () => import("./src/components/DetectionReportPage"),
   );
   registerComponent(
     "grexid-settings",
-    () => import("@/src/components/systems/grex-id/SettingsPage"),
+    () => import("./src/components/SettingsPage"),
   );
 
   // Homepage
   registerHomePage(
     "grex-id",
-    () => import("@/src/components/systems/grex-id/HomePage"),
+    () => import("./src/components/HomePage"),
   );
 
   // i18n

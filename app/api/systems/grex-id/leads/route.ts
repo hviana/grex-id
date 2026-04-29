@@ -14,7 +14,7 @@ import {
   linkOrphanFaceToLead,
   searchOrphanFaceByEmbedding,
   tryUpsertFace,
-} from "@/server/db/queries/systems/grex-id/faces";
+} from "@/systems/grex-id/server/db/queries/faces";
 import Core from "@/server/utils/Core";
 import { standardizeField } from "@/server/utils/field-standardizer";
 import { validateField } from "@/server/utils/field-validator";

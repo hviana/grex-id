@@ -29,18 +29,24 @@ export async function runSeeds(): Promise<void> {
     .filter((f) => /^\d{3}_.*\.ts$/.test(f))
     .map((f) => ({ name: f, filePath: path.join(seedsDir, f) }));
 
-  // Collect system seeds from systems/[slug]/ subfolders
-  const systemsDir = path.join(seedsDir, "systems");
+  // Collect system seeds from systems/<slug>/server/db/seeds/
+  const systemsRoot = path.resolve(seedsDir, "../../../systems");
   const systemFiles: { name: string; filePath: string }[] = [];
-  if (fs.existsSync(systemsDir)) {
-    for (const slug of fs.readdirSync(systemsDir)) {
-      const slugDir = path.join(systemsDir, slug);
-      if (!fs.statSync(slugDir).isDirectory()) continue;
-      for (const f of fs.readdirSync(slugDir)) {
+  if (fs.existsSync(systemsRoot)) {
+    for (const slug of fs.readdirSync(systemsRoot)) {
+      const slugSeedsDir = path.join(
+        systemsRoot,
+        slug,
+        "server",
+        "db",
+        "seeds",
+      );
+      if (!fs.existsSync(slugSeedsDir)) continue;
+      for (const f of fs.readdirSync(slugSeedsDir)) {
         if (!/^\d{3}_.*\.ts$/.test(f)) continue;
         systemFiles.push({
           name: `systems/${slug}/${f}`,
-          filePath: path.join(slugDir, f),
+          filePath: path.join(slugSeedsDir, f),
         });
       }
     }

@@ -27,18 +27,47 @@ export async function runMigrations(): Promise<void> {
     .filter((f) => f.endsWith(".surql"))
     .map((f) => ({ name: f, filePath: path.join(migrationsDir, f) }));
 
-  // Collect system-specific migrations from systems/[system-slug]/ subfolders
-  const systemsDir = path.join(migrationsDir, "systems");
+  // Collect system-specific migrations from systems/<slug>/server/db/migrations/
+  const systemsRoot = path.resolve(migrationsDir, "../../../systems");
   const systemFiles: { name: string; filePath: string }[] = [];
-  if (fs.existsSync(systemsDir)) {
-    for (const slug of fs.readdirSync(systemsDir)) {
-      const slugDir = path.join(systemsDir, slug);
-      if (!fs.statSync(slugDir).isDirectory()) continue;
-      for (const f of fs.readdirSync(slugDir)) {
+  if (fs.existsSync(systemsRoot)) {
+    for (const slug of fs.readdirSync(systemsRoot)) {
+      const slugMigrationsDir = path.join(
+        systemsRoot,
+        slug,
+        "server",
+        "db",
+        "migrations",
+      );
+      if (!fs.existsSync(slugMigrationsDir)) continue;
+      for (const f of fs.readdirSync(slugMigrationsDir)) {
         if (!f.endsWith(".surql")) continue;
         systemFiles.push({
           name: `systems/${slug}/${f}`,
-          filePath: path.join(slugDir, f),
+          filePath: path.join(slugMigrationsDir, f),
+        });
+      }
+    }
+  }
+
+  // Collect framework-specific migrations from frameworks/<name>/server/db/migrations/
+  const frameworksRoot = path.resolve(migrationsDir, "../../../frameworks");
+  const frameworkFiles: { name: string; filePath: string }[] = [];
+  if (fs.existsSync(frameworksRoot)) {
+    for (const fwName of fs.readdirSync(frameworksRoot)) {
+      const fwMigrationsDir = path.join(
+        frameworksRoot,
+        fwName,
+        "server",
+        "db",
+        "migrations",
+      );
+      if (!fs.existsSync(fwMigrationsDir)) continue;
+      for (const f of fs.readdirSync(fwMigrationsDir)) {
+        if (!f.endsWith(".surql")) continue;
+        frameworkFiles.push({
+          name: `frameworks/${fwName}/${f}`,
+          filePath: path.join(fwMigrationsDir, f),
         });
       }
     }
@@ -49,8 +78,8 @@ export async function runMigrations(): Promise<void> {
     const base = name.includes("/") ? name.split("/").pop()! : name;
     return base.split("_")[0];
   };
-  const files = [...coreFiles, ...systemFiles].sort((a, b) =>
-    getPrefix(a.name).localeCompare(getPrefix(b.name))
+  const files = [...coreFiles, ...systemFiles, ...frameworkFiles].sort(
+    (a, b) => getPrefix(a.name).localeCompare(getPrefix(b.name)),
   );
 
   const applied = await db.query<[{ name: string }[]]>(
