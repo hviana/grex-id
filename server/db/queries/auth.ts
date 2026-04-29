@@ -1,10 +1,10 @@
 import { getDb, rid } from "../connection.ts";
 import type { User } from "@/src/contracts/user";
+import type { VerificationRequest } from "@/src/contracts/verification-request";
 import type {
   VerificationActorType,
   VerificationOwnerType,
-  VerificationRequest,
-} from "@/src/contracts/verification-request";
+} from "@/src/contracts/high-level/verification";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("auth");

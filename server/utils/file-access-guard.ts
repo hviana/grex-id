@@ -3,7 +3,7 @@ import type { CompiledFileAccess } from "@/src/contracts/high-level/cache-data";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
-} from "@/src/contracts/file-access.ts";
+} from "@/src/contracts/high-level/file-access";
 import type { Tenant } from "@/src/contracts/tenant";
 import type {
   FileAccessCheckParams,

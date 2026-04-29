@@ -1,15 +1,4 @@
-export type VerificationOwnerType = "user" | "lead";
-
-export type VerificationActorType =
-  | "user"
-  | "lead"
-  | "api_token"
-  | "system";
-
-export interface VerificationRequestTenantContext {
-  tenantIds?: string[];
-  systemSlug?: string;
-}
+import type { VerificationOwnerType } from "./high-level/verification";
 
 export interface VerificationRequest {
   id: string;

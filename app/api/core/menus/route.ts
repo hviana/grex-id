@@ -13,7 +13,7 @@ import {
   genericUpdate,
 } from "@/server/db/queries/generics";
 import { rid } from "@/server/db/connection";
-import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItem } from "@/src/contracts/menu-item";
 
 async function getHandler(req: Request, _ctx: RequestContext) {
   const url = new URL(req.url);

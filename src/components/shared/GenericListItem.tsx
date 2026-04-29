@@ -1,6 +1,6 @@
 "use client";
 
-import type { FieldType } from "@/src/contracts/common";
+import type { FieldType } from "@/src/contracts/high-level/common";
 import {
   formatBytes,
   formatCurrency,

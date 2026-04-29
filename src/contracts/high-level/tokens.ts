@@ -1,7 +1,7 @@
 // ============================================================================
 // Display-oriented API token types — consumed by TokensPage.
 // Represents the API response shape from GET /api/tokens.
-// Distinct from the DB-mirror contract in src/contracts/token.ts.
+// Distinct from the DB-mirror contract in src/contracts/api-token.ts.
 // ============================================================================
 
 import type { ResourceLimitsData } from "./resource-limits";

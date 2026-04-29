@@ -2,11 +2,8 @@ import type { System } from "../system";
 import type { Role } from "../role";
 import type { Plan } from "../plan";
 import type { Voucher } from "../voucher";
-import type { MenuItem } from "../menu";
-import type {
-  FileAccessSection,
-  FileAccessUploadSection,
-} from "../file-access";
+import type { MenuItem } from "../menu-item";
+import type { FileAccessSection, FileAccessUploadSection } from "./file-access";
 import type { FrontSetting } from "../front-setting";
 
 // ============================================================================

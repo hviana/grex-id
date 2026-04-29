@@ -2,7 +2,7 @@ import { getDb, rid } from "../connection.ts";
 import type {
   VerificationOwnerType,
   VerificationRequestTenantContext,
-} from "@/src/contracts/verification-request";
+} from "@/src/contracts/high-level/verification";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("verification");

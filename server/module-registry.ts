@@ -1,7 +1,7 @@
 import type {
   TemplateBuilder,
   TemplateFunction,
-} from "../src/contracts/communication.ts";
+} from "../src/contracts/high-level/communication.ts";
 
 export {
   getAllHandlers,

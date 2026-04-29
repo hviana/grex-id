@@ -4,7 +4,7 @@
 // ============================================================================
 
 import type { ReactNode } from "react";
-import type { FieldType } from "../common";
+import type { FieldType } from "./common";
 import type { CursorParams, PaginatedResult } from "./pagination";
 import type {
   BadgeValue,

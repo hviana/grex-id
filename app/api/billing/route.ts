@@ -5,6 +5,7 @@ import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import Core from "@/server/utils/Core";
 import { publish } from "@/server/event-queue/publisher";
 import { getDb, rid } from "@/server/db/connection";
+import type { ResourceLimit } from "@/src/contracts/resource-limit";
 import {
   addPaymentMethod,
   applyVoucherToSubscription,
@@ -138,12 +139,8 @@ async function postHandler(req: Request, ctx: RequestContext) {
       if (guard) return guard;
     }
 
-    const rl = plan.resourceLimitId ?? {};
-    const planOpMap = (rl as unknown as Record<string, unknown>)
-      .maxOperationCountByResourceKey as Record<
-        string,
-        number
-      > ?? {};
+    const rl = (plan.resourceLimitId ?? {}) as unknown as ResourceLimit;
+    const planOpMap = rl.maxOperationCountByResourceKey ?? {};
     const operationCountMap = Object.keys(planOpMap).length > 0
       ? Object.fromEntries(
         Object.entries(planOpMap).filter(([, v]) => v > 0),
@@ -195,8 +192,7 @@ async function postHandler(req: Request, ctx: RequestContext) {
       planId,
       paymentMethodId: paymentMethodId ?? null,
       userId,
-      planCredits:
-        (rl as unknown as Record<string, unknown>).credits as number ?? 0,
+      planCredits: rl.credits ?? 0,
       operationCountMap,
       start: now,
       end: periodEnd,

@@ -1,7 +1,4 @@
-import type {
-  FileAccessSection,
-  FileAccessUploadSection,
-} from "../file-access";
+import type { FileAccessSection, FileAccessUploadSection } from "./file-access";
 import type { Tenant } from "../tenant";
 
 // ============================================================================

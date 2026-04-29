@@ -11,7 +11,7 @@ import type { HandlerFn } from "@/src/contracts/high-level/event-queue";
 import type {
   TemplateBuilder,
   TemplateResult,
-} from "@/src/contracts/communication";
+} from "@/src/contracts/high-level/communication";
 import { assertServerOnly } from "../../utils/server-only.ts";
 
 assertServerOnly("send-email");

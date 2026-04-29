@@ -6,7 +6,7 @@ import Sidebar from "@/src/components/shared/Sidebar";
 import ProfileMenu from "@/src/components/shared/ProfileMenu";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import Spinner from "@/src/components/shared/Spinner";
-import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItem } from "@/src/contracts/menu-item";
 import type { MenuItemTree } from "@/src/contracts/high-level/menu-item";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 import { supportedLocales } from "@/src/i18n";
@@ -128,7 +128,7 @@ function buildMenuTree(
 ): MenuItemTree[] {
   const visible = flatItems.filter((item) => {
     if (
-      item.roleIds.length > 0 &&
+      item.roleIds?.length &&
       !item.roleIds.some((r) => userRoles.includes(r))
     ) {
       return false;

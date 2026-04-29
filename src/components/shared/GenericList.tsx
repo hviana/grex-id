@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { FieldType } from "@/src/contracts/common";
+import type { FieldType } from "@/src/contracts/high-level/common";
 import type {
   CursorParams,
   PaginatedResult,

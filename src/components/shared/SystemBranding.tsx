@@ -1,6 +1,6 @@
 "use client";
 
-import type { PublicSystemInfo } from "@/src/contracts/system";
+import type { PublicSystemInfo } from "@/src/contracts/high-level/systems";
 import Spinner from "./Spinner.tsx";
 import type { SystemBrandingProps } from "@/src/contracts/high-level/component-props";
 

@@ -1,5 +1,5 @@
 import { t } from "@/src/i18n";
-import type { TemplateResult } from "@/src/contracts/communication";
+import type { TemplateResult } from "@/src/contracts/high-level/communication";
 import type {
   MoneyValue,
   NotificationTemplateData,

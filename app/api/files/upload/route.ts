@@ -2,7 +2,7 @@ import { compose } from "@/server/middleware/compose";
 import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { getFS } from "@/server/utils/fs";
-import type { SaveControlResult } from "@hviana/surreal-fs";
+import type { File, SaveControlResult } from "@hviana/surreal-fs";
 import Core from "@/server/utils/Core";
 import FileCacheManager from "@/server/utils/file-cache";
 import {
@@ -226,7 +226,7 @@ export const POST = compose(
           uri,
           fileUuid,
           fileName,
-          sizeBytes: "size" in result ? (result as any).size : 0,
+          sizeBytes: "size" in result ? (result as File).size : 0,
           mimeType,
         },
       });

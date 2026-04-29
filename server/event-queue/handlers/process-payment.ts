@@ -2,7 +2,7 @@ import type { HandlerFn } from "@/src/contracts/high-level/event-queue";
 import { dispatchCommunication } from "./send-communication.ts";
 import Core from "../../utils/Core.ts";
 import { resolveAllOperationCounts } from "../../utils/guards.ts";
-import type { PaymentResult } from "../../../src/contracts/payment-provider.ts";
+import type { PaymentResult } from "../../../src/contracts/high-level/payment-provider.ts";
 import { assertServerOnly } from "../../utils/server-only.ts";
 import {
   createPaymentRecord,

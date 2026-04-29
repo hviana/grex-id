@@ -12,7 +12,7 @@ import type { SubformConfig } from "@/src/contracts/high-level/components";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
-} from "@/src/contracts/file-access";
+} from "@/src/contracts/high-level/file-access";
 import type { FileAccessItem } from "@/src/contracts/high-level/files";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
 

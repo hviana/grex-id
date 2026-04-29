@@ -2,6 +2,19 @@
 // Verification & resource tracking result types
 // ============================================================================
 
+export type VerificationOwnerType = "user" | "lead";
+
+export type VerificationActorType =
+  | "user"
+  | "lead"
+  | "api_token"
+  | "system";
+
+export interface VerificationRequestTenantContext {
+  tenantIds?: string[];
+  systemSlug?: string;
+}
+
 /** Result from communicationGuard (server/utils/verification-guard.ts). */
 export interface CommunicationGuardResult {
   allowed: boolean;

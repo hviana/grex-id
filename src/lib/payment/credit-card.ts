@@ -2,7 +2,7 @@ import type {
   CardInput,
   IClientPaymentProvider,
   TokenizationResult,
-} from "./interface.ts";
+} from "@/src/contracts/high-level/payment-provider";
 import type { Address } from "@/src/contracts/address";
 
 export class CreditCardTokenizer implements IClientPaymentProvider {

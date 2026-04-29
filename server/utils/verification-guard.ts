@@ -3,7 +3,7 @@ import Core from "@/server/utils/Core";
 import type {
   VerificationOwnerType,
   VerificationRequestTenantContext,
-} from "@/src/contracts/verification-request";
+} from "@/src/contracts/high-level/verification";
 import { assertServerOnly } from "./server-only.ts";
 import { atomicCommunicationGuard } from "../db/queries/verification.ts";
 

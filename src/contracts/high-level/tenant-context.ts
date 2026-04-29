@@ -1,7 +1,8 @@
 import type { Tenant } from "@/src/contracts/tenant";
 import type { UserResolved } from "./user";
 import type { Company } from "@/src/contracts/company";
-import type { PublicSystemInfo, System } from "@/src/contracts/system";
+import type { System } from "@/src/contracts/system";
+import type { PublicSystemInfo } from "./systems";
 import type { SupportedLocale } from "./i18n";
 
 export type TenantActorType = "user" | "api_token";

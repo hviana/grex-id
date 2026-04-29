@@ -1,5 +1,5 @@
 import { getDb, rid } from "../connection.ts";
-import type { ApiToken } from "@/src/contracts/token";
+import type { ApiToken } from "@/src/contracts/api-token";
 import type { TokenCleanupResult } from "@/src/contracts/high-level/query-results";
 import { assertServerOnly } from "../../utils/server-only.ts";
 

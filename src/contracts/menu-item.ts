@@ -6,7 +6,7 @@ export interface MenuItem {
   emoji?: string;
   componentName: string;
   sortOrder: number;
-  roleIds: string[];
+  roleIds?: string[];
   hiddenInPlanIds: string[];
   createdAt: string;
 }

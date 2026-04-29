@@ -16,5 +16,5 @@ export interface Subscription {
   autoRechargeInProgress?: boolean;
   retryPaymentInProgress: boolean;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
 }

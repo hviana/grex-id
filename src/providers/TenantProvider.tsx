@@ -17,7 +17,8 @@ import type {
   TenantContextValue,
 } from "@/src/contracts/high-level/tenant-context";
 import type { Company } from "@/src/contracts/company";
-import type { PublicSystemInfo, System } from "@/src/contracts/system";
+import type { System } from "@/src/contracts/system";
+import type { PublicSystemInfo } from "@/src/contracts/high-level/systems";
 import type { SupportedLocale } from "@/src/contracts/high-level/i18n";
 import {
   defaultLocale as fallbackLocale,

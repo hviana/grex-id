@@ -8,7 +8,7 @@ import {
   revokeToken,
 } from "@/server/db/queries/tokens";
 import { genericList } from "@/server/db/queries/generics";
-import type { ApiToken } from "@/src/contracts/token";
+import type { ApiToken } from "@/src/contracts/api-token";
 
 async function getHandler(req: Request, ctx: RequestContext) {
   const url = new URL(req.url);

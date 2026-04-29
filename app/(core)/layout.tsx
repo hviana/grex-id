@@ -6,7 +6,7 @@ import Sidebar from "@/src/components/shared/Sidebar";
 import Spinner from "@/src/components/shared/Spinner";
 import LocaleSelector from "@/src/components/shared/LocaleSelector";
 import { useTenantContext } from "@/src/hooks/useTenantContext";
-import type { MenuItem } from "@/src/contracts/menu";
+import type { MenuItem } from "@/src/contracts/menu-item";
 
 function useCoreMenus(t: (key: string) => string): MenuItem[] {
   return [

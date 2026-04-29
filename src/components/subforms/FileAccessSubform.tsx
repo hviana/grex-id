@@ -5,7 +5,7 @@ import type { SubformRef } from "@/src/contracts/high-level/components";
 import type {
   FileAccessSection,
   FileAccessUploadSection,
-} from "@/src/contracts/file-access";
+} from "@/src/contracts/high-level/file-access";
 import MultiBadgeField from "@/src/components/fields/MultiBadgeField";
 import TenantSubform from "@/src/components/subforms/TenantSubform";
 import { useTenantContext } from "@/src/hooks/useTenantContext";

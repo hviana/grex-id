@@ -1,4 +1,4 @@
-import type { MenuItem } from "../menu";
+import type { MenuItem } from "../menu-item";
 
 /**
  * Display-oriented menu item — API response shape consumed by MenuTreeEditor.
