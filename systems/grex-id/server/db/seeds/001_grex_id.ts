@@ -1,5 +1,5 @@
 import type { Surreal } from "surrealdb";
-import { assertServerOnly } from "@/server/utils/server-only.ts";
+import { assertServerOnly } from "../../../../../server/utils/server-only.ts";
 
 assertServerOnly("001_grex_id");
 
@@ -39,7 +39,7 @@ export async function seed(db: Surreal): Promise<void> {
     `IF array::len((SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "admin",
-         tenantIds = {$systemTenantId},
+         tenantIds = {$systemTenantId,},
          isBuiltIn = true
      };
      SELECT id FROM role WHERE name = "admin" AND tenantIds CONTAINS $systemTenantId`,
@@ -56,13 +56,13 @@ export async function seed(db: Surreal): Promise<void> {
     `IF array::len((SELECT id FROM role WHERE name = "grexid.detect" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "grexid.detect",
-         tenantIds = {$systemTenantId},
+         tenantIds = {$systemTenantId,},
          isBuiltIn = false
      };
      IF array::len((SELECT id FROM role WHERE name = "grexid.list_locations" AND tenantIds CONTAINS $systemTenantId)) = 0 {
        CREATE role SET
          name = "grexid.list_locations",
-         tenantIds = {$systemTenantId},
+         tenantIds = {$systemTenantId,},
          isBuiltIn = false
      };
      SELECT id FROM role WHERE name IN ["grexid.detect", "grexid.list_locations"] AND tenantIds CONTAINS $systemTenantId`,
@@ -74,8 +74,8 @@ export async function seed(db: Surreal): Promise<void> {
   // 5. Create the STANDARD plan with linked resource_limit
   await db.query(
     `LET $rl = CREATE resource_limit SET
-      benefits = [],
-      roleIds = $roleIds,
+      benefits = NONE,
+      roleIds = <set>$roleIds,
       apiRateLimit = 1000,
       storageLimitBytes = 1073741824,
       fileCacheLimitBytes = 20971520,
@@ -83,7 +83,7 @@ export async function seed(db: Surreal): Promise<void> {
     CREATE plan SET
       name = $name,
       description = $description,
-      tenantIds = {$systemTenantId},
+      tenantIds = {$systemTenantId,},
       price = $price,
       currency = $currency,
       recurrenceDays = $recurrenceDays,

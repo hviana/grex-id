@@ -1,5 +1,5 @@
 import type { Surreal } from "surrealdb";
-import { assertServerOnly } from "@/server/utils/server-only.ts";
+import { assertServerOnly } from "../../../../../server/utils/server-only.ts";
 
 assertServerOnly("002_grex_id_menus");
 
@@ -25,37 +25,37 @@ export async function seed(db: Surreal): Promise<void> {
 
   await db.query(
     `CREATE menu_item SET
-       tenantIds = {$systemTenantId},
+       tenantIds = {$systemTenantId,},
        name = "systems.grex-id.menu.locations",
        emoji = "📍",
        componentName = "grexid-locations",
        sortOrder = 0,
-       roleIds = [],
-       hiddenInPlanIds = [];
+       roleIds = NONE,
+       hiddenInPlanIds = <set>[];
      CREATE menu_item SET
-       tenantIds = {$systemTenantId},
+       tenantIds = {$systemTenantId,},
        name = "systems.grex-id.menu.leads",
        emoji = "👤",
        componentName = "grexid-leads",
        sortOrder = 1,
-       roleIds = [],
-       hiddenInPlanIds = [];
+       roleIds = NONE,
+       hiddenInPlanIds = <set>[];
      CREATE menu_item SET
-       tenantIds = {$systemTenantId},
+       tenantIds = {$systemTenantId,},
        name = "systems.grex-id.menu.detections",
        emoji = "🎯",
        componentName = "grexid-detections",
        sortOrder = 2,
-       roleIds = [],
-       hiddenInPlanIds = [];
+       roleIds = NONE,
+       hiddenInPlanIds = <set>[];
      CREATE menu_item SET
-       tenantIds = {$systemTenantId},
+       tenantIds = {$systemTenantId,},
        name = "systems.grex-id.menu.settings",
        emoji = "⚙️",
        componentName = "grexid-settings",
        sortOrder = 3,
-       roleIds = [],
-       hiddenInPlanIds = [];`,
+       roleIds = NONE,
+       hiddenInPlanIds = <set>[];`,
     { systemTenantId },
   );
 

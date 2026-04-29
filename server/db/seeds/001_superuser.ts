@@ -24,7 +24,7 @@ export async function seed(db: Surreal): Promise<void> {
        verified = true;
      LET $prof = CREATE profile SET
        name = $name,
-       recoveryChannelIds = {};
+       recoveryChannelIds = <set>[];
 
      // 2. Core company (no ownerId — owner resolved via tenant.isOwner)
      LET $coreCompany = CREATE company SET
@@ -53,30 +53,30 @@ export async function seed(db: Surreal): Promise<void> {
      // 6. Built-in superuser role linked to core system-level tenant
      LET $superuserRole = CREATE role SET
        name = "superuser",
-       tenantIds = {$coreSystemTenant[0].id},
+       tenantIds = {$coreSystemTenant[0].id,},
        isBuiltIn = true;
 
      // 7. Built-in anonymous role for public API token
      LET $anonymousRole = CREATE role SET
        name = "anonymous",
-       tenantIds = {$coreSystemTenant[0].id},
+       tenantIds = {$coreSystemTenant[0].id,},
        isBuiltIn = true;
 
      // 8. Resource limits
      LET $superuserRl = CREATE resource_limit SET
-       roleIds = {$superuserRole[0].id};
+       roleIds = {$superuserRole[0].id,};
      LET $anonymousRl = CREATE resource_limit SET
-       roleIds = {$anonymousRole[0].id};
+       roleIds = {$anonymousRole[0].id,};
 
      // 9. Superuser user
      LET $usr = CREATE user SET
        passwordHash = crypto::argon2::generate($password),
        profileId = $prof[0].id,
-       channelIds = {$ch[0].id},
+       channelIds = {$ch[0].id,},
        twoFactorEnabled = false,
        stayLoggedIn = false,
        resourceLimitId = $superuserRl[0].id,
-       tenantIds = {};
+       tenantIds = <set>[];
 
      // 10. Company-membership tenant row (user + company, systemId=NONE, isOwner=true)
      LET $userCompanyTenant = CREATE tenant SET
@@ -93,7 +93,7 @@ export async function seed(db: Surreal): Promise<void> {
 
      // 12. Anonymous API token
      CREATE api_token:anonymous SET
-       tenantIds = {$coreCompanySystemTenant[0].id},
+       tenantIds = {$coreCompanySystemTenant[0].id,},
        name = "Anonymous Token",
        actorType = "token",
        resourceLimitId = $anonymousRl[0].id,
