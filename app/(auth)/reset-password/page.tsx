@@ -1,0 +1,160 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Spinner from "@/src/components/shared/Spinner";
+import GenericFormButton from "@/src/components/shared/GenericFormButton";
+import ErrorDisplay from "@/src/components/shared/ErrorDisplay";
+import LocaleSelector from "@/src/components/shared/LocaleSelector";
+import SystemBranding from "@/src/components/shared/SystemBranding";
+import { useTenantContext } from "@/src/hooks/useTenantContext";
+
+function ResetPasswordContent() {
+  const {
+    t,
+    publicSystem: systemInfo,
+    publicSystemLoading: brandingLoading,
+    loadPublicSystem,
+  } = useTenantContext();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const systemSlug = searchParams.get("systemSlug");
+  useEffect(() => {
+    loadPublicSystem(systemSlug ?? undefined);
+  }, [systemSlug, loadPublicSystem]);
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const systemParam = systemSlug
+    ? `?systemSlug=${encodeURIComponent(systemSlug)}`
+    : "";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError("auth.register.error.passwordMismatch");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password, confirmPassword }),
+      });
+      const json = await res.json();
+
+      if (json.success) {
+        router.push(`/login${systemParam}`);
+      } else {
+        setError(
+          json.error?.code === "EXPIRED"
+            ? "auth.resetPassword.error.invalid"
+            : (json.error?.message ?? "common.error.generic"),
+        );
+      }
+    } catch {
+      setError("common.error.network");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!token) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--color-black)] via-[#0a0a0a] to-[#111] px-4">
+        <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-8 text-center">
+          <ErrorDisplay message="auth.resetPassword.error.invalid" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--color-black)] via-[#0a0a0a] to-[#111] px-4">
+      <div className="absolute top-4 right-4">
+        <LocaleSelector />
+      </div>
+
+      <div className="w-full max-w-md">
+        <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-8">
+          <SystemBranding systemInfo={systemInfo} loading={brandingLoading} />
+
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-[var(--color-primary-green)] to-[var(--color-secondary-blue)] bg-clip-text text-transparent">
+              {t("auth.resetPassword.title")}
+            </h1>
+            <p className="mt-2 text-[var(--color-light-text)]">
+              {t("auth.resetPassword.subtitle")}
+            </p>
+          </div>
+
+          <ErrorDisplay message={error} />
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
+              >
+                {t("auth.resetPassword.password")}
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-[var(--color-light-text)] mb-1"
+              >
+                {t("auth.resetPassword.confirmPassword")}
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="w-full rounded-lg border border-[var(--color-dark-gray)] bg-white/5 px-4 py-3 text-white placeholder-white/30 outline-none focus:border-[var(--color-primary-green)] transition-colors"
+              />
+            </div>
+
+            <GenericFormButton
+              loading={loading}
+              label={t("auth.resetPassword.submit")}
+            />
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[var(--color-black)]">
+          <Spinner size="lg" />
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}

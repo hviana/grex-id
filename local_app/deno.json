@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@vladmandic/human": "https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.6/dist/human.esm.js",
+    "jpeg-js": "npm:jpeg-js@^0.4.4",
+    "@std/path": "jsr:@std/path"
+  }
+}

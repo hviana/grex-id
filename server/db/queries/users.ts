@@ -1,0 +1,451 @@
+import "server-only";
+
+import { getDb, rid, setsToArrays } from "../connection.ts";
+
+/**
+ * Lists users scoped to a specific tenant, including context roles
+ * resolved from `user.resourceLimitId.roleIds`. Cursor-paginated.
+ */
+export async function getUsersForTenant(params: {
+  companyId: string;
+  systemId: string;
+  search?: string;
+  cursor?: string;
+  direction?: string;
+  limit: number;
+}): Promise<{
+  items: Record<string, unknown>[];
+  nextCursor: string | null;
+}> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    limit: params.limit + 1,
+  };
+
+  let query =
+    `SELECT id, profileId, (SELECT * FROM entity_channel WHERE id IN $parent.channelIds) AS channelIds, resourceLimitId, createdAt,
+       (SELECT VALUE name FROM role WHERE id IN
+         (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $parent.id LIMIT 1)) AS contextRoles,
+       (SELECT VALUE name FROM role WHERE id IN $parent.resourceLimitId.roleIds) AS _resourceLimitRoleNames,
+       (SELECT VALUE groupIds FROM tenant
+         WHERE companyId = $companyId AND systemId = $systemId AND actorId = $parent.id LIMIT 1)[0] AS groupIds
+     FROM user
+     WHERE id IN (SELECT VALUE actorId FROM tenant
+       WHERE companyId = $companyId AND systemId = $systemId AND actorId != NONE)`;
+
+  if (params.search) {
+    query += " AND profileId.name @@ $search";
+    bindings.search = params.search;
+  }
+  if (params.cursor) {
+    query += " AND id > $cursor";
+    bindings.cursor = params.cursor;
+  }
+
+  query +=
+    " ORDER BY createdAt DESC LIMIT $limit FETCH profileId, resourceLimitId";
+
+  const result = await db.query<[Record<string, unknown>[]]>(query, bindings);
+  const rawItems = result[0] ?? [];
+  const items = rawItems.map((item) => setsToArrays(item));
+  const hasMore = items.length > params.limit;
+  const data = hasMore ? items.slice(0, params.limit) : items;
+
+  return {
+    items: data,
+    nextCursor: hasMore && data.length > 0
+      ? String((data[data.length - 1] as Record<string, unknown>).id)
+      : null,
+  };
+}
+
+/**
+ * Returns the context roles for a user, resolved from their resource_limit.
+ */
+export async function getUserContext(
+  userId: string,
+  _tenantId: string,
+): Promise<string[]> {
+  const db = await getDb();
+  const result = await db.query<[string[]]>(
+    `SELECT VALUE name FROM role WHERE id IN (
+       SELECT VALUE resourceLimitId.roleIds FROM user
+       WHERE id = $userId
+       LIMIT 1
+     )`,
+    {
+      userId: rid(userId),
+    },
+  );
+  return result[0] ?? [];
+}
+
+/**
+ * Result of inviting an existing user to a tenant, including data needed
+ * for the notification message.
+ */
+import type { InviteExistingUserResult } from "@/src/contracts/high-level/query-results";
+export type { InviteExistingUserResult };
+
+/**
+ * Idempotently associates an existing user with a tenant by creating a
+ * user-access tenant row and updating the user's resource_limit roleIds.
+ * Returns notification metadata (system name, company name, inviter/invitee names).
+ */
+export async function inviteExistingUser(params: {
+  userId: string;
+  tenantId: string;
+  roles: string[];
+  inviterId: string;
+  companyId: string;
+  systemId: string;
+  groupIds?: string[];
+}): Promise<InviteExistingUserResult> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+    tenantId: rid(params.tenantId),
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    roleNames: params.roles,
+    inviterId: rid(params.inviterId),
+  };
+  const groupIdsField = params.groupIds?.length
+    ? `groupIds = {${params.groupIds.map((g) => rid(g)).join(", ")}},`
+    : "";
+
+  const batchResult = await db.query<
+    [
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      {
+        sys: { name: string }[];
+        comp: { name: string }[];
+        inviter: { profileName?: string }[];
+        invitee: { profileName?: string }[];
+      },
+    ]
+  >(
+    `LET $sysTenantId = (SELECT VALUE id FROM tenant WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1)[0];
+     LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $sysTenantId);
+     LET $existingUserTenant = (SELECT id FROM tenant WHERE id = $tenantId AND actorId = $userId LIMIT 1);
+     IF array::len($existingUserTenant) = 0 {
+       CREATE tenant SET
+         ${groupIdsField}
+         actorId = $userId,
+         companyId = $companyId,
+         systemId = $systemId;
+       LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $userId LIMIT 1)[0];
+       IF $userRlId != NONE AND array::len($resolvedRoleIds) > 0 {
+         UPDATE $userRlId SET roleIds = set::union(roleIds ?? <set>[], $resolvedRoleIds);
+       };
+     };
+     LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
+     LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
+     LET $inviter = (SELECT profileId.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profileId);
+     LET $invitee = (SELECT profileId.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profileId);
+     RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
+    bindings,
+  );
+
+  const returnData = batchResult[batchResult.length - 1] as {
+    sys: { name: string }[];
+    comp: { name: string }[];
+    inviter: { profileName?: string }[];
+    invitee: { profileName?: string }[];
+  };
+  return {
+    systemName: returnData?.sys?.[0]?.name ?? "",
+    companyName: returnData?.comp?.[0]?.name ?? "",
+    inviterName: returnData?.inviter?.[0]?.profileName ?? "",
+    inviteeName: returnData?.invitee?.[0]?.profileName ?? "",
+  };
+}
+
+/**
+ * Creates a company-membership tenant row and a user-access tenant row,
+ * then updates the user's resource_limit roleIds for a newly created user
+ * in a single batched query (§2.4).
+ */
+export async function createTenantAssociations(params: {
+  userId: string;
+  companyId: string;
+  systemId: string;
+  roles: string[];
+  groupIds?: string[];
+}): Promise<void> {
+  const db = await getDb();
+  const bindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+    companyId: rid(params.companyId),
+    systemId: rid(params.systemId),
+    roleNames: params.roles,
+  };
+  const groupIdsSet = params.groupIds?.length
+    ? `groupIds = {${params.groupIds.map((g) => rid(g)).join(", ")}},`
+    : "";
+  await db.query(
+    `LET $sysTenantId = (SELECT VALUE id FROM tenant WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1)[0];
+     LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames AND tenantIds CONTAINS $sysTenantId);
+     IF array::len((SELECT id FROM tenant WHERE !actorId AND companyId = $companyId AND !systemId LIMIT 1)) = 0 {
+       CREATE tenant SET actorId = $userId, companyId = $companyId, systemId = NONE, isOwner = true;
+     };
+     LET $t1 = (SELECT VALUE id FROM tenant WHERE !actorId AND companyId = $companyId AND !systemId LIMIT 1)[0];
+     UPDATE user SET tenantIds += $t1 WHERE id = $userId;
+     CREATE tenant SET
+       ${groupIdsSet}
+       actorId = $userId,
+       companyId = $companyId,
+       systemId = $systemId;
+     LET $t2 = (SELECT VALUE id FROM tenant WHERE actorId = $userId AND companyId = $companyId AND systemId = $systemId LIMIT 1)[0];
+     UPDATE user SET tenantIds += $t2 WHERE id = $userId;
+     LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $userId LIMIT 1)[0];
+     IF $userRlId != NONE AND array::len($resolvedRoleIds) > 0 {
+       UPDATE $userRlId SET roleIds = set::union(roleIds ?? <set>[], $resolvedRoleIds);
+     };`,
+    bindings,
+  );
+}
+
+/**
+ * Updates the roles for a user in a tenant, enforcing the admin invariant:
+ * there must be at least one remaining admin after the update.
+ * Returns `null` on success, or an i18n error key when the update was blocked.
+ */
+export async function updateUserRolesWithAdminCheck(params: {
+  userId: string;
+  tenantId: string;
+  roles: string[];
+}): Promise<string | null> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $resolvedRoleIds = (SELECT VALUE id FROM role WHERE name IN $roleNames);
+     LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" LIMIT 1)[0];
+     LET $targetTenant = (SELECT actorId, companyId, systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $otherActorsInScope = (SELECT VALUE actorId FROM tenant
+       WHERE id != $tenantId
+         AND actorId != NONE
+         AND companyId = $targetTenant.companyId
+         AND systemId = $targetTenant.systemId);
+     LET $otherAdminCount = count(
+       FOR $a IN $otherActorsInScope {
+         LET $aRoleIds = (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $a LIMIT 1)[0];
+         IF $aRoleIds CONTAINS $adminRoleId { RETURN true; };
+       }
+     );
+     LET $ac = $otherAdminCount ?? 0;
+     IF $ac > 0 OR $resolvedRoleIds CONTAINS $adminRoleId {
+       LET $userRlId = (SELECT VALUE resourceLimitId FROM user WHERE id = $targetTenant.actorId LIMIT 1)[0];
+       IF $userRlId != NONE {
+         UPDATE $userRlId SET roleIds = $resolvedRoleIds;
+       };
+     };
+     RETURN $ac;`,
+    {
+      userId: rid(params.userId),
+      tenantId: rid(params.tenantId),
+      roleNames: params.roles,
+    },
+  );
+  const otherAdmins = res[res.length - 1] as number;
+  if (otherAdmins === 0 && !params.roles.includes("admin")) {
+    return "users.error.lastAdminRole";
+  }
+  return null;
+}
+
+/**
+ * Removes a user from a tenant, enforcing the admin invariant: the sole
+ * admin cannot be removed. Returns `null` on success, or an i18n error key
+ * when the deletion was blocked.
+ */
+export async function deleteUserWithAdminCheck(params: {
+  userId: string;
+  tenantId: string;
+}): Promise<string | null> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $adminRoleId = (SELECT VALUE id FROM role WHERE name = "admin" LIMIT 1)[0];
+     LET $targetTenant = (SELECT actorId, companyId, systemId FROM tenant WHERE id = $tenantId LIMIT 1)[0];
+     LET $targetRoleIds = (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $targetTenant.actorId LIMIT 1)[0];
+     LET $isTargetAdmin = IF $targetRoleIds != NONE AND $targetRoleIds CONTAINS $adminRoleId THEN 1 ELSE 0 END;
+     LET $otherActorsInScope = (SELECT VALUE actorId FROM tenant
+       WHERE id != $tenantId
+         AND actorId != NONE
+         AND companyId = $targetTenant.companyId
+         AND systemId = $targetTenant.systemId);
+     LET $otherAdminCount = count(
+       FOR $a IN $otherActorsInScope {
+         LET $aRoleIds = (SELECT VALUE resourceLimitId.roleIds FROM user WHERE id = $a LIMIT 1)[0];
+         IF $aRoleIds CONTAINS $adminRoleId { RETURN true; };
+       }
+     );
+     LET $ac = $otherAdminCount ?? 0;
+     IF $isTargetAdmin = 0 OR $ac > 0 {
+       DELETE $tenantId;
+     };
+     RETURN [$isTargetAdmin, $ac];`,
+    {
+      userId: rid(params.userId),
+      tenantId: rid(params.tenantId),
+    },
+  );
+  const [isTargetAdmin, otherAdmins] = res[res.length - 1] as [number, number];
+
+  if (isTargetAdmin > 0 && otherAdmins === 0) {
+    return "users.error.lastAdminDelete";
+  }
+  return null;
+}
+
+/**
+ * Updates a user's profile name by following the `user -> profile` record link.
+ */
+export async function updateUserProfileName(
+  userId: string,
+  name: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `LET $prof = (SELECT profileId FROM $id);
+     UPDATE $prof[0].profileId SET name = $name, updatedAt = time::now()`,
+    { id: rid(userId), name },
+  );
+}
+
+/**
+ * Updates multiple profile fields for the current user, returning the updated
+ * user row with profile and channels resolved.
+ */
+export async function updateCurrentUserProfile(params: {
+  userId: string;
+  name?: string;
+  avatarUri?: string;
+  dateOfBirth?: unknown;
+}): Promise<Record<string, unknown> | null> {
+  const db = await getDb();
+  const profileSets: string[] = ["updatedAt = time::now()"];
+  const profileBindings: Record<string, unknown> = {
+    userId: rid(params.userId),
+  };
+
+  if (params.name !== undefined) {
+    profileSets.push("name = $name");
+    profileBindings.name = params.name;
+  }
+  if (params.avatarUri !== undefined) {
+    profileSets.push("avatarUri = $avatarUri");
+    profileBindings.avatarUri = params.avatarUri || null;
+  }
+  if (params.dateOfBirth !== undefined) {
+    profileSets.push("dateOfBirth = $dateOfBirth");
+    profileBindings.dateOfBirth = params.dateOfBirth
+      ? `<datetime>${params.dateOfBirth}`
+      : null;
+  }
+
+  const stmts = [
+    `LET $prof = (SELECT profileId FROM user WHERE id = $userId)[0].profileId`,
+    `UPDATE $prof SET ${profileSets.join(", ")}`,
+    `UPDATE $userId SET updatedAt = time::now()`,
+    `SELECT * FROM $userId FETCH profileId, channelIds`,
+  ];
+  const result = await db.query<Record<string, unknown>[][]>(
+    stmts.join(";\n"),
+    profileBindings,
+  );
+  const updatedUser = result[result.length - 1]?.[0];
+  return updatedUser ?? null;
+}
+
+export async function updateUserLocale(
+  id: string,
+  locale: string,
+): Promise<void> {
+  const db = await getDb();
+  await db.query(
+    `LET $usr = (SELECT profileId FROM $id);
+    IF $usr[0].profileId != NONE {
+      UPDATE $usr[0].profileId SET locale = $locale, updatedAt = time::now();
+    };
+    UPDATE $id SET updatedAt = time::now();`,
+    { id: rid(id), locale },
+  );
+}
+
+export async function hardDeleteUserIfOrphaned(
+  userId: string,
+): Promise<boolean> {
+  const db = await getDb();
+  const res = await db.query(
+    `LET $tenantCount = (SELECT count() AS c FROM tenant
+       WHERE actorId = $id AND companyId != NONE)[0].c;
+     IF $tenantCount = 0 {
+       LET $usr  = (SELECT profileId, channelIds FROM $id)[0];
+       LET $chIds = IF $usr = NONE THEN [] ELSE $usr.channelIds END;
+       LET $prof  = IF $usr = NONE OR $usr.profileId = NONE
+                    THEN NONE
+                    ELSE (SELECT recoveryChannelIds FROM $usr.profileId)[0]
+                    END;
+       LET $recIds = IF $prof = NONE THEN [] ELSE $prof.recoveryChannelIds END;
+       DELETE verification_request WHERE ownerId = $id;
+       DELETE tenant WHERE actorId = $id;
+       DELETE $id;
+       DELETE entity_channel WHERE id IN $chIds;
+       DELETE entity_channel WHERE id IN $recIds;
+       IF $usr != NONE AND $usr.profileId != NONE {
+         DELETE $usr.profileId;
+       };
+     };
+     RETURN $tenantCount;`,
+    { id: rid(userId) },
+  );
+  return (res[res.length - 1] as number) === 0;
+}
+
+/**
+ * Fetches metadata for re-sending a tenant invitation notification.
+ * Does NOT create or modify any tenant rows — read-only.
+ */
+export async function getUserInviteMeta(params: {
+  userId: string;
+  inviterId: string;
+  companyId: string;
+  systemId: string;
+}): Promise<InviteExistingUserResult> {
+  const db = await getDb();
+  const result = await db.query<
+    [{
+      sys: { name: string }[];
+      comp: { name: string }[];
+      inviter: { profileName?: string }[];
+      invitee: { profileName?: string }[];
+    }]
+  >(
+    `LET $sys = (SELECT name FROM system WHERE id = $systemId LIMIT 1);
+     LET $comp = (SELECT name FROM company WHERE id = $companyId LIMIT 1);
+     LET $inviter = (SELECT profileId.name AS profileName FROM user WHERE id = $inviterId LIMIT 1 FETCH profileId);
+     LET $invitee = (SELECT profileId.name AS profileName FROM user WHERE id = $userId LIMIT 1 FETCH profileId);
+     RETURN {sys: $sys, comp: $comp, inviter: $inviter, invitee: $invitee};`,
+    {
+      userId: rid(params.userId),
+      companyId: rid(params.companyId),
+      systemId: rid(params.systemId),
+      inviterId: rid(params.inviterId),
+    },
+  );
+
+  const data = result[0];
+  return {
+    systemName: data?.sys?.[0]?.name ?? "",
+    companyName: data?.comp?.[0]?.name ?? "",
+    inviterName: data?.inviter?.[0]?.profileName ?? "",
+    inviteeName: data?.invitee?.[0]?.profileName ?? "",
+  };
+}

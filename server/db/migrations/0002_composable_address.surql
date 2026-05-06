@@ -1,0 +1,11 @@
+DEFINE TABLE address SCHEMAFULL;
+DEFINE FIELD street       ON address TYPE string;
+DEFINE FIELD number       ON address TYPE string;
+DEFINE FIELD complement   ON address TYPE option<string>;
+DEFINE FIELD neighborhood ON address TYPE option<string>;
+DEFINE FIELD city         ON address TYPE string;
+DEFINE FIELD state        ON address TYPE string;
+DEFINE FIELD country      ON address TYPE string;
+DEFINE FIELD postalCode   ON address TYPE string;
+DEFINE FIELD createdAt    ON address TYPE datetime DEFAULT time::now();
+DEFINE FIELD updatedAt    ON address TYPE datetime DEFAULT time::now();

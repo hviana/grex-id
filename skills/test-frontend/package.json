@@ -1,0 +1,9 @@
+{
+  "name": "test-frontend-skill",
+  "private": true,
+  "type": "module",
+  "description": "Isolated install target for Playwright so the project's package.json stays untouched.",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}

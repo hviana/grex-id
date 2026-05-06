@@ -1,0 +1,31 @@
+{
+  "layout.footer": "This is a secure, automated message. Please do not reply directly to this email.",
+  "layout.automated": "Powered by Grex",
+
+  "humanConfirmation.preheader": "Confirm: {action}",
+  "humanConfirmation.subject": "Please confirm: {action}",
+  "humanConfirmation.greeting": "Hello {name},",
+  "humanConfirmation.anonymous": "there",
+  "humanConfirmation.summary": "Please confirm this action to proceed. If you didn't request it, you can safely ignore this message.",
+  "humanConfirmation.occurredAtLabel": "Requested at",
+  "humanConfirmation.expiryLabel": "Link expires in",
+  "humanConfirmation.expiryValue": "{minutes} minutes",
+  "humanConfirmation.action": "Confirm",
+  "humanConfirmation.ignore": "If you didn't request this, ignoring this message will leave your account unchanged.",
+  "humanConfirmation.sms": "{action} — {link} (expires in {minutes} min)",
+
+  "notification.preheader": "{event}",
+  "notification.subject": "{event}",
+  "notification.greeting": "Hello {name},",
+  "notification.anonymous": "there",
+  "notification.summary": "Here's a quick update on your account.",
+  "notification.occurredAtLabel": "When",
+  "notification.resourcesLabel": "Details",
+  "notification.valueLabel": "Amount",
+  "notification.invoiceLabel": "Invoice",
+  "notification.viewInvoice": "View invoice",
+  "notification.cta.viewBilling": "View billing",
+  "notification.cta.updatePaymentMethod": "Update payment method",
+  "notification.cta.purchaseCredits": "Purchase credits",
+  "notification.cta.goToDashboard": "Go to dashboard"
+}

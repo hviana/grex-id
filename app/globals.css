@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary-green: #02d07d;
+  --color-hover-green: #02b570;
+  --color-light-green: #00ff88;
+  --color-secondary-blue: #00ccff;
+  --color-black: #000000;
+  --color-dark-gray: #333333;
+  --color-light-text: #cccccc;
+}
+
+/* §4 exception: Scrollbar pseudo-elements have no Tailwind utilities. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000;
+  border: 1px solid #333;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #02d07d 0%, #00ccff 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(2, 208, 125, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #02b570 0%, #00ccff 100%);
+}
+
+::-webkit-scrollbar-corner {
+  background: #000;
+  border: 1px solid #333;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #02d07d #000;
+}
+
+/* §4 exception: Referenced by Tailwind arbitrary value animate-[fadeSlideIn_0.2s_ease-out]. */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

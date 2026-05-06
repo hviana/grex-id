@@ -1,0 +1,31 @@
+{
+  "layout.footer": "Esta é uma mensagem segura e automatizada. Por favor, não responda diretamente a este e-mail.",
+  "layout.automated": "Powered by Grex",
+
+  "humanConfirmation.preheader": "Confirme: {action}",
+  "humanConfirmation.subject": "Por favor confirme: {action}",
+  "humanConfirmation.greeting": "Olá {name},",
+  "humanConfirmation.anonymous": "você",
+  "humanConfirmation.summary": "Por favor, confirme esta ação para prosseguir. Se você não fez esta solicitação, pode ignorar esta mensagem com segurança.",
+  "humanConfirmation.occurredAtLabel": "Solicitado em",
+  "humanConfirmation.expiryLabel": "Link expira em",
+  "humanConfirmation.expiryValue": "{minutes} minutos",
+  "humanConfirmation.action": "Confirmar",
+  "humanConfirmation.ignore": "Se você não fez esta solicitação, ignorar esta mensagem manterá sua conta inalterada.",
+  "humanConfirmation.sms": "{action} — {link} (expira em {minutes} min)",
+
+  "notification.preheader": "{event}",
+  "notification.subject": "{event}",
+  "notification.greeting": "Olá {name},",
+  "notification.anonymous": "você",
+  "notification.summary": "Aqui está uma atualização rápida sobre a sua conta.",
+  "notification.occurredAtLabel": "Quando",
+  "notification.resourcesLabel": "Detalhes",
+  "notification.valueLabel": "Valor",
+  "notification.invoiceLabel": "Fatura",
+  "notification.viewInvoice": "Ver fatura",
+  "notification.cta.viewBilling": "Ver faturamento",
+  "notification.cta.updatePaymentMethod": "Atualizar método de pagamento",
+  "notification.cta.purchaseCredits": "Comprar créditos",
+  "notification.cta.goToDashboard": "Ir para o painel"
+}

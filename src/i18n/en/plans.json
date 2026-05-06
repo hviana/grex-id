@@ -1,0 +1,11 @@
+{
+  "grexId.standard.name": "STANDARD",
+  "grexId.standard.description": "Standard plan with basic features.",
+  "grexId.free.name": "FREE",
+  "grexId.free.description": "Free plan with basic features.",
+  "grexId.free.benefit1": "Up to 100 face detections per month",
+  "grexId.pro.name": "PRO",
+  "grexId.pro.description": "Professional plan with advanced features.",
+  "grexId.pro.benefit1": "Priority support and dedicated assistance",
+  "grexId.pro.benefit2": "Advanced analytics and reporting"
+}
