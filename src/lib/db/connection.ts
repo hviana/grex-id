@@ -1,6 +1,8 @@
 "use client";
 
-let frontendDb: any | null = null;
+import { Surreal } from "../../../server/db/connection.ts";
+
+let frontendDb: Surreal | null = null;
 let cachedConfig: {
   url: string;
   namespace: string;
