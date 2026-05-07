@@ -1,7 +1,6 @@
 import "server-only";
 
-import { getDb, rid } from "../connection.ts";
-import type { StringRecordId } from "surrealdb";
+import { getDb, rid, StringRecordId } from "../connection.ts";
 
 /**
  * Resolve recipient channel values from entity record ids.

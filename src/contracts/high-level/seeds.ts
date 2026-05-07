@@ -3,5 +3,7 @@
 // ============================================================================
 
 export interface SeedModule {
-  seed: (db: import("surrealdb").Surreal) => Promise<void>;
+  seed: (
+    db: import("../../../server/db/connection.ts").Surreal,
+  ) => Promise<void>;
 }
