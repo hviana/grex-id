@@ -192,6 +192,25 @@ export function TenantProvider(
     }
   }, [refresh]);
 
+  // Periodic token refresh — prevents expiry during long-lived sessions.
+  // Default token TTL is 15 min; refresh every 10 min leaves a 5 min buffer.
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  useEffect(() => {
+    if (systemToken) {
+      refreshIntervalRef.current = setInterval(() => {
+        refresh().catch(() => {});
+      }, 10 * 60 * 1000);
+    }
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [systemToken, refresh]);
+
   const login = useCallback(
     async (
       identifier: string,

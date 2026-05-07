@@ -3,7 +3,7 @@ import { withAuthAndLimit } from "@/server/middleware/withAuthAndLimit";
 import type { RequestContext } from "@/src/contracts/high-level/tenant-context";
 import { get, limitsMerger } from "@/server/utils/cache";
 import { createTenantToken } from "@/server/utils/token";
-import { forgetActor, rememberActor } from "@/server/utils/actor-validity";
+import { rememberActor } from "@/server/utils/actor-validity";
 import {
   resolveSuperuserExchange,
   resolveUserExchange,
@@ -52,7 +52,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
     );
   }
 
-  const oldTenantId = tenant.id!;
   const isSuperuser = ctx.tenantContext.roles.includes("superuser");
 
   if (isSuperuser) {
@@ -79,7 +78,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
     const newToken = await createTenantToken(newTenant, false, oldExp);
 
-    await forgetActor({ id: oldTenantId, actorId: String(tenant.actorId) });
     await rememberActor({
       id: suResult.tenantId,
       actorId: String(tenant.actorId),
@@ -136,7 +134,6 @@ async function handler(req: Request, ctx: RequestContext): Promise<Response> {
 
   const newToken = await createTenantToken(newTenant, false, oldExp);
 
-  await forgetActor({ id: oldTenantId, actorId: String(tenant.actorId) });
   await rememberActor({ id: result.tenantId, actorId: String(tenant.actorId) });
 
   const rawRoles2 = await get(newTenant, "roles");
