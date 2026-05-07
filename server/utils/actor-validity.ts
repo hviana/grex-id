@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Tenant } from "@/src/contracts/tenant";
 import { genericList } from "../db/queries/generics.ts";
+import { getDb } from "../db/connection.ts";
 import { getState } from "../global-registry.ts";
 
 /**
@@ -29,22 +30,16 @@ const state = getState<ActorValidityState>("actor-validity", {
 });
 
 async function loadTenantPartition(tenantId: string): Promise<Set<string>> {
-  const result = await genericList<{ id: string }>(
-    {
-      table: "api_token",
-      select: "id",
-      tenant: { id: tenantId },
-      extraConditions: ["revokedAt IS NONE"],
-      extraAccessFields: ["revokedAt"],
-      allowRawExtraConditions: true,
-      limit: 10000,
-    },
+  const db = await getDb();
+  const [tokenIds, tenantActorIds] = await db.query<[string[], string[]]>(
+    `SELECT VALUE id FROM api_token WHERE tenantIds CONTAINS $tenantId AND revokedAt IS NONE;
+     SELECT VALUE actorId FROM $tenantId WHERE actorId != NONE`,
+    { tenantId },
   );
 
   const set = new Set<string>();
-  for (const row of result.items) {
-    set.add(String(row.id));
-  }
+  for (const id of (tokenIds ?? [])) set.add(String(id));
+  for (const id of (tenantActorIds ?? [])) if (id) set.add(String(id));
   return set;
 }
 
