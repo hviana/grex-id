@@ -19,7 +19,7 @@
     "react-dom": "19.2.4",
     "surrealdb": "^2.0.3",
     "xlsx": "^0.18.5",
-    "@std/path":"@std/path@1.1.4"
+    "@std/path":"jsr:@std/path@1.1.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
