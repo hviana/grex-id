@@ -6,38 +6,26 @@ import type { TenantRow } from "@/src/contracts/high-level/query-results";
 export type { TenantRow };
 
 /**
- * Returns the core company-system tenant row:
- *
- * - actorId = NONE
- * - companyId != NONE
- * - systemId = provided system
- *
- * Avoid truthy/falsy SurrealQL checks like `!actorId` or `companyId`.
- * They are shorter, but fragile for production and security-sensitive tenant logic.
+ * Returns the core company-system tenant row (actorId=NONE, companyId NOT NONE).
+ * Used by getSystemTenant() to construct the system-level Tenant.
  */
 export async function fetchSystemTenantRow(
   systemId: string,
 ): Promise<TenantRow | null> {
   const db = await getDb();
-
-  const result = await db.query<unknown[]>(
-    `SELECT id, companyId, systemId
-     FROM tenant
-     WHERE actorId = NONE
-       AND companyId != NONE
+  const [rows] = await db.query<[TenantRow[]]>(
+    `SELECT id, companyId, systemId FROM tenant
+     WHERE !actorId
+       AND companyId
        AND systemId = $systemId
      LIMIT 1`,
     { systemId: rid(systemId) },
   );
-
-  const rows = result.at(-1) as TenantRow[] | undefined;
-
   return rows?.[0] ? { ...rows[0] } : null;
 }
 
 /**
- * Returns the tenant row for a given company+system pair where actorId = NONE.
- *
+ * Returns the tenant row for a given company+system pair where actorId IS NONE.
  * This is the company-system link tenant row.
  */
 export async function fetchCompanySystemTenantRow(
@@ -45,25 +33,19 @@ export async function fetchCompanySystemTenantRow(
   systemId: string,
 ): Promise<TenantRow | null> {
   const db = await getDb();
-
-  const result = await db.query<unknown[]>(
-    `SELECT id, companyId, systemId
-     FROM tenant
-     WHERE actorId = NONE
+  const [rows] = await db.query<[TenantRow[]]>(
+    `SELECT id, companyId, systemId FROM tenant
+     WHERE !actorId
        AND companyId = $companyId
        AND systemId = $systemId
      LIMIT 1`,
     { companyId: rid(companyId), systemId: rid(systemId) },
   );
-
-  const rows = result.at(-1) as TenantRow[] | undefined;
-
   return rows?.[0] ? { ...rows[0] } : null;
 }
 
 /**
- * Resolves the FULL resource_limit for an actor, either user or api_token.
- *
+ * Resolves the FULL resource_limit for an actor (user or api_token).
  * Returns null if the actor or its resource_limit is not found.
  * Used by Core to cache actor-scoped limits and roles.
  */
@@ -71,82 +53,38 @@ export async function fetchActorResourceLimit(
   actorId: string,
 ): Promise<Record<string, unknown> | null> {
   const db = await getDb();
-
   const actorTable = actorId.startsWith("api_token:") ? "api_token" : "user";
-
   const result = await db.query<unknown[]>(
-    `LET $rlId = (
-       SELECT VALUE resourceLimitId
-       FROM ${actorTable}
-       WHERE id = $actorId
-       LIMIT 1
-     )[0];
-
-     SELECT *
-     FROM resource_limit
-     WHERE id = $rlId
-     LIMIT 1;`,
+    `LET $rlId = (SELECT VALUE resourceLimitId FROM ${actorTable}
+       WHERE id = $actorId LIMIT 1);
+     SELECT * FROM ONLY resource_limit WHERE id = $rlId[0];`,
     { actorId: rid(actorId) },
   );
-
-  const rows = result.at(-1) as Record<string, unknown>[] | undefined;
-
-  return rows?.[0] ? { ...rows[0] } : null;
+  return (result[result.length - 1] as Record<string, unknown>) ?? null;
 }
 
 /**
- * Returns the system-level tenant row:
- *
- * - actorId = NONE
- * - companyId = NONE
- * - systemId = provided system
- *
+ * Returns the system-level tenant row (actorId=NONE, companyId=NONE).
  * Creates it if it does not exist.
- *
- * Important:
- * The final statement is always a SELECT, and the TypeScript code reads
- * result.at(-1). This avoids depending on the position of LET/IF/CREATE
- * statement outputs in db.query().
  */
 export async function fetchOrCreateSystemLevelTenantRow(
   systemId: string,
 ): Promise<TenantRow | null> {
   const db = await getDb();
-
-  const result = await db.query<unknown[]>(
-    `LET $existingId = (
-       SELECT VALUE id
-       FROM tenant
-       WHERE actorId = NONE
-         AND companyId = NONE
-         AND systemId = $systemId
-       LIMIT 1
-     )[0];
-
-     LET $created = IF $existingId = NONE THEN
-       CREATE tenant SET
-         actorId = NONE,
-         companyId = NONE,
-         systemId = $systemId
-     ELSE
-       []
+  const [rows] = await db.query<[TenantRow[]]>(
+    `LET $existing = (SELECT id, companyId, systemId FROM tenant
+       WHERE !actorId AND !companyId AND systemId = $systemId LIMIT 1);
+     IF $existing[0] THEN
+       RETURN $existing;
      END;
-
-     LET $targetId = IF $existingId != NONE THEN
-       $existingId
-     ELSE
-       $created[0].id
-     END;
-
-     SELECT id, companyId, systemId
-     FROM tenant
-     WHERE id = $targetId
-     LIMIT 1;`,
+     LET $created = (CREATE tenant SET
+       actorId = NONE,
+       companyId = NONE,
+       systemId = $systemId
+     );
+     RETURN [SELECT id, companyId, systemId FROM $created];`,
     { systemId: rid(systemId) },
   );
-
-  const rows = result.at(-1) as TenantRow[] | undefined;
-
   return rows?.[0] ? { ...rows[0] } : null;
 }
 
@@ -157,15 +95,10 @@ export async function resolveRoleNames(
   roleIds: string[],
 ): Promise<string[]> {
   if (!roleIds.length) return [];
-
   const db = await getDb();
-
-  const result = await db.query<unknown[]>(
-    `SELECT VALUE name
-     FROM role
-     WHERE id IN $roleIds;`,
+  const result = await db.query<[string[]]>(
+    `SELECT VALUE name FROM role WHERE id IN $roleIds;`,
     { roleIds: roleIds.map((id) => rid(id)) },
   );
-
-  return (result.at(-1) as string[] | undefined) ?? [];
+  return result[0] ?? [];
 }
