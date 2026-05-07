@@ -6,6 +6,7 @@
     "unsafe-proto",
     "sloppy-imports"
   ],
+  "exclude": ["local_app"],
   "compilerOptions": {
     "checkJs": false,
     "strict": false,
