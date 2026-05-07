@@ -1,8 +1,6 @@
 "use client";
 
-import { Surreal } from "surrealdb";
-
-let frontendDb: Surreal | null = null;
+let frontendDb: any | null = null;
 let cachedConfig: {
   url: string;
   namespace: string;
@@ -39,26 +37,4 @@ async function getFrontendDbConfig(): Promise<{
 
   cachedConfig = { url, namespace, database, user, pass };
   return cachedConfig;
-}
-
-export async function connectFrontendDb(): Promise<Surreal> {
-  if (frontendDb) {
-    return frontendDb;
-  }
-
-  const { url, namespace, database, user, pass } = await getFrontendDbConfig();
-
-  frontendDb = new Surreal();
-  await frontendDb.connect(url);
-  await frontendDb.use({ namespace, database });
-  await frontendDb.signin({ username: user, password: pass });
-
-  return frontendDb;
-}
-
-export async function disconnectFrontendDb(): Promise<void> {
-  if (frontendDb) {
-    await frontendDb.close();
-    frontendDb = null;
-  }
 }
