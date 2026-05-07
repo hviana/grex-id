@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Tenant } from "@/src/contracts/tenant";
 import { genericList } from "../db/queries/generics.ts";
+import { getState } from "../global-registry.ts";
 
 /**
  * Actor-validity cache (§8.11).
@@ -10,12 +11,22 @@ import { genericList } from "../db/queries/generics.ts";
  * currently allowed to authenticate against the tenant. An actor id is
  * valid iff it appears in its tenant's set; absence IS revocation.
  *
- * Plain in-memory Map — no dependency on cache.ts. Actor validity is
- * inherently per-request, in-memory.
+ * State is stored on `globalThis` so that Turbopack module-instance
+ * splitting does not silently create separate caches (login calls
+ * `rememberActor` from `app/api/` via `@/` alias; middleware reads
+ * `isActorValid` via relative import → different module instances
+ * WITHOUT globalThis).
  */
 
-const partitions = new Map<string, Set<string>>();
-const loadedTenants = new Set<string>();
+interface ActorValidityState {
+  partitions: Map<string, Set<string>>;
+  loadedTenants: Set<string>;
+}
+
+const state = getState<ActorValidityState>("actor-validity", {
+  partitions: new Map(),
+  loadedTenants: new Set(),
+});
 
 async function loadTenantPartition(tenantId: string): Promise<Set<string>> {
   const result = await genericList<{ id: string }>(
@@ -45,10 +56,10 @@ export async function ensureActorValidityLoaded(
   tenant: Tenant,
 ): Promise<void> {
   if (!tenant.id) return;
-  if (loadedTenants.has(tenant.id)) return;
+  if (state.loadedTenants.has(tenant.id)) return;
   const set = await loadTenantPartition(tenant.id);
-  partitions.set(tenant.id, set);
-  loadedTenants.add(tenant.id);
+  state.partitions.set(tenant.id, set);
+  state.loadedTenants.add(tenant.id);
 }
 
 /**
@@ -56,7 +67,7 @@ export async function ensureActorValidityLoaded(
  */
 export function isActorValid(tenant: Tenant): boolean {
   if (!tenant.actorId) return false;
-  return partitions.get(tenant.id!)?.has(tenant.actorId) ?? false;
+  return state.partitions.get(tenant.id!)?.has(tenant.actorId) ?? false;
 }
 
 /** Add an actor id to its tenant's partition. */
@@ -64,11 +75,11 @@ export async function rememberActor(
   tenant: Tenant,
 ): Promise<void> {
   if (!tenant.actorId || !tenant.id) return;
-  let set = partitions.get(tenant.id);
+  let set = state.partitions.get(tenant.id);
   if (!set) {
     set = new Set();
-    partitions.set(tenant.id, set);
-    loadedTenants.add(tenant.id);
+    state.partitions.set(tenant.id, set);
+    state.loadedTenants.add(tenant.id);
   }
   set.add(tenant.actorId);
 }
@@ -78,13 +89,13 @@ export async function forgetActor(
   tenant: Tenant,
 ): Promise<void> {
   if (!tenant.actorId || !tenant.id) return;
-  partitions.get(tenant.id)?.delete(tenant.actorId);
+  state.partitions.get(tenant.id)?.delete(tenant.actorId);
 }
 
 /** Force-reload a single tenant's partition from the DB. */
 export async function reloadTenant(tenant: Tenant): Promise<void> {
   if (!tenant.id) return;
   const set = await loadTenantPartition(tenant.id);
-  partitions.set(tenant.id, set);
-  loadedTenants.add(tenant.id);
+  state.partitions.set(tenant.id, set);
+  state.loadedTenants.add(tenant.id);
 }

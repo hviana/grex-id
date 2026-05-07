@@ -29,6 +29,7 @@
   "report.title": "Detection Report",
   "report.dateRange": "Date Range (max 31 days)",
   "report.selectDates": "Select a date range to view detections.",
+  "report.selectFilters": "Select filters to view the data.",
   "report.member": "Member",
   "report.visitor": "Visitor",
   "report.unknown": "Unknown",

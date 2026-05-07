@@ -541,8 +541,13 @@ export default function DetectionReportPage() {
         fetchFn={fetchIndividuals}
         reloadKey={listReloadKey}
         emptyState={
-          <div className="flex justify-center py-20">
-            <span className="text-8xl">📊</span>
+          <div className="flex flex-col items-center justify-center py-20 gap-6">
+            <div className="backdrop-blur-md bg-white/5 border border-dashed border-[var(--color-dark-gray)] rounded-2xl p-8 hover:shadow-lg hover:shadow-[var(--color-light-green)]/10 transition-all">
+              <span className="text-8xl">📊</span>
+            </div>
+            <p className="text-[var(--color-light-text)] text-sm">
+              {t("systems.grex-id.report.selectFilters")}
+            </p>
           </div>
         }
         renderItem={(item) => {

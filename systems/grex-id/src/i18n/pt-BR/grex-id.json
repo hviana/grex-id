@@ -29,6 +29,7 @@
   "report.title": "Relatório de Detecções",
   "report.dateRange": "Período (máximo 31 dias)",
   "report.selectDates": "Selecione um período para visualizar as detecções.",
+  "report.selectFilters": "Selecione os filtros para visualizar os dados.",
   "report.member": "Membro",
   "report.visitor": "Visitante",
   "report.unknown": "Desconhecido",
