@@ -364,11 +364,11 @@ export class SurrealHttpSqlClient {
           continue;
         }
 
-        console.log("[surreal:signin:ok]", {
-          kind: attempt.kind,
-          namespace: this.namespace,
-          database: this.database,
-        });
+        //console.log("[surreal:signin:ok]", {
+        //  kind: attempt.kind,
+        //  namespace: this.namespace,
+        //  database: this.database,
+        //});
 
         return token;
       } catch (error) {
@@ -852,7 +852,19 @@ function prepareSqlQuery(
   for (const [name, value] of Object.entries(vars)) {
     assertSurrealVariableName(name);
 
-    const expression = toSurrealLiteral(value);
+    /**
+     * Pass the variable name as a hint.
+     *
+     * This lets the HTTP client auto-convert common record-id variables:
+     *
+     *   id: "delivery:abc"
+     *   deliveryId: "delivery:abc"
+     *   tenantIds: ["tenant:one", "tenant:two"]
+     *   $__t_id: "tenant:abc"
+     *
+     * into real SurrealDB records using type::record(...).
+     */
+    const expression = toSurrealLiteral(value, name);
     injectedStatements.push(`LET $${name} = ${expression};`);
   }
 
@@ -869,7 +881,10 @@ function prepareSqlQuery(
   };
 }
 
-function toSurrealLiteral(value: unknown): string {
+function toSurrealLiteral(
+  value: unknown,
+  variableNameHint = "",
+): string {
   if (value === undefined) {
     return "NONE";
   }
@@ -885,23 +900,41 @@ function toSurrealLiteral(value: unknown): string {
       throw new Error(`Invalid SurrealDB record id: ${String(value)}`);
     }
 
-    const { table, id } = splitRecordId(recordId);
+    return recordIdToSurrealLiteral(recordId);
+  }
 
-    /**
-     * SurrealDB 3 uses type::record(...) for constructing a Record ID.
-     * Older snippets often used type::thing(...), which now fails with:
-     *
-     *   Invalid function/constant path, did you maybe mean `type::record`
-     */
-    return `type::record(${JSON.stringify(table)}, ${JSON.stringify(id)})`;
+  /**
+   * Compatibility fix:
+   *
+   * Your old SDK code could pass record IDs as SDK objects.
+   * With direct HTTP /sql, many old call sites may now pass plain strings like:
+   *
+   *   "delivery:fbsu5g07ba76f9uobu7k"
+   *
+   * For variables that look like IDs, convert those strings to real Record IDs.
+   */
+  if (
+    typeof value === "string" &&
+    shouldAutoConvertStringToRecordId(variableNameHint) &&
+    isPlainRecordIdString(value)
+  ) {
+    return recordIdToSurrealLiteral(value);
   }
 
   if (value instanceof Set) {
-    return `<set>[${[...value].map(toSurrealLiteral).join(", ")}]`;
+    return `<set>[${
+      [...value]
+        .map((item) => toSurrealLiteral(item, variableNameHint))
+        .join(", ")
+    }]`;
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map(toSurrealLiteral).join(", ")}]`;
+    return `[${
+      value
+        .map((item) => toSurrealLiteral(item, variableNameHint))
+        .join(", ")
+    }]`;
   }
 
   if (value instanceof Date) {
@@ -939,7 +972,18 @@ function toSurrealLiteral(value: unknown): string {
 
     const fields = Object.entries(value as Record<string, unknown>).map(
       ([key, fieldValue]) => {
-        return `${JSON.stringify(key)}: ${toSurrealLiteral(fieldValue)}`;
+        /**
+         * Use the object field name as the next hint.
+         *
+         * Example:
+         *
+         *   { ownerId: "user:abc" }
+         *
+         * becomes:
+         *
+         *   { "ownerId": type::record("user", "abc") }
+         */
+        return `${JSON.stringify(key)}: ${toSurrealLiteral(fieldValue, key)}`;
       },
     );
 
@@ -949,6 +993,88 @@ function toSurrealLiteral(value: unknown): string {
   return JSON.stringify(String(value));
 }
 
+function recordIdToSurrealLiteral(recordId: string): string {
+  const { table, id } = splitRecordId(recordId);
+
+  /**
+   * SurrealDB 3 uses type::record(...), not type::thing(...).
+   */
+  return `type::record(${JSON.stringify(table)}, ${JSON.stringify(id)})`;
+}
+
+function shouldAutoConvertStringToRecordId(variableName: string): boolean {
+  const normalized = variableName
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toLowerCase();
+
+  /**
+   * Covers:
+   *
+   *   id
+   *   recordId
+   *   tenantId
+   *   tenantIds
+   *   ownerId
+   *   ownerIds
+   *   deliveryId
+   *   $__t_id       -> tid
+   *   $__rootIds    -> rootids
+   */
+  return normalized === "id" ||
+    normalized.endsWith("id") ||
+    normalized.endsWith("ids") ||
+    normalized.includes("recordid") ||
+    normalized.includes("recordids");
+}
+
+function isPlainRecordIdString(value: string): boolean {
+  const trimmed = value.trim();
+
+  /**
+   * Avoid converting URLs and similar strings.
+   */
+  if (trimmed.includes("://")) {
+    return false;
+  }
+
+  const index = trimmed.indexOf(":");
+
+  if (index <= 0 || index === trimmed.length - 1) {
+    return false;
+  }
+
+  const table = trimmed.slice(0, index);
+  const id = trimmed.slice(index + 1);
+
+  /**
+   * Conservative table-name check.
+   *
+   * This catches normal SurrealDB record strings:
+   *
+   *   user:abc
+   *   tenant:zvxy...
+   *   delivery:fbsu...
+   *
+   * without accidentally turning arbitrary strings into records.
+   */
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
+    return false;
+  }
+
+  /**
+   * Avoid common non-record strings.
+   */
+  if (
+    id.includes("/") ||
+    id.includes("?") ||
+    id.includes("#") ||
+    id.includes("@")
+  ) {
+    return false;
+  }
+
+  return id.length > 0;
+}
 function isRecordIdValue(value: unknown): boolean {
   if (!value || typeof value !== "object") {
     return false;

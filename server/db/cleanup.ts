@@ -1,12 +1,7 @@
-import { Surreal } from "surrealdb";
-import dbConfig from "../../database.json" with { type: "json" };
+import { getDb } from "./connection.ts";
 
 async function main() {
-  const db = new Surreal();
-  await db.connect(dbConfig.url, {
-    authentication: { username: dbConfig.user, password: dbConfig.pass },
-  });
-  await db.use({ namespace: dbConfig.namespace, database: dbConfig.database });
+  const db = await getDb();
 
   console.log("[cleanup] Connected. Fetching DB info...");
 
@@ -55,7 +50,6 @@ async function main() {
   await db.close();
 }
 
-main().catch(async (err) => {
+main().catch((err) => {
   console.error("[cleanup] Failed:", err);
-  await new Surreal().close().catch(() => {});
 });

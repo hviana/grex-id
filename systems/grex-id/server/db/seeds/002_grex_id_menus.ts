@@ -1,5 +1,5 @@
 import "server-only";
-import type { Surreal } from "surrealdb";
+import type { Surreal } from "@/server/db/connection";
 
 export async function seed(db: Surreal): Promise<void> {
   // Resolve system-level tenant for grex-id

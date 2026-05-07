@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Surreal } from "surrealdb";
+import type { Surreal } from "../connection.ts";
 
 export async function seed(db: Surreal): Promise<void> {
   const existing = await db.query<[{ id: string }[]]>(

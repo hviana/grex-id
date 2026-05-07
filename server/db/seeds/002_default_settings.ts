@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Surreal } from "surrealdb";
+import type { Surreal } from "../connection.ts";
 
 interface DefaultSetting {
   key: string;
