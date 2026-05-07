@@ -235,6 +235,18 @@ async function tableHasField(table: string, field: string): Promise<boolean> {
   return types.has(field);
 }
 
+/** Tables whose tenantIds field has a max-size constraint of 1 (non-shared entities).
+ *  For these tables, tenant dissociation is meaningless — the caller either owns
+ *  the record and can delete it, or doesn't and is denied by the access check.
+ *  Skipping the set::difference UPDATE avoids a SurrealDB coercion edge case on
+ *  constrained sets. */
+async function isSingleTenantTable(table: string): Promise<boolean> {
+  const types = await getFieldTypes(table);
+  const t = types.get("tenantIds");
+  if (!t) return false;
+  return /set<record<tenant>,\s*1\b/.test(t);
+}
+
 /** Build a SurrealDB set literal from an array of record-ID strings
  *  (or StringRecordId objects). Produces: {type::record("tb","id"),} */
 function buildSetLiteral(ids: unknown[]): string {
@@ -3518,6 +3530,7 @@ export async function genericDelete(
   }
 
   const hasT = await tableHasField(opts.table, "tenantIds");
+  const isSingle = hasT && await isSingleTenantTable(opts.table);
   if (hasT && !hasTenantSelector(opts.tenant) && !opts.skipAccessCheck) {
     return {
       success: false,
@@ -3550,7 +3563,7 @@ export async function genericDelete(
     cascadedTables: string[];
     tenantScopedNodes: CascadeNodeInfo[];
   } | null = null;
-  if (hasT && opts.tenant) {
+  if (hasT && opts.tenant && !isSingle) {
     orphan = await buildCascadeTenantMutation(
       opts.table,
       "__rootIds",
@@ -3570,7 +3583,7 @@ export async function genericDelete(
     `IF $__before = NONE THEN RETURN { deleted: false, orphaned: false }; END;`,
   ];
 
-  if (hasT && opts.tenant) {
+  if (hasT && opts.tenant && !isSingle) {
     lets.push(
       `LET $__callerOwnsRoot = $__before.tenantIds CONTAINSANY ${matching.sql};`,
       `LET $__remaining = set::difference($__before.tenantIds, ${matching.sql});`,
